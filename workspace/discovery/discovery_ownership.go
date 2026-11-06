@@ -1,11 +1,9 @@
 package discovery
 
 import (
-	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
-	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -15,11 +13,17 @@ import (
 )
 
 // ObserveOwnership verifies the local installation receipt against every
-// observed member. Receipt paths are workspace-anchor-relative even when the
-// server directory is nested. A recorded path alone never proves management:
-// the content hash must match. A member whose recorded content cannot be read
-// keeps OwnershipUnknown and never counts as modified. The method never writes
-// files.
+// observed member using the shared receipt reader. Receipt paths are
+// workspace-anchor-relative even when the server directory is nested. A
+// recorded path establishes ownership granted by install commit or explicit
+// adoption; ownership is never inferred through symlink aliases. Content
+// hashes in the receipt serve as conflict baselines: matching content confirms
+// an unmodified managed member (OwnershipManaged), while differing content
+// identifies an owned member that was modified locally (OwnershipModified).
+// Ownership remains independent of observed condition: content changes never
+// erase ownership history, unrecorded paths remain OwnershipUnmanaged, and
+// members that cannot be read are marked OwnershipUnreadable without losing
+// their owned status. The method never writes files.
 func (r *Result) ObserveOwnership(workspaceRoot string) {
 	if r == nil {
 		return
@@ -29,6 +33,24 @@ func (r *Result) ObserveOwnership(workspaceRoot string) {
 		for fileIndex := range r.Installations[index].Files {
 			r.Installations[index].Files[fileIndex].Ownership = OwnershipUnmanaged
 		}
+	}
+
+	current, err := receipt.Read(workspaceRoot)
+	if errors.Is(err, os.ErrNotExist) {
+		return
+	}
+	if err != nil {
+		r.appendReceiptError(filepath.Join(workspaceRoot, receipt.Filename), err)
+		return
+	}
+
+	recorded := make(map[string]string, len(current.Entries))
+	for _, entry := range current.Entries {
+		relative := filepath.Clean(filepath.FromSlash(entry.Path))
+		if !filepath.IsLocal(relative) || relative == "." {
+			continue
+		}
+		recorded[relative] = normalizeHash(entry.SHA256)
 	}
 
 	absoluteRoot, err := filepath.Abs(workspaceRoot)
@@ -43,50 +65,6 @@ func (r *Result) ObserveOwnership(workspaceRoot string) {
 	}
 	defer root.Close()
 
-	data, err := root.ReadFile(receipt.Filename)
-	if errors.Is(err, os.ErrNotExist) {
-		return
-	}
-	if err != nil {
-		r.appendReceiptError(filepath.Join(absoluteRoot, receipt.Filename), err)
-		return
-	}
-	current, err := receipt.Decode(bytes.NewReader(data))
-	if err != nil {
-		r.appendReceiptError(
-			filepath.Join(absoluteRoot, receipt.Filename),
-			fmt.Errorf("parse installation receipt: %w", err),
-		)
-		return
-	}
-	if current.Version != receipt.Version {
-		r.appendReceiptError(
-			filepath.Join(absoluteRoot, receipt.Filename),
-			fmt.Errorf("unsupported installation receipt version %d", current.Version),
-		)
-		return
-	}
-
-	// Duplicate receipt entries are kept: a path may carry several recorded
-	// hashes, and any match proves the observed content.
-	recorded := make(map[string][]string, len(current.Entries))
-	for _, entry := range current.Entries {
-		relative := filepath.Clean(filepath.FromSlash(entry.Path))
-		if !filepath.IsLocal(relative) || relative == "." {
-			continue
-		}
-		hash := normalizeHash(entry.SHA256)
-		recorded[relative] = append(recorded[relative], hash)
-		if resolved, resolveErr := filepath.EvalSymlinks(
-			filepath.Join(absoluteRoot, relative),
-		); resolveErr == nil {
-			if target, ok := relativeWithinRoot(absoluteRoot, resolved); ok &&
-				target != relative {
-				recorded[target] = append(recorded[target], hash)
-			}
-		}
-	}
-
 	verified := make(map[string]verifiedHash, len(recorded))
 	for index := range r.Installations {
 		installation := &r.Installations[index]
@@ -96,7 +74,7 @@ func (r *Result) ObserveOwnership(workspaceRoot string) {
 			if !ok {
 				continue
 			}
-			hashes, listed := recorded[relative]
+			expectedHash, listed := recorded[relative]
 			if !listed {
 				continue
 			}
@@ -107,7 +85,7 @@ func (r *Result) ObserveOwnership(workspaceRoot string) {
 				verified[relative] = observed
 			}
 			if observed.err != nil {
-				file.Ownership = OwnershipUnknown
+				file.Ownership = OwnershipUnreadable
 				r.Diagnostics = append(r.Diagnostics, Finding{
 					Kind:     FindingOwnershipError,
 					Path:     file.Path,
@@ -116,7 +94,7 @@ func (r *Result) ObserveOwnership(workspaceRoot string) {
 				})
 				continue
 			}
-			if matchesRecordedHash(observed.hash, hashes) {
+			if observed.hash != "" && observed.hash == expectedHash {
 				file.Ownership = OwnershipManaged
 				continue
 			}
@@ -180,15 +158,6 @@ func hashRootFile(root *os.Root, relative string) (string, error) {
 		return "", closeErr
 	}
 	return hex.EncodeToString(hash.Sum(nil)), nil
-}
-
-func matchesRecordedHash(observed string, recorded []string) bool {
-	for _, expected := range recorded {
-		if expected != "" && observed == expected {
-			return true
-		}
-	}
-	return false
 }
 
 func normalizeHash(hash string) string {

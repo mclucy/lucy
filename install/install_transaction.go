@@ -9,6 +9,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/mclucy/lucy/bootstrap"
 	"github.com/mclucy/lucy/document"
 	"github.com/mclucy/lucy/internal/fsutil"
 	"github.com/mclucy/lucy/internal/workspaceguard"
@@ -18,13 +19,142 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-func applyCommit(root, stage string, d *document.Manifest, l *document.Lock, publish bool, overwritePaths, adoptedPaths map[string]bool, logger *log.Logger) (FileChanges, error) {
+type installCommitMode int
+
+const (
+	// installCommitReconcile applies a staged tree, updates both
+	// fingerprints, and prunes outputs the resolution no longer needs.
+	installCommitReconcile installCommitMode = iota
+	// installCommitMetadataOnly publishes documents and carries the accepted
+	// ownership ledger forward without walking a stage or pruning.
+	installCommitMetadataOnly
+	// installCommitOverlay applies staged paths over the existing ledger,
+	// preserving entries the stage does not mention. Wrapper reconciliation
+	// uses it so an unchanged bootstrap and package set is never pruned.
+	installCommitOverlay
+)
+
+// stagedOutputPreserved reports whether a staged classification leaves any
+// existing workspace file user-owned. Seeds, discard material, and
+// bootstrap-only tools never grant pruning authority.
+func stagedOutputPreserved(out bootstrap.Output) bool {
+	return out.Policy == bootstrap.PolicySeed ||
+		out.Policy == bootstrap.PolicyDiscard ||
+		out.Role == bootstrap.RoleBootstrapOnly
+}
+
+// prunable reports whether reconcile may remove an accepted entry: the file
+// was not restaged, is not tracked, carries no preserved policy, and belongs
+// to an origin this commit governs.
+func prunable(
+	entry receipt.Entry,
+	tracked map[string]bool,
+	sources map[string]string,
+	stagedOutputs map[string]bootstrap.Output,
+	stagedBootstrap bool,
+) (bool, error) {
+	if tracked[strings.ToLower(entry.Path)] {
+		return false, nil
+	}
+	if _, restaged := sources[entry.Path]; restaged {
+		return false, nil
+	}
+	if out, classified := stagedOutputs[entry.Path]; classified &&
+		stagedOutputPreserved(out) {
+		return false, nil
+	}
+	switch entry.Origin {
+	case receipt.OriginBootstrap:
+		return stagedBootstrap, nil
+	case receipt.OriginPackage, receipt.OriginMCDR:
+		return true, nil
+	default:
+		return false, fmt.Errorf(
+			"unrecognized entry origin %q for path %s; refusing implicit prune",
+			entry.Origin, entry.Path,
+		)
+	}
+}
+
+// pruneTargets plans the accepted entries a reconcile removes. An entry whose
+// file is already absent maps to nil. That absence stays a precondition: the
+// journal plan and the pre-commit check fail if the path reappears, so a file
+// that appears after planning is never silently dropped from the ledger. A
+// present entry maps to the image observed now, which later steps recheck
+// before the journal captures its before image.
+func pruneTargets(
+	root string,
+	previous []receipt.Entry,
+	tracked map[string]bool,
+	sources map[string]string,
+	stagedOutputs map[string]bootstrap.Output,
+	stagedBootstrap bool,
+) (map[string]*workspacewrite.InstallImage, error) {
+	targets := map[string]*workspacewrite.InstallImage{}
+	for _, old := range previous {
+		shouldPrune, err := prunable(
+			old,
+			tracked,
+			sources,
+			stagedOutputs,
+			stagedBootstrap,
+		)
+		if err != nil {
+			return nil, err
+		}
+		if !shouldPrune {
+			continue
+		}
+		p := filepath.Join(root, old.Path)
+		info, err := os.Lstat(p)
+		if errors.Is(err, os.ErrNotExist) {
+			targets[old.Path] = nil
+			continue
+		}
+		if err != nil {
+			return nil, err
+		}
+		if info.Mode()&os.ModeSymlink != 0 || !info.Mode().IsRegular() {
+			return nil, fmt.Errorf("owned output is not a regular file: %s", old.Path)
+		}
+		actual, err := DigestFile(p, nil)
+		if err != nil {
+			return nil, err
+		}
+		observed := workspacewrite.InstallImage{
+			SHA256: actual["sha256"],
+			Mode:   effectiveInstallMode(info.Mode().Perm()),
+		}
+		if !strings.EqualFold(observed.SHA256, old.SHA256) {
+			return nil, fmt.Errorf("modified owned output cannot be pruned: %s", old.Path)
+		}
+		if old.Mode != 0 &&
+			effectiveInstallMode(os.FileMode(old.Mode)) != observed.Mode {
+			return nil, fmt.Errorf("modified owned output cannot be pruned: %s", old.Path)
+		}
+		targets[old.Path] = &observed
+	}
+	return targets, nil
+}
+
+// applyCommit publishes the staged installation. stagedOutputs classifies
+// every non-package file the stage is allowed to contain, including method
+// bootstrap outputs validated before packages joined the stage and explicit
+// wrapper outputs. mcdrOutputs identifies the subset produced by the
+// MCDReforged wrapper so those entries carry their own receipt origin.
+// stagedBootstrap reports whether the bootstrap contract ran for this
+// operation; when false its established outputs are preserved. The commit
+// never inspects the stage tree against the bootstrap contract, because that
+// tree also contains package and wrapper files that are not bootstrap outputs.
+func applyCommit(root, stage string, d *document.Manifest, l *document.Lock, publish bool, overwritePaths map[string]bool, stagedOutputs, mcdrOutputs map[string]bootstrap.Output, stagedBootstrap bool, mode installCommitMode, logger *log.Logger) (FileChanges, error) {
 	var counts FileChanges
-	resultErr := applyCommitFiles(root, stage, d, l, publish, overwritePaths, adoptedPaths, &counts, logger)
+	resultErr := applyCommitFiles(root, stage, d, l, publish, overwritePaths, stagedOutputs, mcdrOutputs, stagedBootstrap, mode, &counts, logger)
 	return counts, resultErr
 }
 
-func applyCommitFiles(root, stage string, d *document.Manifest, l *document.Lock, publish bool, overwritePaths, adoptedPaths map[string]bool, counts *FileChanges, logger *log.Logger) (resultErr error) {
+func applyCommitFiles(root, stage string, d *document.Manifest, l *document.Lock, publish bool, overwritePaths map[string]bool, stagedOutputs, mcdrOutputs map[string]bootstrap.Output, stagedBootstrap bool, mode installCommitMode, counts *FileChanges, logger *log.Logger) (resultErr error) {
+	reconcile := mode == installCommitReconcile
+	metadataOnly := mode == installCommitMetadataOnly
 	receiptPath := filepath.Join(root, receipt.Filename)
 	previous := receipt.New()
 	raw, err := os.ReadFile(receiptPath)
@@ -38,128 +168,249 @@ func applyCommitFiles(root, stage string, d *document.Manifest, l *document.Lock
 	} else if !os.IsNotExist(err) {
 		return err
 	}
-	owned := map[string]string{}
+	owned := map[string]receipt.Entry{}
 	occupantHashes := map[string]string{}
+	observedBefore := map[string]*workspacewrite.InstallImage{}
 	for _, entry := range previous.Entries {
-		owned[entry.Path] = entry.SHA256
+		owned[entry.Path] = entry
 	}
 	next := receipt.New()
-	lockFingerprint, err := receipt.ResolutionFingerprint(l)
-	if err != nil {
-		return err
+	nextIndex := make(map[string]int)
+	packageByDest := make(map[string]string)
+	if reconcile {
+		bf, err := receipt.BootstrapFingerprint(l)
+		if err != nil {
+			return err
+		}
+		pf, err := receipt.PackageFingerprint(l)
+		if err != nil {
+			return err
+		}
+		if stagedBootstrap {
+			next.BootstrapFingerprint = bf
+		} else {
+			next.BootstrapFingerprint = previous.BootstrapFingerprint
+		}
+		next.PackageFingerprint = pf
+		if !stagedBootstrap {
+			for _, entry := range previous.Entries {
+				if entry.Origin != receipt.OriginBootstrap {
+					continue
+				}
+				if out, classified := stagedOutputs[entry.Path]; classified &&
+					stagedOutputPreserved(out) {
+					continue
+				}
+				next.Entries = append(next.Entries, entry)
+			}
+		}
+	} else {
+		// Metadata-only publication carries the accepted ownership ledger
+		// forward untouched. Overlay reconciliation updates only the staged
+		// paths and preserves every other accepted entry.
+		next.BootstrapFingerprint = previous.BootstrapFingerprint
+		next.PackageFingerprint = previous.PackageFingerprint
+		next.Entries = slices.Clone(previous.Entries)
 	}
-	next.LockFingerprint = lockFingerprint
+	if !metadataOnly {
+		// A preserved bootstrap entry can also be restaged, for example a
+		// wrapper regenerated on every package change. Merge by path so the
+		// restaged bytes update the accepted baseline instead of producing a
+		// duplicate entry, and refuse when the staged file claims a different
+		// origin.
+		for i, entry := range next.Entries {
+			nextIndex[entry.Path] = i
+		}
+		for i := range l.Packages {
+			p := &l.Packages[i]
+			if !p.Enabled() {
+				continue
+			}
+			dest, err := packageDestination(l, p)
+			if err != nil {
+				continue
+			}
+			clean := filepath.ToSlash(filepath.Clean(dest))
+			packageByDest[clean] = p.Artifact.Provider.String() + ":" + p.Artifact.ProjectID
+		}
+	}
 	tracked := trackedPaths(l)
 	sources := map[string]string{}
 	sourceImages := map[string]workspacewrite.InstallImage{}
-	err = filepath.WalkDir(stage, func(p string, e os.DirEntry, walkErr error) error {
-		if walkErr != nil {
-			return walkErr
-		}
-		if e.IsDir() {
+	err = func() error {
+		if metadataOnly {
 			return nil
 		}
-		relative, err := filepath.Rel(stage, p)
-		if err != nil {
-			return err
-		}
-		relative = filepath.ToSlash(relative)
-		if strings.Contains(relative, "/.bootstrap-data/") || strings.HasPrefix(relative, ".bootstrap-data/") {
-			return nil
-		}
-		if err := document.SafeRelativePath(relative); err != nil {
-			return err
-		}
-		target := filepath.Join(root, relative)
-		mutableDefault := filepath.Base(relative) == "config.yml" || filepath.Base(relative) == "user_jvm_args.txt"
-		if tracked[strings.ToLower(relative)] {
-			if !mutableDefault {
-				return fmt.Errorf("tracked file %s collides with managed runtime output", relative)
+		return filepath.WalkDir(stage, func(p string, e os.DirEntry, walkErr error) error {
+			if walkErr != nil {
+				return walkErr
 			}
-			return nil
-		}
-		if mutableDefault {
-			if _, err := os.Stat(target); err == nil {
+			if e.IsDir() {
 				return nil
 			}
-		}
-		hashes, err := DigestFile(p, nil)
-		if err != nil {
-			return err
-		}
-		info, err := e.Info()
-		if err != nil {
-			return err
-		}
-		if _, err := os.Lstat(target); err == nil {
-			if info, err := os.Lstat(target); err != nil || info.Mode()&os.ModeSymlink != 0 {
-				return fmt.Errorf("refuse symlink output %s", relative)
-			}
-			actual, err := DigestFile(target, nil)
+			relative, err := filepath.Rel(stage, p)
 			if err != nil {
 				return err
 			}
-			occupantHashes[relative] = actual["sha256"]
-			if actual["sha256"] != hashes["sha256"] && actual["sha256"] != owned[relative] {
-				switch {
-				case overwritePaths[relative]:
-					logger.Debug(
-						"overwriting occupied output",
-						"path", relative,
-						"reason", "overwrite requested",
-					)
-				case adoptedPaths[relative]:
-					logger.Debug(
-						"adopting occupied output",
-						"path", relative,
-						"reason", "occupied by the adopted installation",
-					)
-				default:
-					return fmt.Errorf("unowned or modified output conflict: %s", relative)
+			relative = filepath.ToSlash(relative)
+			if err := document.SafeRelativePath(relative); err != nil {
+				return err
+			}
+			out, classified := stagedOutputs[relative]
+			if classified && (out.Policy == bootstrap.PolicyDiscard || out.Role == bootstrap.RoleBootstrapOnly) {
+				return nil
+			}
+			packageID, isPackage := packageByDest[relative]
+			if classified && isPackage {
+				return fmt.Errorf("staged output %s has both bootstrap and package origins", relative)
+			}
+			if !classified && !isPackage {
+				return fmt.Errorf("staged output %s is not classified by the bootstrap or package plan", relative)
+			}
+			target := filepath.Join(root, relative)
+			isSeed := classified && out.Policy == bootstrap.PolicySeed
+			if tracked[strings.ToLower(relative)] {
+				if !isSeed {
+					return fmt.Errorf("tracked file %s collides with managed runtime output", relative)
+				}
+				return nil
+			}
+			if isSeed {
+				if _, err := os.Stat(target); err == nil {
+					return nil
 				}
 			}
-		} else if !os.IsNotExist(err) {
-			return err
-		}
-		mode := os.FileMode(0o644)
-		if !mutableDefault {
-			mode = info.Mode().Perm()
-			next.Entries = append(next.Entries, receipt.Entry{
-				Path:   relative,
+			hashes, err := DigestFile(p, nil)
+			if err != nil {
+				return err
+			}
+			info, err := e.Info()
+			if err != nil {
+				return err
+			}
+			targetInfo, err := os.Lstat(target)
+			switch {
+			case err == nil:
+				if targetInfo.Mode()&os.ModeSymlink != 0 {
+					return fmt.Errorf("refuse symlink output %s", relative)
+				}
+				if !targetInfo.Mode().IsRegular() {
+					return fmt.Errorf("refuse non-regular output %s", relative)
+				}
+				actual, err := DigestFile(target, nil)
+				if err != nil {
+					return err
+				}
+				occupantHashes[relative] = actual["sha256"]
+				observedBefore[relative] = &workspacewrite.InstallImage{
+					SHA256: actual["sha256"],
+					Mode:   effectiveInstallMode(targetInfo.Mode().Perm()),
+				}
+				prior, isOwned := owned[relative]
+				if !isOwned {
+					if overwritePaths[relative] {
+						logger.Debug(
+							"overwriting unowned output",
+							"path", relative,
+							"reason", "overwrite requested",
+						)
+					} else {
+						return fmt.Errorf("unowned output conflict: %s", relative)
+					}
+				} else {
+					observed := workspacewrite.InstallImage{
+						SHA256: actual["sha256"],
+						Mode:   effectiveInstallMode(targetInfo.Mode().Perm()),
+					}
+					expected := observed
+					expected.SHA256 = prior.SHA256
+					if prior.Mode != 0 {
+						expected.Mode = effectiveInstallMode(os.FileMode(prior.Mode))
+					}
+					if !workspacewrite.InstallImagesEqual(&observed, &expected) {
+						if overwritePaths[relative] {
+							logger.Debug(
+								"overwriting modified output",
+								"path", relative,
+								"reason", "overwrite requested",
+							)
+						} else {
+							return fmt.Errorf("modified owned output conflict: %s", relative)
+						}
+					}
+				}
+			case errors.Is(err, os.ErrNotExist):
+				observedBefore[relative] = nil
+			default:
+				return err
+			}
+			fileMode := os.FileMode(0o644)
+			if !isSeed {
+				fileMode = info.Mode().Perm()
+				origin := receipt.OriginBootstrap
+				if _, isMCDR := mcdrOutputs[relative]; isMCDR {
+					origin = receipt.OriginMCDR
+				}
+				if isPackage {
+					if origin != receipt.OriginBootstrap {
+						return fmt.Errorf(
+							"staged output %s has both MCDR and package origins",
+							relative,
+						)
+					}
+					origin = receipt.OriginPackage
+				}
+				entry := receipt.Entry{
+					Path:    relative,
+					SHA256:  hashes["sha256"],
+					Mode:    uint32(fileMode),
+					Origin:  origin,
+					Package: packageID,
+				}
+				if prior, exists := owned[relative]; exists && prior.Origin != entry.Origin {
+					return fmt.Errorf(
+						"staged output %s changes receipt origin from %s to %s",
+						relative, prior.Origin, entry.Origin,
+					)
+				}
+				if index, exists := nextIndex[relative]; exists {
+					prior := next.Entries[index]
+					if prior.Origin != entry.Origin {
+						return fmt.Errorf(
+							"staged output %s changes receipt origin from %s to %s",
+							relative, prior.Origin, entry.Origin,
+						)
+					}
+					next.Entries[index] = entry
+				} else {
+					nextIndex[relative] = len(next.Entries)
+					next.Entries = append(next.Entries, entry)
+				}
+			}
+			sourceImages[relative] = workspacewrite.InstallImage{
 				SHA256: hashes["sha256"],
-				Mode:   uint32(mode),
-			})
-		}
-		sourceImages[relative] = workspacewrite.InstallImage{
-			SHA256: hashes["sha256"],
-			Mode:   effectiveInstallMode(mode),
-		}
-		sources[relative] = p
-		return nil
-	})
+				Mode:   effectiveInstallMode(fileMode),
+			}
+			sources[relative] = p
+			return nil
+		})
+	}()
 	if err != nil {
 		return err
 	}
-	pruneExpected := map[string]string{}
-	for _, old := range previous.Entries {
-		if tracked[strings.ToLower(old.Path)] {
-			continue
-		}
-		if _, ok := sources[old.Path]; ok {
-			continue
-		}
-		p := filepath.Join(root, old.Path)
-		if _, err := os.Stat(p); os.IsNotExist(err) {
-			continue
-		}
-		actual, err := DigestFile(p, nil)
+	var pruneExpected map[string]*workspacewrite.InstallImage
+	if reconcile {
+		pruneExpected, err = pruneTargets(
+			root,
+			previous.Entries,
+			tracked,
+			sources,
+			stagedOutputs,
+			stagedBootstrap,
+		)
 		if err != nil {
 			return err
 		}
-		if actual["sha256"] != old.SHA256 {
-			return fmt.Errorf("modified owned output cannot be pruned: %s", old.Path)
-		}
-		pruneExpected[old.Path] = old.SHA256
 	}
 	receiptBytes, err := next.Snapshot()
 	if err != nil {
@@ -240,26 +491,19 @@ func applyCommitFiles(root, stage string, d *document.Manifest, l *document.Lock
 		baseImages[document.ManifestFilename] = manifestPlan.Base
 		documentAfter[document.ManifestFilename] = &manifestPlan.Image
 	}
-	for _, old := range previous.Entries {
-		if tracked[strings.ToLower(old.Path)] {
-			continue
+	if reconcile {
+		pruneNames := make([]string, 0, len(pruneExpected))
+		for name := range pruneExpected {
+			pruneNames = append(pruneNames, name)
 		}
-		if _, ok := sources[old.Path]; ok {
-			continue
-		}
-		if _, err := os.Stat(filepath.Join(root, old.Path)); err != nil {
-			if os.IsNotExist(err) {
-				continue
+		slices.Sort(pruneNames)
+		for _, name := range pruneNames {
+			if installPathMatchesReserved(root, name, document.ManifestFilename) {
+				return fmt.Errorf("installation receipt path %s is reserved", name)
 			}
-			return err
-		}
-		if installPathMatchesReserved(
-			root, old.Path, document.ManifestFilename,
-		) {
-			return fmt.Errorf("installation receipt path %s is reserved", old.Path)
-		}
-		if err := planAfter(old.Path, nil); err != nil {
-			return err
+			if err := planAfter(name, nil); err != nil {
+				return err
+			}
 		}
 	}
 	names := make([]string, 0, len(afterImages))
@@ -324,6 +568,14 @@ func applyCommitFiles(root, stage string, d *document.Manifest, l *document.Lock
 			default:
 				return err
 			}
+			if expected, observed := observedBefore[name]; observed {
+				if !workspacewrite.InstallImagesEqual(entry.Before, expected) {
+					return fmt.Errorf(
+						"installation path %s changed while planning",
+						name,
+					)
+				}
+			}
 			if base, planned := baseImages[name]; planned {
 				if !workspacewrite.InstallImagesEqual(entry.Before, base) {
 					return fmt.Errorf(
@@ -337,8 +589,11 @@ func applyCommitFiles(root, stage string, d *document.Manifest, l *document.Lock
 			}
 			if entry.After == nil {
 				expected, validated := pruneExpected[name]
+				if validated && expected == nil {
+					return fmt.Errorf("absent owned output %s reappeared before pruning", name)
+				}
 				if !validated || entry.Before == nil ||
-					entry.Before.SHA256 != expected {
+					!workspacewrite.InstallImagesEqual(entry.Before, expected) {
 					return fmt.Errorf(
 						"modified or unowned output cannot be pruned: %s",
 						name,
@@ -446,34 +701,36 @@ func applyCommitFiles(root, stage string, d *document.Manifest, l *document.Lock
 			}
 		}
 		pruned := 0
-		for _, old := range previous.Entries {
-			if tracked[strings.ToLower(old.Path)] {
-				continue
-			}
-			if _, ok := sources[old.Path]; ok {
-				continue
-			}
-			entry, mutated := mutations[old.Path]
-			if !mutated {
-				continue
-			}
-			current, err := observeInstallPath(files, old.Path)
-			if err != nil {
-				return err
-			}
-			if !workspacewrite.InstallImagesEqual(current, entry.Before) {
-				return fmt.Errorf(
-					"installation output %s changed before pruning",
-					old.Path,
-				)
-			}
-			if err := files.Remove(old.Path); err != nil {
-				if errors.Is(err, os.ErrNotExist) {
+		if reconcile {
+			for _, old := range previous.Entries {
+				if tracked[strings.ToLower(old.Path)] {
 					continue
 				}
-				return err
+				if _, ok := sources[old.Path]; ok {
+					continue
+				}
+				entry, mutated := mutations[old.Path]
+				if !mutated {
+					continue
+				}
+				current, err := observeInstallPath(files, old.Path)
+				if err != nil {
+					return err
+				}
+				if !workspacewrite.InstallImagesEqual(current, entry.Before) {
+					return fmt.Errorf(
+						"installation output %s changed before pruning",
+						old.Path,
+					)
+				}
+				if err := files.Remove(old.Path); err != nil {
+					if errors.Is(err, os.ErrNotExist) {
+						continue
+					}
+					return err
+				}
+				pruned++
 			}
-			pruned++
 		}
 		counts.Removed = pruned
 		if publish {

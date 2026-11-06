@@ -19,6 +19,7 @@ import (
 	"github.com/mclucy/lucy/internal/fsutil"
 	"github.com/mclucy/lucy/internal/workspacewrite"
 	"github.com/mclucy/lucy/javaruntime"
+	"github.com/mclucy/lucy/receipt"
 	"github.com/mclucy/lucy/server"
 	"github.com/mclucy/lucy/upstream"
 	"github.com/mclucy/lucy/version"
@@ -136,7 +137,12 @@ func (s *Service) stageInstall(
 	if err != nil {
 		return nil, err
 	}
-	if current && !opts.PublishManifest {
+	// Publishing documents alone does not require an available MCDR runtime.
+	// An explicit venv request still reconciles the wrapper.
+	metadataOnly := opts.PublishManifest || opts.publishLock
+	reconcileMCDR := !metadataOnly || opts.MCDRVenv
+	if current && (!reconcileMCDR || resolved.MCDR == nil ||
+		mcdrWrapperCurrent(root, resolved, s.python, opts.MCDRVenv)) {
 		s.logger.Info(
 			"installation already current",
 			"root", root,
@@ -145,25 +151,60 @@ func (s *Service) stageInstall(
 		if err := validateUnmanagedArtifacts(ctx, root, resolved, opts.Overwrite, s.logger); err != nil {
 			return nil, err
 		}
-		if resolved.MCDR != nil {
-			if err := ensureMCDRRuntime(ctx, root, resolved, store, s.python, opts.MCDRVenv); err != nil {
+		if metadataOnly {
+			var manifest *document.Manifest
+			if opts.PublishManifest {
+				manifest = d
+			}
+			// A current installation still publishes its documents through
+			// the installation journal, so a concurrent edit is detected and
+			// a partial manifest/lock publication rolls back.
+			if _, err := applyCommit(
+				root, "", manifest, resolved, opts.PublishManifest,
+				nil, nil, nil, false, installCommitMetadataOnly, s.logger,
+			); err != nil {
 				return nil, err
 			}
-		}
-		if opts.publishLock {
-			if err := document.LockFile(root).Write(resolved); err != nil {
-				return nil, err
-			}
+			result.PublishedManifest = opts.PublishManifest
 			result.PublishedLock = true
 			return s.provisionCommitted(ctx, root, resolved, opts)
 		}
 		return s.tracker.Provision(ctx, root, resolved.Files, opts.Offline)
 	}
-	reason := "installation missing or stale"
 	if current {
-		reason = "manifest publication forces re-staging"
+		s.logger.Debug(
+			"reconciling MCDR wrapper through the installation transaction",
+			"root", root,
+		)
+		if err := validateUnmanagedArtifacts(ctx, root, resolved, opts.Overwrite, s.logger); err != nil {
+			return nil, err
+		}
+		stage, err := os.MkdirTemp(filepath.Join(root, ".lucy"), "stage-*")
+		if err != nil {
+			return nil, err
+		}
+		defer os.RemoveAll(stage)
+		if err := preparePython(ctx, root, stage, resolved, store, s.python, opts.MCDRVenv); err != nil {
+			return nil, err
+		}
+		var manifest *document.Manifest
+		if opts.PublishManifest {
+			manifest = d
+		}
+		mcdrOutputs := mcdrWrapperOutputs(resolved)
+		counts, err := applyCommit(
+			root, stage, manifest, resolved, opts.PublishManifest, nil,
+			mcdrOutputs, mcdrOutputs, false, installCommitOverlay, s.logger,
+		)
+		if err != nil {
+			return nil, err
+		}
+		result.Files = counts
+		result.PublishedManifest = opts.PublishManifest
+		result.PublishedLock = opts.publishLock || opts.PublishManifest
+		return s.provisionCommitted(ctx, root, resolved, opts)
 	}
-	s.logger.Debug("staging installation", "root", root, "reason", reason)
+	s.logger.Debug("staging installation", "root", root, "reason", "installation missing or stale")
 	opts.Trace.phaseStarted("install")
 	start := time.Now()
 	installed := false
@@ -184,10 +225,53 @@ func (s *Service) stageInstall(
 		return nil, err
 	}
 	defer os.RemoveAll(stage)
-	if err := s.stageServerTree(ctx, stage, resolved, check.Executable(), store, opts); err != nil {
+	existingReceipt, err := receipt.Read(root)
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
 		return nil, err
 	}
-	overwritePaths, err := s.stagePackages(root, stage, resolved, store, opts)
+	bCurrent, err := bootstrapCurrent(root, resolved, existingReceipt, s.logger)
+	if err != nil {
+		return nil, err
+	}
+	var bootstrapOutputs map[string]bootstrap.Output
+	stagedBootstrap := !bCurrent
+	if stagedBootstrap {
+		// Bootstrap validation and package staging must not share a view of
+		// the stage. ValidateStagedOutputs walks the server tree and accepts only the
+		// method's declared outputs, so packages and wrapper files staged
+		// alongside it would be rejected as unpermitted runtime content.
+		bootstrapOutputs, err = s.stageServerTree(
+			ctx, stage, resolved, check.Executable(), store, opts,
+		)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		s.logger.Debug("bootstrap already current; skipping server tree staging", "root", root)
+	}
+	mcdrOutputs := mcdrWrapperOutputs(resolved)
+	stagedOutputs := make(map[string]bootstrap.Output, len(bootstrapOutputs)+len(mcdrOutputs))
+	for path, output := range bootstrapOutputs {
+		stagedOutputs[path] = output
+	}
+	for path, output := range mcdrOutputs {
+		for existing := range stagedOutputs {
+			if !strings.EqualFold(existing, path) {
+				continue
+			}
+			if existing == path ||
+				workspacewrite.InstallPathsAlias(root, existing, path) {
+				return nil, fmt.Errorf(
+					"bootstrap output %s and MCDR wrapper output %s claim the same path",
+					existing, path,
+				)
+			}
+		}
+		stagedOutputs[path] = output
+	}
+	overwritePaths, err := s.stagePackages(
+		root, stage, resolved, store, stagedOutputs, opts,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -199,19 +283,13 @@ func (s *Service) stageInstall(
 	if err := validateUnmanagedArtifacts(ctx, root, resolved, opts.Overwrite, s.logger); err != nil {
 		return nil, err
 	}
-	adoptedPaths := map[string]bool{}
-	adoption, err := receiptAdoptsRuntime(root)
+	counts, err := applyCommit(
+		root, stage, d, resolved, opts.PublishManifest,
+		overwritePaths, stagedOutputs, mcdrOutputs, stagedBootstrap, installCommitReconcile, s.logger,
+	)
 	if err != nil {
 		return nil, err
 	}
-	if adoption {
-		adoptedPaths = adoptedOutputPaths(root, resolved.Server, s.logger)
-	}
-	counts, err := applyCommit(root, stage, d, resolved, opts.PublishManifest, overwritePaths, adoptedPaths, s.logger)
-	if err != nil {
-		return nil, err
-	}
-	removeSupersededPaperCore(root, resolved, s.logger)
 	result.Files = counts
 	result.PublishedManifest = opts.PublishManifest
 	result.PublishedLock = opts.publishLock || opts.PublishManifest
@@ -220,7 +298,11 @@ func (s *Service) stageInstall(
 }
 
 // stageServerTree materializes the locked core and inputs, then runs the
-// bootstrap that prepares the server tree in stage.
+// bootstrap that prepares the server tree in stage. It returns the validated
+// bootstrap outputs by workspace path. Validation happens here, while stage
+// contains bootstrap material only: later staged packages and wrapper files
+// are not part of the method's output contract and must not be inspected
+// against it.
 func (s *Service) stageServerTree(
 	ctx context.Context,
 	stage string,
@@ -228,10 +310,23 @@ func (s *Service) stageServerTree(
 	java string,
 	store *downloadStore,
 	opts Options,
-) error {
+) (map[string]bootstrap.Output, error) {
+	if opts.Locked {
+		if err := requirePinnedArtifact(resolved.Server.Artifact.Hashes, resolved.Server.Artifact.Filename); err != nil {
+			return nil, err
+		}
+		for _, input := range resolved.Server.Inputs {
+			if input.Embedded != "" {
+				continue
+			}
+			if err := requirePinnedArtifact(input.Artifact.Hashes, input.Path); err != nil {
+				return nil, err
+			}
+		}
+	}
 	core, err := store.materialize(&resolved.Server.Artifact)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	resolved.Server.Artifact.Hashes = core.Hashes
 	inputs := map[string]string{}
@@ -242,7 +337,7 @@ func (s *Service) stageServerTree(
 		}
 		materialized, err := store.materialize(&input.Artifact)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		input.Artifact.Hashes = materialized.Hashes
 		inputs[input.Path] = materialized.Path
@@ -256,28 +351,86 @@ func (s *Service) stageServerTree(
 		java,
 		opts.Trace.processOutput(),
 	); err != nil {
-		return err
+		return nil, err
+	}
+	// Verify the dynamic result now, while the server tree is the only
+	// content in stage. This emits the output classification the commit
+	// uses, including discard and seed policy, without re-walking the tree
+	// after packages and wrapper files join it.
+	stagedOutputs, err := bootstrap.ValidateStagedOutputs(stage, resolved.Server)
+	if err != nil {
+		return nil, err
+	}
+	outputs := make(map[string]bootstrap.Output, len(stagedOutputs))
+	for _, output := range stagedOutputs {
+		outputs[output.Path] = output
 	}
 	s.logger.Debug(
 		"server tree prepared",
 		"stage", stage,
 		"core", resolved.Server.Filename,
 		"inputs", len(inputs),
+		"outputs", len(outputs),
 	)
-	return nil
+	return outputs, nil
+}
+
+func requirePinnedArtifact(hashes map[string]string, name string) error {
+	hasDigest := false
+	for algorithm, digest := range hashes {
+		switch algorithm {
+		case "sha256", "sha512", "sha1", "md5":
+		default:
+			return fmt.Errorf("locked artifact %s has unsupported digest %s", name, algorithm)
+		}
+		hasDigest = hasDigest || strings.TrimSpace(digest) != ""
+	}
+	if hasDigest {
+		return nil
+	}
+	return fmt.Errorf("locked artifact %s has no pinned digest", name)
+}
+
+// mcdrWrapperOutputs declares the files writeMCDRWrapper stages for an
+// installation with an MCDReforged wrapper. They are not part of the server
+// bootstrap method's contract, so they are classified here by exact path: the
+// generated config is seeded only when the workspace has none, and the
+// launcher script is managed. Filename heuristics cannot express that
+// distinction once bootstrap and wrapper outputs share a stage.
+func mcdrWrapperOutputs(resolved *document.Lock) map[string]bootstrap.Output {
+	if resolved == nil || resolved.MCDR == nil {
+		return nil
+	}
+	directory := resolved.MCDR.Directory
+	config := filepath.ToSlash(filepath.Join(directory, "config.yml"))
+	launcher := filepath.ToSlash(filepath.Join(directory, "run-mcdr.sh"))
+	return map[string]bootstrap.Output{
+		config: {
+			Path:   config,
+			Policy: bootstrap.PolicySeed,
+			Role:   bootstrap.RoleRuntime,
+		},
+		launcher: {
+			Path:   launcher,
+			Policy: bootstrap.PolicyManaged,
+			Role:   bootstrap.RoleRuntime,
+		},
+	}
 }
 
 // stagePackages copies every enabled package into stage after rejecting
-// destinations two packages both claim. It returns the destinations an
-// overwrite may replace.
+// destinations two packages both claim or a package shares with a staged
+// bootstrap or wrapper output. It returns the destinations an overwrite may
+// replace.
 func (s *Service) stagePackages(
 	root string,
 	stage string,
 	resolved *document.Lock,
 	store *downloadStore,
+	stagedOutputs map[string]bootstrap.Output,
 	opts Options,
 ) (map[string]bool, error) {
-	if err := rejectSharedDestinations(root, resolved); err != nil {
+	if err := rejectSharedDestinations(root, resolved, stagedOutputs); err != nil {
 		return nil, err
 	}
 	staged := 0
@@ -412,11 +565,22 @@ func (s *Service) coreReusable(ctx context.Context, d *document.Manifest, old *d
 }
 
 // rejectSharedDestinations enforces the lock's installability guarantee: a
-// destination two active packages both claim, or two destinations the target
-// filesystem resolves to one entry, must fail before anything is written. Left
+// destination two active packages both claim, two destinations the target
+// filesystem resolves to one entry, or a package destination that claims a
+// bootstrap or wrapper output must fail before anything is written. Left
 // unguarded the later copy silently replaces the earlier one, so the workspace
-// diverges from a lock that still reports itself as current.
-func rejectSharedDestinations(root string, resolved *document.Lock) error {
+// diverges from a lock that still reports itself as current, and the commit
+// would attribute the surviving bytes to the wrong origin.
+func rejectSharedDestinations(
+	root string,
+	resolved *document.Lock,
+	stagedOutputs map[string]bootstrap.Output,
+) error {
+	outputs := make(map[string][]bootstrap.Output, len(stagedOutputs))
+	for _, output := range stagedOutputs {
+		key := strings.ToLower(output.Path)
+		outputs[key] = append(outputs[key], output)
+	}
 	type claim struct {
 		path     string
 		identity string
@@ -431,8 +595,23 @@ func rejectSharedDestinations(root string, resolved *document.Lock) error {
 		if err != nil {
 			return err
 		}
+		destination = filepath.ToSlash(filepath.Clean(destination))
 		identity := p.Artifact.Provider.String() + ":" + p.Artifact.ProjectID
 		key := strings.ToLower(destination)
+		for _, output := range outputs[key] {
+			if output.Path == destination {
+				return fmt.Errorf(
+					"package %s installs to %s, which bootstrap already produces",
+					identity, destination,
+				)
+			}
+			if workspacewrite.InstallPathsAlias(root, output.Path, destination) {
+				return fmt.Errorf(
+					"package %s installs to %s, which aliases bootstrap output %s",
+					identity, destination, output.Path,
+				)
+			}
+		}
 		for _, prior := range claimed[key] {
 			if prior.path == destination {
 				return fmt.Errorf(

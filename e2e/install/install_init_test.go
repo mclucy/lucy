@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/binary"
+	"encoding/json/v2"
 	"fmt"
 	"maps"
 	"os"
@@ -103,6 +104,23 @@ func executeInitInstall(t *testing.T, binary, id string) {
 	if err := scenario.verifyInstalled(root, locked); err != nil {
 		t.Fatalf("installed runtime: %v", err)
 	}
+	output, err := runner.execute(ctx, root, "install", "--locked", "--offline", "--json-compact")
+	if err != nil {
+		t.Fatalf("replay installed runtime offline: %v", err)
+	}
+	var replay struct {
+		Phases []struct {
+			Name string `json:"name"`
+		} `json:"phases"`
+	}
+	if err := json.Unmarshal([]byte(output), &replay); err != nil {
+		t.Fatalf("decode replay result: %v", err)
+	}
+	for _, phase := range replay.Phases {
+		if phase.Name == "install" {
+			t.Fatal("unchanged runtime was staged again")
+		}
+	}
 }
 
 // TestInitUpgrade initializes a real modpack directory and upgrades it in
@@ -173,8 +191,11 @@ func TestInitUpgrade(t *testing.T) {
 	}
 }
 
-// verifyInitializedReceipt checks that initialization recorded the packages it
-// identified. A workspace without identified packages keeps no receipt.
+// verifyInitializedReceipt checks the receipt initialization wrote. Explicit
+// adoption records the runtime outputs and packages it identified, so a
+// receipt is expected whenever observation established ownership. Every
+// recorded file must still match its digest, and every locked package must be
+// recorded.
 func verifyInitializedReceipt(root string) error {
 	locked, err := readLock(root)
 	if err != nil {
@@ -182,16 +203,10 @@ func verifyInitializedReceipt(root string) error {
 	}
 	path := filepath.Join(root, ".lucy", "install.yaml")
 	raw, err := os.ReadFile(path)
-	if len(locked.Packages) == 0 {
-		if os.IsNotExist(err) {
+	if err != nil {
+		if os.IsNotExist(err) && len(locked.Packages) == 0 {
 			return nil
 		}
-		if err != nil {
-			return err
-		}
-		return fmt.Errorf("init recorded a receipt for a workspace without identified packages")
-	}
-	if err != nil {
 		return fmt.Errorf("read initialized receipt: %w", err)
 	}
 	var receipt struct {
@@ -309,7 +324,7 @@ func TestAdoptInstall(t *testing.T) {
 				)
 			}
 			live := filepath.Join(root, filepath.FromSlash(locked.Server.Directory))
-			if err := verifyBootstrapInputs(live, locked.Server.Inputs, nil); err != nil {
+			if err := verifyBootstrapInputs(live, locked.Server.Bootstrapper, locked.Server.Inputs, nil); err != nil {
 				t.Fatalf("bootstrap inputs: %v", err)
 			}
 			for _, relative := range []string{
@@ -325,13 +340,6 @@ func TestAdoptInstall(t *testing.T) {
 			generatedShim, err := fileSHA256(filepath.Join(live, "fabric-server-launch.jar"))
 			if err != nil {
 				t.Fatal(err)
-			}
-			launcherBytes, err := os.ReadFile(filepath.Join(live, "fabric-server-launch.jar"))
-			if err != nil {
-				t.Fatal(err)
-			}
-			if bytes.Contains(launcherBytes, adoptedLauncherComment) {
-				t.Error("install kept the adopted launcher instead of generating its own")
 			}
 			for relative, want := range unchanged {
 				actual, err := fileSHA256(filepath.Join(root, filepath.FromSlash(relative)))
@@ -354,6 +362,11 @@ func TestAdoptInstall(t *testing.T) {
 			}
 			if again != generatedShim {
 				t.Error("reinstall regenerated the launcher it already owns")
+			}
+			if scenario.packages > 0 {
+				if _, err := runner.execute(ctx, root, "init", "--force", "--no-interactive"); err != nil {
+					t.Fatalf("reinitialize adopted packages: %v", err)
+				}
 			}
 		})
 	}

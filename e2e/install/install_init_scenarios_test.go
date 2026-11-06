@@ -54,6 +54,14 @@ var initInstallScenarios = map[string]initInstallScenario{
 		requiredInputs:  []string{"libraries/net/minecraftforge/forge/1.20.1-47.4.10/forge-1.20.1-47.4.10-universal.jar"},
 		launchArguments: "libraries/net/minecraftforge/forge/1.20.1-47.4.10/unix_args.txt",
 	},
+	"forge-12111": {
+		product:         "forge",
+		minecraft:       "1.21.11",
+		coreVersion:     "61.2.0",
+		requiredFiles:   []string{"run.sh", "user_jvm_args.txt", "forge-1.21.11-61.2.0-shim.jar"},
+		requiredInputs:  []string{"libraries/net/minecraftforge/forge/1.21.11-61.2.0/forge-1.21.11-61.2.0-universal.jar"},
+		launchArguments: "libraries/net/minecraftforge/forge/1.21.11-61.2.0/unix_args.txt",
+	},
 	"paper": {
 		product:        "paper",
 		minecraft:      "1.21.11",
@@ -117,7 +125,7 @@ func (scenario initInstallScenario) verifyInstalled(root string, locked lockDocu
 			return fmt.Errorf("server core: %w", err)
 		}
 	}
-	if err := verifyBootstrapInputs(live, locked.Server.Inputs, scenario.requiredInputs); err != nil {
+	if err := verifyBootstrapInputs(live, locked.Server.Bootstrapper, locked.Server.Inputs, scenario.requiredInputs); err != nil {
 		return err
 	}
 	if err := verifyRuntimeFiles(live, installScenario{

@@ -17,7 +17,13 @@ For CI, `lucy install --locked` fails when the lock is missing or out of date in
 
 Install places the files the lock lists. It removes files it installed or took over earlier that the lock no longer lists, including the previous version of a package it upgrades; files it does not recognize are left alone.
 
-Installation stops when a destination file already exists. Pass `--overwrite` to replace it, including jars from a manual setup. It also refuses a server whose mod dependencies cannot be satisfied; `--accept-broken` installs the declared packages anyway.
+Installation stops when an existing unmanaged file occupies a package destination. Pass `--overwrite` to replace files already present at package destinations, such as mods or plugins from a manual setup. The last committed content hash in `.lucy/install.yaml` serves as a conflict baseline protecting local edits rather than a lockfile reproducibility pin, so locally modified files are never silently overwritten or pruned, and re-initialization preserves existing modification baselines. Seed files are initialized once when missing and remain user-owned; modifying a seed file never blocks installation or triggers replacement.
+
+Ownership is tracked exclusively in the installation receipt. If the receipt is missing or lost, existing workspace files are treated as unmanaged; matching file contents, directory scopes, or prior execution never grant implicit ownership. When an existing workspace is adopted in place through [`lucy init`](/commands/init), lucy records verified runtime files and packages into the receipt atomically without executing bootstrap installers, establishing exact ownership boundaries for subsequent installs.
+
+Later installs reuse an adopted runtime when it still matches the lock and its managed files are unchanged.
+
+Installation also refuses a server whose mod dependencies cannot be satisfied; `--accept-broken` installs the declared packages anyway.
 
 `--with-optional` adds optional dependencies and writes them into `lucy.yaml`, so they remain part of the server on later installs. It resolves again even when the lock is current.
 
@@ -25,7 +31,7 @@ Files tracked with [`lucy file`](/commands/file) are not overwritten. If an immu
 
 ## Offline
 
-`lucy install --offline` uses only files already present in the global artifact store or the shared network cache. It replays a current lock in a new workspace when every required artifact is available and the required local prerequisites are present, such as a Java runtime for a step that runs Java. It fails when the manifest needs a new resolution, an artifact is unavailable, or a prerequisite is missing. A file whose contents do not match the lock counts as missing, even if it exists.
+`lucy install --offline` uses only files already present in the global artifact store or the shared network cache. It replays a current lock in a new workspace when every required artifact is available and the required local prerequisites are present, such as a Java runtime for a step that runs Java. It fails when the manifest needs a new resolution, an artifact is unavailable, or a prerequisite is missing. A file whose contents do not match the lock counts as missing, even if it exists. If the lock records multiple checksums, each must match.
 
 ### Artifact store and download cache
 

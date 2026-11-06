@@ -498,11 +498,12 @@ func ValidateOwnership(root string, files []documentpkg.TrackedFile, locked *doc
 	}
 	if locked != nil {
 		server := locked.Server
-		for _, name := range bootstrap.Outputs(server) {
-			add(server.Directory, name)
+		paths, err := bootstrap.Outputs(server)
+		if err != nil {
+			return err
 		}
-		for _, input := range server.Inputs {
-			add(server.Directory, input.Path)
+		for _, name := range paths {
+			add(server.Directory, name)
 		}
 		if locked.MCDR != nil {
 			add(locked.MCDR.Directory, "run-mcdr.sh")

@@ -233,6 +233,9 @@ func (r *Result) selectableInstallations() []*Installation {
 		if !selectableInstallation(installation) {
 			continue
 		}
+		if entry := chooseEntryPoint(installation); entry == nil || entry.Ownership == OwnershipUnreadable {
+			continue
+		}
 		selectable = append(selectable, installation)
 	}
 	return selectable
@@ -328,16 +331,27 @@ func firstEntryPoint(installation *Installation) *File {
 	return nil
 }
 
-// chooseEntryPoint prefers a receipt-managed entry point, then the lexical
-// first entry point. Filesystem timestamps never participate.
+// chooseEntryPoint prefers a receipt-managed entry point, then a locally
+// modified owned entry point, then a readable unmanaged entry point, and
+// finally any remaining unreadable entry point. Filesystem timestamps never participate.
 func chooseEntryPoint(installation *Installation) *File {
 	if installation == nil {
 		return nil
 	}
-	var first, managed *File
+	var firstReadable, unreadable, modified, managed *File
 	for file := range installation.EntryPoints() {
-		if first == nil || file.Path < first.Path {
-			first = file
+		if file.Ownership == OwnershipUnreadable {
+			if unreadable == nil || file.Path < unreadable.Path {
+				unreadable = file
+			}
+			continue
+		}
+		if firstReadable == nil || file.Path < firstReadable.Path {
+			firstReadable = file
+		}
+		if file.Ownership == OwnershipModified &&
+			(modified == nil || file.Path < modified.Path) {
+			modified = file
 		}
 		if file.Ownership == OwnershipManaged &&
 			(managed == nil || file.Path < managed.Path) {
@@ -347,16 +361,36 @@ func chooseEntryPoint(installation *Installation) *File {
 	if managed != nil {
 		return managed
 	}
-	return first
+	if modified != nil {
+		return modified
+	}
+	if firstReadable != nil {
+		return firstReadable
+	}
+	return unreadable
 }
 
-func hasManagedEntryPoint(installation *Installation) bool {
+func entryPointOwnershipRank(installation *Installation) int {
+	best := 0
 	for file := range installation.EntryPoints() {
-		if file.Ownership == OwnershipManaged {
-			return true
+		rank := 0
+		switch file.Ownership {
+		case OwnershipManaged:
+			rank = 4
+		case OwnershipModified:
+			rank = 3
+		case OwnershipUnreadable:
+			rank = 2
+		case OwnershipUnmanaged:
+			rank = 1
+		default:
+			rank = 0
+		}
+		if rank > best {
+			best = rank
 		}
 	}
-	return false
+	return best
 }
 
 func preferredInstallation(candidates []*Installation) *Installation {
@@ -381,13 +415,10 @@ func preferInstallation(left, right *Installation) int {
 	if leftOrder != rightOrder {
 		return leftOrder - rightOrder
 	}
-	leftManaged := hasManagedEntryPoint(left)
-	rightManaged := hasManagedEntryPoint(right)
-	if leftManaged != rightManaged {
-		if leftManaged {
-			return -1
-		}
-		return 1
+	leftRank := entryPointOwnershipRank(left)
+	rightRank := entryPointOwnershipRank(right)
+	if leftRank != rightRank {
+		return rightRank - leftRank
 	}
 	if result := strings.Compare(identityKey(left.Identity), identityKey(right.Identity)); result != 0 {
 		return result

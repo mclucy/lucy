@@ -16,6 +16,7 @@ import (
 	"github.com/mclucy/lucy/document"
 	"github.com/mclucy/lucy/internal/fsutil"
 	"github.com/mclucy/lucy/internal/maven"
+	"github.com/mclucy/lucy/internal/workspacewrite"
 )
 
 // prepareForgeInstaller runs the processors of a Forge or NeoForge installer
@@ -26,6 +27,9 @@ func prepareForgeInstaller(ctx context.Context, root string, server document.Loc
 		return err
 	}
 	var profile struct {
+		// Path names the launch artifact the installer extracts from its
+		// bundled Maven tree. Shim-era Forge profiles name the root shim.
+		Path string `json:"path"`
 		Data map[string]struct {
 			Server string `json:"server"`
 		} `json:"data"`
@@ -40,6 +44,11 @@ func prepareForgeInstaller(ctx context.Context, root string, server document.Loc
 	if err := json.Unmarshal(raw, &profile); err != nil {
 		return err
 	}
+	if profile.Path != "" {
+		if err := extractProfileArtifact(root, z, profile.Path); err != nil {
+			return err
+		}
+	}
 	vars := map[string]string{
 		"SIDE":              "server",
 		"ROOT":              root,
@@ -51,6 +60,9 @@ func prepareForgeInstaller(ctx context.Context, root string, server document.Loc
 	for key, value := range profile.Data {
 		v := value.Server
 		if strings.HasPrefix(v, "/") {
+			if key == "" || key == "." || key == ".." || strings.ContainsAny(key, "/\\") {
+				return fmt.Errorf("invalid installer data key %q", key)
+			}
 			destination := filepath.Join(root, ".bootstrap-data", key)
 			if err := extractLockedEntry(z, strings.TrimPrefix(v, "/"), destination); err != nil {
 				return err
@@ -66,7 +78,7 @@ func prepareForgeInstaller(ctx context.Context, root string, server document.Loc
 			return strings.Trim(value, "'"), nil
 		}
 		if strings.HasPrefix(value, "[") && strings.HasSuffix(value, "]") {
-			p, err := maven.Path(value[1 : len(value)-1])
+			p, err := safeForgeMavenPath(value[1 : len(value)-1])
 			return filepath.Join(root, "libraries", p), err
 		}
 		for range 16 {
@@ -128,12 +140,19 @@ func prepareForgeInstaller(ctx context.Context, root string, server document.Loc
 			if mappingOutput == "" {
 				return fmt.Errorf("mojang mappings processor has no output")
 			}
+			relative, err := filepath.Rel(root, mappingOutput)
+			if err != nil || !filepath.IsLocal(relative) {
+				return fmt.Errorf("installer mapping output %q escapes staging", mappingOutput)
+			}
+			if err := workspacewrite.SafePath(root, relative); err != nil {
+				return err
+			}
 			if err := fsutil.AtomicCopyFile(filepath.Join(root, "server-mappings.txt"), mappingOutput, 0o644); err != nil {
 				return err
 			}
 			continue
 		}
-		p, err := maven.Path(proc.Jar)
+		p, err := safeForgeMavenPath(proc.Jar)
 		if err != nil {
 			return err
 		}
@@ -144,7 +163,7 @@ func prepareForgeInstaller(ctx context.Context, root string, server document.Loc
 		}
 		classpath := []string{processorJar}
 		for _, coordinate := range proc.Classpath {
-			p, err := maven.Path(coordinate)
+			p, err := safeForgeMavenPath(coordinate)
 			if err != nil {
 				return err
 			}
@@ -180,29 +199,61 @@ func prepareForgeInstaller(ctx context.Context, root string, server document.Loc
 		}
 	}
 	// Profile extraction processors generate the native server launch scripts.
+	argsPath := forgeArgsPath(server.Product, server.Minecraft.String(), server.CoreVersion.String())
 	if _, err := os.Stat(filepath.Join(root, "run.sh")); err != nil {
-		prefix := "net/neoforged/neoforge/"
-		if server.Product == "forge" {
-			prefix = "net/minecraftforge/forge/"
-		}
-		version := server.CoreVersion.String()
-		if server.Product == "forge" {
-			version = server.Minecraft.String() + "-" + version
-		}
-		argsPath := "libraries/" + prefix + version + "/unix_args.txt"
 		if _, err := os.Stat(filepath.Join(root, filepath.FromSlash(argsPath))); err != nil {
 			return fmt.Errorf("installer did not generate server launch arguments: %w", err)
 		}
 		if err := os.WriteFile(filepath.Join(root, "run.sh"), []byte("#!/bin/sh\ncd -- \"$(dirname -- \"$0\")\"\nexec java @user_jvm_args.txt @"+argsPath+" \"$@\"\n"), 0o755); err != nil {
 			return err
 		}
-		if _, err := os.Stat(filepath.Join(root, "user_jvm_args.txt")); os.IsNotExist(err) {
-			if err := os.WriteFile(filepath.Join(root, "user_jvm_args.txt"), nil, 0o644); err != nil {
-				return err
-			}
+	}
+	if _, err := os.Stat(filepath.Join(root, "run.bat")); os.IsNotExist(err) {
+		winArgsPath := forgeWinArgsPath(server.Product, server.Minecraft.String(), server.CoreVersion.String())
+		argsForBat := winArgsPath
+		if _, err := os.Stat(filepath.Join(root, filepath.FromSlash(winArgsPath))); err != nil {
+			argsForBat = argsPath
+		}
+		if err := os.WriteFile(filepath.Join(root, "run.bat"), []byte("@echo off\r\ncd /d %~dp0\r\njava @user_jvm_args.txt @"+argsForBat+" %*\r\n"), 0o644); err != nil {
+			return err
+		}
+	}
+	if _, err := os.Stat(filepath.Join(root, "user_jvm_args.txt")); os.IsNotExist(err) {
+		if err := os.WriteFile(filepath.Join(root, "user_jvm_args.txt"), nil, 0o644); err != nil {
+			return err
 		}
 	}
 	return nil
+}
+
+// extractProfileArtifact writes the launch artifact an installer profile
+// names. The installer bundles it under maven/, mirroring the repository path
+// it would otherwise download, and extracts it to the server root under its
+// filename. Shim-era Forge profiles name the root shim here.
+func extractProfileArtifact(root string, z *zip.Reader, coordinate string) error {
+	rel, err := maven.Path(coordinate)
+	if err != nil {
+		return fmt.Errorf("installer profile artifact: %w", err)
+	}
+	if err := document.SafeRelativePath(rel); err != nil || !filepath.IsLocal(rel) {
+		return fmt.Errorf("invalid installer profile artifact %q", coordinate)
+	}
+	return extractLockedEntry(
+		z,
+		"maven/"+rel,
+		filepath.Join(root, filepath.Base(rel)),
+	)
+}
+
+func safeForgeMavenPath(coordinate string) (string, error) {
+	p, err := maven.Path(coordinate)
+	if err != nil {
+		return "", err
+	}
+	if err := document.SafeRelativePath(p); err != nil || !filepath.IsLocal(p) {
+		return "", fmt.Errorf("invalid installer coordinate %q", coordinate)
+	}
+	return p, nil
 }
 
 func readLockedEntry(z *zip.Reader, name string) ([]byte, error) {

@@ -255,20 +255,18 @@ func requireLockOmitsEntryPoint(t *testing.T, root string) {
 }
 
 // verifyReceipt checks the installation receipt against the packages init
-// identified. Every locked package file must be recorded so a later upgrade
-// may replace it, and every recorded file must exist with the recorded digest.
-// A workspace whose packages all stayed unidentified keeps no receipt.
+// identified. Explicit adoption also records verified runtime outputs, so a
+// receipt may be present even when no package was identified. Every recorded
+// file must exist with the recorded digest, and every locked package must be
+// recorded.
 func verifyReceipt(t *testing.T, root string, want bool) {
 	t.Helper()
 	path := filepath.Join(root, ".lucy", "install.yaml")
 	raw, err := os.ReadFile(path)
-	if !want {
-		if !os.IsNotExist(err) {
-			t.Errorf("init recorded an installation receipt: %v", err)
-		}
-		return
-	}
 	if err != nil {
+		if os.IsNotExist(err) && !want {
+			return
+		}
 		t.Fatalf("expected an installation receipt: %v", err)
 	}
 	var receipt struct {
@@ -293,9 +291,11 @@ func verifyReceipt(t *testing.T, root string, want bool) {
 			t.Errorf("receipt digest for %s = %q, want %q", entry.Path, entry.SHA256, got)
 		}
 	}
-	for _, pkg := range readLock(t, root).Packages {
-		if !recorded[pkg.Filename] {
-			t.Errorf("receipt records no entry for locked package %s", pkg.Filename)
+	if want {
+		for _, pkg := range readLock(t, root).Packages {
+			if !recorded[pkg.Filename] {
+				t.Errorf("receipt records no entry for locked package %s", pkg.Filename)
+			}
 		}
 	}
 }

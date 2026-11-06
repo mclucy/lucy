@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 
 	"github.com/mclucy/lucy/document"
 	"github.com/mclucy/lucy/internal/fsutil"
@@ -20,6 +21,11 @@ import (
 // Java executable for the bootstrap steps that run Java; it may be empty when
 // no runtime is installed, and only those steps fail then.
 func PrepareLocked(ctx context.Context, stage string, server document.LockedServer, corePath string, inputs map[string]string, java string, output io.Writer) error {
+	for _, part := range []string{server.Minecraft.String(), server.CoreVersion.String()} {
+		if part == "" || part == "." || part == ".." || strings.ContainsAny(part, "/\\") {
+			return fmt.Errorf("invalid locked server version %q", part)
+		}
+	}
 	if err := document.SafeRelativePath(server.Directory); err != nil {
 		return err
 	}
