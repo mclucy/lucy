@@ -137,14 +137,12 @@ func (s *Service) stageInstall(
 	if err != nil {
 		return nil, err
 	}
-	// The MCDReforged wrapper is generated on every run but carries no
-	// fingerprint of its own. Metadata-only commands must not execute runtimes,
-	// while an ordinary current MCDR install reconciles just the wrapper
-	// through the journal so its accepted baseline stays current.
+	// Publishing documents alone does not require an available MCDR runtime.
+	// An explicit venv request still reconciles the wrapper.
 	metadataOnly := opts.PublishManifest || opts.publishLock
-	mcdrCurrent := resolved.MCDR == nil ||
-		mcdrWrapperCurrent(root, resolved, s.python, opts.MCDRVenv)
-	if current && (resolved.MCDR == nil || mcdrCurrent) {
+	reconcileMCDR := !metadataOnly || opts.MCDRVenv
+	if current && (!reconcileMCDR || resolved.MCDR == nil ||
+		mcdrWrapperCurrent(root, resolved, s.python, opts.MCDRVenv)) {
 		s.logger.Info(
 			"installation already current",
 			"root", root,
