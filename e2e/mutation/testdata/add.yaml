@@ -122,11 +122,12 @@
       directory: server
       core:
         product: fabric
-        product_version: "0.16.9"
+        product_version: "0.19.5"
       packages:
         fabric:
           modrinth:fabric-api: "0.116.17+1.21.1"
           modrinth:cobblemon: "1.8.2"
+          modrinth:cobblemon-tim-core: "1.8.2-fabric-1.36.1"
           modrinth:open-loader: "21.1.5"
           modrinth:placeholder-api: "2.4.2+1.21"
           modrinth:clumps: "19.0.0.1"
@@ -138,7 +139,7 @@
           modrinth:lithium: "mc1.21.1-0.15.4-fabric"
           modrinth:ferrite-core: "7.0.3-fabric"
   args:
-    - "modrinth:appleskin@3.0.6+mc1.21"
+    - "modrinth:cobblemon-counter@1.8.2-fabric-1.9.2"
 
 - id: add-fabric-tech-automation
   manifest: |
@@ -939,7 +940,7 @@
           modrinth:lithium: "any"
           modrinth:ferrite-core: "any"
   args:
-    - "modrinth:appleskin@any"
+    - "modrinth:farmers-knives@3.2"
 
 - id: add-fabric-zombie-survival
   manifest: |
@@ -1061,7 +1062,7 @@
           curseforge:iron-chests: "any"
           modrinth:ferrite-core: "any"
   args:
-    - "modrinth:appleskin@any"
+    - "modrinth:cooking-for-blockheads@16.0.15+forge-1.20.1"
 
 - id: add-neoforge-train-works
   manifest: |
