@@ -182,13 +182,6 @@ tasks:
     cmds:
       - go run ./tools/genwiki -out dist/wiki
 
-  e2e:status:
-    desc: "Probe sandboxes with the built CLI (args: -run 'TestProbe/<sandbox id>')"
-    deps:
-      - build
-    cmds:
-      - go test -tags e2e -count=1 -timeout 0 ./e2e/status {{.CLI_ARGS}}
-
   e2e:init:
     desc: "Initialize modpack manifests from sandboxes (args: -run 'TestInitialize/<modpack id>')"
     deps:
@@ -210,12 +203,19 @@ tasks:
     cmds:
       - LUCY_COMPILE_LAYER=smoke go test -tags e2e -count=1 -timeout 0 -parallel 1 ./e2e/compile {{.CLI_ARGS}}
 
-  e2e:install:
-    desc: "Run fresh and init-then-install scenarios (args: -run 'Test(Init)?Install/<scenario id>')"
+  e2e:mutation:
+    desc: "Run the full heuristic mutation suite with the built CLI (args: -run '<case id>')"
     deps:
       - build
     cmds:
-      - go test -tags e2e -count=1 -timeout 0 -parallel 2 ./e2e/install {{.CLI_ARGS}}
+      - LUCY_HEURISTIC_LAYER=full go test -tags e2e -count=1 -timeout 0 -parallel 3 -v ./e2e/mutation {{.CLI_ARGS}}
+
+  e2e:mutation:smoke:
+    desc: "Run the smoke layer of the heuristic mutation suite (args: -run '<case id>')"
+    deps:
+      - build
+    cmds:
+      - LUCY_HEURISTIC_LAYER=smoke go test -tags e2e -count=1 -timeout 0 -parallel 3 -v ./e2e/mutation {{.CLI_ARGS}}
 
   ci:test:
     desc: Run the CI verification suite (for GitHub Actions); conditionally generates cipher material

@@ -153,10 +153,3 @@ func copyFile(source, target string) error {
 	}
 	return out.Close()
 }
-
-// HasSandbox reports whether the generated sandbox directory for id exists.
-func HasSandbox(t *testing.T, id string) bool {
-	t.Helper()
-	info, err := os.Stat(filepath.Join(Sandboxes(t), id))
-	return err == nil && info.IsDir()
-}

@@ -1,0 +1,1348 @@
+- id: smoke-add-fabric-api-pinned
+  smoke: true
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.21.4"
+      directory: server
+      core:
+        product: fabric
+        product_version: "0.16.10"
+      packages:
+        fabric:
+          modrinth:lithium: "mc1.21.4-0.15.3-fabric"
+          modrinth:ferrite-core: "7.1.3-fabric"
+          modrinth:krypton: "0.2.8"
+          modrinth:c2me-fabric: "any"
+          modrinth:alternate-current: "any"
+          modrinth:chunky: "1.4.27"
+          modrinth:spark: "1.10.121-fabric"
+          modrinth:servercore: "1.5.8+1.21.4"
+          modrinth:modernfix: "5.20.3+mc1.21.4"
+          modrinth:vmp-fabric: "any"
+          modrinth:carpet: "1.4.161"
+          modrinth:fastback: "any"
+  args:
+    - "modrinth:fabric-api@0.119.4+1.21.4"
+
+- id: smoke-add-offline-missing-cache
+  smoke: true
+  setup:
+    - install
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.21.4"
+      directory: server
+      core:
+        product: fabric
+        product_version: "0.16.9"
+      packages:
+        fabric:
+          modrinth:fabric-api: "0.119.4+1.21.4"
+          modrinth:lithium: "mc1.21.4-0.15.3-fabric"
+          modrinth:ferrite-core: "7.1.3-fabric"
+          modrinth:chunky: "1.4.27"
+          modrinth:flan: "1.21.4-1.11.7.b-fabric"
+          modrinth:fastback: "any"
+          modrinth:vmp-fabric: "any"
+          modrinth:carpet: "1.4.161"
+          modrinth:invview: "any"
+          modrinth:servercore: "1.5.8+1.21.4"
+          modrinth:krypton: "0.2.8"
+  args:
+    - "--offline"
+    - "modrinth:waystones@21.4.19+fabric-1.21.4"
+
+- id: smoke-add-locked-satisfied
+  smoke: true
+  setup:
+    - install
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.21.4"
+      directory: server
+      core:
+        product: fabric
+        product_version: "0.16.9"
+      packages:
+        fabric:
+          modrinth:fabric-api: "0.119.4+1.21.4"
+          modrinth:lithium: "mc1.21.4-0.15.3-fabric"
+          modrinth:servercore: "1.5.8+1.21.4"
+          modrinth:carpet: "1.4.161"
+          modrinth:worldedit: "any"
+          modrinth:open-parties-and-claims: "any"
+          modrinth:invview: "any"
+          modrinth:fastback: "any"
+          modrinth:vanish: "any"
+          modrinth:armorstandeditor: "any"
+          modrinth:styled-chat: "any"
+  args:
+    - "--locked"
+    - "modrinth:fabric-api@0.119.4+1.21.4"
+
+- id: add-fabric-vanilla-plus-smp
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.21.4"
+      directory: server
+      core:
+        product: fabric
+        product_version: "0.16.9"
+      packages:
+        fabric:
+          modrinth:fabric-api: "0.119.4+1.21.4"
+          modrinth:lithium: "mc1.21.4-0.15.3-fabric"
+          modrinth:ferrite-core: "7.1.3-fabric"
+          modrinth:flan: "1.21.4-1.11.7.b-fabric"
+          modrinth:styled-chat: "any"
+          modrinth:ledger: "any"
+          modrinth:simple-voice-chat: "any"
+          modrinth:audioplayer: "any"
+          modrinth:armorstandeditor: "any"
+          modrinth:invview: "any"
+          modrinth:chunky: "1.4.27"
+          modrinth:fastback: "any"
+          modrinth:vanish: "any"
+  files:
+    server/server.properties: |
+      server-port=25565
+      motd=Vanilla+ SMP
+  args:
+    - "modrinth:waystones@21.4.19+fabric-1.21.4"
+
+- id: add-fabric-cobblemon-adventure
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.21.1"
+      directory: server
+      core:
+        product: fabric
+        product_version: "0.16.9"
+      packages:
+        fabric:
+          modrinth:fabric-api: "0.116.17+1.21.1"
+          modrinth:cobblemon: "1.8.2"
+          modrinth:open-loader: "21.1.5"
+          modrinth:placeholder-api: "2.4.2+1.21"
+          modrinth:clumps: "19.0.0.1"
+          modrinth:balm: "21.0.66+fabric-1.21.1"
+          modrinth:spark: "any"
+          modrinth:chunky: "any"
+          modrinth:waystones: "any"
+          modrinth:open-parties-and-claims: "any"
+          modrinth:lithium: "mc1.21.1-0.15.4-fabric"
+          modrinth:ferrite-core: "7.0.3-fabric"
+  args:
+    - "modrinth:appleskin@3.0.6+mc1.21"
+
+- id: add-fabric-tech-automation
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.20.1"
+      directory: server
+      core:
+        product: fabric
+        product_version: "0.16.9"
+      packages:
+        fabric:
+          modrinth:fabric-api: "any"
+          modrinth:modernfix: "any"
+          modrinth:techreborn: "any"
+          modrinth:reborncore: "any"
+          modrinth:modern-industrialization: "any"
+          modrinth:ae2: "any"
+          modrinth:mega: "any"
+          modrinth:wireless-networks: "any"
+          modrinth:spark: "any"
+          modrinth:lithium: "any"
+          modrinth:ferrite-core: "any"
+          modrinth:krypton: "any"
+  args:
+    - "modrinth:applied-botanics@any"
+
+- id: add-fabric-hardcore-survival
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.21.1"
+      directory: server
+      core:
+        product: fabric
+        product_version: "0.16.9"
+      packages:
+        fabric:
+          modrinth:fabric-api: "0.116.17+1.21.1"
+          modrinth:dehydration: "any"
+          modrinth:hardcore-revival: "any"
+          modrinth:passable-foliage: "any"
+          modrinth:sound-physics-remastered: "any"
+          modrinth:simple-voice-chat: "any"
+          modrinth:spark: "any"
+          modrinth:chunky: "any"
+          modrinth:lithium: "mc1.21.1-0.15.4-fabric"
+          modrinth:krypton: "0.2.8"
+          modrinth:ferrite-core: "7.0.3-fabric"
+  args:
+    - "modrinth:fastback@any"
+
+- id: add-fabric-creative-builders
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.21.4"
+      directory: server
+      core:
+        product: fabric
+        product_version: "0.16.9"
+      packages:
+        fabric:
+          modrinth:fabric-api: "0.119.4+1.21.4"
+          modrinth:worldedit: "any"
+          modrinth:open-parties-and-claims: "any"
+          modrinth:armorstandeditor: "any"
+          modrinth:fastback: "any"
+          modrinth:ledger: "any"
+          modrinth:invview: "any"
+          modrinth:spark: "1.10.121-fabric"
+          modrinth:chunky: "1.4.27"
+          modrinth:styledplayerlist: "any"
+          modrinth:polysit: "any"
+          modrinth:vanish: "any"
+  args:
+    - "modrinth:carpet@1.4.161"
+
+- id: add-fabric-rpg-dimensions
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.21.1"
+      directory: server
+      core:
+        product: fabric
+        product_version: "0.16.9"
+      packages:
+        fabric:
+          modrinth:fabric-api: "0.116.17+1.21.1"
+          modrinth:bosses-of-mass-destruction: "any"
+          modrinth:deeperdarker: "any"
+          modrinth:geckolib: "any"
+          modrinth:yungs-api: "any"
+          modrinth:yungs-better-dungeons: "any"
+          modrinth:yungs-better-nether-fortresses: "any"
+          modrinth:repurposed-structures-fabric: "any"
+          modrinth:spark: "any"
+          modrinth:clumps: "19.0.0.1"
+          modrinth:lithium: "mc1.21.1-0.15.4-fabric"
+  args:
+    - "modrinth:waystones@any"
+
+- id: add-fabric-scalable-concurrency
+  setup:
+    - install
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.21.4"
+      directory: server
+      core:
+        product: fabric
+        product_version: "0.16.9"
+      packages:
+        fabric:
+          modrinth:fabric-api: "0.119.4+1.21.4"
+          modrinth:vmp-fabric: "any"
+          modrinth:c2me-fabric: "any"
+          modrinth:alternate-current: "any"
+          modrinth:krypton: "0.2.8"
+          modrinth:servercore: "1.5.8+1.21.4"
+          modrinth:spark: "1.10.121-fabric"
+          modrinth:chunky: "1.4.27"
+          modrinth:sound-physics-remastered: "any"
+          modrinth:simple-voice-chat: "any"
+          modrinth:polysit: "any"
+  args:
+    - "modrinth:lithium@mc1.21.4-0.15.3-fabric"
+
+- id: add-fabric-explicit-ecosystem-flag
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.21.4"
+      directory: server
+      core:
+        product: fabric
+        product_version: "0.16.9"
+      packages:
+        fabric:
+          modrinth:fabric-api: "0.119.4+1.21.4"
+          modrinth:lithium: "mc1.21.4-0.15.3-fabric"
+          modrinth:styled-chat: "any"
+          modrinth:vanish: "any"
+          modrinth:invview: "any"
+          modrinth:armorstandeditor: "any"
+          modrinth:carpet: "1.4.161"
+          modrinth:fastback: "any"
+          modrinth:styledplayerlist: "any"
+          modrinth:polysit: "any"
+          modrinth:servercore: "1.5.8+1.21.4"
+  args:
+    - "--ecosystem"
+    - "fabric"
+    - "modrinth:flan@1.21.4-1.11.7.b-fabric"
+
+- id: add-fabric-with-optional-deps
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.21.4"
+      directory: server
+      core:
+        product: fabric
+        product_version: "0.16.9"
+      packages:
+        fabric:
+          modrinth:lithium: "mc1.21.4-0.15.3-fabric"
+          modrinth:servercore: "1.5.8+1.21.4"
+          modrinth:chunky: "1.4.27"
+          modrinth:ledger: "any"
+          modrinth:flan: "1.21.4-1.11.7.b-fabric"
+          modrinth:armorstandeditor: "any"
+          modrinth:invview: "any"
+          modrinth:sound-physics-remastered: "any"
+          modrinth:fastback: "any"
+          modrinth:polysit: "any"
+          modrinth:spark: "1.10.121-fabric"
+  args:
+    - "--with-optional"
+    - "modrinth:fabric-api@0.119.4+1.21.4"
+
+- id: add-fabric-idempotent-package
+  setup:
+    - install
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.21.4"
+      directory: server
+      core:
+        product: fabric
+        product_version: "0.16.10"
+      packages:
+        fabric:
+          modrinth:fabric-api: "0.119.4+1.21.4"
+          modrinth:modernfix: "5.20.3+mc1.21.4"
+          modrinth:chunky: "1.4.27"
+          modrinth:carpet: "1.4.161"
+          modrinth:vanish: "any"
+          modrinth:ledger: "any"
+          modrinth:styled-chat: "any"
+          modrinth:fastback: "any"
+          modrinth:ferrite-core: "7.1.3-fabric"
+          modrinth:c2me-fabric: "any"
+          modrinth:vmp-fabric: "any"
+  args:
+    - "modrinth:fabric-api@0.119.4+1.21.4"
+
+- id: add-fabric-version-downgrade
+  setup:
+    - install
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.21.4"
+      directory: server
+      core:
+        product: fabric
+        product_version: "0.16.9"
+      packages:
+        fabric:
+          modrinth:fabric-api: "0.119.4+1.21.4"
+          modrinth:krypton: "0.2.8"
+          modrinth:servercore: "1.5.8+1.21.4"
+          modrinth:invview: "any"
+          modrinth:flan: "1.21.4-1.11.7.b-fabric"
+          modrinth:open-parties-and-claims: "any"
+          modrinth:spark: "1.10.121-fabric"
+          modrinth:chunky: "1.4.27"
+          modrinth:alternate-current: "any"
+          modrinth:polysit: "any"
+          modrinth:armorstandeditor: "any"
+  args:
+    - "modrinth:fabric-api@0.115.0+1.21.4"
+
+- id: add-fabric-disabled-mod-stack
+  setup:
+    - install
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.21.4"
+      directory: server
+      core:
+        product: fabric
+        product_version: "0.16.9"
+      packages:
+        fabric:
+          modrinth:fabric-api: "0.119.4+1.21.4"
+          modrinth:ferrite-core: "7.1.3-fabric"
+          modrinth:krypton: "0.2.8"
+          modrinth:spark: "1.10.121-fabric"
+          modrinth:styled-chat: "any"
+          modrinth:ledger: "any"
+          modrinth:vanish: "any"
+          modrinth:styledplayerlist: "any"
+          modrinth:c2me-fabric: "any"
+          modrinth:lithium:
+            selector: "mc1.21.4-0.15.3-fabric"
+            enabled: false
+  args:
+    - "modrinth:chunky@1.4.27"
+
+- id: add-fabric-offline-after-install
+  setup:
+    - install
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.21.4"
+      directory: server
+      core:
+        product: fabric
+        product_version: "0.16.10"
+      packages:
+        fabric:
+          modrinth:fabric-api: "0.119.4+1.21.4"
+          modrinth:modernfix: "5.20.3+mc1.21.4"
+          modrinth:alternate-current: "any"
+          modrinth:carpet: "1.4.161"
+          modrinth:invview: "any"
+          modrinth:fastback: "any"
+          modrinth:armorstandeditor: "any"
+          modrinth:spark: "1.10.121-fabric"
+          modrinth:polysit: "any"
+          modrinth:styledplayerlist: "any"
+          modrinth:servercore: "1.5.8+1.21.4"
+  args:
+    - "--offline"
+    - "modrinth:fabric-api@0.119.4+1.21.4"
+
+- id: add-fabric-locked-missing-error
+  setup:
+    - install
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.21.4"
+      directory: server
+      core:
+        product: fabric
+        product_version: "0.16.9"
+      packages:
+        fabric:
+          modrinth:fabric-api: "0.119.4+1.21.4"
+          modrinth:lithium: "mc1.21.4-0.15.3-fabric"
+          modrinth:c2me-fabric: "any"
+          modrinth:flan: "1.21.4-1.11.7.b-fabric"
+          modrinth:audioplayer: "any"
+          modrinth:simple-voice-chat: "any"
+          modrinth:styled-chat: "any"
+          modrinth:spark: "1.10.121-fabric"
+          modrinth:sound-physics-remastered: "any"
+          modrinth:chunky: "1.4.27"
+  args:
+    - "--locked"
+    - "modrinth:waystones"
+
+- id: add-forge-tech-industrial
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.20.1"
+      directory: server
+      core:
+        product: forge
+        product_version: "47.4.10"
+      packages:
+        forge:
+          modrinth:curios: "5.9.1+1.20.1"
+          modrinth:spark: "any"
+          modrinth:chunky: "any"
+          modrinth:ferrite-core: "any"
+          modrinth:ae2: "15.3.3"
+          curseforge:iron-chests: "any"
+          curseforge:waystones: "any"
+          curseforge:biomes-o-plenty: "any"
+          curseforge:security-craft: "any"
+          curseforge:supplementaries: "any"
+          modrinth:mekanism-generators: "any"
+  files:
+    server/eula.txt: |
+      eula=true
+  args:
+    - "modrinth:mekanism@any"
+
+- id: add-forge-magic-fantasy
+  setup:
+    - install
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.20.1"
+      directory: server
+      core:
+        product: forge
+        product_version: "47.4.10"
+      packages:
+        forge:
+          modrinth:curios: "5.9.1+1.20.1"
+          modrinth:spark: "any"
+          modrinth:botania: "any"
+          modrinth:patchouli: "any"
+          curseforge:corail-tombstone: "any"
+          curseforge:waystones: "any"
+          curseforge:biomes-o-plenty: "any"
+          curseforge:supplementaries: "any"
+          curseforge:the-twilight-forest: "any"
+          modrinth:geckolib: "any"
+  args:
+    - "modrinth:ars-nouveau@any"
+
+- id: add-neoforge-exploration-pack
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.21.1"
+      directory: server
+      core:
+        product: neoforge
+        product_version: "21.1.65"
+      packages:
+        neoforge:
+          modrinth:ferrite-core: "any"
+          modrinth:spark: "any"
+          modrinth:chunky: "any"
+          modrinth:curios: "any"
+          modrinth:waystones: "any"
+          modrinth:geckolib: "any"
+          modrinth:open-parties-and-claims: "any"
+          curseforge:biomes-o-plenty: "any"
+          modrinth:comforts: "any"
+          curseforge:iron-chests: "any"
+          modrinth:travelersbackpack: "any"
+  args:
+    - "modrinth:clumps@any"
+
+- id: add-neoforge-create-machinery
+  setup:
+    - install
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.21.1"
+      directory: server
+      core:
+        product: neoforge
+        product_version: "21.1.65"
+      packages:
+        neoforge:
+          modrinth:create: "1.21.1-6.0.4"
+          modrinth:ferrite-core: "any"
+          modrinth:spark: "any"
+          modrinth:curios: "any"
+          modrinth:open-parties-and-claims: "any"
+          curseforge:waystones: "any"
+          curseforge:iron-chests: "any"
+          modrinth:sophisticated-backpacks: "any"
+          modrinth:createaddition: "any"
+          modrinth:comforts: "any"
+  args:
+    - "modrinth:storagedrawers@any"
+
+- id: add-paper-protocol-utilities
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.21.1"
+      directory: server
+      core:
+        product: paper
+        product_version: "133"
+      packages:
+        paper:
+          modrinth:viaversion: "5.12.2"
+          modrinth:viabackwards: "5.12.2"
+          modrinth:tabtps: "any"
+          modrinth:chunky: "1.4.28"
+          modrinth:luckperms: "any"
+          modrinth:worldedit: "any"
+          modrinth:geyser: "any"
+          modrinth:vaultunlocked: "any"
+          modrinth:coreprotect: "any"
+          modrinth:discordsrv: "any"
+  files:
+    server/config/paper-global.yml: |
+      timings:
+        enabled: true
+  args:
+    - "modrinth:squaremap@any"
+
+- id: add-paper-towny-nations
+  setup:
+    - install
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.21.1"
+      directory: server
+      core:
+        product: paper
+        product_version: "133"
+      packages:
+        paper:
+          modrinth:towny: "any"
+          modrinth:vaultunlocked: "any"
+          modrinth:luckperms: "any"
+          modrinth:tabtps: "any"
+          modrinth:chunky: "1.4.28"
+          modrinth:worldguard: "any"
+          modrinth:coreprotect: "any"
+          modrinth:multiverse-core: "any"
+          modrinth:discordsrv: "any"
+          modrinth:squaremap: "any"
+  files:
+    server/config/paper-global.yml: |
+      timings:
+        enabled: true
+  args:
+    - "modrinth:quickshop-hikari@any"
+
+- id: add-purpur-high-performance-anarchy
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.21.1"
+      directory: server
+      core:
+        product: purpur
+        product_version: "2329"
+      packages:
+        paper:
+          modrinth:tabtps: "any"
+          modrinth:chunky: "1.4.28"
+          modrinth:luckperms: "any"
+          modrinth:grimac: "any"
+          modrinth:coreprotect: "any"
+          modrinth:viaversion: "5.2.1"
+          modrinth:viabackwards: "5.2.1"
+          modrinth:worldedit: "any"
+          modrinth:discordsrv: "any"
+          modrinth:fastasyncworldedit: "any"
+  files:
+    server/purpur.yml: |
+      settings:
+        lagging-threshold: 0.8
+  args:
+    - "modrinth:squaremap@1.3.0"
+
+- id: add-cross-loader-mismatch-operator-error
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.21.1"
+      directory: server
+      core:
+        product: paper
+        product_version: "133"
+      packages:
+        paper:
+          modrinth:luckperms: "any"
+          modrinth:multiverse-core: "any"
+          modrinth:worldedit: "any"
+          modrinth:worldguard: "any"
+          modrinth:fastasyncworldedit: "any"
+          modrinth:decentholograms: "any"
+          modrinth:chestshop: "any"
+          modrinth:tabtps: "any"
+          modrinth:coreprotect: "any"
+          modrinth:discordsrv: "any"
+  files:
+    server/server.properties: |
+      server-port=25565
+  args:
+    - "modrinth:flan"
+
+- id: add-mcdr-management-fabric
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.21.4"
+      directory: server
+      core:
+        product: fabric
+        product_version: "0.16.9"
+      packages:
+        fabric:
+          modrinth:fabric-api: "0.119.4+1.21.4"
+          modrinth:lithium: "mc1.21.4-0.15.3-fabric"
+          modrinth:ferrite-core: "7.1.3-fabric"
+          modrinth:krypton: "0.2.8"
+          modrinth:spark: "1.10.121-fabric"
+          modrinth:servercore: "1.5.8+1.21.4"
+          modrinth:carpet: "1.4.161"
+          modrinth:invview: "any"
+          modrinth:fastback: "any"
+          modrinth:polysit: "any"
+          modrinth:styledplayerlist: "any"
+    mcdr:
+      directory: mcdr
+      version: "2.12.2"
+      packages:
+        mcdr:prime_backup: "any"
+  files:
+    mcdr/config.yml: |
+      language: en_us
+  args:
+    - "--ecosystem"
+    - "mcdr"
+    - "mcdr:minecraft_data_api@any"
+
+- id: add-mcdr-installed-cluster
+  setup:
+    - install
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.21.4"
+      directory: server
+      core:
+        product: fabric
+        product_version: "0.16.10"
+      packages:
+        fabric:
+          modrinth:fabric-api: "0.119.4+1.21.4"
+          modrinth:modernfix: "5.20.3+mc1.21.4"
+          modrinth:chunky: "1.4.27"
+          modrinth:ledger: "any"
+          modrinth:flan: "1.21.4-1.11.7.b-fabric"
+          modrinth:vanish: "any"
+          modrinth:armorstandeditor: "any"
+          modrinth:styled-chat: "any"
+          modrinth:polysit: "any"
+          modrinth:open-parties-and-claims: "any"
+    mcdr:
+      directory: mcdr
+      version: "2.12.2"
+      packages:
+        mcdr:prime_backup: "any"
+  args:
+    - "--ecosystem"
+    - "mcdr"
+    - "mcdr:minecraft_data_api@any"
+
+- id: add-fabric-voice-proximity
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.21.4"
+      directory: server
+      core:
+        product: fabric
+        product_version: "0.16.9"
+      packages:
+        fabric:
+          modrinth:fabric-api: "0.119.4+1.21.4"
+          modrinth:lithium: "mc1.21.4-0.15.3-fabric"
+          modrinth:simple-voice-chat: "any"
+          modrinth:audioplayer: "any"
+          modrinth:sound-physics-remastered: "any"
+          modrinth:ledger: "any"
+          modrinth:armorstandeditor: "any"
+          modrinth:chunky: "1.4.27"
+          modrinth:vanish: "any"
+          modrinth:fastback: "any"
+  args:
+    - "modrinth:styled-chat@any"
+
+- id: add-neoforge-industrial-revolution
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.21.1"
+      directory: server
+      core:
+        product: neoforge
+        product_version: "21.1.65"
+      packages:
+        neoforge:
+          modrinth:modern-industrialization: "any"
+          modrinth:ae2: "any"
+          modrinth:mega: "any"
+          modrinth:spark: "any"
+          modrinth:chunky: "any"
+          modrinth:storagedrawers: "any"
+          modrinth:curios: "any"
+          modrinth:open-parties-and-claims: "any"
+          modrinth:ferrite-core: "any"
+          curseforge:iron-chests: "any"
+  args:
+    - "modrinth:applied-mekanistics@any"
+
+- id: add-fabric-occult-magic
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.20.1"
+      directory: server
+      core:
+        product: fabric
+        product_version: "0.16.9"
+      packages:
+        fabric:
+          modrinth:fabric-api: "any"
+          modrinth:botania: "any"
+          modrinth:patchouli: "any"
+          modrinth:geckolib: "any"
+          modrinth:mythic-mounts: "any"
+          modrinth:bewitchment: "any"
+          modrinth:spark: "any"
+          modrinth:clumps: "any"
+          modrinth:lithium: "any"
+          modrinth:ferrite-core: "any"
+  args:
+    - "modrinth:waystones@any"
+
+- id: add-fabric-speedrun-practice
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.21.4"
+      directory: server
+      core:
+        product: fabric
+        product_version: "0.16.9"
+      packages:
+        fabric:
+          modrinth:fabric-api: "0.119.4+1.21.4"
+          modrinth:carpet: "1.4.161"
+          modrinth:alternate-current: "any"
+          modrinth:worldedit: "any"
+          modrinth:fastback: "any"
+          modrinth:servercore: "1.5.8+1.21.4"
+          modrinth:spark: "1.10.121-fabric"
+          modrinth:invview: "any"
+          modrinth:lithium: "mc1.21.4-0.15.3-fabric"
+          modrinth:polysit: "any"
+  args:
+    - "modrinth:chunky@1.4.27"
+
+- id: add-fabric-dungeon-overhaul
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.21.1"
+      directory: server
+      core:
+        product: fabric
+        product_version: "0.16.9"
+      packages:
+        fabric:
+          modrinth:fabric-api: "0.116.17+1.21.1"
+          modrinth:yungs-api: "any"
+          modrinth:yungs-better-mineshafts: "any"
+          modrinth:yungs-better-dungeons: "any"
+          modrinth:yungs-better-nether-fortresses: "any"
+          modrinth:towns-and-towers: "any"
+          modrinth:repurposed-structures-fabric: "any"
+          modrinth:spark: "any"
+          modrinth:lithium: "mc1.21.1-0.15.4-fabric"
+          modrinth:chunky: "any"
+          modrinth:ferrite-core: "7.0.3-fabric"
+  args:
+    - "modrinth:clumps@19.0.0.1"
+
+- id: add-fabric-roleplay-economy
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.21.4"
+      directory: server
+      core:
+        product: fabric
+        product_version: "0.16.9"
+      packages:
+        fabric:
+          modrinth:fabric-api: "0.119.4+1.21.4"
+          modrinth:flan: "1.21.4-1.11.7.b-fabric"
+          modrinth:styled-chat: "any"
+          modrinth:ledger: "any"
+          modrinth:armorstandeditor: "any"
+          modrinth:invview: "any"
+          modrinth:vanish: "any"
+          modrinth:fastback: "any"
+          modrinth:polysit: "any"
+          modrinth:styledplayerlist: "any"
+          modrinth:simple-voice-chat: "any"
+  args:
+    - "modrinth:luckperms@any"
+
+- id: add-fabric-redstone-bench
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.21.4"
+      directory: server
+      core:
+        product: fabric
+        product_version: "0.16.9"
+      packages:
+        fabric:
+          modrinth:fabric-api: "0.119.4+1.21.4"
+          modrinth:alternate-current: "any"
+          modrinth:carpet: "1.4.161"
+          modrinth:spark: "1.10.121-fabric"
+          modrinth:chunky: "1.4.27"
+          modrinth:fastback: "any"
+          modrinth:servercore: "1.5.8+1.21.4"
+          modrinth:c2me-fabric: "any"
+          modrinth:vmp-fabric: "any"
+          modrinth:ferrite-core: "7.1.3-fabric"
+  args:
+    - "modrinth:worldedit@any"
+
+- id: add-fabric-farming-culinary
+  setup:
+    - install
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.20.1"
+      directory: server
+      core:
+        product: fabric
+        product_version: "0.16.9"
+      packages:
+        fabric:
+          modrinth:fabric-api: "any"
+          modrinth:farmers-delight-refabricated: "any"
+          modrinth:lets-do-vinery: "any"
+          modrinth:lets-do-bakery-farmcharm-compat: "any"
+          modrinth:cultural-delights-fabric: "any"
+          modrinth:spark: "any"
+          modrinth:chunky: "any"
+          modrinth:clumps: "any"
+          modrinth:lithium: "any"
+          modrinth:ferrite-core: "any"
+  args:
+    - "modrinth:appleskin@any"
+
+- id: add-fabric-zombie-survival
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.21.1"
+      directory: server
+      core:
+        product: fabric
+        product_version: "0.16.9"
+      packages:
+        fabric:
+          modrinth:fabric-api: "0.116.17+1.21.1"
+          modrinth:smart-zombies: "any"
+          modrinth:hardcore-revival: "any"
+          modrinth:open-parties-and-claims: "any"
+          modrinth:clumps: "19.0.0.1"
+          modrinth:fastback: "any"
+          modrinth:vanish: "any"
+          modrinth:armorstandeditor: "any"
+          modrinth:spark: "any"
+          modrinth:chunky: "any"
+  args:
+    - "modrinth:passable-foliage@any"
+
+- id: add-forge-create-cogwheels
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.20.1"
+      directory: server
+      core:
+        product: forge
+        product_version: "47.4.10"
+      packages:
+        forge:
+          modrinth:create: "any"
+          modrinth:spark: "any"
+          curseforge:corail-tombstone: "any"
+          curseforge:waystones: "any"
+          curseforge:biomes-o-plenty: "any"
+          curseforge:supplementaries: "any"
+          curseforge:the-twilight-forest: "any"
+          curseforge:sophisticated-backpacks: "any"
+          modrinth:geckolib: "any"
+          modrinth:patchouli: "any"
+  args:
+    - "modrinth:createaddition@any"
+
+- id: add-forge-rpg-graveyard
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.20.1"
+      directory: server
+      core:
+        product: forge
+        product_version: "47.4.10"
+      packages:
+        forge:
+          modrinth:curios: "5.9.1+1.20.1"
+          modrinth:geckolib: "any"
+          curseforge:corail-tombstone: "any"
+          curseforge:waystones: "any"
+          curseforge:biomes-o-plenty: "any"
+          curseforge:alexs-mobs: "any"
+          curseforge:the-twilight-forest: "any"
+          curseforge:sophisticated-backpacks: "any"
+          modrinth:spark: "any"
+          curseforge:iron-chests: "any"
+  args:
+    - "modrinth:patchouli@any"
+
+- id: add-forge-flux-industry
+  setup:
+    - install
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.20.1"
+      directory: server
+      core:
+        product: forge
+        product_version: "47.4.10"
+      packages:
+        forge:
+          modrinth:curios: "5.9.1+1.20.1"
+          modrinth:ae2: "15.3.3"
+          modrinth:spark: "any"
+          curseforge:industrial-foregoing: "any"
+          curseforge:thermal-expansion: "any"
+          curseforge:iron-chests: "any"
+          curseforge:security-craft: "any"
+          curseforge:flux-networks: "any"
+          modrinth:ferrite-core: "any"
+          modrinth:chunky: "any"
+  args:
+    - "modrinth:mekanism@any"
+
+- id: add-forge-farmers-valley
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.20.1"
+      directory: server
+      core:
+        product: forge
+        product_version: "47.4.10"
+      packages:
+        forge:
+          modrinth:curios: "5.9.1+1.20.1"
+          modrinth:farmers-delight: "any"
+          curseforge:supplementaries: "any"
+          curseforge:waystones: "any"
+          curseforge:biomes-o-plenty: "any"
+          curseforge:sophisticated-backpacks: "any"
+          modrinth:chunky: "any"
+          modrinth:spark: "any"
+          curseforge:iron-chests: "any"
+          modrinth:ferrite-core: "any"
+  args:
+    - "modrinth:appleskin@any"
+
+- id: add-neoforge-train-works
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.21.1"
+      directory: server
+      core:
+        product: neoforge
+        product_version: "21.1.65"
+      packages:
+        neoforge:
+          modrinth:create: "1.21.1-6.0.4"
+          modrinth:createaddition: "any"
+          modrinth:storagedrawers: "any"
+          modrinth:curios: "any"
+          modrinth:spark: "any"
+          curseforge:waystones: "any"
+          curseforge:iron-chests: "any"
+          modrinth:open-parties-and-claims: "any"
+          modrinth:ferrite-core: "any"
+          modrinth:chunky: "any"
+  args:
+    - "modrinth:comforts@any"
+
+- id: add-neoforge-wildlife-fauna
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.21.1"
+      directory: server
+      core:
+        product: neoforge
+        product_version: "21.1.65"
+      packages:
+        neoforge:
+          modrinth:geckolib: "any"
+          modrinth:curios: "any"
+          modrinth:waystones: "any"
+          modrinth:spark: "any"
+          curseforge:corail-tombstone: "any"
+          modrinth:chunky: "any"
+          modrinth:open-parties-and-claims: "any"
+          modrinth:sophisticated-backpacks: "any"
+          modrinth:travelersbackpack: "any"
+          curseforge:biomes-o-plenty: "any"
+  args:
+    - "modrinth:clumps@any"
+
+- id: add-neoforge-arcane-glyphs
+  setup:
+    - install
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.21.1"
+      directory: server
+      core:
+        product: neoforge
+        product_version: "21.1.65"
+      packages:
+        neoforge:
+          modrinth:ars-nouveau: "any"
+          modrinth:geckolib: "any"
+          modrinth:curios: "any"
+          modrinth:waystones: "any"
+          curseforge:corail-tombstone: "any"
+          curseforge:biomes-o-plenty: "any"
+          modrinth:spark: "any"
+          modrinth:patchouli: "any"
+          modrinth:ferrite-core: "any"
+          modrinth:comforts: "any"
+  args:
+    - "modrinth:storagedrawers@any"
+
+- id: add-neoforge-autocrafting-grid
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.21.1"
+      directory: server
+      core:
+        product: neoforge
+        product_version: "21.1.65"
+      packages:
+        neoforge:
+          modrinth:ae2: "any"
+          modrinth:mekanism: "any"
+          modrinth:applied-mekanistics: "any"
+          modrinth:curios: "any"
+          modrinth:spark: "any"
+          curseforge:iron-chests: "any"
+          curseforge:waystones: "any"
+          modrinth:storagedrawers: "any"
+          modrinth:mega: "any"
+          modrinth:ferrite-core: "any"
+  args:
+    - "modrinth:mek-energistics@any"
+
+- id: add-paper-crossplay-geyser
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.21.1"
+      directory: server
+      core:
+        product: paper
+        product_version: "133"
+      packages:
+        paper:
+          modrinth:geyser: "any"
+          modrinth:tabtps: "any"
+          modrinth:chunky: "1.4.28"
+          modrinth:luckperms: "any"
+          modrinth:squaremap: "any"
+          modrinth:worldguard: "any"
+          modrinth:coreprotect: "any"
+          modrinth:viaversion: "5.12.2"
+          modrinth:viabackwards: "5.12.2"
+          modrinth:discordsrv: "any"
+  args:
+    - "modrinth:decentholograms@any"
+
+- id: add-paper-clan-warfare
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.21.1"
+      directory: server
+      core:
+        product: paper
+        product_version: "133"
+      packages:
+        paper:
+          modrinth:worldguard: "any"
+          modrinth:worldedit: "any"
+          modrinth:coreprotect: "any"
+          modrinth:grimac: "any"
+          modrinth:luckperms: "any"
+          modrinth:discordsrv: "any"
+          modrinth:tabtps: "any"
+          modrinth:chunky: "1.4.28"
+          modrinth:multiverse-core: "any"
+          modrinth:vaultunlocked: "any"
+  args:
+    - "modrinth:tab-was-taken@any"
+
+- id: add-paper-fast-async-builders
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.21.1"
+      directory: server
+      core:
+        product: paper
+        product_version: "133"
+      packages:
+        paper:
+          modrinth:fastasyncworldedit: "any"
+          modrinth:worldguard: "any"
+          modrinth:multiverse-core: "any"
+          modrinth:decentholograms: "any"
+          modrinth:luckperms: "any"
+          modrinth:coreprotect: "any"
+          modrinth:squaremap: "any"
+          modrinth:tabtps: "any"
+          modrinth:discordsrv: "any"
+          modrinth:chunky: "1.4.28"
+  args:
+    - "modrinth:griefprevention@any"
+
+- id: add-paper-minigames-parkour-hub
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.21.1"
+      directory: server
+      core:
+        product: paper
+        product_version: "133"
+      packages:
+        paper:
+          modrinth:tab-was-taken: "any"
+          modrinth:placeholderapi: "any"
+          modrinth:multiverse-core: "any"
+          modrinth:parkour-bukkit: "any"
+          modrinth:decentholograms: "any"
+          modrinth:skinsrestorer: "any"
+          modrinth:luckperms: "any"
+          modrinth:tabtps: "any"
+          modrinth:coreprotect: "any"
+          modrinth:discordsrv: "any"
+  args:
+    - "modrinth:viaversion@5.12.2"
+
+- id: add-paper-web-analytics
+  setup:
+    - install
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.21.1"
+      directory: server
+      core:
+        product: paper
+        product_version: "133"
+      packages:
+        paper:
+          modrinth:plan: "any"
+          modrinth:discordsrv: "any"
+          modrinth:luckperms: "any"
+          modrinth:placeholderapi: "any"
+          modrinth:tab-was-taken: "any"
+          modrinth:tabtps: "any"
+          modrinth:coreprotect: "any"
+          modrinth:chunky: "1.4.28"
+          modrinth:vaultunlocked: "any"
+          modrinth:multiverse-core: "any"
+  args:
+    - "modrinth:skinsrestorer@any"
+
+- id: add-purpur-pvp-arena
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.21.1"
+      directory: server
+      core:
+        product: purpur
+        product_version: "2329"
+      packages:
+        paper:
+          modrinth:grimac: "any"
+          modrinth:tab-was-taken: "any"
+          modrinth:placeholderapi: "any"
+          modrinth:skinsrestorer: "any"
+          modrinth:luckperms: "any"
+          modrinth:tabtps: "any"
+          modrinth:chunky: "1.4.28"
+          modrinth:quality-tpa: "any"
+          modrinth:multiverse-core: "any"
+          modrinth:coreprotect: "any"
+  files:
+    server/purpur.yml: |
+      settings:
+        lagging-threshold: 0.8
+  args:
+    - "modrinth:squaremap@1.3.0"
+
+- id: add-mcdr-management-suite
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.21.4"
+      directory: server
+      core:
+        product: fabric
+        product_version: "0.16.9"
+      packages:
+        fabric:
+          modrinth:fabric-api: "0.119.4+1.21.4"
+          modrinth:lithium: "mc1.21.4-0.15.3-fabric"
+          modrinth:chunky: "1.4.27"
+          modrinth:ledger: "any"
+          modrinth:flan: "1.21.4-1.11.7.b-fabric"
+          modrinth:styled-chat: "any"
+          modrinth:spark: "1.10.121-fabric"
+          modrinth:vanish: "any"
+          modrinth:open-parties-and-claims: "any"
+          modrinth:armorstandeditor: "any"
+    mcdr:
+      directory: mcdr
+      version: "2.12.2"
+      packages:
+        mcdr:info: "any"
+        mcdr:minecraft_data_api: "any"
+  files:
+    mcdr/config.yml: |
+      language: en_us
+  args:
+    - "--ecosystem"
+    - "mcdr"
+    - "mcdr:quick_backup_multi@1.5.0"
+
