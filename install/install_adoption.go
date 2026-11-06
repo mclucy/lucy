@@ -200,7 +200,6 @@ type adoptionLedger struct {
 	verifiedPresent      map[string]bool
 	legacyUnclaimed      map[string]struct{}
 	bootstrapFingerprint string
-	packageFingerprint   string
 }
 
 func newAdoptionLedger() *adoptionLedger {
@@ -381,12 +380,13 @@ func (l *adoptionLedger) rejectUnclaimedLegacy() error {
 // build finalizes the receipt: package fingerprint, sorted entries, alias
 // rejection, and schema validation.
 func (l *adoptionLedger) build(root string, lock *document.Lock) (receipt.Receipt, error) {
+	var packageFingerprint string
 	if packageSetObserved(root, lock, l.entries) {
 		fingerprint, err := receipt.PackageFingerprint(lock)
 		if err != nil {
 			return receipt.Receipt{}, err
 		}
-		l.packageFingerprint = fingerprint
+		packageFingerprint = fingerprint
 	}
 
 	names := make([]string, 0, len(l.entries))
@@ -403,7 +403,7 @@ func (l *adoptionLedger) build(root string, lock *document.Lock) (receipt.Receip
 
 	next := receipt.New()
 	next.BootstrapFingerprint = l.bootstrapFingerprint
-	next.PackageFingerprint = l.packageFingerprint
+	next.PackageFingerprint = packageFingerprint
 	next.Entries = make([]receipt.Entry, 0, len(names))
 	for _, name := range names {
 		next.Entries = append(next.Entries, l.entries[name])
