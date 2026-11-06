@@ -23,6 +23,21 @@ lucy add mcdr:synced --ecosystem mcdr
 
 Add `--with-optional` to include optional dependencies; they are recorded as explicit packages for future installations. See [`lucy remove`](/commands/remove) to remove a package.
 
+## Downgrade
+
+`--downgrade` moves a declared package one version below its locked version; `--downgrade=2` moves it back two. Steps follow version precedence, not publication date:
+
+```bash
+lucy add modrinth:lithium --downgrade
+lucy add modrinth:lithium --downgrade=2
+```
+
+Lucy records the older version exactly, replacing the package's previous selector (`any`, `stable`, `beta`, or an exact version). Prereleases count as versions and release channels do not filter candidates, but builds must still match the server's Minecraft version, ecosystem, and file filters. The server runtime stays unchanged. Packages you did not name retain compatible locked versions. Naming several packages moves all of them by the same number of steps or changes nothing.
+
+The package must be an enabled direct entry in `lucy.yaml`, and the lock must match the manifest. A step past the oldest available version fails without changes, as does a version that cannot be ordered (such as a Bukkit or Paper plugin). If the selected version is incompatible, Lucy fails rather than trying an older one. `--downgrade` cannot be combined with `--locked`, `--offline`, or a target written with `@version`.
+
+`--force` commits the same older version when package metadata reports a compatibility conflict, turning the failure into a warning. It does not waive runtime, Minecraft, or loader requirements, and it cannot overwrite files lucy does not manage.
+
 ## Flags
 
 ### Arguments
@@ -46,11 +61,19 @@ Add `--with-optional` to include optional dependencies; they are recorded as exp
 </ParamField>
 
 <ParamField query="--locked" type="boolean" default="false">
-  Do not resolve new versions; fail when the lock cannot satisfy the request.
+  Do not resolve new versions; fail when the lock cannot satisfy the request. Cannot be combined with `--downgrade`.
 </ParamField>
 
 <ParamField query="--offline" type="boolean" default="false">
-  Disallow network access. Adding a package changes the manifest, so a package that needs re-resolution fails under `--offline`; the flag is useful only when the lock already pins the result.
+  Disallow network access. Adding a package changes the manifest, so a package that needs re-resolution fails under `--offline`; the flag is useful only when the lock already pins the result. Cannot be combined with `--downgrade`.
+</ParamField>
+
+<ParamField query="--downgrade" type="integer" default="1 when supplied">
+  Move each named package back from its locked version by a positive number of versions. A bare `--downgrade` means one step; supply any other count with `=`, as in `--downgrade=2`.
+</ParamField>
+
+<ParamField query="--force" type="boolean" default="false">
+  Requires `--downgrade`. Commit the selected older version even when package metadata reports a compatibility conflict, recording the conflict as a warning. Runtime, Minecraft, and loader requirements remain fatal, and unmanaged files are not overwritten.
 </ParamField>
 
 See also [Global Flags](/commands/global-flags) and [`lucy remove`](/commands/remove).

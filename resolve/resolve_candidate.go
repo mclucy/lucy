@@ -1,6 +1,7 @@
 package resolve
 
 import (
+	"fmt"
 	"path/filepath"
 	"slices"
 	"sort"
@@ -245,6 +246,59 @@ func conflictDetail(dep upstream.ProjectDependency) string {
 		detail += "@" + dep.ReleaseID
 	}
 	return detail
+}
+
+// packageConflictWarnings reports the metadata-declared incompatibilities
+// among the packages a resolution finally selected. It scans every selected
+// package's declarations against every other selection, so a conflict declared
+// by either side is reported whichever package the search selected first.
+// Findings are deduplicated as unordered pairs and sorted, so repeated
+// resolutions report the same warnings in the same order.
+func packageConflictWarnings(
+	packages []document.Package,
+	declared map[projectKey][]upstream.ProjectDependency,
+) []error {
+	selected := make(map[projectKey]document.Package, len(packages))
+	for _, p := range packages {
+		selected[projectKey{p.Environment, p.Ecosystem, p.Provider, p.ProjectID}] = p
+	}
+	seen := make(map[string]struct{})
+	var details []string
+	for key, conflicts := range declared {
+		owner, ok := selected[key]
+		if !ok || owner.Artifact.Filename == "" {
+			continue
+		}
+		ownerRef := owner.Provider.String() + ":" + owner.ProjectID
+		for _, dep := range conflicts {
+			if dep.Provider == owner.Provider && dep.ProjectID == owner.ProjectID {
+				continue
+			}
+			target, ok := selected[projectKey{key.environment, key.ecosystem, dep.Provider, dep.ProjectID}]
+			if !ok || target.Artifact.Filename == "" {
+				continue
+			}
+			if dep.ReleaseID != "" && target.ReleaseID != dep.ReleaseID {
+				continue
+			}
+			left, right := ownerRef, conflictDetail(dep)
+			if strings.Compare(left, right) > 0 {
+				left, right = right, left
+			}
+			pair := left + "\x00" + right
+			if _, ok := seen[pair]; ok {
+				continue
+			}
+			seen[pair] = struct{}{}
+			details = append(details, left+" conflicts with "+right)
+		}
+	}
+	slices.Sort(details)
+	warnings := make([]error, 0, len(details))
+	for _, detail := range details {
+		warnings = append(warnings, fmt.Errorf("package conflict: %s", detail))
+	}
+	return warnings
 }
 
 type analysisEntry struct {

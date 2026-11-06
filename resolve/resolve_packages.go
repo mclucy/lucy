@@ -120,6 +120,7 @@ func Packages(request PackagesRequest) ([]document.Package, []error, error) {
 	materialize := request.Materialize
 	withOptional := request.WithOptional
 	acceptBroken := request.AcceptBroken
+	acceptPackageConflicts := request.AcceptPackageConflicts
 	expandDependencies := request.ExpandDependencies
 	trace := request.Trace
 	var requests []projectRequest
@@ -247,13 +248,20 @@ func Packages(request PackagesRequest) ([]document.Package, []error, error) {
 				return hardFail(err)
 			}
 			if len(problems) > 0 && strict {
+				fatal := problems
+				if acceptPackageConflicts && !acceptBroken {
+					fatal = serverModuleProblems(problems)
+				}
+				if len(fatal) == 0 {
+					return true
+				}
 				logger.Debug(
 					"resolve: settled graph rejected",
 					"attempt", attempts,
-					"reason", problems[0],
+					"reason", fatal[0],
 				)
-				lastErr = errors.Join(problemErrors(problems)...)
-				for _, problem := range problems {
+				lastErr = errors.Join(problemErrors(fatal)...)
+				for _, problem := range fatal {
 					key := projectKey{
 						problem.Environment,
 						problem.Ecosystem,
@@ -406,19 +414,30 @@ func Packages(request PackagesRequest) ([]document.Package, []error, error) {
 				continue
 			}
 			if detail, conflicting := metadataConflict(candidate, r, state.chosen, state.conflicts); conflicting {
-				reason := describeRejection(RejectionMetadataConflict, detail)
-				ledger.record(r.key, r.display, string(candidate.Version), detail, RejectionMetadataConflict)
-				trace.rejected(r.display, string(candidate.Version), reason)
+				if !acceptPackageConflicts {
+					reason := describeRejection(RejectionMetadataConflict, detail)
+					ledger.record(r.key, r.display, string(candidate.Version), detail, RejectionMetadataConflict)
+					trace.rejected(r.display, string(candidate.Version), reason)
+					logger.Debug(
+						"resolve: candidate rejected",
+						"provider", r.key.provider,
+						"project", r.key.project,
+						"origin", r.origin.String(),
+						"candidate", candidate.Version,
+						"file", candidate.Filename,
+						"reason", reason,
+					)
+					continue
+				}
 				logger.Debug(
-					"resolve: candidate rejected",
+					"resolve: metadata conflict accepted",
 					"provider", r.key.provider,
 					"project", r.key.project,
 					"origin", r.origin.String(),
 					"candidate", candidate.Version,
 					"file", candidate.Filename,
-					"reason", reason,
+					"conflict", detail,
 				)
-				continue
 			}
 			a := candidate.Artifact
 			var modules []catalog.DescriptorModule
@@ -605,17 +624,42 @@ func Packages(request PackagesRequest) ([]document.Package, []error, error) {
 		return nil, nil, err
 	}
 	var warnings []error
+	if acceptPackageConflicts {
+		warnings = append(warnings, packageConflictWarnings(out, state.conflicts)...)
+	}
 	if len(problems) > 0 {
-		if !acceptBroken {
+		if acceptBroken {
+			warnings = append(warnings, problemErrors(problems)...)
+		} else if acceptPackageConflicts {
+			// A requirement the server runtime answers is not something a
+			// package choice can change, so it stays fatal even when package
+			// conflicts are accepted.
+			if fatal := serverModuleProblems(problems); len(fatal) > 0 {
+				return nil, nil, errors.Join(problemErrors(fatal)...)
+			}
+			warnings = append(warnings, problemErrors(problems)...)
+		} else {
 			return nil, nil, errors.Join(problemErrors(problems)...)
 		}
-		warnings = problemErrors(problems)
 	}
 	logger.Info(
 		"resolve: selected packages",
 		"packages", len(out),
 	)
 	return out, warnings, nil
+}
+
+// serverModuleProblems keeps the module problems the server runtime itself
+// answers. No candidate choice can satisfy such a requirement, so accepting
+// package conflicts never turns one into a warning.
+func serverModuleProblems(problems []ModuleProblem) []ModuleProblem {
+	var fatal []ModuleProblem
+	for _, problem := range problems {
+		if problem.Server {
+			fatal = append(fatal, problem)
+		}
+	}
+	return fatal
 }
 
 func mergeArtifactSelections(packages []document.Package) []document.Package {
