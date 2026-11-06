@@ -418,6 +418,10 @@ func infoCandidateRegistry(
 		return catalog.RegistryModrinth, true
 	case catalog.ProviderCurseForge:
 		return catalog.RegistryCurseForge, true
+	case catalog.ProviderHangar:
+		return catalog.RegistryHangar, true
+	case catalog.ProviderSpiget:
+		return catalog.RegistrySpiget, true
 	case catalog.ProviderMCDR:
 		return catalog.RegistryMCDR, true
 	default:

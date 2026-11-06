@@ -97,12 +97,23 @@ func (p *Provider) Info(ctx context.Context, ref catalog.Ref) (catalog.Metadata,
 	return info, nil
 }
 
+// Dependencies reports that Spiget publishes no dependency declarations.
+//
+// The Spiget API exposes no dependency metadata for any resource version, so a
+// resource that declares nothing and one whose declarations are undocumented
+// upstream are indistinguishable. Returning an empty set would assert the
+// former; report the gap instead. Search, info, version selection, and fetch
+// remain available.
 func (p *Provider) Dependencies(
 	_ context.Context,
 	_ upstream.LocalContext,
-	_ catalog.VersionedRef,
+	id catalog.VersionedRef,
 ) (*upstream.DependencySet, error) {
-	return &upstream.DependencySet{FromArtifact: false}, nil
+	return nil, fmt.Errorf(
+		"%w: spiget does not publish dependency declarations for %s",
+		upstream.ErrDependencyMetadataUnavailable,
+		id.StringQualified(),
+	)
 }
 
 func (p *Provider) ResolveVersionSelector(

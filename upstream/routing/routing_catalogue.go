@@ -30,6 +30,10 @@ func (r *Router) Candidates(
 			return nil, fmt.Errorf("%w: %q", ErrNoCatalogue, registry)
 		}
 		return r.curseforge.Candidates(ctx, project, minecraft, loader)
+	case catalog.RegistryHangar:
+		return r.hangar.Candidates(ctx, project, minecraft, loader)
+	case catalog.RegistrySpiget:
+		return r.spiget.Candidates(ctx, project, minecraft, loader)
 	case catalog.RegistryMCDR:
 		return r.mcdr.Candidates(ctx, project, minecraft, loader)
 	default:

@@ -221,8 +221,11 @@ func (r *Router) ResolveArtifactByHash(
 }
 
 // DependenciesMany executes Dependencies on all providers in parallel and
-// returns all successful results. An error is returned only when every provider
-// fails; partial failures are collected in the returned []upstream.ProviderError slice.
+// returns the sets providers reported. A provider that fails or returns no set
+// is excluded and collected as a ProviderError: an empty result therefore means
+// the provider supplied one, not that dependency metadata was unavailable. When
+// every provider fails, no sets are returned and the ProviderError slice carries
+// each failure.
 func (r *Router) DependenciesMany(
 	ctx context.Context,
 	local upstream.LocalContext,
@@ -256,11 +259,21 @@ func (r *Router) DependenciesMany(
 				}
 				return
 			}
-			result := upstream.DependencySet{}
-			if deps != nil {
-				result = *deps
+			if deps == nil {
+				slots[i] = slot{
+					failed: true,
+					err: upstream.ProviderError{
+						Provider: provider.Provider(),
+						Err: fmt.Errorf(
+							"%w: %s returned no dependency set",
+							upstream.ErrDependencyMetadataUnavailable,
+							provider.Provider(),
+						),
+					},
+				}
+				return
 			}
-			slots[i] = slot{ok: true, res: result}
+			slots[i] = slot{ok: true, res: *deps}
 		})
 	}
 

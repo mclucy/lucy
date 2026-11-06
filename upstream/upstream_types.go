@@ -44,6 +44,12 @@ type Fetcher interface {
 	)
 }
 
+// DependencyResolver reports the dependencies a build declares.
+//
+// Implementations that cannot obtain dependency metadata must return
+// ErrDependencyMetadataUnavailable rather than an empty DependencySet: an
+// empty set asserts that the build declares none. A nil set with a nil error is
+// invalid; callers treat it as unavailable.
 type DependencyResolver interface {
 	Dependencies(
 		ctx context.Context,
@@ -58,6 +64,10 @@ type PackageResolver interface {
 	Fetcher
 }
 
+// PackageProvider composes package selection with dependency reporting.
+// Providers without dependency metadata report
+// ErrDependencyMetadataUnavailable from Dependencies and remain usable for
+// search, info, selection, and fetch.
 type PackageProvider interface {
 	PackageResolver
 	DependencyResolver
@@ -157,6 +167,9 @@ type SearchResult struct {
 }
 
 func (r SearchResult) DisplayName() string {
+	if r.Title != "" {
+		return r.Title
+	}
 	if r.Provider == catalog.ProviderMCDR {
 		return strings.ReplaceAll(r.ProjectName, "_", "-")
 	}

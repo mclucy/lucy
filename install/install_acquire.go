@@ -246,17 +246,55 @@ func importFile(
 	return object, hashes, nil
 }
 
+// artifactCacheIdentityHost is a reserved host (RFC 2606 .invalid) that only
+// carries cache identities; no request targets it.
+const artifactCacheIdentityHost = "artifact.cache.lucy.invalid"
+
+// artifactCacheIdentity returns the network cache key for an artifact. Spiget
+// download URLs are mutable and publish no upstream hash, so their key hashes
+// the URL and adds provider, project, release, and file: neither a different
+// release nor a different URL can alias cached bytes. Other providers keep the
+// URL key.
+func artifactCacheIdentity(a *catalog.Artifact) (string, error) {
+	if a.Provider != catalog.ProviderSpiget {
+		return a.URL, nil
+	}
+	project := strings.TrimSpace(a.ProjectID)
+	release := strings.TrimSpace(a.ReleaseID)
+	file := strings.TrimSpace(a.FileID)
+	if project == "" || release == "" || file == "" {
+		return "", fmt.Errorf(
+			"spiget artifact %s is missing its project, release, or file identity",
+			a.Filename,
+		)
+	}
+	urlDigest := sha256.Sum256([]byte(a.URL))
+	return "https://" + artifactCacheIdentityHost + "/" +
+		url.PathEscape(a.Provider.String()) + "/" +
+		hex.EncodeToString(urlDigest[:]) + "/" +
+		url.PathEscape(project) + "/" +
+		url.PathEscape(release) + "/" +
+		url.PathEscape(file), nil
+}
+
 // downloadArtifact obtains candidate bytes from the network cache or, in
-// offline mode, the cache alone. The returned path is temporary; callers
-// import it into the store before removing the directory.
+// offline mode, the cache alone. The cache identity is separate from the
+// request URL, so a mutable provider URL cannot alias releases; the request
+// and the persisted artifact URL stay the artifact's own URL. The returned
+// path is temporary; callers import it into the store before removing the
+// directory.
 func (s *downloadStore) downloadArtifact(a *catalog.Artifact) (string, func(), error) {
+	identity, err := artifactCacheIdentity(a)
+	if err != nil {
+		return "", nil, err
+	}
 	directory, err := os.MkdirTemp("", "lucy-artifact-")
 	if err != nil {
 		return "", nil, err
 	}
 	cleanup := func() { os.RemoveAll(directory) }
 	if s.offline {
-		hit, cached, _, err := s.network.Get(a.URL)
+		hit, cached, _, err := s.network.Get(identity)
 		if err != nil {
 			return "", cleanup, err
 		}
@@ -309,7 +347,7 @@ func (s *downloadStore) downloadArtifact(a *catalog.Artifact) (string, func(), e
 		"host", downloadHost(options.RequestURL),
 	)
 	started := time.Now()
-	result, err := s.network.CachedDownload(s.ctx, a.URL, directory, options)
+	result, err := s.network.CachedDownload(s.ctx, identity, directory, options)
 	if err != nil {
 		return "", cleanup, err
 	}

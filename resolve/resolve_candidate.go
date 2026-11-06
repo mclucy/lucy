@@ -177,6 +177,79 @@ func preferReleaseHints(
 	return ordered
 }
 
+// candidateProvenance records the metadata a provider could not establish for
+// one candidate. It follows the selected artifact so resolution can report the
+// gap instead of letting missing metadata read as a negative answer.
+type candidateProvenance struct {
+	dependenciesUnknown  bool
+	compatibilityUnknown bool
+}
+
+// provenanceKey is the persisted candidate identity. URL is deliberately
+// excluded: merging selections keeps the artifact identity, not any mirror
+// the provider happened to return.
+func provenanceKey(
+	provider catalog.Provider,
+	ecosystem catalog.Ecosystem,
+	projectID, releaseID, fileID string,
+) string {
+	return provider.String() + "|" + ecosystem.String() + "|" +
+		projectID + "|" + releaseID + "|" + fileID
+}
+
+func packageProvenanceKey(p document.Package) string {
+	return provenanceKey(p.Provider, p.Ecosystem, p.ProjectID, p.ReleaseID, p.FileID)
+}
+
+// packageReference prefers the declared reference, which keeps a provider's
+// canonical project ID from replacing the identity the user wrote.
+func packageReference(p document.Package) string {
+	for _, requirement := range p.Requirements {
+		if requirement.Reference != "" {
+			return requirement.Reference
+		}
+	}
+	return p.Provider.String() + ":" + p.ProjectID
+}
+
+// provenanceWarnings reports the metadata gaps of the selected builds. A
+// provider that cannot answer must be distinguishable from one that answered
+// "none".
+func provenanceWarnings(
+	packages []document.Package,
+	provenance map[string]candidateProvenance,
+	target Target,
+	expandDependencies bool,
+) []error {
+	var warnings []error
+	for _, p := range packages {
+		entry, known := provenance[packageProvenanceKey(p)]
+		if !known {
+			continue
+		}
+		reference := packageReference(p)
+		if entry.dependenciesUnknown && expandDependencies {
+			warnings = append(warnings, fmt.Errorf(
+				"%s %s: %s does not report dependency metadata for this build; upstream dependencies were not expanded",
+				reference,
+				p.Version,
+				p.Provider.Title(),
+			))
+		}
+		if entry.compatibilityUnknown {
+			warnings = append(warnings, fmt.Errorf(
+				"%s %s: %s cannot verify compatibility with Minecraft %s (%s); resolution selected it anyway",
+				reference,
+				p.Version,
+				p.Provider.Title(),
+				target.Minecraft,
+				p.Ecosystem,
+			))
+		}
+	}
+	return warnings
+}
+
 // conflictDependencies returns the candidate's incompatibility declarations.
 func conflictDependencies(candidate upstream.Candidate) []upstream.ProjectDependency {
 	var out []upstream.ProjectDependency

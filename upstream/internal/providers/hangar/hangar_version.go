@@ -2,6 +2,7 @@ package hangar
 
 import (
 	"context"
+	"strings"
 
 	"github.com/mclucy/lucy/catalog"
 	"github.com/mclucy/lucy/input"
@@ -9,7 +10,24 @@ import (
 	versionpkg "github.com/mclucy/lucy/version"
 )
 
-const hangarPreferredPlatform = "PAPER"
+// Hangar identifies plugin platforms by these names in both the downloads map
+// and the platformDependencies map. Waterfall is the BungeeCord-compatible
+// proxy platform Hangar hosts; Velocity is a separate proxy API. Hangar never
+// hosts Fabric, Forge, NeoForge, or Vanilla artifacts.
+const (
+	hangarPlatformPaper     = "PAPER"
+	hangarPlatformWaterfall = "WATERFALL"
+	hangarPlatformVelocity  = "VELOCITY"
+)
+
+// hangarPreferredPlatforms orders platforms for a request that does not name
+// one. The order is a documented default, never a fallback from an explicitly
+// requested platform.
+var hangarPreferredPlatforms = []string{
+	hangarPlatformPaper,
+	hangarPlatformWaterfall,
+	hangarPlatformVelocity,
+}
 
 type hangarDependencies struct {
 	version  *hangarVersion
@@ -18,22 +36,44 @@ type hangarDependencies struct {
 
 func (h *hangarDependencies) ToDependencySet() upstream.DependencySet {
 	result := upstream.DependencySet{FromArtifact: true}
-	for _, dep := range h.version.DependenciesForPlatform(h.platform) {
-		if dep.Name == "" || dep.ExternalURL != nil {
+	keys, supported := hangarPlatformKeysFor(h.platform)
+	if !supported {
+		return result
+	}
+	if len(keys) == 0 {
+		keys = hangarPreferredPlatforms
+	}
+
+	seen := make(map[int64]struct{})
+	for _, key := range keys {
+		declared, known := h.version.platformPluginDependencies(key)
+		if !known {
 			continue
 		}
-		result.Dependencies = append(
-			result.Dependencies, catalog.Dependency{
-				ID: catalog.VersionedRef{
-					Ref: catalog.Ref{
-						Name:     input.ToProjectName(dep.Name),
-						Provider: catalog.ProviderUnspecified,
+		for _, dep := range declared {
+			if dep.Name == "" || dep.ExternalURL != nil && *dep.ExternalURL != "" {
+				continue
+			}
+			if dep.ProjectID == nil || *dep.ProjectID <= 0 {
+				continue
+			}
+			if _, duplicate := seen[*dep.ProjectID]; duplicate {
+				continue
+			}
+			seen[*dep.ProjectID] = struct{}{}
+			result.Dependencies = append(
+				result.Dependencies, catalog.Dependency{
+					ID: catalog.VersionedRef{
+						Ref: catalog.Ref{
+							Name:     input.ToProjectName(dep.Name),
+							Provider: catalog.ProviderUnspecified,
+						},
+						Ecosystem: catalog.EcosystemUnspecified,
 					},
-					Ecosystem: catalog.EcosystemUnspecified,
+					Mandatory: dep.Required,
 				},
-				Mandatory: dep.Required,
-			},
-		)
+			)
+		}
 	}
 	return result
 }
@@ -54,9 +94,14 @@ func (p *Provider) resolveVersion(
 		return selectLatestCompatibleVersion(versions, id.Ecosystem)
 	default:
 		for i := range versions {
-			if versions[i].Name == id.Version.String() {
-				return &versions[i], nil
+			if versions[i].Name != id.Version.String() {
+				continue
 			}
+			if !id.Ecosystem.IsUnspecified() &&
+				!versions[i].hasDownloadForPlatform(id.Ecosystem) {
+				return nil, ErrNoVersion
+			}
+			return &versions[i], nil
 		}
 		return nil, ErrNoVersion
 	}
@@ -64,34 +109,27 @@ func (p *Provider) resolveVersion(
 
 // selectLatestVersion selects the newest version for any/beta selectors.
 // any prefers a release channel and falls back to any channel; beta accepts
-// any channel. Platform-specific candidates are preferred over versions that
-// declare no platform dependency.
+// any channel. A platform-specific request never falls back to another
+// platform's artifact.
 func selectLatestVersion(
 	versions []hangarVersion,
 	platform catalog.Ecosystem,
 	selector versionpkg.Version,
 ) (*hangarVersion, error) {
-	platforms := []catalog.Ecosystem{platform}
-	if platform != catalog.EcosystemUnspecified {
-		platforms = append(platforms, catalog.EcosystemUnspecified)
+	keys, supported := hangarPlatformKeysFor(platform)
+	if !supported {
+		return nil, ErrNoVersion
 	}
-	for _, candidatePlatform := range platforms {
+	if len(keys) == 0 {
+		keys = hangarPreferredPlatforms
+	}
+	for _, key := range keys {
 		if selector == versionpkg.Any {
-			if version := firstVersionMatching(
-				versions,
-				candidatePlatform,
-				false,
-				true,
-			); version != nil {
+			if version := firstVersionMatching(versions, key, true); version != nil {
 				return version, nil
 			}
 		}
-		if version := firstVersionMatching(
-			versions,
-			candidatePlatform,
-			false,
-			false,
-		); version != nil {
+		if version := firstVersionMatching(versions, key, false); version != nil {
 			return version, nil
 		}
 	}
@@ -99,35 +137,35 @@ func selectLatestVersion(
 }
 
 // selectLatestCompatibleVersion selects the newest release-channel version
-// that declares compatibility with the platform. stable never falls back to
-// a prerelease channel.
+// that publishes an artifact for the platform. stable never falls back to a
+// prerelease channel.
 func selectLatestCompatibleVersion(
 	versions []hangarVersion,
 	platform catalog.Ecosystem,
 ) (*hangarVersion, error) {
-	if version := firstVersionMatching(
-		versions,
-		platform,
-		true,
-		true,
-	); version != nil {
-		return version, nil
+	keys, supported := hangarPlatformKeysFor(platform)
+	if !supported {
+		return nil, ErrNoVersion
+	}
+	if len(keys) == 0 {
+		keys = hangarPreferredPlatforms
+	}
+	for _, key := range keys {
+		if version := firstVersionMatching(versions, key, true); version != nil {
+			return version, nil
+		}
 	}
 	return nil, ErrNoVersion
 }
 
 func firstVersionMatching(
 	versions []hangarVersion,
-	platform catalog.Ecosystem,
-	requireCompatibility bool,
+	platformKey string,
 	requireRelease bool,
 ) *hangarVersion {
 	for i := range versions {
 		version := &versions[i]
-		if !version.HasDownloadForPlatform(platform) {
-			continue
-		}
-		if requireCompatibility && !version.SupportsPlatform(platform) {
+		if _, ok := version.downloadForPlatformKey(platformKey); !ok {
 			continue
 		}
 		if requireRelease && !version.IsReleaseChannel() {
@@ -138,9 +176,81 @@ func firstVersionMatching(
 	return nil
 }
 
-func preferredDownloadPlatform(platform catalog.Ecosystem) catalog.Ecosystem {
-	if platform == catalog.EcosystemUnspecified {
-		return "paper"
+// hangarPlatformKeysFor maps a package ecosystem to Hangar platform
+// identifiers in preference order. An empty slice with supported true means
+// the request did not name a platform. supported false means Hangar cannot
+// serve the ecosystem at all.
+func hangarPlatformKeysFor(ecosystem catalog.Ecosystem) (
+	[]string,
+	bool,
+) {
+	switch catalog.Ecosystem(
+		strings.ToLower(strings.TrimSpace(string(ecosystem))),
+	) {
+	case "":
+		return nil, true
+	case catalog.EcosystemPaper, catalog.EcosystemBukkit:
+		return []string{hangarPlatformPaper}, true
+	case catalog.EcosystemBungeeCord:
+		return []string{hangarPlatformWaterfall}, true
+	case catalog.EcosystemVelocity:
+		return []string{hangarPlatformVelocity}, true
+	default:
+		return nil, false
 	}
-	return "paper"
+}
+
+// hangarPlatformTracksMinecraft reports whether the platform's dependency
+// list enumerates Minecraft versions. Velocity lists Velocity API versions
+// instead, so a Minecraft version cannot be verified against it.
+func hangarPlatformTracksMinecraft(platformKey string) bool {
+	switch strings.ToUpper(platformKey) {
+	case hangarPlatformPaper, hangarPlatformWaterfall:
+		return true
+	default:
+		return false
+	}
+}
+
+func (v *hangarVersion) hasDownloadForPlatform(
+	platform catalog.Ecosystem,
+) bool {
+	_, ok := v.downloadForPlatform(platform)
+	return ok
+}
+
+func (v *hangarVersion) downloadForPlatform(
+	platform catalog.Ecosystem,
+) (hangarDownload, bool) {
+	keys, supported := hangarPlatformKeysFor(platform)
+	if !supported {
+		return hangarDownload{}, false
+	}
+	if len(keys) == 0 {
+		keys = hangarPreferredPlatforms
+	}
+	for _, key := range keys {
+		if download, ok := v.downloadForPlatformKey(key); ok {
+			return download, true
+		}
+	}
+	return hangarDownload{}, false
+}
+
+// downloadForPlatformKey returns the platform's download only when it carries
+// a usable URL. A declared platform without a fetchable artifact is not a
+// downloadable build.
+func (v *hangarVersion) downloadForPlatformKey(
+	platformKey string,
+) (hangarDownload, bool) {
+	for key, download := range v.Downloads {
+		if !strings.EqualFold(key, platformKey) {
+			continue
+		}
+		if download.URL() == "" || download.metadataFilename() == "" {
+			return hangarDownload{}, false
+		}
+		return download, true
+	}
+	return hangarDownload{}, false
 }

@@ -26,8 +26,13 @@ type upgradeRoot struct {
 	Project     string
 	Previous    *document.Package
 	Versions    []upgradeVersion
+	// LockedIndex is the highest selectable index in Versions. It is the
+	// locked build's index when that build is listed, or the oldest listed
+	// index when the locked build is missing from a mutable location.
 	LockedIndex int
-	LockedRank  int
+	// LockedRank is the locked build's rank, or len(Versions) when the locked
+	// build is missing and ranks below every listed build.
+	LockedRank int
 }
 
 type upgradeVersion struct {

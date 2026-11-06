@@ -105,7 +105,8 @@ func ParseReference(ref string) (provider catalog.Provider, project string, err 
 
 func isPackageProvider(provider catalog.Provider) bool {
 	switch provider {
-	case catalog.ProviderModrinth, catalog.ProviderCurseForge, catalog.ProviderMCDR:
+	case catalog.ProviderModrinth, catalog.ProviderCurseForge,
+		catalog.ProviderHangar, catalog.ProviderSpiget, catalog.ProviderMCDR:
 		return true
 	default:
 		return false

@@ -2,11 +2,10 @@ package spiget
 
 import (
 	"encoding/base64"
-	"fmt"
 	"net/url"
+	"path"
 	"strconv"
 	"strings"
-	"time"
 	"unicode"
 
 	"github.com/mclucy/lucy/catalog"
@@ -38,6 +37,10 @@ type resolvedVersion struct {
 	UUID        string
 }
 
+// ToSearchResults exposes Spiget's numeric resource ID as the project
+// identity. SpigotMC publishes several resources under one display name, so a
+// normalized name is not stable or installable; the ID is, and the display name
+// travels as the result title.
 func (s searchResponse) ToSearchResults(source catalog.Provider) upstream.SearchResponse {
 	results := upstream.SearchResponse{
 		Provider: source,
@@ -45,13 +48,16 @@ func (s searchResponse) ToSearchResults(source catalog.Provider) upstream.Search
 	}
 
 	for _, resource := range s {
-		if resource.Name == "" {
+		if resource.ID <= 0 || resource.Name == "" {
 			continue
 		}
 		results.Items = append(
 			results.Items, upstream.SearchResult{
-				ProjectName: normalizedProjectName(resource.Name).String(),
+				ProjectName: strconv.FormatInt(resource.ID, 10),
 				Provider:    source,
+				Title:       resource.Name,
+				Description: resource.Tag,
+				Downloads:   resource.Downloads,
 			},
 		)
 	}
@@ -116,24 +122,31 @@ func NewResolvedVersion(
 // carry no game versions, loaders, or channel; resource-level tested versions
 // are not build-specific and stay out of the build.
 func (v versionResponse) ToBuild() upstream.Build {
-	build := upstream.Build{Version: v.Name}
-	if build.Version == "" && v.ID != 0 {
-		build.Version = strconv.FormatInt(v.ID, 10)
+	build := upstream.Build{
+		Version:   strings.TrimSpace(v.Name),
+		Published: releaseTime(v.ReleaseDate),
 	}
-	if v.ReleaseDate > 0 {
-		build.Published = time.Unix(v.ReleaseDate, 0).UTC()
+	if build.Version == "" && v.ID > 0 {
+		build.Version = strconv.FormatInt(v.ID, 10)
 	}
 	return build
 }
 
-func (r resolvedVersion) LucyVersion() versionpkg.Version {
-	if r.VersionName != "" {
-		return versionpkg.Version(r.VersionName)
+// spigetVersion reports the human version label, falling back to the numeric
+// version ID when the publisher left the label empty. The ID is always kept
+// separately as the release and file identity.
+func spigetVersion(name string, id int64) versionpkg.Version {
+	if name = strings.TrimSpace(name); name != "" {
+		return versionpkg.Version(name)
 	}
-	if r.VersionID != 0 {
-		return versionpkg.Version(strconv.FormatInt(r.VersionID, 10))
+	if id > 0 {
+		return versionpkg.Version(strconv.FormatInt(id, 10))
 	}
 	return versionpkg.Unknown
+}
+
+func (r resolvedVersion) LucyVersion() versionpkg.Version {
+	return spigetVersion(r.VersionName, r.VersionID)
 }
 
 func (r resolvedVersion) Matches(version versionpkg.Version) bool {
@@ -159,33 +172,94 @@ func (r resolvedVersion) downloadURL() string {
 	if r.External && r.ExternalURL != "" {
 		return r.ExternalURL
 	}
-	if r.ResourceID == 0 || r.VersionID == 0 {
+	if r.ResourceID == 0 {
 		return ""
 	}
-	return fmt.Sprintf(
-		"%s/resources/%d/versions/%d/download",
-		spigetAPIBaseURL,
-		r.ResourceID,
-		r.VersionID,
-	)
+	return resourceDownloadURL(r.ResourceID)
 }
 
 func (r resolvedVersion) filename() string {
-	base := strings.TrimSpace(r.ProjectName)
+	return artifactFilename(
+		r.ResourceID,
+		r.ProjectName,
+		r.VersionName,
+		r.VersionID,
+		r.FileType,
+		r.downloadURL(),
+	)
+}
+
+// artifactFilename names the local file for one published version. Spiget's API
+// reports the archive type but never the uploaded file name, so a Spiget-hosted
+// version gets a name derived from provider fields. An external download URL
+// names the file itself, so its last path element is used unchanged.
+func artifactFilename(
+	resourceID int64,
+	projectName, versionName string,
+	versionID int64,
+	fileType, downloadURL string,
+) string {
+	if name := archiveFilename(downloadURL); name != "" {
+		return name
+	}
+	base := normalizedProjectName(projectName).String()
 	if base == "" {
-		base = strconv.FormatInt(r.ResourceID, 10)
+		base = strconv.FormatInt(resourceID, 10)
 	}
-	version := strings.TrimSpace(r.VersionName)
-	if version == "" && r.VersionID != 0 {
-		version = strconv.FormatInt(r.VersionID, 10)
+	label := sanitizeFilenamePart(versionName)
+	if label == "" && versionID > 0 {
+		label = strconv.FormatInt(versionID, 10)
 	}
-	if version != "" {
-		base += "-" + version
+	if label != "" {
+		base += "-" + label
 	}
-	if ext := normalizedFileExtension(r.FileType); ext != "" {
+	if ext := normalizedFileExtension(fileType); ext != "" {
 		return base + ext
 	}
 	return base
+}
+
+// archiveFilename returns the file name of a direct plugin-archive URL, or ""
+// when the URL does not address one. Spiget's external URLs sometimes point at
+// a release page rather than an archive; installing such a page would not
+// produce a plugin.
+func archiveFilename(rawURL string) string {
+	parsed, err := url.Parse(strings.TrimSpace(rawURL))
+	if err != nil {
+		return ""
+	}
+	name := path.Base(parsed.Path)
+	if name == "" || name == "." || name == "/" {
+		return ""
+	}
+	if !strings.EqualFold(path.Ext(name), ".jar") {
+		return ""
+	}
+	if strings.ContainsAny(name, "/\\") {
+		return ""
+	}
+	return name
+}
+
+// sanitizeFilenamePart keeps a version label safe for a file name without
+// dropping its readable form.
+func sanitizeFilenamePart(part string) string {
+	part = strings.TrimSpace(part)
+	var b strings.Builder
+	b.Grow(len(part))
+	lastReplaced := false
+	for _, r := range part {
+		switch {
+		case unicode.IsLetter(r) || unicode.IsDigit(r) || r == '.' ||
+			r == '_' || r == '-':
+			b.WriteRune(r)
+			lastReplaced = false
+		case !lastReplaced:
+			b.WriteByte('-')
+			lastReplaced = true
+		}
+	}
+	return strings.Trim(b.String(), "-.")
 }
 
 func normalizedFileExtension(fileType string) string {

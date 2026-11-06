@@ -13,12 +13,34 @@ Narrow the search to a mod or plugin type, sort the results, or choose a source:
 
 ```bash
 lucy search worldedit --ecosystem fabric --sort downloads
-lucy search luckperms --registry hangar --long
+lucy search luckperms --ecosystem paper --registry hangar --long
 ```
 
 `--ecosystem` accepts `fabric`, `forge`, `neoforge`, `bukkit`, or `paper`; `--registry` accepts `modrinth`, `curseforge`, `hangar`, `spiget`, or `mcdr`. Sort by `relevance`, `downloads`, or `newest`. Add `--include-client` to include client-only mods.
 
 Use [`lucy info`](/commands/info) to inspect a result before adding it.
+
+## Sources
+
+Each source has its own catalogue and reports different metadata. Lucy does not query a source for a platform it cannot serve.
+
+| Source | Packages | Search filtering |
+|---|---|---|
+| `modrinth` | Fabric, Forge, NeoForge, Bukkit, and Paper mods and plugins | Loader and server-side facets applied upstream; `paper` has no Modrinth facet, so it searches every server-side loader |
+| `curseforge` | Fabric, Forge, and NeoForge mods | Loader applied upstream; requires a configured API key |
+| `hangar` | Bukkit and Paper plugins | Paper filter applied upstream when one is requested |
+| `spiget` | Bukkit and Paper plugins | None; keyword search only |
+| `mcdr` | MCDReforged plugins | None; keyword search only |
+
+A search without `--ecosystem` queries Modrinth, CurseForge when configured, and the MCDReforged catalogue. Hangar and Spiget join only when you select `bukkit` or `paper`, or when you name one with `--registry`. Naming a source that cannot serve the requested ecosystem is an error.
+
+### Hangar
+
+Hangar is PaperMC's plugin platform. Its results carry the `owner/slug` identity, for example `hangar:HelpChat/PlaceholderAPI`, which is also the reference [`lucy add`](/commands/add) accepts; `--long` prints it. Without an ecosystem filter, Hangar search returns every Hangar platform; `--ecosystem bukkit` or `paper` limits it to Paper projects. Waterfall and Velocity projects are outside lucy's supported package targets. Installation checks the Minecraft versions a Hangar version declares for the Paper platform rather than assuming compatibility.
+
+### Spiget
+
+Spiget is the SpigotMC resource API. Its identity is the numeric resource ID, for example `spiget:6245`, because display names are not unique; `--long` prints the reference. Spiget offers no platform or Minecraft-version search filter, so `--ecosystem bukkit` or `paper` selects Spiget without narrowing its results, and only a resource's current version can be installed. Inspect a result with [`lucy info`](/commands/info) before adding it.
 
 ## Flags
 
@@ -29,15 +51,15 @@ Use [`lucy info`](/commands/info) to inspect a result before adding it.
 </ParamField>
 
 <ParamField query="--ecosystem" type="string">
-  Filter results to a mod or plugin type. Accepted values: `fabric`, `forge`, `neoforge`, `bukkit`, `paper`. The filter also restricts which sources are queried.
+  Filter results to a mod or plugin type. Accepted values: `fabric`, `forge`, `neoforge`, `bukkit`, `paper`. The filter also restricts which sources are queried: mod ecosystems select Modrinth and CurseForge when configured, while `bukkit` and `paper` select Modrinth, Hangar, and Spiget. Modrinth has no Paper facet, so `paper` leaves its results unfiltered beyond server-side packages.
 </ParamField>
 
 <ParamField query="--registry, -s" type="string">
-  Restrict the search to one source instead of querying all applicable ones. Accepted values: `modrinth`, `curseforge`, `hangar`, `spiget`, `mcdr`.
+  Restrict the search to one source instead of querying all applicable ones. Accepted values: `modrinth`, `curseforge`, `hangar`, `spiget`, `mcdr`. A source is rejected when it cannot serve the selected ecosystem.
 </ParamField>
 
 <ParamField query="--sort" type="string" default="relevance">
-  Sort order for each source's results. Sorting is applied after those results are returned.
+  Sort order for each source's results. Sorting is applied after those results are returned. A source that does not report the sorting field keeps its own order.
 
   | Value | Description |
   |---|---|
@@ -47,11 +69,11 @@ Use [`lucy info`](/commands/info) to inspect a result before adding it.
 </ParamField>
 
 <ParamField query="--include-client, -c" type="boolean" default="false">
-  Include client-only mods in results. By default, packages marked as client-side only are filtered out.
+  Ask Modrinth to include client-only mods. Modrinth is the only source with a client/server facet; Hangar, Spiget, and the MCDReforged catalogue publish server-side packages only, and CurseForge cannot filter by client side.
 </ParamField>
 
 <ParamField query="--long, -l" type="boolean" default="false">
-  Use the expanded output format. Shows the description, download count, last-updated time, and package reference for each result instead of the compact table.
+  Use the expanded output format. Shows the metadata the source provides, such as the description, download count, and last-updated time, plus the package reference for each result instead of the compact table.
 </ParamField>
 
 See also [Global Flags](/commands/global-flags) and [`lucy info`](/commands/info).
