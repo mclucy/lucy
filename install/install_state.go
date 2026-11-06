@@ -40,8 +40,9 @@ func installationCurrent(root string, l *document.Lock, logger *log.Logger) (boo
 	return true, nil
 }
 
-// bootstrapCurrent reports whether the receipt satisfies the resolved bootstrap plan
-// and all required managed bootstrap outputs exist and match their accepted baselines.
+// bootstrapCurrent reports whether the receipt satisfies the resolved bootstrap
+// plan: every required managed bootstrap output is owned with bootstrap origin
+// and still matches its accepted baseline.
 func bootstrapCurrent(root string, l *document.Lock, current *receipt.Receipt, logger *log.Logger) (bool, error) {
 	if current == nil {
 		return false, nil
@@ -81,16 +82,6 @@ func bootstrapCurrent(root string, l *document.Lock, current *receipt.Receipt, l
 		logger.Debug("bootstrap not current", "reason", checkResult.Reason)
 		return false, nil
 	case bootstrap.CurrentnessInconclusive:
-		for _, spec := range specs {
-			if spec.Policy != bootstrap.PolicyManaged || spec.Path == "" {
-				continue
-			}
-			p := filepath.Join(serverDir, filepath.FromSlash(spec.Path))
-			if _, err := os.Stat(p); err != nil {
-				logger.Debug("bootstrap not current", "reason", "required output missing", "path", spec.Path)
-				return false, nil
-			}
-		}
 		for _, seedPath := range bootstrap.RequiredSeedOutputs(l.Server) {
 			p := filepath.Join(serverDir, filepath.FromSlash(seedPath))
 			if _, err := os.Stat(p); err != nil {
@@ -101,6 +92,7 @@ func bootstrapCurrent(root string, l *document.Lock, current *receipt.Receipt, l
 	}
 
 	tracked := trackedPaths(l)
+	owned := make(map[string]bool)
 	hasBootstrapEntry := false
 	for _, entry := range current.Entries {
 		if entry.Origin != receipt.OriginBootstrap {
@@ -110,8 +102,9 @@ func bootstrapCurrent(root string, l *document.Lock, current *receipt.Receipt, l
 		if tracked[strings.ToLower(entry.Path)] {
 			continue
 		}
-		current, err := receiptEntryCurrent(root, entry, "bootstrap", logger)
-		if err != nil || !current {
+		owned[entry.Path] = true
+		entryCurrent, err := receiptEntryCurrent(root, entry, "bootstrap", logger)
+		if err != nil || !entryCurrent {
 			return false, err
 		}
 	}
@@ -119,7 +112,41 @@ func bootstrapCurrent(root string, l *document.Lock, current *receipt.Receipt, l
 		logger.Debug("bootstrap not current", "reason", "no bootstrap entries recorded in receipt")
 		return false, nil
 	}
+	for _, required := range requiredBootstrapOutputs(l.Server, specs, checkResult.Outputs) {
+		if tracked[strings.ToLower(required)] {
+			continue
+		}
+		if !owned[required] {
+			logger.Debug("bootstrap not current", "reason", "required managed output not owned by receipt", "path", required)
+			return false, nil
+		}
+	}
 	return true, nil
+}
+
+// requiredBootstrapOutputs lists the workspace paths the receipt must own with
+// bootstrap origin: every managed exact output the contract declares and every
+// managed output CheckExisting verified, including dynamically attributed
+// ones. Seed, discard, and bootstrap-only material carries no such requirement.
+func requiredBootstrapOutputs(
+	locked document.LockedServer,
+	specs []bootstrap.OutputSpec,
+	outputs []bootstrap.Output,
+) []string {
+	var required []string
+	for _, spec := range specs {
+		if spec.Path == "" || spec.Policy != bootstrap.PolicyManaged ||
+			spec.Role == bootstrap.RoleBootstrapOnly {
+			continue
+		}
+		required = append(required, filepath.ToSlash(filepath.Join(locked.Directory, spec.Path)))
+	}
+	for _, out := range outputs {
+		if out.Policy == bootstrap.PolicyManaged && out.Role != bootstrap.RoleBootstrapOnly {
+			required = append(required, out.Path)
+		}
+	}
+	return required
 }
 
 // packagesCurrent reports whether recorded package entries match the lock's
