@@ -3,15 +3,16 @@ title: "lucy add"
 description: "Add mods and plugins to a server"
 ---
 
-Add a package by its source and project name. Lucy records it in `lucy.yaml` and installs it with its required dependencies.
+Add a package by its source-qualified reference. Lucy records it in `lucy.yaml` and installs it with its required dependencies.
 
 ```bash
 lucy add modrinth:lithium
 lucy add modrinth:fabric-api@0.165.1+26.4
-lucy add modrinth:fabric-api modrinth:lithium
+lucy add hangar:HelpChat/PlaceholderAPI
+lucy add spiget:6245
 ```
 
-Use [`lucy search`](/commands/search) to find packages. A bare name can also work: lucy checks the current lock first, then uses Modrinth (or the MCDR catalogue for an MCDR plugin). If the name is ambiguous, use the full source-qualified reference.
+Use [`lucy search`](/commands/search) to find packages. A bare name can also work: lucy checks the current lock first, then uses Modrinth (or the MCDR catalogue for an MCDR plugin). It never searches Hangar or Spiget by name. If the name is ambiguous, use the full source-qualified reference.
 
 An `@version` suffix pins a version. Without one, lucy prefers a release and may select a prerelease if necessary. Existing package pins are preserved. If resolution fails, the manifest and lock remain unchanged.
 
@@ -20,6 +21,20 @@ Lucy normally infers the mod or plugin type from the server. Use `--ecosystem` w
 ```bash
 lucy add mcdr:synced --ecosystem mcdr
 ```
+
+## Hangar and Spiget
+
+Hangar references use Hangar's `owner/slug` coordinate, such as `hangar:HelpChat/PlaceholderAPI`. Spiget references use the numeric SpigotMC resource ID, such as `spiget:6245`. `lucy search --long` prints the reference for either source. For installation, a Spiget resource name works only when exactly one resource matches it; an ambiguous name fails with the matching IDs instead of choosing one.
+
+Both sources publish Bukkit-lineage plugins. Lucy installs them only on targets that load Bukkit or Paper plugins: Paper, Purpur, and Paperclip-based forks. Fabric, Forge, NeoForge, and proxy (BungeeCord, Waterfall, or Velocity) targets are rejected. Lucy installs only Hangar's Paper builds; Waterfall and Velocity projects are not package targets.
+
+Hangar versions are filtered against the Minecraft versions declared for the Paper platform. When a version declares no platform compatibility, lucy keeps the build but warns that compatibility is unverified. Spiget publishes no per-version Minecraft version or loader data, so lucy cannot verify Spiget compatibility and warns when it selects a Spiget version. Spiget also publishes no release channel, so `@stable` cannot be satisfied and a Spiget package on `stable` is not upgraded.
+
+Hangar declares plugin dependencies, and lucy resolves those that identify a Hangar project. An entry that links outside Hangar, or names no Hangar project, makes the dependency list incomplete; lucy warns rather than assuming it is complete. Spiget reports no dependency metadata, so lucy does not expand Spigot plugin dependencies and warns that they were not expanded; install required Spigot plugins yourself. Spiget premium resources have no public download.
+
+Only the version currently published by a Spiget resource has a fetchable download. Its version-specific download endpoint is not fetchable by lucy, while the resource-level download always serves the newest file, so `spiget:<id>@<older-version>` cannot be resolved by add or install, and `lucy info` may list versions that cannot be installed. `lucy upgrade` is the exception: it moves the package to the new current version and rewrites an exact pin. Upgrade fails and leaves the lock unchanged when the resource has no current build or the current build downloads from a different URL; a valid upgrade plan never keeps the old version. Externally hosted resources are also limited to the current version, and only when their single external URL points at a `.jar` file. The current-version URL can later serve different bytes; the lock pins the SHA-256 of the bytes lucy fetched, so replay fails verification instead of installing changed content under the same version.
+
+When Hangar reports a SHA-256 digest for a download, the lock verifies it; otherwise lucy pins the digest of the bytes it downloaded. Spiget publishes no checksum, so lucy always pins the digest of the bytes it downloaded: it can verify its own copy but cannot compare it with an upstream checksum. Neither source identifies an existing local jar by hash.
 
 Add `--with-optional` to include optional dependencies; they are recorded as explicit packages for future installations. See [`lucy remove`](/commands/remove) to remove a package.
 
@@ -30,15 +45,17 @@ Add `--with-optional` to include optional dependencies; they are recorded as exp
 <ParamField path="package" type="string" required>
   One or more package references.
 
-  References include the package source, such as `modrinth:lithium`, `curseforge:238222`, or `mcdr:synced`. An `@` suffix pins a version — `modrinth:fabric-api@0.100.8`. Without `@`, the recorded version rule is `any`.
+  References include the package source, such as `modrinth:lithium`, `curseforge:238222`, `hangar:HelpChat/PlaceholderAPI`, `spiget:6245`, or `mcdr:synced`. An `@` suffix pins a version — `modrinth:fabric-api@0.100.8`. Without `@`, the recorded version rule is `any`.
 
-  A bare name such as `lithium` works as a shortcut. `lucy` first looks for a unique match among the package names the current lock already records; if nothing matches, it falls back to Modrinth, or to the MCDR catalogue when adding an MCDR plugin. A name matching more than one locked package is an error asking for a `modrinth:project`-style reference rather than a guess.
+  A bare name such as `lithium` works as a shortcut. `lucy` first looks for a unique match among the package names the current lock already records; if nothing matches, it falls back to Modrinth, or to the MCDR catalogue when adding an MCDR plugin. A name matching more than one locked package is an error asking for a `modrinth:project`-style reference rather than a guess. Hangar and Spiget are not searched by name; only an exact project ID already in the lock resolves without a prefix.
 
-  Lucy does not rename the IDs inside a mod or plugin. The manifest stores the `modrinth:`, `curseforge:`, or `mcdr:` reference; the ID stays whatever the server loads.
+  Hangar accepts an `owner/slug` path, a bare slug that resolves to one project, or a numeric Hangar project ID. Spiget accepts a numeric SpigotMC resource ID or a resource name that matches exactly one resource.
+
+  Lucy does not rename the IDs inside a mod or plugin. The manifest stores the source-qualified reference; the ID stays whatever the server loads.
 </ParamField>
 
 <ParamField query="--ecosystem" type="string">
-  Target mod or plugin type for the request: `fabric`, `forge`, `neoforge`, `bukkit`, `paper`, or `mcdr`.
+  Target mod or plugin type for the request: `fabric`, `forge`, `neoforge`, `bukkit`, `paper`, or `mcdr`. Hangar and Spiget packages resolve only on `bukkit` or `paper`; other package ecosystems fail.
 </ParamField>
 
 <ParamField query="--with-optional" type="boolean" default="false">

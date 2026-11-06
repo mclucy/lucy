@@ -26,11 +26,17 @@ func TestSearchResponseToSearchResults(t *testing.T) {
 	if len(results.Items) != 2 {
 		t.Fatalf("expected 2 projects, got %d", len(results.Items))
 	}
-	if results.Items[0].ProjectName != "placeholderapi" {
-		t.Fatalf("expected placeholderapi, got %q", results.Items[0].ProjectName)
+	if results.Items[0].ProjectName != "6245" {
+		t.Fatalf("expected numeric resource identity, got %q", results.Items[0].ProjectName)
 	}
-	if results.Items[1].ProjectName != "clearchat-3-2" {
-		t.Fatalf("expected clearchat-3-2, got %q", results.Items[1].ProjectName)
+	if results.Items[0].Title != "PlaceholderAPI" {
+		t.Fatalf("expected display title PlaceholderAPI, got %q", results.Items[0].Title)
+	}
+	if results.Items[1].ProjectName != "3031" {
+		t.Fatalf("expected numeric resource identity, got %q", results.Items[1].ProjectName)
+	}
+	if results.Items[1].Title != "ClearChat 3.2" {
+		t.Fatalf("expected display title ClearChat 3.2, got %q", results.Items[1].Title)
 	}
 }
 
@@ -161,7 +167,7 @@ func TestResolvedVersionToPackageRemote(t *testing.T) {
 			remote.ID.Provider,
 		)
 	}
-	if remote.FileURL != "https://api.spiget.org/v2/resources/6245/versions/625258/download" {
+	if remote.FileURL != "https://api.spiget.org/v2/resources/6245/download" {
 		t.Fatalf("unexpected file url %q", remote.FileURL)
 	}
 	if remote.Filename != "placeholderapi-2.12.2.jar" {
@@ -190,7 +196,7 @@ func TestResolvedVersionUsesExternalDownload(t *testing.T) {
 	if remote.FileURL != "https://downloads.example.com/plugin.jar" {
 		t.Fatalf("expected external url, got %q", remote.FileURL)
 	}
-	if remote.Filename != "external-plugin-1.0.0" {
+	if remote.Filename != "plugin.jar" {
 		t.Fatalf("unexpected filename %q", remote.Filename)
 	}
 }
@@ -247,7 +253,7 @@ func TestResolvedVersionIDFallbackPolicy(t *testing.T) {
 	}
 
 	remote := resolved.ToPackageRemote()
-	if remote.FileURL != "https://api.spiget.org/v2/resources/6245/versions/625258/download" {
+	if remote.FileURL != "https://api.spiget.org/v2/resources/6245/download" {
 		t.Fatalf("unexpected fallback file url %q", remote.FileURL)
 	}
 	if remote.Filename != "placeholderapi-625258.jar" {

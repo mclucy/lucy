@@ -302,11 +302,9 @@ func renderSearchCompact(res upstream.SearchResponse, theme style.Theme) string 
 		)
 
 	for _, item := range res.Items {
-		desc := item.Description
-		if desc == "" && item.Title != "" && item.Title != item.ProjectName {
-			desc = item.Title
-		}
-		t.Row("  "+item.DisplayName(), truncateText(desc, 60))
+		// DisplayName already prefers a human title when one is present, so an
+		// empty description stays empty rather than repeating the row label.
+		t.Row("  "+item.DisplayName(), truncateText(item.Description, 60))
 	}
 	sb.WriteString(t.String())
 	sb.WriteString("\n")

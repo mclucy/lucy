@@ -162,7 +162,7 @@ func (s *Service) PlanUpgrade(
 		if !targets[roots[i].Reference] {
 			continue
 		}
-		versions, lockedIndex, lockedRank, err := s.upgradeVersions(ctx, roots[i], old, maxVersions)
+		versions, lockedIndex, lockedRank, upgradable, err := s.upgradeVersions(ctx, roots[i], old, maxVersions)
 		if err != nil {
 			if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 				return nil, err
@@ -184,7 +184,10 @@ func (s *Service) PlanUpgrade(
 		roots[i].Versions = versions
 		roots[i].LockedIndex = lockedIndex
 		roots[i].LockedRank = lockedRank
-		if lockedIndex > 0 {
+		// A root is active only when a retained build is newer than its lock.
+		// A missing locked build ranks below every retained build, so the scan
+		// reports that case as upgradable directly.
+		if upgradable {
 			active = append(active, i)
 		}
 	}

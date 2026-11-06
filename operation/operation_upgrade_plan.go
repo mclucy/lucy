@@ -66,7 +66,7 @@ func (s *Service) resolveUpgradeOption(
 	if moduleErr != nil {
 		s.logger.Warn(fmt.Errorf("read server core modules: %w", moduleErr))
 	}
-	packages, _, err := resolve.Packages(resolve.PackagesRequest{
+	packages, resolutionWarnings, err := resolve.Packages(resolve.PackagesRequest{
 		Context:            ctx,
 		Manifest:           resolutionManifest,
 		Previous:           old.Packages,
@@ -178,6 +178,7 @@ func (s *Service) resolveUpgradeOption(
 		return UpgradeOption{}, err
 	}
 	plan.Result.ManifestChanges = manifestChanges
+	plan.Result.Warnings = append(plan.Result.Warnings, resolutionWarnings...)
 	hash := upgradePlanHash(baseManifest, baseLock, finalFingerprint, resolved.Packages)
 	plan.Result.PlanHash = hash
 	return UpgradeOption{

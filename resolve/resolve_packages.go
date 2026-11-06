@@ -201,6 +201,7 @@ func Packages(request PackagesRequest) ([]document.Package, []error, error) {
 		}
 	}
 	candidates := map[projectKey][]upstream.Candidate{}
+	provenance := map[string]candidateProvenance{}
 	canonical := map[projectKey]projectKey{}
 	state := newSelectionState()
 	cache := request.Cache
@@ -421,6 +422,18 @@ func Packages(request PackagesRequest) ([]document.Package, []error, error) {
 				continue
 			}
 			a := candidate.Artifact
+			if candidate.DependenciesUnknown || candidate.CompatibilityUnknown {
+				provenance[provenanceKey(
+					candidate.Provider,
+					r.key.ecosystem,
+					candidate.ProjectID,
+					candidate.ReleaseID,
+					candidate.FileID,
+				)] = candidateProvenance{
+					dependenciesUnknown:  candidate.DependenciesUnknown,
+					compatibilityUnknown: candidate.CompatibilityUnknown,
+				}
+			}
 			var modules []catalog.DescriptorModule
 			entry, cached := analysisEntry{}, false
 			if cache != nil {
@@ -611,6 +624,7 @@ func Packages(request PackagesRequest) ([]document.Package, []error, error) {
 		}
 		warnings = problemErrors(problems)
 	}
+	warnings = append(warnings, provenanceWarnings(out, provenance, target, expandDependencies)...)
 	logger.Info(
 		"resolve: selected packages",
 		"packages", len(out),

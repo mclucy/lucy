@@ -1,7 +1,11 @@
 package hangar
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"maps"
+	"net/url"
+	"path"
 	"slices"
 	"strings"
 	"time"
@@ -44,6 +48,9 @@ func (r hangarProjectRef) ProjectURL() string {
 	return hangarSiteBaseURL + "/" + r.Owner + "/" + r.Slug
 }
 
+// ToSearchResults preserves the owner-qualified identity, which is the
+// coordinate an install can resolve without relying on a display name that
+// two projects could share.
 func (s *projectSearchResponse) ToSearchResults(source catalog.Provider) upstream.SearchResponse {
 	res := upstream.SearchResponse{
 		Provider: source,
@@ -51,10 +58,14 @@ func (s *projectSearchResponse) ToSearchResults(source catalog.Provider) upstrea
 	}
 
 	for _, project := range s.Result {
+		ref := project.ProjectRef()
 		res.Items = append(
 			res.Items, upstream.SearchResult{
-				ProjectName: project.ProjectRef().CanonicalName().String(),
+				ProjectName: ref.LookupPath(),
 				Provider:    source,
+				Title:       project.Name,
+				Description: project.Description,
+				LastUpdated: hangarPublishedAt(project.LastUpdated),
 			},
 		)
 	}
@@ -95,14 +106,15 @@ func (p *hangarProject) ToProjectInformation() catalog.Metadata {
 
 	for _, section := range p.Settings.Links {
 		for _, link := range section.Links {
-			if link.URL == "" {
+			linkURL := safeHangarURL(link.URL)
+			if linkURL == "" {
 				continue
 			}
 			info.URLs = append(
 				info.URLs, catalog.URL{
 					Name: link.Name,
 					Type: classifyHangarURL(link.Name),
-					URL:  link.URL,
+					URL:  linkURL,
 				},
 			)
 		}
@@ -165,39 +177,67 @@ func hangarPublishedAt(raw string) time.Time {
 	return published
 }
 
-func (v *hangarVersion) ToPackageRemote() upstream.ResolvedPackage {
-	remote, _ := v.ToPackageRemoteForPlatform(preferredDownloadPlatform(catalog.EcosystemUnspecified))
-	if remote.FileURL == "" {
-		platforms := sortedMapKeys(v.Downloads)
-		if len(platforms) == 0 {
-			return upstream.ResolvedPackage{ID: catalog.VersionedRef{Ref: catalog.Ref{Provider: catalog.ProviderHangar}}}
-		}
-
-		remote, _ = v.ToPackageRemoteForPlatform(catalog.Ecosystem(strings.ToLower(platforms[0])))
+func hangarPackageRef() catalog.VersionedRef {
+	return catalog.VersionedRef{
+		Ref: catalog.Ref{Provider: catalog.ProviderHangar},
 	}
-	return remote
 }
 
+func (v *hangarVersion) ToPackageRemote() upstream.ResolvedPackage {
+	for _, key := range hangarPreferredPlatforms {
+		if remote, ok := v.packageRemoteForPlatformKey(key); ok {
+			return remote
+		}
+	}
+	for _, key := range sortedMapKeys(v.Downloads) {
+		if remote, ok := v.packageRemoteForPlatformKey(key); ok {
+			return remote
+		}
+	}
+	return upstream.ResolvedPackage{ID: hangarPackageRef()}
+}
+
+// ToPackageRemoteForPlatform resolves the artifact for exactly the requested
+// platform. A request for one platform never receives another platform's
+// file, because a Hangar version publishes platform-specific downloads.
 func (v *hangarVersion) ToPackageRemoteForPlatform(platform catalog.Ecosystem) (
 	upstream.ResolvedPackage,
 	bool,
 ) {
-	download, ok := v.downloadForPlatform(platform)
+	keys, supported := hangarPlatformKeysFor(platform)
+	if !supported || len(keys) == 0 {
+		return upstream.ResolvedPackage{ID: hangarPackageRef()}, false
+	}
+	for _, key := range keys {
+		if remote, ok := v.packageRemoteForPlatformKey(key); ok {
+			return remote, true
+		}
+	}
+	return upstream.ResolvedPackage{ID: hangarPackageRef()}, false
+}
+
+func (v *hangarVersion) packageRemoteForPlatformKey(platformKey string) (
+	upstream.ResolvedPackage,
+	bool,
+) {
+	download, ok := v.downloadForPlatformKey(platformKey)
 	if !ok {
-		return upstream.ResolvedPackage{ID: catalog.VersionedRef{Ref: catalog.Ref{Provider: catalog.ProviderHangar}}}, false
+		return upstream.ResolvedPackage{ID: hangarPackageRef()}, false
+	}
+	filename := download.metadataFilename()
+	if filename == "" {
+		return upstream.ResolvedPackage{ID: hangarPackageRef()}, false
 	}
 
 	remote := upstream.ResolvedPackage{
-		ID:       catalog.VersionedRef{Ref: catalog.Ref{Provider: catalog.ProviderHangar}},
+		ID:       hangarPackageRef(),
 		FileURL:  download.URL(),
-		Filename: download.FileInfo.Name,
+		Filename: filename,
 	}
-
-	if download.FileInfo.SHA256Hash != "" {
-		remote.Hash = download.FileInfo.SHA256Hash
+	if hash := download.SHA256(); hash != "" {
+		remote.Hash = hash
 		remote.HashAlgorithm = "sha256"
 	}
-
 	return remote, true
 }
 
@@ -208,15 +248,76 @@ func (v *hangarVersion) IsReleaseChannel() bool {
 	return v.Channel.Name == "" || strings.EqualFold(v.Channel.Name, "Release")
 }
 
+// platformPluginDependencies returns the plugin dependencies Hangar declared
+// for one platform. known is false only when the response carried no
+// dependency object at all, which is different from an empty declaration.
+func (v *hangarVersion) platformPluginDependencies(platformKey string) (
+	[]hangarPluginDependency,
+	bool,
+) {
+	if v.PluginDependencies == nil {
+		return []hangarPluginDependency{}, false
+	}
+	if len(v.PluginDependencies) == 0 {
+		return []hangarPluginDependency{}, true
+	}
+	for key, dependencies := range v.PluginDependencies {
+		if !strings.EqualFold(key, platformKey) {
+			continue
+		}
+		if dependencies == nil {
+			return []hangarPluginDependency{}, true
+		}
+		return dependencies, true
+	}
+	// Another platform declared dependencies, but this platform's list is
+	// unknown. Falling back would attribute another platform's dependencies.
+	return []hangarPluginDependency{}, false
+}
+
+// platformDependenciesFor returns the Minecraft versions declared for one
+// platform. ok is false when the response carried no entry for the platform,
+// which leaves compatibility unverified rather than incompatible.
+func (v *hangarVersion) platformDependenciesFor(platformKey string) (
+	[]string,
+	bool,
+) {
+	if len(v.PlatformDependencies) == 0 {
+		return nil, false
+	}
+	for key, versions := range v.PlatformDependencies {
+		if strings.EqualFold(key, platformKey) {
+			return versions, true
+		}
+	}
+	return nil, false
+}
+
 func (v *hangarVersion) PluginDependencyNames() []catalog.Name {
-	depsForPlatform := v.DependenciesForPlatform(catalog.EcosystemUnspecified)
-	if len(depsForPlatform) == 0 {
+	var declared []hangarPluginDependency
+	for _, key := range hangarPreferredPlatforms {
+		if dependencies, known := v.platformPluginDependencies(key); known {
+			declared = dependencies
+			if len(declared) > 0 {
+				break
+			}
+		}
+	}
+	if len(declared) == 0 {
+		for _, key := range sortedMapKeys(v.PluginDependencies) {
+			if dependencies := v.PluginDependencies[key]; len(dependencies) > 0 {
+				declared = dependencies
+				break
+			}
+		}
+	}
+	if len(declared) == 0 {
 		return nil
 	}
 
-	deps := make([]catalog.Name, 0, len(depsForPlatform))
-	for _, dep := range depsForPlatform {
-		if dep.Name == "" || dep.ExternalURL != nil {
+	deps := make([]catalog.Name, 0, len(declared))
+	for _, dep := range declared {
+		if dep.Name == "" || dep.ExternalURL != nil && *dep.ExternalURL != "" {
 			continue
 		}
 		deps = append(deps, input.ToProjectName(dep.Name))
@@ -225,69 +326,65 @@ func (v *hangarVersion) PluginDependencyNames() []catalog.Name {
 	return deps
 }
 
-func (v *hangarVersion) DependenciesForPlatform(platform catalog.Ecosystem) []hangarPluginDependency {
-	if len(v.PluginDependencies) == 0 {
-		return nil
+// safeHangarURL accepts only absolute HTTP(S) URLs. Remote metadata is
+// untrusted input and must not become a local file path or another scheme.
+func safeHangarURL(raw string) string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return ""
 	}
-
-	preferredKey := strings.ToUpper(preferredDownloadPlatform(platform).String())
-	if deps := v.PluginDependencies[preferredKey]; len(deps) > 0 {
-		return deps
+	parsed, err := url.Parse(raw)
+	if err != nil {
+		return ""
 	}
-
-	for _, key := range sortedMapKeys(v.PluginDependencies) {
-		if deps := v.PluginDependencies[key]; len(deps) > 0 {
-			return deps
-		}
+	switch strings.ToLower(parsed.Scheme) {
+	case "http", "https":
+	default:
+		return ""
 	}
-
-	return nil
+	if parsed.Host == "" {
+		return ""
+	}
+	return parsed.String()
 }
 
-func (v *hangarVersion) HasDownloadForPlatform(platform catalog.Ecosystem) bool {
-	_, ok := v.downloadForPlatform(preferredDownloadPlatform(platform))
-	if ok {
-		return true
+// hangarArtifactFilename accepts a single path segment only. Download
+// metadata is the only filename source: a URL path can change independently
+// of the uploaded artifact and must not rename what the lock pins.
+func hangarArtifactFilename(name string) string {
+	name = strings.TrimSpace(name)
+	if name == "" || name == "." || name == ".." {
+		return ""
 	}
-	return len(v.Downloads) > 0 && platform == catalog.EcosystemUnspecified
+	if path.Base(name) != name || strings.ContainsAny(name, `/\`) {
+		return ""
+	}
+	return name
 }
 
-func (v *hangarVersion) SupportsPlatform(platform catalog.Ecosystem) bool {
-	if len(v.PlatformDependencies) == 0 {
-		return false
-	}
-
-	preferredKey := strings.ToUpper(preferredDownloadPlatform(platform).String())
-	if versions := v.PlatformDependencies[preferredKey]; len(versions) > 0 {
-		return true
-	}
-
-	return platform == catalog.EcosystemUnspecified && len(v.PlatformDependencies) > 0
-}
-
-func (v *hangarVersion) downloadForPlatform(platform catalog.Ecosystem) (
-	hangarDownload,
-	bool,
-) {
-	if len(v.Downloads) == 0 {
-		return hangarDownload{}, false
-	}
-
-	needle := strings.ToLower(platform.String())
-	for key, download := range v.Downloads {
-		if strings.ToLower(key) == needle {
-			return download, true
-		}
-	}
-
-	return hangarDownload{}, false
+func (d hangarDownload) metadataFilename() string {
+	return hangarArtifactFilename(d.FileInfo.Name)
 }
 
 func (d hangarDownload) URL() string {
-	if d.ExternalURL != nil && *d.ExternalURL != "" {
-		return *d.ExternalURL
+	if direct := safeHangarURL(d.DownloadURL); direct != "" {
+		return direct
 	}
-	return d.DownloadURL
+	if d.ExternalURL == nil {
+		return ""
+	}
+	return safeHangarURL(*d.ExternalURL)
+}
+
+func (d hangarDownload) SHA256() string {
+	hash := strings.ToLower(strings.TrimSpace(d.FileInfo.SHA256Hash))
+	if len(hash) != sha256.Size*2 {
+		return ""
+	}
+	if _, err := hex.DecodeString(hash); err != nil {
+		return ""
+	}
+	return hash
 }
 
 func classifyHangarURL(name string) catalog.URLType {
@@ -300,8 +397,6 @@ func classifyHangarURL(name string) catalog.URLType {
 		return catalog.URLWiki
 	case "support", "discord":
 		return catalog.URLForum
-	case "website", "homepage", "hangar":
-		return catalog.URLHome
 	default:
 		return catalog.URLMisc
 	}

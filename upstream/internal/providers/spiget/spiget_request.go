@@ -69,22 +69,6 @@ func (p *Provider) getResource(
 	return resp, nil
 }
 
-func (p *Provider) getLatestVersion(
-	ctx context.Context,
-	resourceID int64,
-) (*versionResponse, error) {
-	resp := &versionResponse{}
-	if err := p.requestJSON(
-		ctx,
-		latestVersionURL(resourceID),
-		resp,
-		ErrNoVersion,
-	); err != nil {
-		return nil, err
-	}
-	return resp, nil
-}
-
 const spigetVersionPageSize = 1000
 
 func (p *Provider) listVersions(
@@ -121,8 +105,33 @@ func resourceURL(id int64) string {
 	return spigetAPIBaseURL + "/resources/" + strconv.FormatInt(id, 10)
 }
 
-func latestVersionURL(resourceID int64) string {
-	return resourceURL(resourceID) + "/versions/latest"
+// resourceDownloadURL returns the resource-scoped download endpoint. Spiget
+// redirects it to the CDN copy of the resource's CURRENT file; the endpoint
+// accepts no version selector, so it is only used for the current version.
+func resourceDownloadURL(resourceID int64) string {
+	return resourceURL(resourceID) + "/download"
+}
+
+// currentVersionID reports which published version the resource's file belongs
+// to. Spiget exposes it as the resource's version pointer and repeats it as the
+// version query of file.url; either identifies the single external download.
+func (r resourceResponse) currentVersionID() int64 {
+	if r.Version.ID > 0 {
+		return r.Version.ID
+	}
+	return fileURLVersionID(r.File.URL)
+}
+
+func fileURLVersionID(raw string) int64 {
+	parsed, err := url.Parse(strings.TrimSpace(raw))
+	if err != nil {
+		return 0
+	}
+	versionID, err := strconv.ParseInt(parsed.Query().Get("version"), 10, 64)
+	if err != nil || versionID <= 0 {
+		return 0
+	}
+	return versionID
 }
 
 func versionsURL(resourceID int64, page int) string {

@@ -65,24 +65,21 @@ func (p *Provider) Fetch(
 		return upstream.ResolvedPackage{}, err
 	}
 
-	preferredPlatform := preferredDownloadPlatform(id.Ecosystem)
-	if remote, ok := version.ToPackageRemoteForPlatform(preferredPlatform); ok {
-		return upstream.ResolvedPackage{
-			FileURL:       remote.FileURL,
-			Filename:      remote.Filename,
-			Hash:          remote.Hash,
-			HashAlgorithm: remote.HashAlgorithm,
-		}, nil
+	// An explicit ecosystem selects exactly that Hangar platform. Only a
+	// request without platform context uses the preferred-platform order.
+	if id.Ecosystem.IsUnspecified() {
+		remote := version.ToPackageRemote()
+		if remote.FileURL == "" || remote.Filename == "" {
+			return upstream.ResolvedPackage{}, ErrNoDownload
+		}
+		return remote, nil
 	}
-	if remote := version.ToPackageRemote(); remote.FileURL != "" {
-		return upstream.ResolvedPackage{
-			FileURL:       remote.FileURL,
-			Filename:      remote.Filename,
-			Hash:          remote.Hash,
-			HashAlgorithm: remote.HashAlgorithm,
-		}, nil
+
+	remote, ok := version.ToPackageRemoteForPlatform(id.Ecosystem)
+	if !ok {
+		return upstream.ResolvedPackage{}, ErrNoDownload
 	}
-	return upstream.ResolvedPackage{}, ErrNoDownload
+	return remote, nil
 }
 
 func (p *Provider) Info(ctx context.Context, ref catalog.Ref) (catalog.Metadata, error) {

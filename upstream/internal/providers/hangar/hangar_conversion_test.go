@@ -32,15 +32,15 @@ func TestProjectSearchResponseToSearchResults(t *testing.T) {
 	if len(results.Items) != 2 {
 		t.Fatalf("expected 2 projects, got %d", len(results.Items))
 	}
-	if results.Items[0].ProjectName != "placeholderapi" {
+	if results.Items[0].ProjectName != "HelpChat/PlaceholderAPI" {
 		t.Fatalf(
-			"expected first project placeholderapi, got %s",
+			"expected first project HelpChat/PlaceholderAPI, got %s",
 			results.Items[0].ProjectName,
 		)
 	}
-	if results.Items[1].ProjectName != "pronounsmc" {
+	if results.Items[1].ProjectName != "Alfie51m/PronounsMC" {
 		t.Fatalf(
-			"expected second project pronounsmc, got %s",
+			"expected second project Alfie51m/PronounsMC, got %s",
 			results.Items[1].ProjectName,
 		)
 	}
@@ -215,7 +215,7 @@ func TestHangarVersionRemoteSelectionPolicy(t *testing.T) {
 				DownloadURL: "https://hangarcdn.papermc.io/plugins/HelpChat/PlaceholderAPI/versions/2.12.3/PAPER/PlaceholderAPI-2.12.3-paper.jar",
 				FileInfo: hangarFileInfo{
 					Name:       "PlaceholderAPI-2.12.3-paper.jar",
-					SHA256Hash: "paper-sha256",
+					SHA256Hash: "7b5c9ca9e9194f8aeb1dbee1d7cc3cd54bbaacac32e2e71141504127637d0133",
 				},
 			},
 			"BUKKIT": {
@@ -223,7 +223,7 @@ func TestHangarVersionRemoteSelectionPolicy(t *testing.T) {
 				ExternalURL: new("https://downloads.example.com/placeholderapi-bukkit.jar"),
 				FileInfo: hangarFileInfo{
 					Name:       "PlaceholderAPI-2.12.3-bukkit.jar",
-					SHA256Hash: "bukkit-sha256",
+					SHA256Hash: "067ed70571c4561981e318f915533259d168f2bf56210c84c82031c7a5a2af37",
 				},
 			},
 		},
@@ -251,6 +251,13 @@ func TestHangarVersionRemoteSelectionPolicy(t *testing.T) {
 			"expected ambiguous remote selection to preserve sha256 metadata, got hash=%q algo=%q",
 			defaultRemote.Hash,
 			defaultRemote.HashAlgorithm,
+		)
+	}
+	if paperHash := version.Downloads["PAPER"].FileInfo.SHA256Hash; defaultRemote.Hash != paperHash {
+		t.Fatalf(
+			"expected default selection to prefer the PAPER artifact, got hash=%q want %q",
+			defaultRemote.Hash,
+			paperHash,
 		)
 	}
 

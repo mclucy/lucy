@@ -236,6 +236,20 @@ func (s *Service) Add(ctx context.Context, root string, args []string, ecosystem
 		if err != nil {
 			return nil, err
 		}
+		provider, _, err := documentpkg.ParseReference(ref)
+		if err != nil {
+			return nil, err
+		}
+		// The manifest stores MCDR packages in a separate block. A package
+		// provider that does not serve the selected environment would be
+		// written where resolution can never select it.
+		if (provider == catalog.ProviderMCDR) != (ecosystem == catalog.EcosystemMCDR) {
+			return nil, fmt.Errorf(
+				"provider %s cannot supply %s packages",
+				provider,
+				ecosystem,
+			)
+		}
 		r := documentpkg.Requirement{Selector: selector, Enabled: new(true)}
 		if ecosystem == catalog.EcosystemMCDR {
 			if d.MCDR == nil {
