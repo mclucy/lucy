@@ -333,7 +333,6 @@ func AdoptExistingWorkspace(root string, opts AdoptOptions) error {
 			}
 			if !selectedCore {
 				checkResult.Current = false
-				checkResult.Status = bootstrap.CurrentnessMismatch
 				checkResult.Reason = "selected runtime does not match verified server output"
 			}
 		}
@@ -685,48 +684,10 @@ func AdoptExistingWorkspace(root string, opts AdoptOptions) error {
 		)
 	}
 
-	// 5. Fingerprints describe the resolved lock only when the observed tree
-	// proves it. A workspace with no packages needs no package fingerprint.
-	if len(opts.Lock.Packages) > 0 {
-		allMatch := true
-		for i := range opts.Lock.Packages {
-			lp := &opts.Lock.Packages[i]
-			if !lp.Enabled() {
-				continue
-			}
-			dest, destErr := packageDestination(opts.Lock, lp)
-			if destErr != nil {
-				allMatch = false
-				break
-			}
-			cleanDest := filepath.ToSlash(filepath.Clean(dest))
-			entry, ok := entries[cleanDest]
-			if !ok || entry.Origin != receipt.OriginPackage {
-				allMatch = false
-				break
-			}
-			expectedID := lp.Artifact.Provider.String() + ":" + lp.Artifact.ProjectID
-			if lp.Artifact.ProjectID != "" && entry.Package != "" &&
-				entry.Package != expectedID && entry.Package != lp.Filename {
-				allMatch = false
-				break
-			}
-			target := filepath.Join(root, filepath.FromSlash(cleanDest))
-			if len(lp.Artifact.Hashes) > 0 {
-				if _, digestErr := DigestFile(target, lp.Artifact.Hashes); digestErr != nil {
-					allMatch = false
-					break
-				}
-			} else {
-				allMatch = false
-				break
-			}
-		}
-		if allMatch {
-			pfp, pErr := receipt.PackageFingerprint(opts.Lock)
-			if pErr == nil {
-				next.PackageFingerprint = pfp
-			}
+	if packageSetObserved(root, opts.Lock, entries) {
+		pfp, pErr := receipt.PackageFingerprint(opts.Lock)
+		if pErr == nil {
+			next.PackageFingerprint = pfp
 		}
 	}
 
@@ -797,6 +758,59 @@ func adoptionReceiptChanged(
 		}
 	}
 	return false
+}
+
+// packageSetObserved refuses a fingerprint while owned paths remain to prune.
+func packageSetObserved(
+	root string,
+	lock *document.Lock,
+	entries map[string]receipt.Entry,
+) bool {
+	if len(lock.Packages) == 0 && lock.MCDR != nil {
+		return false
+	}
+	claimed := make(map[string]struct{}, len(lock.Packages))
+	for i := range lock.Packages {
+		lp := &lock.Packages[i]
+		if !lp.Enabled() {
+			continue
+		}
+		dest, err := packageDestination(lock, lp)
+		if err != nil {
+			return false
+		}
+		cleanDest := filepath.ToSlash(filepath.Clean(dest))
+		entry, ok := entries[cleanDest]
+		if !ok || entry.Origin != receipt.OriginPackage {
+			return false
+		}
+		expectedID := lp.Artifact.Provider.String() + ":" + lp.Artifact.ProjectID
+		if lp.Artifact.ProjectID != "" && entry.Package != "" &&
+			entry.Package != expectedID && entry.Package != lp.Filename {
+			return false
+		}
+		if len(lp.Artifact.Hashes) == 0 {
+			return false
+		}
+		target := filepath.Join(root, filepath.FromSlash(cleanDest))
+		if _, err := DigestFile(target, lp.Artifact.Hashes); err != nil {
+			return false
+		}
+		claimed[cleanDest] = struct{}{}
+	}
+	for path, entry := range entries {
+		switch entry.Origin {
+		case receipt.OriginPackage:
+			if _, ok := claimed[path]; !ok {
+				return false
+			}
+		case receipt.OriginMCDR:
+			if lock.MCDR == nil {
+				return false
+			}
+		}
+	}
+	return true
 }
 
 // verifyExistingBaseline checks that a receipt entry still describes the file
@@ -932,7 +946,7 @@ func publishAdoption(
 				return document.ManifestFile(root).Snapshot(opts.Manifest)
 			}
 		}
-		data := pinned.raw
+		var data []byte
 		if pinned.exists {
 			if opts.ManifestMerge != nil {
 				data, err = opts.ManifestMerge(pinned.raw)
@@ -958,7 +972,7 @@ func publishAdoption(
 	}
 	if opts.Lock != nil && opts.PublishLock {
 		pinned := pre.documents[document.LockFilename]
-		data := pinned.raw
+		var data []byte
 		if pinned.exists {
 			data, err = opts.Lock.MergeBytes(pinned.raw)
 		} else {
