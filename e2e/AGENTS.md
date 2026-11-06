@@ -8,7 +8,7 @@ The e2e domain suites are Go tests behind the `e2e` build tag. They run the buil
 
 - `e2e/init` initializes modpack manifests from generated server sandboxes.
 - `e2e/compile` compiles repository fixtures from `e2e/testdata/repo`.
-- `e2e/mutation` runs heuristic add, remove, and upgrade-all cases from YAML fixtures. Its outcomes are recorded, not gated.
+- `e2e/mutation` runs heuristic add, remove, and upgrade-all cases from YAML fixtures. Its observation cases are recorded, not gated. Four contract anchors in the same package gate fixed rejection behaviors.
 
 The `cmd` filetrack guard suite runs in the default test suite (`go test ./...`); it invokes the CLI in process and uses a helper process for the world session lock. The default suite stays hermetic through temporary directories, local HTTP servers, and self-executed helper processes.
 
@@ -51,7 +51,7 @@ Direct `go test` runs of `e2e/mutation` need `-timeout 0`, because Go's default 
 
 ## Heuristic Mutation Suite
 
-`e2e/mutation` records how the real CLI behaves on hand-authored add, remove, and upgrade-all cases. It is not a regression gate. You author concrete examples in YAML; the runner does not generate cases, randomize inputs, or assert expected outcomes for them.
+`e2e/mutation` records how the real CLI behaves on hand-authored add, remove, and upgrade-all cases. Observation cases are not a regression gate; the four contract anchors in the same package are (see [Contract Anchors](#contract-anchors)). You author concrete examples in YAML; the runner does not generate cases, randomize inputs, or assert expected outcomes for them.
 
 ### Fixture Files and Schema
 
@@ -89,7 +89,7 @@ task build                                                    # Build dist/lucy 
 task e2e:mutation                                             # All cases in all three files
 task e2e:mutation -- -run 'TestAddHeuristic/<case id>'        # One case
 task e2e:mutation:smoke                                       # Smoke cases only
-LUCY_HEURISTIC_REPORT_DIR=<dir> task e2e:mutation             # Write reports to <dir>
+LUCY_HEURISTIC_REPORT_DIR=<absolute dir> task e2e:mutation    # Write reports to an absolute path
 LUCY_HEURISTIC_COMMAND_TIMEOUT=10m task e2e:mutation          # Per-command timeout (default 3m)
 ```
 
@@ -118,27 +118,40 @@ Reports go to `LUCY_HEURISTIC_REPORT_DIR`. When unset, they go to `test_e2e-repo
 
 Report root: when `LUCY_HEURISTIC_REPORT_DIR` is unset but Go's `-artifacts` flag is set, reports go under the `t.ArtifactDir` root, which takes precedence over the repository fallback.
 
+Relative `LUCY_HEURISTIC_REPORT_DIR` values resolve against `e2e/mutation`, the directory `go test` runs in, not the repository root. Pass an absolute path. The same applies to `-lucy`.
+
 Paths: `fixture.path` in `index.json` and `report.json` is relative to the run root. Stage output paths are relative to the case directory.
 
-Gating is limited to harness errors, which fail the test: YAML parse errors or unknown fields, invalid or duplicate ids, unsafe or duplicate file paths, a `lucy.yaml` entry in `files`, an invalid `args` shape, an empty `setup` list or a `setup` first word starting with `-`, a bad layer value, a missing Lucy binary, workspace setup or copy failures, exec startup errors, and report write failures. A setup or main command that exits non-zero, is killed by a signal, or times out is recorded as an observation and does not fail the test. When setup fails, the main command is not run and its stage is recorded as `skipped` with no output. Unexpected stdout or stderr is also an observation.
+Gating is limited to harness errors and contract anchor failures, which fail the test: YAML parse errors or unknown fields, invalid or duplicate ids, unsafe or duplicate file paths, a `lucy.yaml` entry in `files`, an invalid `args` shape, an empty `setup` list or a `setup` first word starting with `-`, a bad layer value, a missing Lucy binary, workspace setup or copy failures, exec startup errors, and report write failures. A setup or main command that exits non-zero, is killed by a signal, or times out is recorded as an observation and does not fail the test. When setup fails, including by a timeout or a signal, the main command is not run and its stage is recorded as `skipped` with no output. A setup that exceeds `LUCY_HEURISTIC_COMMAND_TIMEOUT` therefore skips its command, so check the setup stage before judging a skipped result. Unexpected stdout or stderr is also an observation.
 
 ### Runtime and Network
 
-Cases execute the real CLI and may resolve packages over the network, so runs take time and depend on network availability. Each command invocation (setup, main, and contract anchors) gets its own timeout from `LUCY_HEURISTIC_COMMAND_TIMEOUT`: a Go duration with a unit, such as `90s`, `10m`, or `1h30m`. The default is `3m`. Blank counts as unset; bare numbers, zero, and negative values fail the test as harness errors. A timeout kills the whole process tree and is recorded as an observation (`killed after <duration>`), not a failure. `report.json` records the resolved value in `invocation.timeout`, for example `3m0s`. Do not add sandbox setup to these cases; they must not depend on `.sandboxes`.
+Cases execute the real CLI and may resolve packages over the network, so runs take time and depend on network availability. Each command invocation (setup and main) gets its own timeout from `LUCY_HEURISTIC_COMMAND_TIMEOUT`: a Go duration with a unit, such as `90s`, `10m`, or `1h30m`. The default is `3m`. Blank counts as unset; bare numbers, zero, and negative values fail the test as harness errors. A timeout kills the whole process tree and is recorded as an observation (`killed after <duration>`), not a failure. `report.json` records the resolved value in `invocation.timeout`, for example `3m0s`. Do not add sandbox setup to these cases; they must not depend on `.sandboxes`.
+
+### Contract Anchors
+
+Four tests in `e2e/mutation` check fixed rejection contracts and gate the run. They ignore the layer and sample settings, but honor `LUCY_HEURISTIC_COMMAND_TIMEOUT`. Their results are not written to heuristic reports. Run them alone with `-run '^TestMutation'`:
+
+- `TestMutationAddRejectsMissingManifest`
+- `TestMutationRemoveRejectsMissingManifest`
+- `TestMutationRemoveKeepsUnparseableManifest`
+- `TestMutationUpgradeKeepsManifestWithoutLock`
+
+An anchor fails on a timeout, a clean exit, or a nonzero exit whose output lacks the expected reason. It also fails when the manifest, lock, or workspace entries differ from what the contract requires.
 
 ### Comparing Builds
 
 Use heuristic runs to judge whether a change behaves more correctly and more usefully than the baseline. Keep the fixtures and seed fixed, and change only the binary. Both builds run the same fixture bytes because the harness comes from the same tree.
 
-1. Build the baseline from the base commit in a git-ignored worktree, then build the changed tree:
+1. Build the baseline from `origin/main` (or an explicit base commit) in a git-ignored worktree, then build the changed tree:
 
 ```bash
-git worktree add --detach test_baseline HEAD && (cd test_baseline && task build)
+git fetch origin && git worktree add --detach test_baseline origin/main && (cd test_baseline && task build)
 task build
 ```
 
 2. If the change targets a scenario no case covers, add a realistic case to the fixture first, so both builds run it.
-3. Run both builds back to back with the same layer, sample, seed, timeout, and parallelism. Omit `LUCY_HEURISTIC_SAMPLE` to compare every case:
+3. Run both builds back to back with the same layer, sample, seed, timeout, and parallelism. The example draws 10 cases per operation; to compare every case, leave `LUCY_HEURISTIC_SAMPLE` unset:
 
 ```bash
 export LUCY_HEURISTIC_SAMPLE=10 LUCY_HEURISTIC_SEED=20261106
@@ -148,7 +161,7 @@ LUCY_HEURISTIC_REPORT_DIR="$PWD/test_reports/changed" go test -tags e2e -count=1
 
 4. Match entries by `id` across the two `index.json` files for each command. Read the `report.json` of every case whose `status`, `exit_code`, or setup fields differ, and of every case that is not clean.
 5. Inspect every observation, not only exit codes:
-- `skipped` main stage: setup failed, so the command never ran. Read the setup stage output.
+- `skipped` main stage: setup did not exit zero, so the command never ran. A setup timeout does this too. Read the setup stage output.
 - `timeout` (`killed after <duration>`): an unfinished run, not a result. Rerun it with a larger `LUCY_HEURISTIC_COMMAND_TIMEOUT` before you judge it.
 - `signaled`: read stderr for a crash.
 - Unexpected stdout or stderr.
