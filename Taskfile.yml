@@ -135,7 +135,7 @@ tasks:
       - go tool gocover-cobertura < cover.out > coverage.xml
 
   lint:
-    desc: Enforce package dependency boundaries
+    desc: Run static analysis and enforce package dependency boundaries
     cmds:
       - go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.15.0 run --config .golangci.yml {{default "./..." .CLI_ARGS}}
 

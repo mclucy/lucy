@@ -102,6 +102,7 @@ func (p *Provider) fingerprintMatch(
 	req.Header.Set("Accept", "application/json")
 
 	p.logger.Debug("curseforge fingerprint lookup")
+	//nolint:bodyclose // CloseReader closes the response and logs close errors.
 	resp, err := p.network.Do(req)
 	if err != nil {
 		return zero, err
