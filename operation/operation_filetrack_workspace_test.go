@@ -145,8 +145,6 @@ func TestFileCommandsPreserveRuntimePinsAndReceipt(t *testing.T) {
 		current.Files[0].Immutable {
 		t.Fatalf("the lock did not publish the declaration: %+v", current.Files)
 	}
-	manifestBytes := operationTestRead(t, root, document.ManifestFilename)
-	lockBytes := operationTestRead(t, root, document.LockFilename)
 	receiptBytes := operationTestRead(t, root, ".lucy/install.yaml")
 
 	// The permissions a user chose for the documents must survive each rewrite.
@@ -190,8 +188,8 @@ func TestFileCommandsPreserveRuntimePinsAndReceipt(t *testing.T) {
 	if !reflect.DeepEqual(fresh.Server, lock.Server) {
 		t.Fatal("a manifest-only edit rewrote the runtime pins")
 	}
-	manifestBytes = operationTestRead(t, root, document.ManifestFilename)
-	lockBytes = operationTestRead(t, root, document.LockFilename)
+	manifestBytes := operationTestRead(t, root, document.ManifestFilename)
+	lockBytes := operationTestRead(t, root, document.LockFilename)
 
 	coreInfo, err := os.Stat(filepath.Join(root, "server", "server.jar"))
 	if err != nil {
