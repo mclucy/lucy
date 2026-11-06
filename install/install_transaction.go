@@ -43,6 +43,39 @@ func stagedOutputPreserved(out bootstrap.Output) bool {
 		out.Role == bootstrap.RoleBootstrapOnly
 }
 
+// prunable reports whether reconcile may remove an accepted entry: the file
+// was not restaged, is not tracked, carries no preserved policy, and belongs
+// to an origin this commit governs.
+func prunable(
+	entry receipt.Entry,
+	tracked map[string]bool,
+	sources map[string]string,
+	stagedOutputs map[string]bootstrap.Output,
+	stagedBootstrap bool,
+) (bool, error) {
+	if tracked[strings.ToLower(entry.Path)] {
+		return false, nil
+	}
+	if _, restaged := sources[entry.Path]; restaged {
+		return false, nil
+	}
+	if out, classified := stagedOutputs[entry.Path]; classified &&
+		stagedOutputPreserved(out) {
+		return false, nil
+	}
+	switch entry.Origin {
+	case receipt.OriginBootstrap:
+		return stagedBootstrap, nil
+	case receipt.OriginPackage, receipt.OriginMCDR:
+		return true, nil
+	default:
+		return false, fmt.Errorf(
+			"unrecognized entry origin %q for path %s; refusing implicit prune",
+			entry.Origin, entry.Path,
+		)
+	}
+}
+
 // applyCommit publishes the staged installation. stagedOutputs classifies
 // every non-package file the stage is allowed to contain, including method
 // bootstrap outputs validated before packages joined the stage and explicit
@@ -307,24 +340,18 @@ func applyCommitFiles(root, stage string, d *document.Manifest, l *document.Lock
 	pruneExpected := map[string]workspacewrite.InstallImage{}
 	if reconcile {
 		for _, old := range previous.Entries {
-			if tracked[strings.ToLower(old.Path)] {
-				continue
+			shouldPrune, err := prunable(
+				old,
+				tracked,
+				sources,
+				stagedOutputs,
+				stagedBootstrap,
+			)
+			if err != nil {
+				return err
 			}
-			if _, ok := sources[old.Path]; ok {
+			if !shouldPrune {
 				continue
-			}
-			if out, classified := stagedOutputs[old.Path]; classified &&
-				stagedOutputPreserved(out) {
-				continue
-			}
-			switch old.Origin {
-			case receipt.OriginBootstrap:
-				if !stagedBootstrap {
-					continue
-				}
-			case receipt.OriginPackage, receipt.OriginMCDR:
-			default:
-				return fmt.Errorf("unrecognized entry origin %q for path %s; refusing implicit prune", old.Origin, old.Path)
 			}
 			p := filepath.Join(root, old.Path)
 			info, err := os.Lstat(p)
@@ -437,38 +464,16 @@ func applyCommitFiles(root, stage string, d *document.Manifest, l *document.Lock
 		documentAfter[document.ManifestFilename] = &manifestPlan.Image
 	}
 	if reconcile {
-		for _, old := range previous.Entries {
-			if tracked[strings.ToLower(old.Path)] {
-				continue
+		pruneNames := make([]string, 0, len(pruneExpected))
+		for name := range pruneExpected {
+			pruneNames = append(pruneNames, name)
+		}
+		slices.Sort(pruneNames)
+		for _, name := range pruneNames {
+			if installPathMatchesReserved(root, name, document.ManifestFilename) {
+				return fmt.Errorf("installation receipt path %s is reserved", name)
 			}
-			if _, ok := sources[old.Path]; ok {
-				continue
-			}
-			if out, classified := stagedOutputs[old.Path]; classified &&
-				stagedOutputPreserved(out) {
-				continue
-			}
-			switch old.Origin {
-			case receipt.OriginBootstrap:
-				if !stagedBootstrap {
-					continue
-				}
-			case receipt.OriginPackage, receipt.OriginMCDR:
-			default:
-				return fmt.Errorf("unrecognized entry origin %q for path %s; refusing implicit prune", old.Origin, old.Path)
-			}
-			if _, err := os.Stat(filepath.Join(root, old.Path)); err != nil {
-				if os.IsNotExist(err) {
-					continue
-				}
-				return err
-			}
-			if installPathMatchesReserved(
-				root, old.Path, document.ManifestFilename,
-			) {
-				return fmt.Errorf("installation receipt path %s is reserved", old.Path)
-			}
-			if err := planAfter(old.Path, nil); err != nil {
+			if err := planAfter(name, nil); err != nil {
 				return err
 			}
 		}

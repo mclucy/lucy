@@ -110,37 +110,9 @@ func bootstrapCurrent(root string, l *document.Lock, current *receipt.Receipt, l
 		if tracked[strings.ToLower(entry.Path)] {
 			continue
 		}
-		if err := workspacewrite.SafePath(root, entry.Path); err != nil {
+		current, err := receiptEntryCurrent(root, entry, "bootstrap", logger)
+		if err != nil || !current {
 			return false, err
-		}
-		target := filepath.Join(root, entry.Path)
-		info, err := os.Lstat(target)
-		if os.IsNotExist(err) {
-			logger.Debug("bootstrap not current", "reason", "managed bootstrap output missing", "path", entry.Path)
-			return false, nil
-		}
-		if err != nil {
-			return false, err
-		}
-		if info.Mode()&os.ModeSymlink != 0 || !info.Mode().IsRegular() {
-			logger.Debug("bootstrap not current", "reason", "managed bootstrap output is symlink or non-regular", "path", entry.Path)
-			return false, nil
-		}
-		actual, err := DigestFile(target, nil)
-		if err != nil {
-			return false, err
-		}
-		if !strings.EqualFold(actual["sha256"], entry.SHA256) {
-			logger.Debug("bootstrap not current", "reason", "managed bootstrap output modified", "path", entry.Path, "baseline", entry.SHA256, "actual", actual["sha256"])
-			return false, nil
-		}
-		if entry.Mode != 0 {
-			actualMode := effectiveInstallMode(info.Mode().Perm())
-			expectedMode := effectiveInstallMode(os.FileMode(entry.Mode))
-			if actualMode != expectedMode {
-				logger.Debug("bootstrap not current", "reason", "managed bootstrap output mode modified", "path", entry.Path, "expected", expectedMode, "actual", actualMode)
-				return false, nil
-			}
 		}
 	}
 	if l.Server.Product != "" && !hasBootstrapEntry {
@@ -196,37 +168,53 @@ func packagesCurrent(root string, l *document.Lock, current *receipt.Receipt, lo
 			logger.Debug("packages not current", "reason", "package identity mismatch", "path", cleanDest)
 			return false, nil
 		}
-		if err := workspacewrite.SafePath(root, cleanDest); err != nil {
+		current, err := receiptEntryCurrent(root, entry, "packages", logger)
+		if err != nil || !current {
 			return false, err
 		}
-		target := filepath.Join(root, cleanDest)
-		info, err := os.Lstat(target)
-		if os.IsNotExist(err) {
-			logger.Debug("packages not current", "reason", "package output missing", "path", cleanDest)
+	}
+	return true, nil
+}
+
+// receiptEntryCurrent reports whether the file a receipt entry protects still
+// exists as a regular file with its accepted digest and mode. kind names the
+// entry class in diagnostics.
+func receiptEntryCurrent(
+	root string,
+	entry receipt.Entry,
+	kind string,
+	logger *log.Logger,
+) (bool, error) {
+	if err := workspacewrite.SafePath(root, entry.Path); err != nil {
+		return false, err
+	}
+	target := filepath.Join(root, filepath.FromSlash(entry.Path))
+	info, err := os.Lstat(target)
+	switch {
+	case os.IsNotExist(err):
+		logger.Debug(kind+" not current", "reason", "managed output missing", "path", entry.Path)
+		return false, nil
+	case err != nil:
+		return false, err
+	}
+	if info.Mode()&os.ModeSymlink != 0 || !info.Mode().IsRegular() {
+		logger.Debug(kind+" not current", "reason", "managed output is symlink or non-regular", "path", entry.Path)
+		return false, nil
+	}
+	actual, err := DigestFile(target, nil)
+	if err != nil {
+		return false, err
+	}
+	if !strings.EqualFold(actual["sha256"], entry.SHA256) {
+		logger.Debug(kind+" not current", "reason", "managed output modified", "path", entry.Path, "baseline", entry.SHA256, "actual", actual["sha256"])
+		return false, nil
+	}
+	if entry.Mode != 0 {
+		actualMode := effectiveInstallMode(info.Mode().Perm())
+		expectedMode := effectiveInstallMode(os.FileMode(entry.Mode))
+		if actualMode != expectedMode {
+			logger.Debug(kind+" not current", "reason", "managed output mode modified", "path", entry.Path, "expected", expectedMode, "actual", actualMode)
 			return false, nil
-		}
-		if err != nil {
-			return false, err
-		}
-		if info.Mode()&os.ModeSymlink != 0 || !info.Mode().IsRegular() {
-			logger.Debug("packages not current", "reason", "package output is symlink or non-regular", "path", cleanDest)
-			return false, nil
-		}
-		actual, err := DigestFile(target, nil)
-		if err != nil {
-			return false, err
-		}
-		if !strings.EqualFold(actual["sha256"], entry.SHA256) {
-			logger.Debug("packages not current", "reason", "package output modified", "path", cleanDest)
-			return false, nil
-		}
-		if entry.Mode != 0 {
-			actualMode := effectiveInstallMode(info.Mode().Perm())
-			expectedMode := effectiveInstallMode(os.FileMode(entry.Mode))
-			if actualMode != expectedMode {
-				logger.Debug("packages not current", "reason", "package output mode modified", "path", cleanDest, "expected", expectedMode, "actual", actualMode)
-				return false, nil
-			}
 		}
 	}
 	return true, nil
