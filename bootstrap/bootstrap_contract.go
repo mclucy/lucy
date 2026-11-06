@@ -73,6 +73,13 @@ type OutputSpec struct {
 	Origin OutputOrigin
 }
 
+// stageOnly reports whether the declared material exists only to drive staged
+// bootstrap execution. Such material is pinned and verified before execution
+// but is discarded from the committed runtime tree.
+func (s OutputSpec) stageOnly() bool {
+	return s.Policy == PolicyDiscard || s.Role == RoleBootstrapOnly
+}
+
 // Output describes a concrete staged or verified output file.
 type Output struct {
 	// Path is the workspace-relative path (e.g. "server.jar" or "server/server.jar").
@@ -398,7 +405,7 @@ func ValidateStagedOutputs(stageRoot string, locked document.LockedServer) ([]Ou
 
 	// Shared method verification for staging: verify required outputs, pinned hashes, and launcher semantics.
 	// cachedDigests avoids re-reading and re-hashing all files from disk a second time.
-	verification, err := verifyServerTree(serverRoot, locked, true, cachedDigests)
+	verification, err := verifyServerTree(serverRoot, locked, exact, true, cachedDigests)
 	if err != nil {
 		return nil, fmt.Errorf("staged bootstrap verification error: %w", err)
 	}
@@ -420,7 +427,9 @@ func InspectStage(stageRoot string, locked document.LockedServer) ([]Output, err
 // CheckExisting checks whether an existing server directory already satisfies the locked bootstrap contract
 // without executing bootstrap.
 // It shares the single verification path with stage validation, verifying:
-// - Exact presence and hashes of all locked inputs and runtime core artifacts (for Forge, the core installer is bootstrap-only).
+// - Exact presence and hashes of runtime locked inputs and runtime core artifacts. Stage-only inputs
+// (Forge's bootstrap-only server.jar, server-mappings.txt, and .bootstrap-data/) are consumed by installer
+// execution and absent from a committed tree, so they are neither required nor verified here; staging still verifies them.
 // - Semantics and classpath of generated launch files.
 // - Embedded metadata (download-context, versions.list, patches.list, libraries.list) for Paperclip.
 // For methods where outputs are generated dynamically and cannot be proven identical to lock artifacts
@@ -430,17 +439,18 @@ func InspectStage(stageRoot string, locked document.LockedServer) ([]Output, err
 // in Outputs so adoption can preserve them without claiming full bootstrap currentness.
 // Definite conflicts and hash mismatches return CurrentnessMismatch.
 func CheckExisting(serverDir string, locked document.LockedServer) (CheckResult, error) {
-	if _, _, err := validateContract(locked); err != nil {
+	exact, _, err := validateContract(locked)
+	if err != nil {
 		return CheckResult{
 			Current: false,
 			Status:  CurrentnessMismatch,
 			Reason:  fmt.Sprintf("invalid bootstrap contract: %v", err),
 		}, err
 	}
-	return verifyServerTree(serverDir, locked, false, nil)
+	return verifyServerTree(serverDir, locked, exact, false, nil)
 }
 
-func verifyServerTree(serverDir string, locked document.LockedServer, isStaging bool, cachedDigests map[string]string) (CheckResult, error) {
+func verifyServerTree(serverDir string, locked document.LockedServer, contract map[string]OutputSpec, isStaging bool, cachedDigests map[string]string) (CheckResult, error) {
 	if err := checkPathSafety(serverDir, "", false); err != nil {
 		return CheckResult{
 			Current: false,
@@ -1181,6 +1191,19 @@ func verifyServerTree(serverDir string, locked document.LockedServer, isStaging 
 				continue
 			}
 			cleanRel := filepath.ToSlash(filepath.Clean(input.Path))
+			spec, declared := contract[cleanRel]
+			if !declared {
+				failed = true
+				if reason == "" {
+					reason = fmt.Sprintf("locked input %s has no declared bootstrap contract", cleanRel)
+				}
+				continue
+			}
+			// Existing trees retain only runtime material. Stage-only inputs are consumed by installer
+			// execution and discarded at commit; staging still requires their pinned hashes before execution.
+			if !isStaging && spec.stageOnly() {
+				continue
+			}
 			if err := checkPathSafety(serverDir, cleanRel, true); err != nil {
 				failed = true
 				if reason == "" {
@@ -1209,12 +1232,8 @@ func verifyServerTree(serverDir string, locked document.LockedServer, isStaging 
 			if locked.Directory != "" && locked.Directory != "." {
 				wsInPath = filepath.ToSlash(filepath.Clean(filepath.Join(locked.Directory, cleanRel)))
 			}
-			policy := PolicyManaged
-			role := RoleRuntime
-			if isForgeDiscardInput(cleanRel) {
-				policy = PolicyDiscard
-				role = RoleBootstrapOnly
-			}
+			policy := spec.Policy
+			role := spec.Role
 			addOutput(Output{
 				Path:       wsInPath,
 				ServerPath: cleanRel,

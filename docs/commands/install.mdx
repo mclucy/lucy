@@ -21,6 +21,8 @@ Installation stops when an existing unmanaged file occupies a package destinatio
 
 Ownership is tracked exclusively in the installation receipt. If the receipt is missing or lost, existing workspace files are treated as unmanaged; matching file contents, directory scopes, or prior execution never grant implicit ownership. When an existing workspace is adopted in place through [`lucy init`](/commands/init), lucy records verified runtime files and packages into the receipt atomically without executing bootstrap installers, establishing exact ownership boundaries for subsequent installs.
 
+Later installs reuse an adopted runtime when it still matches the lock and its managed files are unchanged.
+
 Installation also refuses a server whose mod dependencies cannot be satisfied; `--accept-broken` installs the declared packages anyway.
 
 `--with-optional` adds optional dependencies and writes them into `lucy.yaml`, so they remain part of the server on later installs. It resolves again even when the lock is current.
