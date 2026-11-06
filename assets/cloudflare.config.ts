@@ -4,6 +4,7 @@ export default defineConfig({
   worker: {
     name: "lucy-static-assets",
     compatibilityDate: "2026-10-30",
+    placement: { mode: "smart" },
     entrypoint: "./src/index.ts",
     assets: {
       runWorkerFirst: ["/latest.json", "/dl/*"],
@@ -18,5 +19,17 @@ export default defineConfig({
       triggers.fetch({ pattern: "lucy.lc/latest.json", zone: "lucy.lc" }),
       triggers.fetch({ pattern: "lucy.lc/dl/*", zone: "lucy.lc" }),
     ],
+    observability: {
+      enabled: true,
+      issues: {
+        enabled: true,
+      },
+      traces: {
+        enabled: true,
+      },
+    },
+    cache: {
+      enabled: true,
+    },
   },
 });
