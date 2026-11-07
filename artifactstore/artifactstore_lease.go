@@ -45,13 +45,13 @@ func AcquireOperation() (*Lease, error) {
 // serialized by the same gate a collection uses, so a sweep either observes
 // the lease before deleting or waits for the lease to exist.
 func (s *Store) AcquireLease() (*Lease, error) {
-	gate, err := fsutil.LockFile(s.tmpPath(operationsLockName))
+	gate, err := fsutil.LockFile(s.operationPath(operationsLockName))
 	if err != nil {
 		return nil, fmt.Errorf("lock artifact store operations: %w", err)
 	}
 	defer func() { _ = gate.Close() }()
 	for {
-		name := s.tmpPath(operationPrefix + rand.Text() + operationSuffix)
+		name := s.operationPath(operationPrefix + rand.Text() + operationSuffix)
 		file, err := os.OpenFile(name, os.O_CREATE|os.O_EXCL|os.O_RDWR, 0o600)
 		if errors.Is(err, os.ErrExist) {
 			continue
@@ -96,11 +96,11 @@ func (l *Lease) Close() error {
 // must stay held through the sweep so no operation can acquire artifacts
 // between this check and the last removal.
 func (s *Store) beginCollection() (*fsutil.FileLock, error) {
-	gate, err := fsutil.LockFile(s.tmpPath(operationsLockName))
+	gate, err := fsutil.LockFile(s.operationPath(operationsLockName))
 	if err != nil {
 		return nil, fmt.Errorf("lock artifact store operations: %w", err)
 	}
-	entries, err := os.ReadDir(s.tmpPath())
+	entries, err := os.ReadDir(s.operations)
 	if err != nil {
 		return nil, errors.Join(err, gate.Close())
 	}
@@ -109,7 +109,7 @@ func (s *Store) beginCollection() (*fsutil.FileLock, error) {
 		if !strings.HasPrefix(name, operationPrefix) || !strings.HasSuffix(name, operationSuffix) {
 			continue
 		}
-		path := s.tmpPath(name)
+		path := s.operationPath(name)
 		if !entry.Type().IsRegular() {
 			return nil, errors.Join(
 				fmt.Errorf("artifact store operation lease %s is not a regular file", path),
@@ -142,9 +142,6 @@ func (s *Store) beginCollection() (*fsutil.FileLock, error) {
 	return gate, nil
 }
 
-func (s *Store) tmpPath(parts ...string) string {
-	joined := make([]string, 0, len(parts)+2)
-	joined = append(joined, s.directory, "tmp")
-	joined = append(joined, parts...)
-	return filepath.Join(joined...)
+func (s *Store) operationPath(name string) string {
+	return filepath.Join(s.operations, name)
 }

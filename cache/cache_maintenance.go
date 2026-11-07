@@ -1,7 +1,6 @@
 package cache
 
 import (
-	"path/filepath"
 	"time"
 
 	"github.com/mclucy/lucy/cas"
@@ -81,8 +80,7 @@ func (h *handler) collectAllLocked(report *ResetReport) error {
 		if report != nil {
 			report.TotalFreedSize += freed
 			report.FileCount++
-			hex := object.Digest.Hex()
-			report.Removed = append(report.Removed, filepath.Join(h.dir, "cas", "objects", "sha256", hex[:2], hex))
+			report.Removed = append(report.Removed, h.store.Path(object.Digest))
 		}
 		return nil
 	})
