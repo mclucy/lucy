@@ -16,7 +16,7 @@ import (
 	"github.com/mclucy/lucy/catalog"
 	"github.com/mclucy/lucy/internal/fsutil"
 	"github.com/mclucy/lucy/version"
-	"github.com/pelletier/go-toml"
+	"github.com/pelletier/go-toml/v2"
 	"gopkg.in/yaml.v3"
 )
 

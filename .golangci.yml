@@ -59,7 +59,7 @@ linters:
             - github.com/mclucy/lucy/catalog$
             - github.com/mclucy/lucy/internal/fileschema$
             - github.com/mclucy/lucy/internal/fn$
-            - github.com/pelletier/go-toml$
+            - github.com/pelletier/go-toml/v2$
 
         appdata-leaf:
           list-mode: strict

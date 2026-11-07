@@ -9,7 +9,7 @@ import (
 	"github.com/mclucy/lucy/internal/fsutil"
 
 	versionpkg "github.com/mclucy/lucy/version"
-	"github.com/pelletier/go-toml"
+	"github.com/pelletier/go-toml/v2"
 )
 
 type forgeReader struct{}
