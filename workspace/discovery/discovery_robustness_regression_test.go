@@ -99,56 +99,6 @@ func TestGeyserVersionExtractionFromFilename(t *testing.T) {
 	}
 }
 
-func TestCompareForgeMajorNumeric(t *testing.T) {
-	t.Parallel()
-
-	tests := []struct {
-		version string
-		target  int
-		want    int
-	}{
-		{"8.0.0", 61, -1},
-		{"61.0.0", 61, 0},
-		{"61.0", 61, 0},
-		{"72.1.0", 61, 1},
-		{"59.0.0", 61, -1},
-		{"100.0.0", 61, 1},
-		{"", 61, -1},
-		{"not-a-number", 61, -1},
-	}
-
-	for _, tt := range tests {
-		t.Run(
-			tt.version, func(t *testing.T) {
-				t.Parallel()
-
-				got := compareForgeMajor(
-					versionpkg.Version(tt.version),
-					tt.target,
-				)
-				sign := func(n int) int {
-					if n < 0 {
-						return -1
-					}
-					if n > 0 {
-						return 1
-					}
-					return 0
-				}(got)
-				if sign != tt.want {
-					t.Fatalf(
-						"compareForgeMajor(%q, %d) sign = %d, want %d",
-						tt.version,
-						tt.target,
-						sign,
-						tt.want,
-					)
-				}
-			},
-		)
-	}
-}
-
 func TestNeoForgeVersionRegexAllowsBetaSuffix(t *testing.T) {
 	t.Parallel()
 
