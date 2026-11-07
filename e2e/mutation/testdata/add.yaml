@@ -1347,3 +1347,383 @@
     - "mcdr"
     - "mcdr:quick_backup_multi@1.5.0"
 
+- id: add-hangar-paper-moderation-grim
+  smoke: true
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.21.1"
+      directory: server
+      core:
+        product: paper
+        product_version: "133"
+      packages:
+        paper:
+          modrinth:luckperms: "any"
+          modrinth:worldedit: "any"
+          modrinth:worldguard: "any"
+          modrinth:fastasyncworldedit: "any"
+          modrinth:coreprotect: "any"
+          modrinth:tabtps: "any"
+          modrinth:chunky: "1.4.28"
+          modrinth:discordsrv: "any"
+          modrinth:plan: "any"
+          modrinth:placeholderapi: "any"
+          modrinth:decentholograms: "any"
+  files:
+    server/server.properties: |
+      server-port=25565
+      motd=Staff-managed survival
+  args:
+    - "hangar:GrimAnticheat/GrimAnticheat"
+
+- id: add-hangar-paper-via-backwards-dependency
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.21.4"
+      directory: server
+      core:
+        product: paper
+        product_version: "232"
+      packages:
+        paper:
+          modrinth:luckperms: "any"
+          modrinth:coreprotect: "any"
+          modrinth:chunky: "any"
+          modrinth:squaremap: "any"
+          modrinth:tabtps: "any"
+          modrinth:plan: "any"
+          modrinth:placeholderapi: "any"
+          modrinth:discordsrv: "any"
+          modrinth:decentholograms: "any"
+          modrinth:worldedit: "any"
+          modrinth:worldguard: "any"
+  args:
+    - "hangar:ViaVersion/ViaBackwards"
+
+- id: add-hangar-purpur-squaremap-survival
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.21.1"
+      directory: server
+      core:
+        product: purpur
+        product_version: "2329"
+      packages:
+        paper:
+          modrinth:luckperms: "any"
+          modrinth:coreprotect: "any"
+          modrinth:worldedit: "any"
+          modrinth:worldguard: "any"
+          modrinth:fastasyncworldedit: "any"
+          modrinth:chunky: "1.4.28"
+          modrinth:tabtps: "any"
+          modrinth:plan: "any"
+          modrinth:placeholderapi: "any"
+          modrinth:discordsrv: "any"
+          modrinth:decentholograms: "any"
+  files:
+    server/purpur.yml: |
+      settings:
+        lagging-threshold: 0.8
+  args:
+    - "hangar:jmp/squaremap"
+
+- id: add-hangar-paper-multiverse-rpg-worlds
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.21.4"
+      directory: server
+      core:
+        product: paper
+        product_version: "232"
+      packages:
+        paper:
+          modrinth:luckperms: "any"
+          modrinth:coreprotect: "any"
+          modrinth:placeholderapi: "any"
+          modrinth:tabtps: "any"
+          modrinth:plan: "any"
+          modrinth:chunky: "any"
+          modrinth:discordsrv: "any"
+          modrinth:decentholograms: "any"
+          modrinth:worldedit: "any"
+          modrinth:worldguard: "any"
+          modrinth:griefprevention: "any"
+  args:
+    - "hangar:Multiverse/Multiverse-Core"
+
+- id: add-hangar-paper-creative-worldedit
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.21.4"
+      directory: server
+      core:
+        product: paper
+        product_version: "232"
+      packages:
+        paper:
+          modrinth:luckperms: "any"
+          modrinth:multiverse-core: "any"
+          modrinth:decentholograms: "any"
+          modrinth:tabtps: "any"
+          modrinth:plan: "any"
+          modrinth:chunky: "any"
+          modrinth:placeholderapi: "any"
+          modrinth:coreprotect: "any"
+          modrinth:worldguard: "any"
+          modrinth:quality-tpa: "any"
+  args:
+    - "hangar:EngineHub/WorldEdit"
+
+- id: unverified-add-spiget-paper-luckperms-network
+  smoke: true
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.21.1"
+      directory: server
+      core:
+        product: paper
+        product_version: "133"
+      packages:
+        paper:
+          modrinth:vaultunlocked: "any"
+          modrinth:towny: "any"
+          modrinth:quickshop-hikari: "any"
+          modrinth:coreprotect: "any"
+          modrinth:chunky: "1.4.28"
+          modrinth:tabtps: "any"
+          modrinth:plan: "any"
+          modrinth:discordsrv: "any"
+          modrinth:decentholograms: "any"
+          modrinth:worldguard: "any"
+          modrinth:worldedit: "any"
+  args:
+    - "spiget:28140"
+
+- id: unverified-add-spiget-paper-chestshop-economy
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.21.4"
+      directory: server
+      core:
+        product: paper
+        product_version: "232"
+      packages:
+        paper:
+          modrinth:vaultunlocked: "any"
+          modrinth:luckperms: "any"
+          modrinth:towny: "any"
+          modrinth:plan: "any"
+          modrinth:placeholderapi: "any"
+          modrinth:tabtps: "any"
+          modrinth:coreprotect: "any"
+          modrinth:chunky: "any"
+          modrinth:discordsrv: "any"
+          modrinth:decentholograms: "any"
+          modrinth:worldedit: "any"
+  args:
+    - "spiget:51856"
+
+- id: unverified-add-spiget-purpur-deluxemenus-lobby
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.21.4"
+      directory: server
+      core:
+        product: purpur
+        product_version: "2416"
+      packages:
+        paper:
+          modrinth:luckperms: "any"
+          modrinth:placeholderapi: "any"
+          modrinth:tabtps: "any"
+          modrinth:chunky: "any"
+          modrinth:plan: "any"
+          modrinth:coreprotect: "any"
+          modrinth:worldguard: "any"
+          modrinth:worldedit: "any"
+          modrinth:decentholograms: "any"
+          modrinth:skinsrestorer: "any"
+  files:
+    server/purpur.yml: |
+      settings:
+        use-alternate-keepalive: true
+  args:
+    - "spiget:11734"
+
+- id: unverified-add-spiget-hangar-mixed-paper-community
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.21.1"
+      directory: server
+      core:
+        product: paper
+        product_version: "133"
+      packages:
+        paper:
+          modrinth:luckperms: "any"
+          modrinth:coreprotect: "any"
+          modrinth:tabtps: "any"
+          modrinth:plan: "any"
+          modrinth:discordsrv: "any"
+          modrinth:worldguard: "any"
+          modrinth:worldedit: "any"
+          modrinth:decentholograms: "any"
+          modrinth:quality-tpa: "any"
+          modrinth:skinsrestorer: "any"
+  args:
+    - "hangar:HelpChat/PlaceholderAPI"
+    - "spiget:81534"
+
+- id: unverified-add-spiget-external-direct-jar-viaversion
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.21.4"
+      directory: server
+      core:
+        product: paper
+        product_version: "232"
+      packages:
+        paper:
+          modrinth:luckperms: "any"
+          modrinth:coreprotect: "any"
+          modrinth:chunky: "any"
+          modrinth:tabtps: "any"
+          modrinth:plan: "any"
+          modrinth:discordsrv: "any"
+          modrinth:worldedit: "any"
+          modrinth:worldguard: "any"
+          modrinth:decentholograms: "any"
+          modrinth:squaremap: "any"
+  args:
+    - "spiget:19254"
+
+- id: add-spiget-external-release-page-essentialsx
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.21.4"
+      directory: server
+      core:
+        product: paper
+        product_version: "232"
+      packages:
+        paper:
+          modrinth:luckperms: "any"
+          modrinth:coreprotect: "any"
+          modrinth:chunky: "any"
+          modrinth:tabtps: "any"
+          modrinth:plan: "any"
+          modrinth:discordsrv: "any"
+          modrinth:worldedit: "any"
+          modrinth:worldguard: "any"
+          modrinth:decentholograms: "any"
+          modrinth:placeholderapi: "any"
+  args:
+    - "spiget:9089"
+
+- id: add-spiget-premium-resource-litebans
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.21.1"
+      directory: server
+      core:
+        product: paper
+        product_version: "133"
+      packages:
+        paper:
+          modrinth:luckperms: "any"
+          modrinth:coreprotect: "any"
+          modrinth:chunky: "1.4.28"
+          modrinth:tabtps: "any"
+          modrinth:plan: "any"
+          modrinth:discordsrv: "any"
+          modrinth:worldedit: "any"
+          modrinth:worldguard: "any"
+          modrinth:decentholograms: "any"
+          modrinth:placeholderapi: "any"
+  args:
+    - "spiget:3715"
+
+- id: add-spiget-older-version-unfetchable
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.21.1"
+      directory: server
+      core:
+        product: paper
+        product_version: "133"
+      packages:
+        paper:
+          modrinth:luckperms: "any"
+          modrinth:coreprotect: "any"
+          modrinth:chunky: "1.4.28"
+          modrinth:tabtps: "any"
+          modrinth:plan: "any"
+          modrinth:discordsrv: "any"
+          modrinth:worldedit: "any"
+          modrinth:worldguard: "any"
+          modrinth:decentholograms: "any"
+          modrinth:skinsrestorer: "any"
+  args:
+    - "spiget:6245@2.11.7"
+
+- id: add-hangar-fabric-rejected
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.21.4"
+      directory: server
+      core:
+        product: fabric
+        product_version: "0.16.10"
+      packages:
+        fabric:
+          modrinth:fabric-api: "0.119.4+1.21.4"
+          modrinth:lithium: "mc1.21.4-0.15.3-fabric"
+          modrinth:ferrite-core: "7.1.3-fabric"
+          modrinth:krypton: "0.2.8"
+          modrinth:chunky: "1.4.27"
+          modrinth:carpet: "1.4.161"
+          modrinth:servercore: "1.5.8+1.21.4"
+          modrinth:modernfix: "5.20.3+mc1.21.4"
+          modrinth:vmp-fabric: "any"
+          modrinth:c2me-fabric: "any"
+  args:
+    - "hangar:HelpChat/PlaceholderAPI"
+
+- id: add-spiget-neoforge-rejected
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.21.1"
+      directory: server
+      core:
+        product: neoforge
+        product_version: "21.1.65"
+      packages:
+        neoforge:
+          modrinth:ferrite-core: "any"
+          modrinth:spark: "any"
+          modrinth:chunky: "any"
+          modrinth:curios: "any"
+          modrinth:waystones: "any"
+          modrinth:geckolib: "any"
+          modrinth:open-parties-and-claims: "any"
+          modrinth:comforts: "any"
+          modrinth:storagedrawers: "any"
+          modrinth:sophisticated-backpacks: "any"
+  args:
+    - "spiget:6245"
