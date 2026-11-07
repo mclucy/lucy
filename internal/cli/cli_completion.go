@@ -46,23 +46,6 @@ func ToCobraCompletions(candidates []CompletionCandidate) []string {
 	return out
 }
 
-// StaticEcosystemCandidates covers all user-facing ecosystems.
-func StaticEcosystemCandidates() []CompletionCandidate {
-	return []CompletionCandidate{
-		{
-			Value:       catalog.EcosystemMinecraft.String(),
-			Description: "Vanilla / Bukkit / Paper plugins",
-		},
-		{Value: catalog.EcosystemFabric.String(), Description: "Fabric mods"},
-		{Value: catalog.EcosystemForge.String(), Description: "Forge mods"},
-		{Value: catalog.EcosystemNeoForge.String(), Description: "NeoForge mods"},
-		{
-			Value:       catalog.EcosystemMCDR.String(),
-			Description: "MCDR controller / plugin framework",
-		},
-	}
-}
-
 func StaticStatusLogoCandidates() []CompletionCandidate {
 	return []CompletionCandidate{
 		{Value: "small", Description: "Compact logo (default)"},
