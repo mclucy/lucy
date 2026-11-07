@@ -145,6 +145,12 @@ tasks:
       - test:race
       - lint
 
+  ci:verify:
+    desc: Run the CI verification set; CI reads test:race for coverage and needs no development binary
+    deps:
+      - test:race
+      - lint
+
   sandboxes:list:
     desc: List sandboxes defined in the manifest
     cmds:
@@ -223,7 +229,7 @@ tasks:
         if [ -n "${CURSEFORGE_API_KEY:-}" ]; then
           task cipher:generate
         fi
-      - task: check
+      - task: ci:verify
       - task: coverage:xml
 
   ci:build:
