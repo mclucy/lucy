@@ -27,13 +27,7 @@ func supportedExt(ext string) bool {
 
 // ReadInfo extracts package metadata from an artifact file. For .jar/.zip
 // files all readers are tried; for .pyz/.mcdr only the MCDR reader runs.
-func ReadInfo(filePath string, opts ...Option) ([]PackageInfo, error) {
-	o := &options{}
-	for _, opt := range opts {
-		opt(o)
-	}
-	_ = o
-
+func ReadInfo(filePath string) ([]PackageInfo, error) {
 	ext := strings.ToLower(filepath.Ext(filePath))
 	if !supportedExt(ext) {
 		return nil, fmt.Errorf("unsupported artifact format: %s", ext)

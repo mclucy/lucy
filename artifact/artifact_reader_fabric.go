@@ -19,8 +19,6 @@ var _ Reader = (*fabricReader)(nil)
 
 func newFabricReader() Reader { return &fabricReader{} }
 
-var _ = newFabricReader
-
 func (r *fabricReader) Read(
 	zipRdr *zip.Reader,
 	filePath string,
