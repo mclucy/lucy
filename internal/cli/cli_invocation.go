@@ -22,11 +22,8 @@ type Invocation struct {
 	// Logger receives diagnostics for this run. A nil Logger deliberately
 	// records nothing.
 	Logger *log.Logger
-	// Theme styles human output.
-	Theme style.Theme
-	// Stdout describes the standard output terminal of this run.
+	Theme  style.Theme
 	Stdout style.Terminal
-	// Stderr describes the standard error terminal of this run.
 	Stderr style.Terminal
 	// Interactive reports whether prompts and animated output are allowed.
 	Interactive bool

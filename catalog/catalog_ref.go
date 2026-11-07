@@ -1,6 +1,10 @@
 package catalog
 
-import "github.com/mclucy/lucy/version"
+import (
+	"strings"
+
+	"github.com/mclucy/lucy/version"
+)
 
 // Name is a package name. User input may be untrusted; normalize it
 // before using it as an identity.
@@ -8,6 +12,11 @@ type Name string
 
 func (n Name) String() string {
 	return string(n)
+}
+
+// PythonName formats the name as a Python distribution name.
+func (n Name) PythonName() string {
+	return strings.ReplaceAll(string(n), "-", "_")
 }
 
 // Ref identifies one package supplied by a provider.

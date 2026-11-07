@@ -5,8 +5,6 @@
 // presentation belong to their owning packages, not catalog.
 package catalog
 
-import "strings"
-
 // Ecosystem identifies the compatibility surface a server can serve. It is a
 // capability descriptor, not the server product itself.
 type Ecosystem string
@@ -119,9 +117,4 @@ func (e Ecosystem) IsModding() bool {
 // context.
 func (e Ecosystem) IsUnspecified() bool {
 	return e == EcosystemUnspecified
-}
-
-// PythonName formats the name as a Python distribution name.
-func (n Name) PythonName() string {
-	return strings.ReplaceAll(string(n), "-", "_")
 }

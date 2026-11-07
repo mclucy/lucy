@@ -16,10 +16,8 @@ import (
 // every value: a renderer never reads process streams or global styles.
 type Options struct {
 	// Writer receives every permanent line and, when animated, the live area.
-	Writer io.Writer
-	// Theme styles progress text.
-	Theme style.Theme
-	// Terminal describes the capabilities of Writer.
+	Writer   io.Writer
+	Theme    style.Theme
 	Terminal style.Terminal
 	// Interactive allows an animated area when Terminal is a terminal.
 	Interactive bool

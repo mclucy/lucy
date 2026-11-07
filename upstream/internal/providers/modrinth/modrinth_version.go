@@ -12,7 +12,7 @@ var (
 	ErrNoProject = errors.New("modrinth project not found")
 )
 
-// Known crash risk: this path has caused segmentation faults.
+// listVersions has a known crash risk: this path has caused segmentation faults.
 func (p *Provider) listVersions(
 	ctx context.Context,
 	slug catalog.Name,

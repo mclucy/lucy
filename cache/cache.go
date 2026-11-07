@@ -123,7 +123,6 @@ func (c *Client) Get(k string) (
 	return c.cache().get(k)
 }
 
-// GetBytes returns a cached entry's bytes.
 func (c *Client) GetBytes(k string) (hit bool, data []byte, err error) {
 	c.lifetime.RLock()
 	defer c.lifetime.RUnlock()

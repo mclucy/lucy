@@ -160,7 +160,6 @@ func (s *Service) Create(scope Scope, options CreateOptions) (result *WriteResul
 	return &WriteResult{Path: file.Path(), Created: created}, nil
 }
 
-// validateSetting rejects values that the field's meaning cannot accept.
 func validateSetting(key, text string) error {
 	switch key {
 	case "github.proxy":

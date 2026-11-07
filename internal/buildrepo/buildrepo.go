@@ -222,7 +222,6 @@ func (p *prober) readOptional(path string) (string, bool) {
 	return data, true
 }
 
-// firstExisting returns the first existing path among candidates.
 func (p *prober) firstExisting(dir string, names ...string) string {
 	for _, name := range names {
 		path := filepath.Join(dir, name)
