@@ -170,8 +170,6 @@ func TestStatusRenderLogoNone(t *testing.T) {
 func TestStatusRenderLogoModes(t *testing.T) {
 	document := loadStatusFixture(t, statusPackagesFixture)
 
-	// width keeps both logo modes in the vertical layout, where every art line
-	// survives; side-by-side clips art to its first line's width.
 	const width = 60
 
 	small := renderStatusForTest(document, false, terminal.StatusLogoSmall, width, true)
@@ -190,6 +188,12 @@ func TestStatusRenderLogoModes(t *testing.T) {
 	}
 	if missing := statusMissingArt(large, largeOnly); len(missing) > 0 {
 		t.Fatalf("logo mode large omitted its art:\n%s", strings.Join(missing, "\n"))
+	}
+	if missing := statusMissingArt(small, largeOnly); len(missing) != len(largeOnly) {
+		t.Fatal("logo mode small also rendered large-only art")
+	}
+	if missing := statusMissingArt(large, smallOnly); len(missing) != len(smallOnly) {
+		t.Fatal("logo mode large also rendered small-only art")
 	}
 }
 
