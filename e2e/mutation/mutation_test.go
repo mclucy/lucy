@@ -26,7 +26,7 @@ import (
 	"time"
 
 	"github.com/mclucy/lucy/e2e/internal/testkit"
-	"gopkg.in/yaml.v3"
+	"go.yaml.in/yaml/v4"
 )
 
 const (
