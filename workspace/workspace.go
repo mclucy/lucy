@@ -184,11 +184,7 @@ func applicableDeclaration(
 // directory.
 func resolveServerDir(anchor string, wrappers WrapperInfo) string {
 	if wrappers.MCDR != nil {
-		wd := wrappers.MCDR.Config.WorkingDirectory
-		if filepath.IsAbs(wd) {
-			return wd
-		}
-		return filepath.Join(anchor, wd)
+		return wrappers.MCDR.Config.workingDirectory(anchor)
 	}
 	return anchor
 }

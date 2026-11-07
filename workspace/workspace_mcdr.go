@@ -1,6 +1,13 @@
 package workspace
 
-import "github.com/mclucy/lucy/version"
+import (
+	"fmt"
+	"os"
+	"path/filepath"
+
+	"github.com/mclucy/lucy/version"
+	"go.yaml.in/yaml/v4"
+)
 
 // WrapperInfo describes non-jar wrappers around a server directory.
 type WrapperInfo struct {
@@ -12,47 +19,61 @@ type MCDREnv struct {
 	Config  *MCDRConfig     `json:"config,omitempty"`
 }
 
-// MCDRConfig is the decoded shape of an MCDR config.yml file.
+// MCDRConfig is the subset of an MCDR config.yml file that Lucy consumes.
+// Unknown keys stay ignored so an MCDR upgrade does not break observation.
 type MCDRConfig struct {
-	Language         string `yaml:"language"`
-	WorkingDirectory string `yaml:"working_directory"`
-	StartCommand     string `yaml:"start_command"`
-	Handler          string `yaml:"handler"`
-	Encoding         string `yaml:"encoding"`
-	Decoding         string `yaml:"decoding"`
-	Rcon             struct {
-		Enable   bool   `yaml:"enable"`
-		Address  string `yaml:"address"`
-		Port     int    `yaml:"port"`
-		Password string `yaml:"password"`
-	} `yaml:"rcon"`
-	PluginDirectories         []string `yaml:"plugin_directories"`
-	CatalogueMetaCacheTtl     int      `yaml:"catalogue_meta_cache_ttl"`
-	CatalogueMetaFetchTimeout int      `yaml:"catalogue_meta_fetch_timeout"`
-	CatalogueMetaUrl          any      `yaml:"catalogue_meta_url"`
-	PluginDownloadUrl         any      `yaml:"plugin_download_url"`
-	PluginDownloadTimeout     int      `yaml:"plugin_download_timeout"`
-	PluginPipInstallExtraArgs any      `yaml:"plugin_pip_install_extra_args"`
-	CheckUpdate               bool     `yaml:"check_update"`
-	AdvancedConsole           bool     `yaml:"advanced_console"`
-	HttpProxy                 any      `yaml:"http_proxy"`
-	HttpsProxy                any      `yaml:"https_proxy"`
-	Telemetry                 bool     `yaml:"telemetry"`
-	DisableConsoleThread      bool     `yaml:"disable_console_thread"`
-	DisableConsoleColor       bool     `yaml:"disable_console_color"`
-	CustomHandlers            any      `yaml:"custom_handlers"`
-	CustomInfoReactors        any      `yaml:"custom_info_reactors"`
-	WatchdogThreshold         int      `yaml:"watchdog_threshold"`
-	HandlerDetection          bool     `yaml:"handler_detection"`
-	Debug                     struct {
-		All          bool `yaml:"all"`
-		Mcdr         bool `yaml:"mcdr"`
-		Handler      bool `yaml:"handler"`
-		Reactor      bool `yaml:"reactor"`
-		Plugin       bool `yaml:"plugin"`
-		Permission   bool `yaml:"permission"`
-		Command      bool `yaml:"command"`
-		TaskExecutor bool `yaml:"task_executor"`
-		Telemetry    bool `yaml:"telemetry"`
-	} `yaml:"debug"`
+	WorkingDirectory  string   `yaml:"working_directory"`
+	PluginDirectories []string `yaml:"plugin_directories"`
+}
+
+func readMCDRConfig(path string) (*MCDRConfig, error) {
+	file, err := os.Open(path)
+	if err != nil {
+		return nil, fmt.Errorf("cannot open %s: %w", path, err)
+	}
+	defer file.Close()
+
+	config := &MCDRConfig{}
+	if err := yaml.NewDecoder(file).Decode(config); err != nil {
+		return nil, fmt.Errorf("cannot decode %s: %w", path, err)
+	}
+	return config, nil
+}
+
+// readMCDRWorkingDirectory resolves the server directory of an MCDR anchor
+// while decoding only working_directory. Activity checks must stay tolerant of
+// unrelated malformed configuration fields.
+func readMCDRWorkingDirectory(anchor string) string {
+	file, err := os.Open(filepath.Join(anchor, mcdrConfigFileName))
+	if err != nil {
+		return anchor
+	}
+	defer file.Close()
+
+	var config struct {
+		WorkingDirectory string `yaml:"working_directory"`
+	}
+	if err := yaml.NewDecoder(file).Decode(&config); err != nil {
+		return anchor
+	}
+	return resolveMCDRWorkingDirectory(anchor, config.WorkingDirectory)
+}
+
+func (c *MCDRConfig) workingDirectory(anchor string) string {
+	if c == nil {
+		return anchor
+	}
+	return resolveMCDRWorkingDirectory(anchor, c.WorkingDirectory)
+}
+
+// resolveMCDRWorkingDirectory resolves a configured working directory against
+// the MCDR anchor.
+func resolveMCDRWorkingDirectory(anchor, workingDirectory string) string {
+	if workingDirectory == "" {
+		return anchor
+	}
+	if filepath.IsAbs(workingDirectory) {
+		return workingDirectory
+	}
+	return filepath.Join(anchor, workingDirectory)
 }
