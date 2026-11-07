@@ -43,69 +43,6 @@ func (g *Graph) artifactHasDependencies(node *Node) bool {
 	return len(node.Children) > 0
 }
 
-// TopologicalSort returns nodes in dependency-first order (dependencies
-// before dependents). It returns nil if a cycle is detected.
-func (g *Graph) TopologicalSort() []*Node {
-	outDeg := make(map[string]int, len(g.Nodes))
-	for id := range g.Nodes {
-		outDeg[id] = len(g.Nodes[id].Children)
-	}
-
-	queue := make([]string, 0, len(g.Nodes))
-	for id, deg := range outDeg {
-		if deg == 0 {
-			queue = append(queue, id)
-		}
-	}
-	slices.Sort(queue)
-
-	result := make([]*Node, 0, len(g.Nodes))
-	for len(queue) > 0 {
-		id := queue[0]
-		queue = queue[1:]
-		result = append(result, g.Nodes[id])
-		for _, parent := range g.Nodes[id].Parents {
-			outDeg[parent.Key()]--
-			if outDeg[parent.Key()] == 0 {
-				queue = append(queue, parent.Key())
-			}
-		}
-	}
-
-	if len(result) != len(g.Nodes) {
-		return nil
-	}
-	return result
-}
-
-// OrderedRoots returns the root artifacts in dependency-first order, falling
-// back to ID order when the graph has a cycle.
-func (g *Graph) OrderedRoots() []*Node {
-	sorted := g.TopologicalSort()
-	if sorted == nil {
-		ordered := make([]*Node, 0, len(g.Roots))
-		ordered = append(ordered, g.Roots...)
-		sortNodes(ordered)
-		return ordered
-	}
-
-	position := make(map[string]int, len(sorted))
-	for i, node := range sorted {
-		position[node.Key()] = i
-	}
-	ordered := make([]*Node, 0, len(g.Roots))
-	for _, root := range g.Roots {
-		if _, ok := position[root.Key()]; !ok {
-			return nil
-		}
-		ordered = append(ordered, root)
-	}
-	slices.SortStableFunc(ordered, func(a, b *Node) int {
-		return position[a.Key()] - position[b.Key()]
-	})
-	return ordered
-}
-
 // OrderedArtifacts returns every artifact node in dependency-first order.
 // Root selection is not enough: in a live observation, a directly declared
 // requirement can also be another package's dependency.
