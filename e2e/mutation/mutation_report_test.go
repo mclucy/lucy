@@ -7,7 +7,8 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"errors"
 	"flag"
 	"fmt"
@@ -84,9 +85,9 @@ type indexEntry struct {
 	ID            string `json:"id"`
 	Smoke         bool   `json:"smoke"`
 	Status        string `json:"status"`
-	ExitCode      *int   `json:"exit_code,omitempty"`
+	ExitCode      *int   `json:"exit_code,omitzero"`
 	SetupStatus   string `json:"setup_status,omitempty"`
-	SetupExitCode *int   `json:"setup_exit_code,omitempty"`
+	SetupExitCode *int   `json:"setup_exit_code,omitzero"`
 	Report        string `json:"report"`
 }
 
@@ -94,7 +95,7 @@ type runIndex struct {
 	Command string       `json:"command"`
 	Layer   string       `json:"layer"`
 	Fixture fileRecord   `json:"fixture"`
-	Sample  *sampleIndex `json:"sample,omitempty"`
+	Sample  *sampleIndex `json:"sample,omitzero"`
 	Cases   []indexEntry `json:"cases"`
 }
 
@@ -217,7 +218,7 @@ func (r *reportRun) writeIndexLocked() error {
 		Sample:  r.sampleSummary(entries),
 		Cases:   entries,
 	}
-	encoded, err := json.MarshalIndent(index, "", "  ")
+	encoded, err := json.Marshal(index, jsontext.WithIndent("  "), json.Deterministic(true), json.FormatNilSliceAsNull(true))
 	if err != nil {
 		return fmt.Errorf("encode run index: %w", err)
 	}
@@ -259,7 +260,7 @@ type invocation struct {
 
 type runOutcome struct {
 	Status     string `json:"status"`
-	ExitCode   *int   `json:"exit_code,omitempty"`
+	ExitCode   *int   `json:"exit_code,omitzero"`
 	Detail     string `json:"detail,omitempty"`
 	DurationMS int64  `json:"duration_ms"`
 }
@@ -270,10 +271,10 @@ type stage struct {
 	Name    string      `json:"name"`
 	Argv    []string    `json:"argv"`
 	Outcome runOutcome  `json:"outcome"`
-	Stdout  *fileRecord `json:"stdout,omitempty"`
-	Stderr  *fileRecord `json:"stderr,omitempty"`
-	After   *snapshot   `json:"after,omitempty"`
-	Changes *changeSet  `json:"changes,omitempty"`
+	Stdout  *fileRecord `json:"stdout,omitzero"`
+	Stderr  *fileRecord `json:"stderr,omitzero"`
+	After   *snapshot   `json:"after,omitzero"`
+	Changes *changeSet  `json:"changes,omitzero"`
 }
 
 type stageRun struct {
@@ -290,7 +291,7 @@ type caseReport struct {
 	Definition caseDefinition `json:"definition"`
 	Invocation invocation     `json:"invocation"`
 	Before     snapshot       `json:"before"`
-	Setup      *stage         `json:"setup,omitempty"`
+	Setup      *stage         `json:"setup,omitzero"`
 	Main       stage          `json:"main"`
 }
 
@@ -307,7 +308,7 @@ func persistCase(dir string, report caseReport, runs []stageRun) error {
 			}
 		}
 	}
-	encoded, err := json.MarshalIndent(report, "", "  ")
+	encoded, err := json.Marshal(report, jsontext.WithIndent("  "), json.Deterministic(true), json.FormatNilSliceAsNull(true))
 	if err != nil {
 		return fmt.Errorf("encode case report: %w", err)
 	}
@@ -335,7 +336,7 @@ type fileEntry struct {
 	Size   int64   `json:"size"`
 	SHA256 string  `json:"sha256,omitempty"`
 	Target string  `json:"target,omitempty"`
-	Text   *string `json:"text,omitempty"`
+	Text   *string `json:"text,omitzero"`
 }
 
 type snapshot []fileEntry
