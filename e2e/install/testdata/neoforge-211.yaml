@@ -1,7 +1,0 @@
-manifest_version: 1
-server:
-  minecraft: "1.21.1"
-  directory: server
-  core:
-    product: neoforge
-    product_version: "21.1.248"

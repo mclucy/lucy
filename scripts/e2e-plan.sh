@@ -24,52 +24,30 @@ fi
 suites="$(cat <<'EOF'
 [
   {
-    "domain": "status",
-    "group": "status",
-    "suite": "status",
-    "command": "go test -tags e2e -count=1 -v ./e2e/status -run 'TestProbe/(arclight-fabric|arclight-forge|cobblemon-1211|create-plus-1211|fabric-executable-1214|forge-1201|mcdr-fabric|neoforge-262|paper)'",
+    "domain": "mutation",
+    "group": "mutation",
+    "suite": "smoke",
+    "command": "LUCY_HEURISTIC_LAYER=smoke go test -tags e2e -count=1 -timeout 40m -parallel 3 -v ./e2e/mutation",
     "timeout": 45,
-    "sandboxes": "arclight-fabric,arclight-forge,cobblemon-1211,create-plus-1211,fabric-executable-1214,forge-1201,mcdr-fabric,neoforge-262,paper",
+    "sandboxes": "",
     "java": "",
     "gradle": false,
     "cache-key": "",
-    "cache-pattern": ""
+    "cache-pattern": "",
+    "report-artifact": "lucy-heuristic-mutation-smoke"
   },
   {
     "domain": "init",
     "group": "init",
     "suite": "init",
-    "command": "go test -tags e2e -count=1 -v ./e2e/init -run 'TestInitialize/(cobblemon-1211|create-plus-1211)'",
+    "command": "go test -tags e2e -count=1 -timeout 25m -v ./e2e/init -run 'TestInitialize/(cobblemon-1211|create-plus-1211)'",
     "timeout": 30,
     "sandboxes": "cobblemon-1211,create-plus-1211",
     "java": "",
     "gradle": false,
     "cache-key": "",
-    "cache-pattern": ""
-  },
-  {
-    "domain": "install",
-    "group": "install",
-    "suite": "install",
-    "command": "go test -tags e2e -count=1 -timeout 28m -parallel 2 -v ./e2e/install -run '^TestInstall$'",
-    "timeout": 30,
-    "sandboxes": "vanilla-1201,forge-1201,forge-12111,neoforge-211,paper,purpur,cobblemon-1211",
-    "java": "21",
-    "gradle": false,
-    "cache-key": "",
-    "cache-pattern": ""
-  },
-  {
-    "domain": "install",
-    "group": "init-install",
-    "suite": "init-install",
-    "command": "go test -tags e2e -count=1 -timeout 28m -parallel 2 -v ./e2e/install -run '^TestInitInstall$'",
-    "timeout": 30,
-    "sandboxes": "vanilla-1201,forge-1201,forge-12111,paper,cobblemon-1211",
-    "java": "21",
-    "gradle": false,
-    "cache-key": "",
-    "cache-pattern": ""
+    "cache-pattern": "",
+    "report-artifact": ""
   }
 ]
 EOF
@@ -94,7 +72,8 @@ matrix="$(jq -c \
             "java": "",
             "gradle": true,
             "cache-key": $fixture,
-            "cache-pattern": ("e2e/testdata/repo/" + $fixture + ".yaml")
+            "cache-pattern": ("e2e/testdata/repo/" + $fixture + ".yaml"),
+            "report-artifact": ""
           }
         ]
       else
@@ -108,7 +87,8 @@ matrix="$(jq -c \
             "java": "",
             "gradle": true,
             "cache-key": "smoke",
-            "cache-pattern": "e2e/testdata/repo/*.yaml"
+            "cache-pattern": "e2e/testdata/repo/*.yaml",
+            "report-artifact": ""
           }
         ]
       end
