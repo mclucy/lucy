@@ -124,14 +124,13 @@ tasks:
       - go test ./...
 
   test:race:
-    desc: Run the Go test suite with the race detector
+    desc: Run the Go test suite with the race detector and a coverage profile
     cmds:
-      - go test -race ./...
+      - go test -race -coverprofile=cover.out ./...
 
-  test:coverage:
-    desc: Run the Go test suite with a coverage profile
+  coverage:xml:
+    desc: Convert the Go coverage profile to Cobertura XML
     cmds:
-      - go test -coverprofile=cover.out ./...
       - go tool gocover-cobertura < cover.out > coverage.xml
 
   lint:
@@ -225,7 +224,7 @@ tasks:
           task cipher:generate
         fi
       - task: check
-      - task: test:coverage
+      - task: coverage:xml
 
   ci:build:
     desc: Build release artifacts for CI (for GitHub Actions); conditionally generates cipher material
