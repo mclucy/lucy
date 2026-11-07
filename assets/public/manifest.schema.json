@@ -42,8 +42,8 @@
           "oneOf": [
             {
               "type": "integer",
-              "minimum": 8,
-              "description": "The Java major version."
+              "description": "The Java major version.",
+              "minimum": 8
             },
             {
               "const": "auto",
