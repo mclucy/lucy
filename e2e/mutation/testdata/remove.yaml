@@ -1322,3 +1322,289 @@
   args:
     - "modrinth:fabric-api"
 
+- id: smoke-remove-hangar-placeholderapi-paper
+  smoke: true
+  setup:
+    - install
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.21.4"
+      directory: server
+      core:
+        product: paper
+        product_version: "171"
+      packages:
+        paper:
+          hangar:HelpChat/PlaceholderAPI: "2.12.3"
+          modrinth:chunky: "1.4.28"
+          modrinth:squaremap: "any"
+          modrinth:vaultunlocked: "2.20.1"
+          modrinth:essentialsx: "2.21.0"
+          modrinth:luckperms: "v5.5.71-bukkit"
+          modrinth:coreprotect: "any"
+          modrinth:viaversion: "any"
+          modrinth:viabackwards: "any"
+          modrinth:worldguard: "any"
+          modrinth:worldedit: "7.4.6"
+  args:
+    - "hangar:HelpChat/PlaceholderAPI"
+
+- id: remove-hangar-viaversion-required-by-viabackwards
+  setup:
+    - install
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.21.4"
+      directory: server
+      core:
+        product: paper
+        product_version: "171"
+      packages:
+        paper:
+          hangar:ViaVersion/ViaVersion: "5.12.2"
+          hangar:ViaVersion/ViaBackwards: "5.12.2"
+          hangar:HelpChat/PlaceholderAPI: "2.12.3"
+          modrinth:essentialsx: "2.21.0"
+          modrinth:luckperms: "v5.5.71-bukkit"
+          modrinth:chunky: "1.4.28"
+          modrinth:squaremap: "any"
+          modrinth:coreprotect: "any"
+          modrinth:worldguard: "any"
+          modrinth:worldedit: "7.4.6"
+  args:
+    - "--locked"
+    - "--offline"
+    - "hangar:ViaVersion/ViaVersion"
+
+- id: remove-hangar-chunky-border-dependency-purpur
+  setup:
+    - install
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.21.4"
+      directory: server
+      core:
+        product: purpur
+        product_version: "2416"
+      packages:
+        paper:
+          hangar:pop4959/Chunky: "1.4.40"
+          modrinth:chunkyborder: "any"
+          hangar:HelpChat/PlaceholderAPI: "2.12.3"
+          modrinth:luckperms: "v5.5.71-bukkit"
+          modrinth:essentialsx: "2.21.0"
+          modrinth:coreprotect: "any"
+          modrinth:squaremap: "any"
+          modrinth:vaultunlocked: "2.20.1"
+          modrinth:viaversion: "any"
+          modrinth:viabackwards: "any"
+  args:
+    - "hangar:pop4959/Chunky"
+
+- id: smoke-remove-unverified-spiget-vault-paper
+  smoke: true
+  setup:
+    - install
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.21.4"
+      directory: server
+      core:
+        product: paper
+        product_version: "171"
+      packages:
+        paper:
+          spiget:34315: "any"
+          hangar:HelpChat/PlaceholderAPI: "2.12.3"
+          modrinth:essentialsx: "2.21.0"
+          modrinth:luckperms: "v5.5.71-bukkit"
+          modrinth:chunky: "1.4.28"
+          modrinth:squaremap: "any"
+          modrinth:coreprotect: "any"
+          modrinth:worldguard: "any"
+          modrinth:worldedit: "7.4.6"
+  args:
+    - "--locked"
+    - "--offline"
+    - "spiget:34315"
+
+- id: remove-unverified-spiget-luckperms-purpur
+  setup:
+    - install
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.21.4"
+      directory: server
+      core:
+        product: purpur
+        product_version: "2416"
+      packages:
+        paper:
+          spiget:28140: "any"
+          spiget:34315: "any"
+          hangar:HelpChat/PlaceholderAPI: "2.12.3"
+          hangar:ViaVersion/ViaVersion: "5.12.2"
+          modrinth:libertybans: "any"
+          modrinth:essentialsx: "2.21.0"
+          modrinth:chunky: "1.4.28"
+          modrinth:coreprotect: "any"
+          modrinth:squaremap: "any"
+          modrinth:worldguard: "any"
+          modrinth:worldedit: "7.4.6"
+  args:
+    - "spiget:28140"
+
+- id: remove-hangar-only-package-paper
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.21.4"
+      directory: server
+      core:
+        product: paper
+        product_version: "171"
+      packages:
+        paper:
+          hangar:HelpChat/PlaceholderAPI: "2.12.3"
+  args:
+    - "hangar:HelpChat/PlaceholderAPI"
+
+- id: remove-unverified-spiget-citizens-paper
+  setup:
+    - install
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.21.4"
+      directory: server
+      core:
+        product: paper
+        product_version: "171"
+      packages:
+        paper:
+          spiget:13811: "any"
+          hangar:HelpChat/PlaceholderAPI: "2.12.3"
+          hangar:ViaVersion/ViaVersion: "5.12.2"
+          hangar:pop4959/Chunky: "1.4.40"
+          modrinth:luckperms: "v5.5.71-bukkit"
+          modrinth:coreprotect: "any"
+          modrinth:squaremap: "any"
+          modrinth:essentialsx: "2.21.0"
+          modrinth:worldguard: "any"
+          modrinth:worldedit: "7.4.6"
+  args:
+    - "--locked"
+    - "--offline"
+    - "spiget:13811"
+
+- id: remove-forge-ftb-library-dependents
+  setup:
+    - install
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.20.1"
+      directory: server
+      core:
+        product: forge
+        product_version: "47.4.10"
+      packages:
+        forge:
+          curseforge:ftb-library-forge: "any"
+          curseforge:ftb-quests-forge: "any"
+          curseforge:ftb-teams-forge: "any"
+          curseforge:ftb-chunks-forge: "any"
+          modrinth:spark: "1.10.53-forge"
+          modrinth:ferrite-core: "6.0.1"
+          modrinth:canary: "any"
+          modrinth:chunky: "any"
+          curseforge:connectivity: "any"
+          modrinth:curios: "5.13.0+1.20.1"
+          modrinth:waystones: "any"
+  args:
+    - "curseforge:ftb-library-forge"
+
+- id: remove-forge-create-addons-without-create
+  setup:
+    - install
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.19.2"
+      directory: server
+      core:
+        product: forge
+        product_version: "43.4.0"
+      packages:
+        forge:
+          modrinth:create: "1.19.2-0.5.1.i"
+          modrinth:createaddition: "1.19.2-1.2.2"
+          modrinth:create-steam-n-rails: "1.6.6+forge-mc1.19.2"
+          modrinth:create-central-kitchen: "1.3.11.c"
+          modrinth:patchouli: "any"
+          modrinth:curios: "any"
+          modrinth:spark: "any"
+          modrinth:ferrite-core: "any"
+          modrinth:canary: "any"
+          modrinth:chunky: "any"
+          curseforge:connectivity: "any"
+          modrinth:waystones: "any"
+  args:
+    - "modrinth:create"
+
+- id: remove-mcdr-minecraft-data-api-dependents
+  setup:
+    - install
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.21.4"
+      directory: server
+      core:
+        product: vanilla
+        product_version: "1.21.4"
+    mcdr:
+      directory: mcdr
+      version: "2.12.2"
+      packages:
+        mcdr:minecraft_data_api: "any"
+        mcdr:mg_events: "any"
+        mcdr:death_back: "any"
+        mcdr:where_is: "any"
+        mcdr:player_last_play: "any"
+  args:
+    - "--ecosystem"
+    - "mcdr"
+    - "mcdr:minecraft_data_api"
+
+- id: remove-neoforge-kubejs-rhino-dependency
+  setup:
+    - install
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.21.1"
+      directory: server
+      core:
+        product: neoforge
+        product_version: "21.1.233"
+      packages:
+        neoforge:
+          modrinth:kubejs: "any"
+          modrinth:rhino: "any"
+          modrinth:spark: "1.10.124-neoforge-1.21.1"
+          modrinth:ferrite-core: "7.0.3-neoforge"
+          modrinth:chunky: "1.4.23"
+          modrinth:curios-continuation: "any"
+          modrinth:ae2: "any"
+          modrinth:kotlin-for-forge: "5.11.0"
+          modrinth:moonlight: "any"
+          modrinth:supplementaries: "any"
+  args:
+    - "modrinth:rhino"
+

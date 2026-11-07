@@ -1284,3 +1284,240 @@
           modrinth:essentialsx: "any"
   args:
     - "--dry-run"
+
+- id: upgrade-all-paper-hangar-spiget-proxy-unverified-1214
+  setup:
+    - install
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.21.4"
+      directory: server
+      core:
+        product: paper
+        product_version: "232"
+      packages:
+        paper:
+          hangar:ViaVersion/ViaVersion: "5.12.2"
+          hangar:ViaVersion/ViaBackwards: "5.12.2"
+          hangar:ViaVersion/ViaRewind: "4.2.0"
+          hangar:EngineHub/WorldEdit: "7.4.6"
+          hangar:HelpChat/PlaceholderAPI: "2.12.3"
+          hangar:pop4959/Chunky: "1.4.40"
+          hangar:kennytv/Maintenance: "stable"
+          hangar:SRTeam/SkinsRestorer: "15.12.6"
+          hangar:Multiverse/Multiverse-Core: "5.8.2"
+          spiget:28140: "any"
+          spiget:34315: "any"
+          spiget:96927: "any"
+  args:
+    - "--policy"
+    - "more"
+
+- id: upgrade-all-purpur-towny-economy-unverified-1214
+  setup:
+    - install
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.21.4"
+      directory: server
+      core:
+        product: purpur
+        product_version: "2416"
+      packages:
+        paper:
+          modrinth:towny: "0.103.2.0"
+          hangar:Multiverse/Multiverse-Core: "5.8.2"
+          hangar:HelpChat/DeluxeMenus: "1.14.1"
+          hangar:HelpChat/PlaceholderAPI: "2.12.3"
+          hangar:Gecolay/GSit: "3.8.0"
+          hangar:pop4959/Chunky: "1.4.40"
+          hangar:SRTeam/SkinsRestorer: "15.12.6"
+          spiget:51856: "any"
+          spiget:4216: "any"
+          spiget:87610: "any"
+          spiget:34315: "1.7.3"
+          spiget:96927: "any"
+          spiget:28140: "any"
+  args:
+    - "--policy"
+    - "options"
+    - "--dry-run"
+
+- id: upgrade-all-paper-hangar-lobby-admin-unverified-12111
+  setup:
+    - install
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.21.11"
+      directory: server
+      core:
+        product: paper
+        product_version: "132"
+      packages:
+        paper:
+          hangar:EssentialsX/Essentials: "2.22.0"
+          hangar:ViaVersion/ViaVersion: "5.12.2"
+          hangar:ViaVersion/ViaBackwards: "5.12.2"
+          hangar:ViaVersion/ViaRewind: "4.2.0"
+          hangar:HelpChat/PlaceholderAPI: "2.12.3"
+          hangar:jmp/TabTPS: "1.4.3"
+          hangar:jmp/MiniMOTD: "2.2.5"
+          hangar:kennytv/Maintenance: "5.1.1"
+          hangar:SRTeam/SkinsRestorer: "stable"
+          hangar:pop4959/Chunky: "1.4.40"
+          hangar:LOOHP/InteractionVisualizer: "2026.1.4"
+          spiget:28140: "any"
+          spiget:34315: "1.7.3"
+  args:
+    - "--policy"
+    - "later"
+
+- id: upgrade-all-purpur-hangar-rpg-progression-unverified-1211
+  setup:
+    - install
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.21.1"
+      directory: server
+      core:
+        product: purpur
+        product_version: "2329"
+      packages:
+        paper:
+          hangar:Lumine/MythicMobs: "v5.14.0"
+          hangar:ArcanePlugins/LevelledMobs: "4.5.3.1-b155"
+          hangar:Archy/AuraSkills: "2.4.0"
+          hangar:William278/HuskHomes: "stable"
+          hangar:Gecolay/GSit: "3.8.0"
+          hangar:Jannyboy11/InvSee-plus-plus: "0.31.22"
+          hangar:HelpChat/DeluxeMenus: "1.14.1"
+          hangar:HelpChat/PlaceholderAPI: "2.12.3"
+          hangar:CyntrixAlgorithm/DeathChest: "3.0.1"
+          spiget:4216: "any"
+          spiget:87610: "any"
+          spiget:34315: "any"
+          spiget:96927: "any"
+  args:
+    - "--policy"
+    - "more"
+    - "--dry-run"
+
+- id: upgrade-all-paper-hangar-moderation-unverified-1211
+  setup:
+    - install
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.21.1"
+      directory: server
+      core:
+        product: paper
+        product_version: "133"
+      packages:
+        paper:
+          hangar:GrimAnticheat/GrimAnticheat: "2.3.72"
+          hangar:ViaVersion/ViaVersion: "5.12.2"
+          hangar:ViaVersion/ViaBackwards: "5.12.2"
+          hangar:kennytv/Maintenance: "stable"
+          hangar:Flyte/PluginPortal: "3.8.7"
+          hangar:SRTeam/SkinsRestorer: "15.12.6"
+          hangar:HelpChat/PlaceholderAPI: "2.12.3"
+          hangar:LOOHP/InteractionVisualizer: "2026.1.4"
+          spiget:26: "any"
+          spiget:41530: "any"
+          spiget:28140: "any"
+          spiget:1997: "5.4.0"
+  args:
+    - "--policy"
+    - "later"
+
+- id: upgrade-all-paper-spiget-only-community-unverified-12111
+  setup:
+    - install
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.21.11"
+      directory: server
+      core:
+        product: paper
+        product_version: "132"
+      packages:
+        paper:
+          spiget:28140: "any"
+          spiget:34315: "any"
+          spiget:4216: "any"
+          spiget:87610: "any"
+          spiget:96927: "any"
+          spiget:62325: "3.7.0"
+          spiget:51856: "3.13-pre-1"
+          spiget:81534: "1.5.66"
+          spiget:84278: "1.2.75"
+          spiget:6245: "2.12.3"
+  args:
+    - "--policy"
+    - "later"
+
+- id: upgrade-all-paper-hangar-crossplay-event-unverified-1214
+  setup:
+    - install
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.21.4"
+      directory: server
+      core:
+        product: paper
+        product_version: "232"
+      packages:
+        paper:
+          hangar:GeyserMC/Geyser: "stable"
+          hangar:GeyserMC/Floodgate: "stable"
+          hangar:henkelmax/SimpleVoiceChat: "stable"
+          hangar:Flyte/PluginPortal: "3.8.7"
+          hangar:Gecolay/GSit: "3.8.0"
+          hangar:HelpChat/PlaceholderAPI: "2.12.3"
+          hangar:LOOHP/InteractionVisualizer: "2026.1.4"
+          hangar:CyntrixAlgorithm/DeathChest: "3.0.1"
+          spiget:28140: "any"
+          spiget:34315: "any"
+          spiget:96927: "any"
+          spiget:51856: "any"
+          spiget:4216: "any"
+          spiget:87610: "any"
+  args:
+    - "--policy"
+    - "more"
+
+- id: upgrade-all-purpur-hangar-visual-media-unverified-12111
+  setup:
+    - install
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.21.11"
+      directory: server
+      core:
+        product: purpur
+        product_version: "2568"
+      packages:
+        paper:
+          hangar:LOOHP/ImageFrame: "2026.1.5"
+          hangar:LOOHP/InteractionVisualizer: "2026.1.4"
+          hangar:CyntrixAlgorithm/DeathChest: "3.0.1"
+          hangar:Multiverse/Multiverse-Core: "5.8.2"
+          hangar:William278/HuskHomes: "4.11.1"
+          hangar:Archy/AuraSkills: "2.4.0"
+          hangar:Gecolay/GSit: "3.8.0"
+          spiget:81534: "1.5.66"
+          spiget:84278: "1.2.75"
+          spiget:96927: "any"
+          spiget:28140: "any"
+  args:
+    - "--policy"
+    - "more"
+    - "--dry-run"
