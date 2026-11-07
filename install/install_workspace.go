@@ -91,7 +91,7 @@ func (s *Service) syncInstall(ctx context.Context, root string, d *document.Mani
 		return nil, err
 	}
 	defer func() { resultErr = errors.Join(resultErr, writer.Close()) }()
-	baseManifest, baseLock, err := preflightLocked(root, d, old, opts, true, s.logger)
+	baseManifest, baseLock, err := preflightLocked(root, d, old, opts, s.logger)
 	if err != nil {
 		return nil, err
 	}

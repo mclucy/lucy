@@ -150,74 +150,6 @@ func (s *Service) Resolve(
 	return resolved, result, nil
 }
 
-// PlanInstall resolves a lock without staging or committing the server tree.
-// It holds the artifact-store operation lease and the workspace writer lock
-// only while reading and resolving, so a collection sweep cannot reclaim bytes
-// the resolution materializes. Both locks are released when planning returns;
-// the plan itself reserves no artifacts, and ApplyPlan acquires the lease
-// again before using it.
-func (s *Service) PlanInstall(
-	ctx context.Context,
-	root string,
-	d *document.Manifest,
-	old *document.Lock,
-	opts Options,
-) (plan *Plan, resultErr error) {
-	absolute, err := filepath.Abs(root)
-	if err != nil {
-		return nil, err
-	}
-	root = absolute
-	lease, err := artifactstore.AcquireOperation()
-	if err != nil {
-		return nil, err
-	}
-	defer func() { resultErr = errors.Join(resultErr, lease.Close()) }()
-	if err := workspacewrite.SafePath(root, ".lucy"); err != nil {
-		return nil, err
-	}
-	writer, err := workspacewrite.Lock(root, s.logger)
-	if err != nil {
-		return nil, err
-	}
-	defer func() { resultErr = errors.Join(resultErr, writer.Close()) }()
-	_, baseLock, err := preflightLocked(root, d, old, opts, false, s.logger)
-	if err != nil {
-		return nil, err
-	}
-	previous, err := recoveredLock(old, baseLock)
-	if err != nil {
-		return nil, err
-	}
-	result := newResult()
-	store := s.newDownloadStore(ctx, opts, result)
-	// The plan answers the recovered workspace: the previous lock is always the
-	// recovered one, so a caller that read documents before recovery cannot
-	// hand the resolver a stale base. The manifest stays the caller's document
-	// because a publish plan carries an intended edit; ApplyPlan rejects a
-	// non-publishing plan whose manifest does not match the recorded base.
-	resolved, err := s.resolveLock(ctx, root, d, previous, &opts, store, result)
-	if err != nil {
-		return nil, err
-	}
-	result.PublishedManifest = opts.PublishManifest
-	result.PublishedLock = opts.publishLock
-	baseManifestFingerprint, baseLockFingerprint, err := workspaceFingerprints(root)
-	if err != nil {
-		return nil, err
-	}
-	return &Plan{
-		Manifest:                d,
-		Previous:                previous,
-		Resolved:                resolved,
-		PublishManifest:         opts.PublishManifest,
-		PublishLock:             opts.publishLock,
-		BaseManifestFingerprint: baseManifestFingerprint,
-		BaseLockFingerprint:     baseLockFingerprint,
-		Result:                  result,
-	}, nil
-}
-
 // ApplyPlan stages and commits a previously resolved plan. It rechecks the
 // workspace state before staging, so a plan cannot overwrite a concurrent
 // manifest or lock edit.
@@ -250,7 +182,7 @@ func (s *Service) ApplyPlan(
 	defer func() { resultErr = errors.Join(resultErr, writer.Close()) }()
 	preflightOptions := opts
 	preflightOptions.PublishManifest = plan.PublishManifest
-	if _, _, err := preflightLocked(root, plan.Manifest, plan.Previous, preflightOptions, true, s.logger); err != nil {
+	if _, _, err := preflightLocked(root, plan.Manifest, plan.Previous, preflightOptions, s.logger); err != nil {
 		return nil, err
 	}
 	if err := checkPlannedDocuments(plan); err != nil {

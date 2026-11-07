@@ -97,7 +97,6 @@ func TestPreflightRejectsExpectedManifestMismatch(t *testing.T) {
 		d,
 		lock,
 		Options{ExpectedManifest: "sha256:not-the-manifest"},
-		true,
 		nil,
 	)
 	if err == nil || !strings.Contains(err.Error(), "manifest changed") {
@@ -113,7 +112,6 @@ func TestPreflightRejectsExpectedLockMismatch(t *testing.T) {
 		d,
 		lock,
 		Options{ExpectedLock: "sha256:not-the-lock"},
-		true,
 		nil,
 	)
 	if err == nil || !strings.Contains(err.Error(), "lock changed") {
@@ -140,7 +138,6 @@ func TestPreflightAcceptsExpectedFingerprints(t *testing.T) {
 			ExpectedManifest: manifestFingerprint,
 			ExpectedLock:     lockFingerprint,
 		},
-		true,
 		nil,
 	); err != nil {
 		t.Fatalf("preflightLocked() error = %v", err)
