@@ -3,6 +3,7 @@ package curseforge
 import (
 	"fmt"
 	"net/url"
+	"strconv"
 
 	"github.com/mclucy/lucy/catalog"
 )
@@ -78,10 +79,10 @@ func modDescriptionUrl(modId int32, stripped bool) string {
 	return u + "?" + params.Encode()
 }
 
-// Docs: https://docs.curseforge.com/rest-api/#get-mod-files
+// modFilesUrl builds a file-list request: https://docs.curseforge.com/rest-api/#get-mod-files.
 func modFilesUrl(modId int32, gameVersion string, loaderType int) string {
 	params := url.Values{}
-	params.Set("pageSize", "50")
+	params.Set("pageSize", strconv.Itoa(modFilesPageSize))
 
 	if gameVersion != "" {
 		params.Set("gameVersion", gameVersion)

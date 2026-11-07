@@ -5,6 +5,8 @@ import (
 	"strconv"
 )
 
+const modFilesPageSize = 50
+
 // listAllFiles pages through every file of a mod for the given compatibility
 // filter. An empty gameVersion and zero loaderType list all files unfiltered.
 func (p *Provider) listAllFiles(
@@ -13,11 +15,8 @@ func (p *Provider) listAllFiles(
 	gameVersion string,
 	loaderType int,
 ) ([]fileResponse, error) {
-	// Must match the pageSize set by modFilesUrl.
-	const pageSize = 50
-
 	var files []fileResponse
-	for offset := 0; ; offset += pageSize {
+	for offset := 0; ; offset += modFilesPageSize {
 		u := modFilesUrl(modID, gameVersion, loaderType) +
 			"&index=" + strconv.Itoa(offset)
 		var page filesResponse
@@ -25,7 +24,7 @@ func (p *Provider) listAllFiles(
 			return nil, err
 		}
 		files = append(files, page.Data...)
-		if len(page.Data) < pageSize {
+		if len(page.Data) < modFilesPageSize {
 			break
 		}
 		if page.Pagination.TotalCount > 0 &&
