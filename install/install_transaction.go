@@ -123,13 +123,13 @@ func pruneTargets(
 		}
 		observed := workspacewrite.InstallImage{
 			SHA256: actual["sha256"],
-			Mode:   effectiveInstallMode(info.Mode().Perm()),
+			Mode:   workspacewrite.EffectiveInstallMode(info.Mode().Perm()),
 		}
 		if !strings.EqualFold(observed.SHA256, old.SHA256) {
 			return nil, fmt.Errorf("modified owned output cannot be pruned: %s", old.Path)
 		}
 		if old.Mode != 0 &&
-			effectiveInstallMode(os.FileMode(old.Mode)) != observed.Mode {
+			workspacewrite.EffectiveInstallMode(os.FileMode(old.Mode)) != observed.Mode {
 			return nil, fmt.Errorf("modified owned output cannot be pruned: %s", old.Path)
 		}
 		targets[old.Path] = &observed
@@ -304,7 +304,7 @@ func applyCommitFiles(root, stage string, d *document.Manifest, l *document.Lock
 				occupantHashes[relative] = actual["sha256"]
 				observedBefore[relative] = &workspacewrite.InstallImage{
 					SHA256: actual["sha256"],
-					Mode:   effectiveInstallMode(targetInfo.Mode().Perm()),
+					Mode:   workspacewrite.EffectiveInstallMode(targetInfo.Mode().Perm()),
 				}
 				prior, isOwned := owned[relative]
 				if !isOwned {
@@ -320,12 +320,12 @@ func applyCommitFiles(root, stage string, d *document.Manifest, l *document.Lock
 				} else {
 					observed := workspacewrite.InstallImage{
 						SHA256: actual["sha256"],
-						Mode:   effectiveInstallMode(targetInfo.Mode().Perm()),
+						Mode:   workspacewrite.EffectiveInstallMode(targetInfo.Mode().Perm()),
 					}
 					expected := observed
 					expected.SHA256 = prior.SHA256
 					if prior.Mode != 0 {
-						expected.Mode = effectiveInstallMode(os.FileMode(prior.Mode))
+						expected.Mode = workspacewrite.EffectiveInstallMode(os.FileMode(prior.Mode))
 					}
 					if !workspacewrite.InstallImagesEqual(&observed, &expected) {
 						if overwritePaths[relative] {
@@ -389,7 +389,7 @@ func applyCommitFiles(root, stage string, d *document.Manifest, l *document.Lock
 			}
 			sourceImages[relative] = workspacewrite.InstallImage{
 				SHA256: hashes["sha256"],
-				Mode:   effectiveInstallMode(fileMode),
+				Mode:   workspacewrite.EffectiveInstallMode(fileMode),
 			}
 			sources[relative] = p
 			return nil
@@ -443,10 +443,10 @@ func applyCommitFiles(root, stage string, d *document.Manifest, l *document.Lock
 	if err != nil {
 		return err
 	}
-	receiptAfter := installBytesImage(receiptBytes, receiptMode)
+	receiptAfter := workspacewrite.InstallBytesImage(receiptBytes, receiptMode)
 	var receiptBase *workspacewrite.InstallImage
 	if receiptExisted {
-		receiptBase = installBytesImage(raw, receiptMode)
+		receiptBase = workspacewrite.InstallBytesImage(raw, receiptMode)
 	}
 	afterImages := make(map[string]*workspacewrite.InstallImage, len(sources)+3)
 	for name, image := range sourceImages {
@@ -549,25 +549,11 @@ func applyCommitFiles(root, stage string, d *document.Manifest, l *document.Lock
 				Path:  name,
 				After: afterImages[name],
 			}
-			info, err := files.Lstat(name)
-			switch {
-			case err == nil:
-				if !info.Mode().IsRegular() {
-					return fmt.Errorf("installation target %s is not a regular file", name)
-				}
-				hashes, err := DigestFile(target, nil)
-				if err != nil {
-					return err
-				}
-				before := workspacewrite.InstallImage{
-					SHA256: hashes["sha256"],
-					Mode:   effectiveInstallMode(info.Mode().Perm()),
-				}
-				entry.Before = &before
-			case errors.Is(err, os.ErrNotExist):
-			default:
+			before, err := workspacewrite.ObserveInstallImage(files, name)
+			if err != nil {
 				return err
 			}
+			entry.Before = before
 			if expected, observed := observedBefore[name]; observed {
 				if !workspacewrite.InstallImagesEqual(entry.Before, expected) {
 					return fmt.Errorf(
@@ -713,7 +699,7 @@ func applyCommitFiles(root, stage string, d *document.Manifest, l *document.Lock
 				if !mutated {
 					continue
 				}
-				current, err := observeInstallPath(files, old.Path)
+				current, err := workspacewrite.ObserveInstallImage(files, old.Path)
 				if err != nil {
 					return err
 				}
@@ -769,12 +755,12 @@ func applyCommitFiles(root, stage string, d *document.Manifest, l *document.Lock
 			}
 		}
 		for name, expected := range documentAfter {
-			current, err := observeInstallPath(files, name)
+			current, err := workspacewrite.ObserveInstallImage(files, name)
 			if err != nil {
 				return err
 			}
 			compareMode := baseImages[name] != nil
-			if !installFinalImageMatches(current, expected, compareMode) {
+			if !workspacewrite.InstallImagesMatch(current, expected, compareMode) {
 				return fmt.Errorf(
 					"installation document %s changed before commit",
 					name,
@@ -788,7 +774,7 @@ func applyCommitFiles(root, stage string, d *document.Manifest, l *document.Lock
 			if _, document := documentAfter[name]; document {
 				continue
 			}
-			current, err := observeInstallPath(files, name)
+			current, err := workspacewrite.ObserveInstallImage(files, name)
 			if err != nil {
 				return err
 			}

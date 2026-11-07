@@ -11,6 +11,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 
 	"github.com/mclucy/lucy/internal/fsutil"
@@ -204,7 +205,7 @@ func ReplayInstallJournal(
 	plan := make([]InstallJournalEntry, 0, len(journal.Entries))
 	refused := make([]string, 0)
 	for _, entry := range journal.Entries {
-		current, err := observeInstallImage(files, filepath.FromSlash(entry.Path))
+		current, err := ObserveInstallImage(files, filepath.FromSlash(entry.Path))
 		if err != nil {
 			return err
 		}
@@ -410,26 +411,13 @@ func classifyInstallEntry(current, before, after *InstallImage) installEntryStat
 	// match would misclassify their own committed bytes as an external edit.
 	compareMode := before != nil && after != nil &&
 		before.SHA256 == after.SHA256
-	if installImagesMatch(current, before, compareMode) {
+	if InstallImagesMatch(current, before, compareMode) {
 		return installEntryUnapplied
 	}
-	if installImagesMatch(current, after, compareMode) {
+	if InstallImagesMatch(current, after, compareMode) {
 		return installEntryApplied
 	}
 	return installEntryModified
-}
-
-func installImagesMatch(
-	current, expected *InstallImage,
-	compareMode bool,
-) bool {
-	if current == nil || expected == nil {
-		return current == nil && expected == nil
-	}
-	if current.SHA256 != expected.SHA256 {
-		return false
-	}
-	return !compareMode || current.Mode == expected.Mode
 }
 
 // InstallPathsAlias reports whether two workspace-relative paths would resolve
@@ -582,13 +570,32 @@ func flipNameCase(name string) string {
 // including permission mode. Commit planning uses it to decide whether a
 // publication would change anything.
 func InstallImagesEqual(left, right *InstallImage) bool {
-	if left == nil || right == nil {
-		return left == nil && right == nil
-	}
-	return left.SHA256 == right.SHA256 && left.Mode == right.Mode
+	return InstallImagesMatch(left, right, true)
 }
 
-func observeInstallImage(files *os.Root, relative string) (*InstallImage, error) {
+// InstallImagesMatch reports whether current matches expected. When
+// compareMode is false only content is compared; recovery uses that because
+// some filesystems cannot represent the requested mode, so their own committed
+// bytes must not be classified as an external edit. Planning that requires an
+// exact answer uses InstallImagesEqual.
+func InstallImagesMatch(
+	current, expected *InstallImage,
+	compareMode bool,
+) bool {
+	if current == nil || expected == nil {
+		return current == nil && expected == nil
+	}
+	if current.SHA256 != expected.SHA256 {
+		return false
+	}
+	return !compareMode || current.Mode == expected.Mode
+}
+
+// ObserveInstallImage observes the content hash and effective permission mode
+// of relative beneath files. A nil image with a nil error means the path is
+// absent. A present non-regular path is an error because installation images
+// describe files.
+func ObserveInstallImage(files *os.Root, relative string) (*InstallImage, error) {
 	info, err := files.Lstat(relative)
 	if errors.Is(err, os.ErrNotExist) {
 		return nil, nil
@@ -598,7 +605,7 @@ func observeInstallImage(files *os.Root, relative string) (*InstallImage, error)
 	}
 	if !info.Mode().IsRegular() {
 		return nil, fmt.Errorf(
-			"installation journal path %s is not a regular file",
+			"installation path %s is not a regular file",
 			relative,
 		)
 	}
@@ -614,8 +621,31 @@ func observeInstallImage(files *os.Root, relative string) (*InstallImage, error)
 	}
 	return &InstallImage{
 		SHA256: hex.EncodeToString(hasher.Sum(nil)),
-		Mode:   uint32(info.Mode().Perm()),
+		Mode:   EffectiveInstallMode(info.Mode().Perm()),
 	}, nil
+}
+
+// InstallBytesImage describes the content and effective permission mode that
+// publishing data at mode produces.
+func InstallBytesImage(data []byte, mode os.FileMode) *InstallImage {
+	sum := sha256.Sum256(data)
+	return &InstallImage{
+		SHA256: hex.EncodeToString(sum[:]),
+		Mode:   EffectiveInstallMode(mode),
+	}
+}
+
+// EffectiveInstallMode reports the permission bits the platform exposes after
+// a chmod to mode. Windows represents regular files as writable (0666) or
+// read-only (0444); Unix preserves the requested bits.
+func EffectiveInstallMode(mode os.FileMode) uint32 {
+	if runtime.GOOS == "windows" {
+		if mode&0o200 != 0 {
+			return 0o666
+		}
+		return 0o444
+	}
+	return uint32(mode.Perm())
 }
 
 func checkInstallPreImage(
@@ -649,7 +679,7 @@ func restoreInstallEntry(
 ) (resultErr error) {
 	relative := filepath.FromSlash(entry.Path)
 	if entry.Before == nil {
-		current, err := observeInstallImage(files, relative)
+		current, err := ObserveInstallImage(files, relative)
 		if err != nil {
 			return err
 		}
@@ -673,7 +703,7 @@ func restoreInstallEntry(
 				entry.Before.SHA256, entry.Path,
 			)
 		}
-		current, err := observeInstallImage(files, relative)
+		current, err := ObserveInstallImage(files, relative)
 		if err != nil {
 			return err
 		}

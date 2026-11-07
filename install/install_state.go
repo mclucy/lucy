@@ -237,8 +237,8 @@ func receiptEntryCurrent(
 		return false, nil
 	}
 	if entry.Mode != 0 {
-		actualMode := effectiveInstallMode(info.Mode().Perm())
-		expectedMode := effectiveInstallMode(os.FileMode(entry.Mode))
+		actualMode := workspacewrite.EffectiveInstallMode(info.Mode().Perm())
+		expectedMode := workspacewrite.EffectiveInstallMode(os.FileMode(entry.Mode))
 		if actualMode != expectedMode {
 			logger.Debug(kind+" not current", "reason", "managed output mode modified", "path", entry.Path, "expected", expectedMode, "actual", actualMode)
 			return false, nil
