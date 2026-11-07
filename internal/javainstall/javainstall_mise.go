@@ -3,6 +3,7 @@ package javainstall
 import (
 	"context"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -36,8 +37,8 @@ type mise struct{}
 func (mise) method() Method { return MethodMise }
 func (mise) system() bool   { return false }
 
-func (mise) ownsJava(_ context.Context, host *Host) bool {
-	dir := miseDataDir(host)
+func (mise) ownsJava(_ context.Context, _ *Host) bool {
+	dir := miseDataDir()
 	if dir == "" {
 		return false
 	}
@@ -46,7 +47,7 @@ func (mise) ownsJava(_ context.Context, host *Host) bool {
 }
 
 func (mise) plans(ctx context.Context, req Request, host *Host) ([]Plan, error) {
-	if _, err := host.lookPath("mise"); err != nil {
+	if _, err := exec.LookPath("mise"); err != nil {
 		return nil, nil
 	}
 	prefix, distribution, ok := miseVendor(req.Distribution)
@@ -87,11 +88,11 @@ func miseVendor(dist java.Distribution) (string, java.Distribution, bool) {
 	return prefix, dist, ok
 }
 
-func miseDataDir(host *Host) string {
-	if dir := host.getenv("MISE_DATA_DIR"); dir != "" {
+func miseDataDir() string {
+	if dir := os.Getenv("MISE_DATA_DIR"); dir != "" {
 		return dir
 	}
-	home, err := host.userHomeDir()
+	home, err := os.UserHomeDir()
 	if err != nil {
 		return ""
 	}

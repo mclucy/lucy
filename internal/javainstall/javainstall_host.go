@@ -34,7 +34,7 @@ type Policy struct {
 	AllowRepository bool
 }
 
-// Command is one process invocation for a System runner. Args[0] names the
+// Command is one process invocation for the host. Args[0] names the
 // executable.
 type Command struct {
 	Args   []string
@@ -50,56 +50,6 @@ type Command struct {
 	// Platforms without process interrupts kill the direct process and
 	// still wait for it.
 	InterruptOnCancel bool
-}
-
-// System is the process and discovery boundary that one Java host uses. The
-// default adapter is NewSystem; tests or alternate environments supply their
-// own values without mutable package state. NewHost does not fill missing
-// fields, so a supplied System must set every function it will use.
-type System struct {
-	// GOOS and GOARCH name the platform the host plans for.
-	GOOS   string
-	GOARCH string
-	// LookPath resolves an executable name on PATH.
-	LookPath func(name string) (string, error)
-	// Run executes one command and waits for it. Cancellation follows
-	// Command.InterruptOnCancel.
-	Run func(ctx context.Context, command Command) error
-	// Getenv reads one environment variable.
-	Getenv func(name string) string
-	// Environ returns the process environment entries.
-	Environ func() []string
-	// UserHomeDir returns the current user's home directory.
-	UserHomeDir func() (string, error)
-	// ManagedRoot returns the per-user directory that holds downloaded Java
-	// runtimes.
-	ManagedRoot func() (string, error)
-	// Release returns the fields of /etc/os-release.
-	Release func() (map[string]string, error)
-	// IsRoot reports whether Lucy runs as root.
-	IsRoot func() bool
-	// EvalSymlinks resolves a symbolic link to its target.
-	EvalSymlinks func(path string) (string, error)
-	// UsesMusl reports whether the host runs musl instead of glibc.
-	UsesMusl func() bool
-}
-
-// NewSystem returns the real process and discovery boundary.
-func NewSystem() System {
-	return System{
-		GOOS:         runtime.GOOS,
-		GOARCH:       runtime.GOARCH,
-		LookPath:     exec.LookPath,
-		Run:          runCommand,
-		Getenv:       os.Getenv,
-		Environ:      os.Environ,
-		UserHomeDir:  os.UserHomeDir,
-		ManagedRoot:  toolchain.ManagedJavaRoot,
-		Release:      readSystemRelease,
-		IsRoot:       func() bool { return os.Geteuid() == 0 },
-		EvalSymlinks: filepath.EvalSymlinks,
-		UsesMusl:     detectMusl,
-	}
 }
 
 func runCommand(ctx context.Context, command Command) error {
@@ -185,7 +135,6 @@ func detectMusl() bool {
 // after first use.
 type Host struct {
 	network *cache.Client
-	system  System
 	logger  *log.Logger
 	goos    string
 	goarch  string
@@ -209,20 +158,18 @@ type Host struct {
 }
 
 // NewHost returns the host boundary for one invocation. It probes nothing
-// until planning or execution needs a fact. system supplies the process and
-// discovery boundary, network carries the invocation's HTTP transport and
-// cache, and logger records planning decisions; a nil logger records nothing.
+// until planning or execution needs a fact. network carries the invocation's
+// HTTP transport and cache, and logger records planning decisions; a nil
+// logger records nothing.
 func NewHost(
 	network *cache.Client,
-	system System,
 	logger *log.Logger,
 ) *Host {
 	return &Host{
 		network: network,
-		system:  system,
 		logger:  logger,
-		goos:    system.GOOS,
-		goarch:  system.GOARCH,
+		goos:    runtime.GOOS,
+		goarch:  runtime.GOARCH,
 	}
 }
 
@@ -230,7 +177,7 @@ func NewHost(
 // runtimes.
 func (h *Host) managedRoot() (string, error) {
 	h.managedOnce.Do(func() {
-		h.managedPath, h.managedErr = h.system.ManagedRoot()
+		h.managedPath, h.managedErr = toolchain.ManagedJavaRoot()
 	})
 	return h.managedPath, h.managedErr
 }
@@ -239,7 +186,7 @@ func (h *Host) managedRoot() (string, error) {
 // an empty map.
 func (h *Host) systemRelease() map[string]string {
 	h.releaseOnce.Do(func() {
-		release, err := h.system.Release()
+		release, err := readSystemRelease()
 		if err != nil {
 			h.logger.Debug("read os-release failed", "reason", err)
 			release = nil
@@ -255,15 +202,14 @@ func (h *Host) systemRelease() map[string]string {
 // usesMusl reports whether the host runs musl instead of glibc.
 func (h *Host) usesMusl() bool {
 	h.muslOnce.Do(func() {
-		h.musl = h.system.UsesMusl()
+		h.musl = detectMusl()
 	})
 	return h.musl
 }
 
-// isRoot reports whether Lucy runs as root.
 func (h *Host) isRoot() bool {
 	h.rootOnce.Do(func() {
-		h.root = h.system.IsRoot()
+		h.root = os.Geteuid() == 0
 	})
 	return h.root
 }
@@ -274,7 +220,7 @@ func (h *Host) rootAvailable(ctx context.Context, policy Policy) (bool, error) {
 	if h.isRoot() {
 		return true, nil
 	}
-	path, err := h.lookPath("sudo")
+	path, err := exec.LookPath("sudo")
 	if err != nil {
 		return false, nil
 	}
@@ -295,9 +241,9 @@ func (h *Host) passwordlessSudo(ctx context.Context, sudo string) (bool, error) 
 	}
 	probeCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
-	err := h.system.Run(probeCtx, Command{
+	err := runCommand(probeCtx, Command{
 		Args: []string{sudo, "-n", "true"},
-		Env:  h.environ(),
+		Env:  os.Environ(),
 	})
 	if err := probeCtx.Err(); err != nil {
 		return false, err
@@ -317,7 +263,7 @@ func (h *Host) systemToolAvailable(names ...string) bool {
 		return false
 	}
 	for _, name := range names {
-		if _, err := h.lookPath(name); err != nil {
+		if _, err := exec.LookPath(name); err != nil {
 			return false
 		}
 	}
@@ -344,15 +290,15 @@ func (h *Host) probe(
 ) ([]byte, error) {
 	probeCtx, cancel := context.WithTimeout(ctx, wait)
 	defer cancel()
-	path, err := h.lookPath(name)
+	path, err := exec.LookPath(name)
 	if err != nil {
 		return nil, err
 	}
 	if environment == nil {
-		environment = h.environ()
+		environment = os.Environ()
 	}
 	var stdout, stderr bytes.Buffer
-	err = h.system.Run(probeCtx, Command{
+	err = runCommand(probeCtx, Command{
 		Args:   append([]string{path}, args...),
 		Env:    environment,
 		Stdout: &stdout,
@@ -369,23 +315,6 @@ func (h *Host) probe(
 	return stdout.Bytes(), nil
 }
 
-func (h *Host) lookPath(name string) (string, error) {
-	return h.system.LookPath(name)
-}
-
-func (h *Host) getenv(name string) string {
-	return h.system.Getenv(name)
-}
-
-func (h *Host) environ() []string {
-	return h.system.Environ()
-}
-
-func (h *Host) userHomeDir() (string, error) {
-	return h.system.UserHomeDir()
-}
-
-// fetchMetadata reads a metadata URL through the invocation's cache.
 func (h *Host) fetchMetadata(
 	ctx context.Context,
 	address string,
@@ -397,7 +326,6 @@ func (h *Host) fetchMetadata(
 	})
 }
 
-// request issues one HTTP request through the invocation's client.
 func (h *Host) request(
 	ctx context.Context,
 	address string,

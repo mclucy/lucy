@@ -3,6 +3,7 @@ package javainstall
 import (
 	"context"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -35,8 +36,8 @@ type asdf struct{}
 func (asdf) method() Method { return MethodAsdf }
 func (asdf) system() bool   { return false }
 
-func (asdf) ownsJava(_ context.Context, host *Host) bool {
-	dir := asdfDataDir(host)
+func (asdf) ownsJava(_ context.Context, _ *Host) bool {
+	dir := asdfDataDir()
 	if dir == "" {
 		return false
 	}
@@ -45,7 +46,7 @@ func (asdf) ownsJava(_ context.Context, host *Host) bool {
 }
 
 func (asdf) plans(ctx context.Context, req Request, host *Host) ([]Plan, error) {
-	if _, err := host.lookPath("asdf"); err != nil {
+	if _, err := exec.LookPath("asdf"); err != nil {
 		return nil, nil
 	}
 	plugins, err := asdfCommand(ctx, host, "plugin", "list")
@@ -97,11 +98,11 @@ func asdfVendor(dist java.Distribution) (string, java.Distribution, bool) {
 	return prefix, dist, ok
 }
 
-func asdfDataDir(host *Host) string {
-	if dir := host.getenv("ASDF_DATA_DIR"); dir != "" {
+func asdfDataDir() string {
+	if dir := os.Getenv("ASDF_DATA_DIR"); dir != "" {
 		return dir
 	}
-	home, err := host.userHomeDir()
+	home, err := os.UserHomeDir()
 	if err != nil {
 		return ""
 	}

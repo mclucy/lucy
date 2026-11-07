@@ -315,7 +315,7 @@ func (r *Runner) configureServices(cmd *cobra.Command) error {
 	r.dependencies.Router = router
 	r.dependencies.Files = files
 	r.dependencies.Operations = operation.NewService(installer, router, registry, r.invocation.Logger)
-	r.dependencies.JavaHost = javainstall.NewHost(network, javainstall.NewSystem(), r.invocation.Logger)
+	r.dependencies.JavaHost = javainstall.NewHost(network, r.invocation.Logger)
 	return nil
 }
 

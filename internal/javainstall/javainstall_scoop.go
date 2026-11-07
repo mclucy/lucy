@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -125,7 +126,7 @@ func (scoop) plans(ctx context.Context, req Request, host *Host) ([]Plan, error)
 	if host.goos != "windows" {
 		return nil, nil
 	}
-	if _, err := host.lookPath("scoop.cmd"); err != nil {
+	if _, err := exec.LookPath("scoop.cmd"); err != nil {
 		return nil, nil
 	}
 	hasManifest, err := scoopJavaBucket(ctx, host)
@@ -143,7 +144,7 @@ func (scoop) ownsJava(_ context.Context, host *Host) bool {
 	if host.goos != "windows" {
 		return false
 	}
-	root := scoopRoot(host)
+	root := scoopRoot()
 	if root == "" {
 		return false
 	}
@@ -264,7 +265,7 @@ func scoopJavaBucket(ctx context.Context, host *Host) (func(string) bool, error)
 	if !scoopHasBucket(string(output), "java") {
 		return nil, nil
 	}
-	root := scoopRoot(host)
+	root := scoopRoot()
 	if root == "" {
 		return nil, nil
 	}
@@ -288,11 +289,11 @@ func scoopHasBucket(output, bucket string) bool {
 }
 
 // scoopRoot returns the scoop installation directory.
-func scoopRoot(host *Host) string {
-	if root := host.getenv("SCOOP"); root != "" {
+func scoopRoot() string {
+	if root := os.Getenv("SCOOP"); root != "" {
 		return root
 	}
-	home, err := host.userHomeDir()
+	home, err := os.UserHomeDir()
 	if err != nil {
 		return ""
 	}
