@@ -69,34 +69,12 @@ func (p *Provider) LatestMinecraftVersion(ctx context.Context) (
 	return version.NewestMinecraft(versions)
 }
 
-func (p *Provider) ResolveVersionSelector(
-	ctx context.Context,
-	local upstream.LocalContext,
-	id catalog.VersionedRef,
-) (catalog.VersionedRef, error) {
-	gameVersion, err := minecraftVersionForInstall(local)
-	if err != nil {
-		return id, err
-	}
-
-	forgeVersion, err := p.forgeVersionFromPackageRef(ctx, id, gameVersion)
-	if err != nil {
-		return id, err
-	}
-
-	return catalog.VersionedRef{
-		Ecosystem: catalog.EcosystemForge,
-		Name:      "forge",
-		Version:   version.Version(forgeVersion),
-	}, nil
-}
-
 func (p *Provider) Fetch(
 	ctx context.Context,
-	local upstream.LocalContext,
+	minecraft version.Version,
 	id catalog.VersionedRef,
 ) (upstream.ResolvedPackage, error) {
-	gameVersion, err := minecraftVersionForInstall(local)
+	gameVersion, err := minecraftVersionForInstall(minecraft)
 	if err != nil {
 		return upstream.ResolvedPackage{}, err
 	}
@@ -118,13 +96,13 @@ func (p *Provider) Fetch(
 	}, nil
 }
 
-func minecraftVersionForInstall(local upstream.LocalContext) (version.Version, error) {
-	if !local.HasMinecraftVersion() {
+func minecraftVersionForInstall(minecraft version.Version) (version.Version, error) {
+	if minecraft == "" || minecraft.IsInvalid() || minecraft.CanInfer() {
 		return "", errors.New(
 			"forge bootstrap requires a concrete Minecraft version",
 		)
 	}
-	return local.MinecraftVersion, nil
+	return minecraft, nil
 }
 
 func (p *Provider) forgeVersionFromPackageRef(

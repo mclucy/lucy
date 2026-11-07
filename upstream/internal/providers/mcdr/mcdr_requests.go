@@ -5,8 +5,6 @@ import (
 	"encoding/json/v2"
 	"fmt"
 
-	"github.com/mclucy/lucy/internal/github"
-	versionpkg "github.com/mclucy/lucy/version"
 	"github.com/sahilm/fuzzy"
 )
 
@@ -60,12 +58,6 @@ func (p *Provider) getInfo(
 		return nil, fmt.Errorf("%w: %s", ErrorGhApi, msg.Message)
 	}
 
-	var res github.GhItem
-	err = json.Unmarshal(data, &res)
-	if err != nil {
-		return nil, err
-	}
-
 	var info pluginInfo
 	err = json.Unmarshal(data, &info)
 	if err != nil {
@@ -96,63 +88,6 @@ func (p *Provider) getMeta(
 		return nil, err
 	}
 	return &meta, nil
-}
-
-func (p *Provider) getRelease(
-	ctx context.Context,
-	id string,
-	version versionpkg.Version,
-) (*release, error) {
-	history, err := p.getReleaseHistory(ctx, id)
-	if err != nil {
-		return nil, err
-	}
-
-	if version == versionpkg.Any || version == versionpkg.Beta {
-		return &history.Releases[history.LatestVersionIndex], nil
-	}
-
-	for _, rel := range history.Releases {
-		if rel.Meta.Version == version.String() {
-			return &rel, nil
-		}
-	}
-	return nil, ErrVersionNotFound(id, version.String())
-}
-
-func (p *Provider) getLatestRelease(
-	ctx context.Context,
-	id string,
-) (*release, error) {
-	history, err := p.getReleaseHistory(ctx, id)
-	if err != nil {
-		return nil, err
-	}
-	rel := selectLatestRelease(history)
-	if rel == nil {
-		return nil, ErrVersionNotFound(id, versionpkg.Any.String())
-	}
-	return rel, nil
-}
-
-func (p *Provider) getLatestCompatibleRelease(
-	ctx context.Context,
-	id string,
-	localMcdrVersion versionpkg.Version,
-) (*release, error) {
-	history, err := p.getReleaseHistory(ctx, id)
-	if err != nil {
-		return nil, err
-	}
-	rel, err := selectLatestCompatibleRelease(history, localMcdrVersion)
-	if err != nil {
-		return nil, err
-	}
-	if rel != nil {
-		return rel, nil
-	}
-
-	return nil, ErrVersionNotFound(id, "latest compatible")
 }
 
 func (p *Provider) getReleaseHistory(

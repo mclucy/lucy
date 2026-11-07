@@ -9,7 +9,6 @@ import (
 
 	"github.com/mclucy/lucy/cache"
 	"github.com/mclucy/lucy/catalog"
-	"github.com/mclucy/lucy/upstream"
 	"github.com/mclucy/lucy/version"
 )
 
@@ -31,11 +30,6 @@ func (p *Provider) Provider() catalog.Provider {
 	return catalog.ProviderFabric
 }
 
-type installerVersion struct {
-	Version string `json:"version"`
-	Stable  bool   `json:"stable"`
-}
-
 type loaderVersionEntry struct {
 	Version string `json:"version"`
 	Stable  bool   `json:"stable"`
@@ -48,7 +42,6 @@ type gameVersionEntry struct {
 
 func (p *Provider) ResolveVersionSelector(
 	ctx context.Context,
-	_ upstream.LocalContext,
 	id catalog.VersionedRef,
 ) (catalog.VersionedRef, error) {
 	loaderVer, err := p.loaderVersion(ctx, id.Version)
@@ -59,50 +52,6 @@ func (p *Provider) ResolveVersionSelector(
 		Ecosystem: catalog.EcosystemFabric,
 		Name:      "fabric",
 		Version:   version.Version(loaderVer),
-	}, nil
-}
-
-func (p *Provider) Fetch(
-	ctx context.Context,
-	local upstream.LocalContext,
-	id catalog.VersionedRef,
-) (upstream.ResolvedPackage, error) {
-	if !local.HasMinecraftVersion() {
-		return upstream.ResolvedPackage{}, errors.New(
-			"fabric bootstrap requires a concrete Minecraft version",
-		)
-	}
-	gameVersionID := local.MinecraftVersion.String()
-
-	loaderVer, err := p.loaderVersion(ctx, id.Version)
-	if err != nil {
-		return upstream.ResolvedPackage{}, fmt.Errorf(
-			"resolve fabric loader version failed: %w",
-			err,
-		)
-	}
-
-	installerVer, err := p.latestInstallerVersion(ctx)
-	if err != nil {
-		return upstream.ResolvedPackage{}, fmt.Errorf(
-			"resolve fabric installer version failed: %w",
-			err,
-		)
-	}
-
-	url := fmt.Sprintf(
-		"https://meta.fabricmc.net/v2/versions/loader/%s/%s/%s/server/jar",
-		gameVersionID, loaderVer, installerVer,
-	)
-
-	return upstream.ResolvedPackage{
-		FileURL: url,
-		Filename: fmt.Sprintf(
-			"fabric-server-mc%s-loader%s-launcher%s.jar",
-			gameVersionID,
-			loaderVer,
-			installerVer,
-		),
 	}, nil
 }
 
@@ -162,30 +111,11 @@ func (p *Provider) loaderVersion(
 	)
 }
 
-func (p *Provider) latestInstallerVersion(ctx context.Context) (string, error) {
-	versions, err := p.fetchInstallerVersions(ctx)
-	if err != nil {
-		return "", err
-	}
-	if len(versions) == 0 {
-		return "", errors.New("no fabric installer versions found")
-	}
-	return versions[0].Version, nil
-}
-
 func (p *Provider) fetchLoaderVersions(ctx context.Context) (
 	loaderVersions []loaderVersionEntry,
 	err error,
 ) {
 	err = p.fetchVersionsMeta(ctx, "loader", &loaderVersions)
-	return
-}
-
-func (p *Provider) fetchInstallerVersions(ctx context.Context) (
-	installerVersions []installerVersion,
-	err error,
-) {
-	err = p.fetchVersionsMeta(ctx, "installer", &installerVersions)
 	return
 }
 

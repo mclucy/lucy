@@ -9,14 +9,12 @@ package curseforge
 
 import (
 	"context"
-	"fmt"
 	"strings"
 
 	"github.com/mclucy/lucy/cache"
 	"github.com/mclucy/lucy/catalog"
 	"github.com/mclucy/lucy/log"
 	"github.com/mclucy/lucy/upstream"
-	"github.com/mclucy/lucy/version"
 )
 
 // Provider is one configured CurseForge API client. Every request it performs
@@ -61,33 +59,6 @@ func (p *Provider) Search(
 	return resp.ToSearchResults(p.Provider()), nil
 }
 
-func (p *Provider) Fetch(
-	ctx context.Context,
-	local upstream.LocalContext,
-	id catalog.VersionedRef,
-) (upstream.ResolvedPackage, error) {
-	mod, err := p.resolveSlug(ctx, id.Name)
-	if err != nil {
-		return upstream.ResolvedPackage{}, err
-	}
-
-	file, err := p.getFileByDisplayName(
-		ctx,
-		mod.ID,
-		string(id.Version),
-		local,
-		id.Ecosystem,
-	)
-	if err != nil {
-		return upstream.ResolvedPackage{}, err
-	}
-
-	resolved := file.ToPackageRemote()
-	resolved.ID.Ref = id.Ref
-	resolved.ID.Version = id.Version
-	return resolved, nil
-}
-
 func (p *Provider) Info(
 	ctx context.Context,
 	ref catalog.Ref,
@@ -104,122 +75,4 @@ func (p *Provider) Info(
 		mod: mod, description: description,
 	}.ToProjectInformation()
 	return info, nil
-}
-
-func (p *Provider) Dependencies(
-	ctx context.Context,
-	local upstream.LocalContext,
-	id catalog.VersionedRef,
-) (*upstream.DependencySet, error) {
-	mod, err := p.resolveSlug(ctx, id.Name)
-	if err != nil {
-		return nil, err
-	}
-
-	file, err := p.getFileByDisplayName(
-		ctx,
-		mod.ID,
-		string(id.Version),
-		local,
-		id.Ecosystem,
-	)
-	if err != nil {
-		return nil, err
-	}
-
-	return new((&curseforgeDependencies{file: file}).ToDependencySet()), nil
-}
-
-// curseforgeDependencies wraps a fileResponse for dependency
-// normalization.
-type curseforgeDependencies struct {
-	file *fileResponse
-}
-
-func (c *curseforgeDependencies) ToDependencySet() upstream.DependencySet {
-	result := upstream.DependencySet{
-		FromArtifact: false,
-	}
-
-	for _, dep := range c.file.Dependencies {
-		// relationType mapping:
-		// 1 = EmbeddedLibrary (skip - embedded in the mod itself)
-		// 2 = OptionalDependency -> Mandatory: false
-		// 3 = RequiredDependency -> Mandatory: true
-		// 4 = Tool (skip - not a runtime dependency)
-		// 5 = Incompatible (skip - breaks compatibility)
-		// 6 = Include (skip - bundled with the mod)
-
-		switch dep.RelationType {
-		case 2:
-			result.Dependencies = append(
-				result.Dependencies, catalog.Dependency{
-					ID: catalog.VersionedRef{
-						Ref: catalog.Ref{
-							Name: catalog.Name(
-								fmt.Sprintf(
-									"%d",
-									dep.ModId,
-								),
-							),
-						},
-					},
-					Mandatory: false,
-				},
-			)
-		case 3:
-			result.Dependencies = append(
-				result.Dependencies, catalog.Dependency{
-					ID: catalog.VersionedRef{
-						Ref: catalog.Ref{
-							Name: catalog.Name(
-								fmt.Sprintf(
-									"%d",
-									dep.ModId,
-								),
-							),
-						},
-					},
-					Mandatory: true,
-				},
-			)
-		default:
-			continue
-		}
-	}
-
-	return result
-}
-
-// ResolveVersionSelector resolves abstract version specifiers (any, stable,
-// beta) to a concrete version by querying the CurseForge API.
-func (p *Provider) ResolveVersionSelector(
-	ctx context.Context,
-	local upstream.LocalContext,
-	id catalog.VersionedRef,
-) (parsed catalog.VersionedRef, err error) {
-	if id.Ecosystem.IsUnspecified() {
-		id.Ecosystem = catalog.EcosystemUnspecified
-	}
-	parsed.Ecosystem = id.Ecosystem
-	parsed.Name = id.Name
-
-	mod, err := p.resolveSlug(ctx, id.Name)
-	if err != nil {
-		return id, err
-	}
-
-	var file *fileResponse
-	switch id.Version {
-	case version.Stable, version.Beta, version.Any:
-		file, err = p.latestFile(ctx, mod.ID, local, id.Ecosystem, id.Version)
-	default:
-		return id, nil
-	}
-	if err != nil {
-		return id, err
-	}
-
-	parsed.Version = version.Version(file.FileName)
-	return parsed, nil
 }

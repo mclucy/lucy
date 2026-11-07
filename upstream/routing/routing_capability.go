@@ -2,8 +2,9 @@ package routing
 
 import "github.com/mclucy/lucy/catalog"
 
-// SearchEcosystemSupport describes how a provider can participate in search for a
-// given ecosystem.
+// SearchEcosystemSupport describes how a provider serves an ecosystem:
+// selection and search both read Supported, and search additionally reads
+// upstream filterability.
 type SearchEcosystemSupport struct {
 	// Supported reports whether the provider can serve this platform at all.
 	Supported bool
@@ -12,7 +13,9 @@ type SearchEcosystemSupport struct {
 	UpstreamFilterable bool
 }
 
-// SearchCapability describes static search capabilities for a provider.
+// SearchCapability is the authoritative static ecosystem policy for one
+// provider. Provider selection derives its ordered ecosystem relation from
+// these tables.
 //
 // This is a struct instead of an interface so additional capability dimensions
 // can be added later without breaking callers.
@@ -70,6 +73,10 @@ var searchCapabilityByProvider = map[catalog.Provider]SearchCapability{
 			catalog.EcosystemForge:    unsupportedSearchEcosystem,
 			catalog.EcosystemNeoForge: unsupportedSearchEcosystem,
 			catalog.EcosystemBukkit:   unsupportedSearchEcosystem,
+			catalog.EcosystemMCDR: {
+				Supported:          true,
+				UpstreamFilterable: true,
+			},
 		},
 	},
 }

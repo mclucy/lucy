@@ -10,7 +10,6 @@ import (
 	"github.com/mclucy/lucy/internal/github"
 	"github.com/mclucy/lucy/log"
 	"github.com/mclucy/lucy/upstream"
-	"github.com/mclucy/lucy/version"
 )
 
 // Provider resolves MCDR plugin catalogue entries through one configured
@@ -86,24 +85,6 @@ func (p *Provider) Search(ctx context.Context, q upstream.Query) (upstream.Searc
 	return res.ToSearchResults(p.Provider()), nil
 }
 
-func (p *Provider) Fetch(
-	ctx context.Context,
-	_ upstream.LocalContext,
-	id catalog.VersionedRef,
-) (upstream.ResolvedPackage, error) {
-	rel, err := p.getRelease(ctx, id.Name.PythonName(), id.Version)
-	if err != nil {
-		return upstream.ResolvedPackage{}, err
-	}
-	r := rel.ToPackageRemote()
-	return upstream.ResolvedPackage{
-		FileURL:       r.FileURL,
-		Filename:      r.Filename,
-		Hash:          r.Hash,
-		HashAlgorithm: r.HashAlgorithm,
-	}, nil
-}
-
 func (p *Provider) Info(ctx context.Context, ref catalog.Ref) (catalog.Metadata, error) {
 	name := ref.Name.PythonName()
 	plugin, err := p.getInfo(ctx, name)
@@ -125,97 +106,4 @@ func (p *Provider) Info(ctx context.Context, ref catalog.Ref) (catalog.Metadata,
 		Repository: repo,
 	}.ToProjectInformation()
 	return info, nil
-}
-
-func (p *Provider) Dependencies(
-	ctx context.Context,
-	local upstream.LocalContext,
-	id catalog.VersionedRef,
-) (*upstream.DependencySet, error) {
-	if id.Version == "" || id.Version.CanInfer() {
-		resolved, err := p.ResolveVersionSelector(ctx, local, id)
-		if err != nil {
-			return nil, err
-		}
-		id = resolved
-	}
-
-	rel, err := p.getRelease(ctx, id.Name.PythonName(), id.Version)
-	if err != nil {
-		return nil, err
-	}
-	dependencies, err := mcdrDependenciesFromMeta(rel.Meta)
-	if err != nil {
-		return nil, err
-	}
-	return new(dependencies), nil
-}
-
-func mcdrDependenciesFromMeta(meta pluginMeta) (upstream.DependencySet, error) {
-	deps := upstream.DependencySet{FromArtifact: true}
-	if len(meta.Dependencies) == 0 {
-		return deps, nil
-	}
-
-	deps.Dependencies = make([]catalog.Dependency, 0, len(meta.Dependencies))
-	for name, constraint := range meta.Dependencies {
-		parsed, err := version.ParseConstraint(
-			constraint,
-			version.DialectMCDR,
-		)
-		if err != nil {
-			return upstream.DependencySet{}, err
-		}
-		deps.Dependencies = append(
-			deps.Dependencies, catalog.Dependency{
-				ID: catalog.VersionedRef{
-					Ref: catalog.Ref{
-						Name:     input.ToProjectName(name),
-						Provider: catalog.ProviderMCDR,
-					},
-					Ecosystem: catalog.EcosystemMCDR,
-				},
-				Constraint: parsed,
-				Mandatory:  true,
-			},
-		)
-	}
-	return deps, nil
-}
-
-func (p *Provider) ResolveVersionSelector(
-	ctx context.Context,
-	local upstream.LocalContext,
-	id catalog.VersionedRef,
-) (parsed catalog.VersionedRef, err error) {
-	var rel *release
-	switch id.Version {
-	case version.Stable:
-		rel, err = p.getLatestCompatibleRelease(
-			ctx,
-			id.Name.PythonName(),
-			local.MCDRVersion,
-		)
-	case version.Beta, version.Any:
-		rel, err = p.getLatestRelease(ctx, id.Name.PythonName())
-		if err != nil {
-			return id, err
-		}
-	default:
-		return id, fmt.Errorf(
-			"cannot parse version %s for package %s",
-			id.Version,
-			id.Name,
-		)
-	}
-	if err != nil {
-		return id, err
-	}
-	parsed = catalog.VersionedRef{
-		Ecosystem: catalog.EcosystemMCDR,
-		Name:      id.Name,
-		Version:   version.Version(rel.Meta.Version),
-	}
-	p.logger.Debug("parsed from" + id.StringQualified() + " to " + parsed.StringQualified())
-	return parsed, nil
 }

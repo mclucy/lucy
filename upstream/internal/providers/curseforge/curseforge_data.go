@@ -206,37 +206,6 @@ type fileResponse struct {
 	ServerPackFileId *int32           `json:"serverPackFileId"`
 }
 
-func (f *fileResponse) ToPackageRemote() upstream.ResolvedPackage {
-	remote := upstream.ResolvedPackage{
-		ID:       catalog.VersionedRef{Ref: catalog.Ref{Provider: catalog.ProviderCurseForge}},
-		Filename: f.FileName,
-	}
-
-	if f.DownloadUrl != nil {
-		remote.FileURL = *f.DownloadUrl
-	}
-
-	// Prefer SHA1 over MD5 (algo 1=sha1, 2=md5)
-	for _, h := range f.Hashes {
-		if h.Algo == 1 {
-			remote.Hash = h.Digest
-			remote.HashAlgorithm = "sha1"
-			break
-		}
-	}
-	if remote.Hash == "" {
-		for _, h := range f.Hashes {
-			if h.Algo == 2 {
-				remote.Hash = h.Digest
-				remote.HashAlgorithm = "md5"
-				break
-			}
-		}
-	}
-
-	return remote
-}
-
 type fileHash struct {
 	Digest string `json:"value"`
 	Algo   int32  `json:"algo"` // 1=Sha1, 2=Md5

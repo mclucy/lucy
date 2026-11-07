@@ -22,21 +22,8 @@ func (r *Router) Candidates(
 		"minecraft", minecraft,
 		"loader", loader,
 	)
-	switch registry {
-	case catalog.RegistryModrinth:
-		return r.modrinth.Candidates(ctx, project, minecraft, loader)
-	case catalog.RegistryCurseForge:
-		if r.curseforge == nil {
-			return nil, fmt.Errorf("%w: %q", ErrNoCatalogue, registry)
-		}
-		return r.curseforge.Candidates(ctx, project, minecraft, loader)
-	case catalog.RegistryHangar:
-		return r.hangar.Candidates(ctx, project, minecraft, loader)
-	case catalog.RegistrySpiget:
-		return r.spiget.Candidates(ctx, project, minecraft, loader)
-	case catalog.RegistryMCDR:
-		return r.mcdr.Candidates(ctx, project, minecraft, loader)
-	default:
+	catalogue, ok := r.providers.catalogues[registry.Provider()]
+	if !ok {
 		r.logger.Debug(
 			"routing: catalogue registry rejected",
 			"registry", registry,
@@ -44,4 +31,5 @@ func (r *Router) Candidates(
 		)
 		return nil, fmt.Errorf("%w: %q", ErrNoCatalogue, registry)
 	}
+	return catalogue.Candidates(ctx, project, minecraft, loader)
 }

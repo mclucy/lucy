@@ -2,13 +2,11 @@ package hangar
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/mclucy/lucy/cache"
 	"github.com/mclucy/lucy/catalog"
 	"github.com/mclucy/lucy/log"
 	"github.com/mclucy/lucy/upstream"
-	versionpkg "github.com/mclucy/lucy/version"
 )
 
 // Provider resolves Hangar projects and versions through one configured
@@ -55,33 +53,6 @@ func (p *Provider) Search(ctx context.Context, q upstream.Query) (upstream.Searc
 	return res.ToSearchResults(p.Provider()), nil
 }
 
-func (p *Provider) Fetch(
-	ctx context.Context,
-	_ upstream.LocalContext,
-	id catalog.VersionedRef,
-) (upstream.ResolvedPackage, error) {
-	version, err := p.getVersion(ctx, id)
-	if err != nil {
-		return upstream.ResolvedPackage{}, err
-	}
-
-	// An explicit ecosystem selects exactly that Hangar platform. Only a
-	// request without platform context uses the preferred-platform order.
-	if id.Ecosystem.IsUnspecified() {
-		remote := version.ToPackageRemote()
-		if remote.FileURL == "" || remote.Filename == "" {
-			return upstream.ResolvedPackage{}, ErrNoDownload
-		}
-		return remote, nil
-	}
-
-	remote, ok := version.ToPackageRemoteForPlatform(id.Ecosystem)
-	if !ok {
-		return upstream.ResolvedPackage{}, ErrNoDownload
-	}
-	return remote, nil
-}
-
 func (p *Provider) Info(ctx context.Context, ref catalog.Ref) (catalog.Metadata, error) {
 	project, err := p.getProject(ctx, ref.Name)
 	if err != nil {
@@ -89,44 +60,4 @@ func (p *Provider) Info(ctx context.Context, ref catalog.Ref) (catalog.Metadata,
 	}
 	info := project.ToProjectInformation()
 	return info, nil
-}
-
-func (p *Provider) Dependencies(
-	ctx context.Context,
-	_ upstream.LocalContext,
-	id catalog.VersionedRef,
-) (*upstream.DependencySet, error) {
-	version, err := p.getVersion(ctx, id)
-	if err != nil {
-		return nil, fmt.Errorf("hangar: dependencies fetch failed: %w", err)
-	}
-	return new(
-		(&hangarDependencies{
-			version:  version,
-			platform: id.Ecosystem,
-		}).ToDependencySet(),
-	), nil
-}
-
-func (p *Provider) ResolveVersionSelector(
-	ctx context.Context,
-	_ upstream.LocalContext,
-	id catalog.VersionedRef,
-) (parsed catalog.VersionedRef, err error) {
-	if id.Ecosystem.IsUnspecified() {
-		id.Ecosystem = catalog.EcosystemUnspecified
-	}
-
-	if !id.Version.CanInfer() {
-		return id, nil
-	}
-
-	version, err := p.resolveVersion(ctx, id)
-	if err != nil {
-		return id, err
-	}
-
-	parsed = id
-	parsed.Version = versionpkg.Version(version.Name)
-	return parsed, nil
 }

@@ -24,19 +24,6 @@ type decodedHTML struct {
 	Valid bool
 }
 
-// resolvedVersion keeps enough provider-local identity to resolve exact Spiget
-// downloads while still exposing Lucy-friendly human version names.
-type resolvedVersion struct {
-	ResourceID  int64
-	VersionID   int64
-	VersionName string
-	ProjectName string
-	FileType    string
-	External    bool
-	ExternalURL string
-	UUID        string
-}
-
 // ToSearchResults exposes Spiget's numeric resource ID as the project
 // identity. SpigotMC publishes several resources under one display name, so a
 // normalized name is not stable or installable; the ID is, and the display name
@@ -100,24 +87,6 @@ func (r resourceResponse) ToProjectInformation() catalog.Metadata {
 	return info
 }
 
-// NewResolvedVersion preserves both Lucy-facing human versions and Spiget's
-// numeric resource/version identifiers for later exact download resolution.
-func NewResolvedVersion(
-	resource resourceResponse,
-	version versionResponse,
-) resolvedVersion {
-	return resolvedVersion{
-		ResourceID:  resource.ID,
-		VersionID:   version.ID,
-		VersionName: version.Name,
-		ProjectName: normalizedProjectName(resource.Name).String(),
-		FileType:    resource.File.Type,
-		External:    resource.External,
-		ExternalURL: resource.File.ExternalURL,
-		UUID:        version.UUID,
-	}
-}
-
 // ToBuild maps one Spiget resource version to a build. Spiget version records
 // carry no game versions, loaders, or channel; resource-level tested versions
 // are not build-specific and stay out of the build.
@@ -143,50 +112,6 @@ func spigetVersion(name string, id int64) versionpkg.Version {
 		return versionpkg.Version(strconv.FormatInt(id, 10))
 	}
 	return versionpkg.Unknown
-}
-
-func (r resolvedVersion) LucyVersion() versionpkg.Version {
-	return spigetVersion(r.VersionName, r.VersionID)
-}
-
-func (r resolvedVersion) Matches(version versionpkg.Version) bool {
-	requested := strings.TrimSpace(version.String())
-	if requested == "" || requested == versionpkg.Any.String() {
-		return false
-	}
-	if requested == string(r.LucyVersion()) {
-		return true
-	}
-	return r.VersionID != 0 && requested == strconv.FormatInt(r.VersionID, 10)
-}
-
-func (r resolvedVersion) ToPackageRemote() upstream.ResolvedPackage {
-	return upstream.ResolvedPackage{
-		ID:       catalog.VersionedRef{Ref: catalog.Ref{Provider: catalog.ProviderSpiget}},
-		FileURL:  r.downloadURL(),
-		Filename: r.filename(),
-	}
-}
-
-func (r resolvedVersion) downloadURL() string {
-	if r.External && r.ExternalURL != "" {
-		return r.ExternalURL
-	}
-	if r.ResourceID == 0 {
-		return ""
-	}
-	return resourceDownloadURL(r.ResourceID)
-}
-
-func (r resolvedVersion) filename() string {
-	return artifactFilename(
-		r.ResourceID,
-		r.ProjectName,
-		r.VersionName,
-		r.VersionID,
-		r.FileType,
-		r.downloadURL(),
-	)
 }
 
 // artifactFilename names the local file for one published version. Spiget's API

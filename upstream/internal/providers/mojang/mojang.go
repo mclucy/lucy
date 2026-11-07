@@ -95,31 +95,8 @@ func ResolveVersionEntry(
 	)
 }
 
-func (p *Provider) ResolveVersionSelector(
-	ctx context.Context,
-	_ upstream.LocalContext,
-	id catalog.VersionedRef,
-) (catalog.VersionedRef, error) {
-	manifest, err := p.VersionManifest(ctx)
-	if err != nil {
-		return id, err
-	}
-
-	versionID, _, err := ResolveVersionEntry(manifest, id.Version)
-	if err != nil {
-		return id, err
-	}
-
-	return catalog.VersionedRef{
-		Ecosystem: catalog.EcosystemMinecraft,
-		Name:      "minecraft",
-		Version:   version.Version(versionID),
-	}, nil
-}
-
 func (p *Provider) Fetch(
 	ctx context.Context,
-	_ upstream.LocalContext,
 	id catalog.VersionedRef,
 ) (upstream.ResolvedPackage, error) {
 	manifest, err := p.VersionManifest(ctx)

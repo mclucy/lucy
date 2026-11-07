@@ -48,15 +48,6 @@ type release struct {
 	Meta        pluginMeta `json:"meta"`
 }
 
-func (r release) ToPackageRemote() upstream.ResolvedPackage {
-	remote := upstream.ResolvedPackage{
-		ID:       catalog.VersionedRef{Ref: catalog.Ref{Provider: catalog.ProviderMCDR}},
-		FileURL:  r.Asset.BrowserDownloadUrl,
-		Filename: r.Asset.Name,
-	}
-	return remote
-}
-
 // Channel reports the stability channel from the release's prerelease flag.
 func (r release) Channel() upstream.ReleaseChannel {
 	if r.Prerelease {
