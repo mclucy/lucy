@@ -116,14 +116,17 @@ type cliResult struct {
 }
 
 func TestAddHeuristic(t *testing.T) {
+	t.Parallel()
 	runHeuristic(t, "add")
 }
 
 func TestRemoveHeuristic(t *testing.T) {
+	t.Parallel()
 	runHeuristic(t, "remove")
 }
 
 func TestUpgradeAllHeuristic(t *testing.T) {
+	t.Parallel()
 	runHeuristic(t, "upgrade")
 }
 
