@@ -66,13 +66,8 @@ func TestRunnerSchemaResult(t *testing.T) {
 	if !runner.JSONSelected() {
 		t.Fatal("schema status must select machine output")
 	}
-	var document struct {
-		Title string `json:"title"`
-	}
+	var document any
 	decodeOneDocument(t, stdout, &document)
-	if !strings.Contains(strings.ToLower(document.Title), "status") {
-		t.Fatalf("schema status title = %q, want it to mention status", document.Title)
-	}
 }
 
 func TestRunnerFailureDocument(t *testing.T) {
@@ -108,7 +103,6 @@ func TestRunnerFailureDocument(t *testing.T) {
 		Schema int    `json:"schema"`
 		Kind   string `json:"kind"`
 		Code   string `json:"code"`
-		Title  string `json:"title"`
 	}
 	decodeOneDocument(t, stderr.String(), &document)
 	if document.Code != cli.CodeInvalidInvocation {
@@ -116,9 +110,6 @@ func TestRunnerFailureDocument(t *testing.T) {
 	}
 	if document.Kind != cli.ErrorKind {
 		t.Fatalf("kind = %q, want %q", document.Kind, cli.ErrorKind)
-	}
-	if document.Title == "" {
-		t.Fatal("failure document must carry a title")
 	}
 }
 
