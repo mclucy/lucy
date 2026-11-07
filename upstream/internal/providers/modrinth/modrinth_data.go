@@ -189,28 +189,6 @@ type versionResponse struct {
 	Dependencies    []dependenciesResponse `json:"dependencies"`
 }
 
-func (v versionResponse) ToPackageRemote() upstream.ResolvedPackage {
-	remote := upstream.ResolvedPackage{
-		ID:       catalog.VersionedRef{Ref: catalog.Ref{Provider: catalog.ProviderModrinth}},
-		FileURL:  v.Files[0].URL,
-		Filename: v.Files[0].Filename,
-	}
-
-	if h := v.Files[0].Hashes; h.Sha512 != "" {
-		remote.Hash = h.Sha512
-		remote.HashAlgorithm = "sha512"
-	} else if h.Sha1 != "" {
-		remote.Hash = h.Sha1
-		remote.HashAlgorithm = "sha1"
-	}
-
-	return remote
-}
-
-func resolvedPackageFromVersion(v versionResponse) upstream.ResolvedPackage {
-	return v.ToPackageRemote()
-}
-
 type dependencyType string
 
 const (
@@ -238,46 +216,4 @@ type dependenciesResponse struct {
 	ProjectId      string         `json:"project_id"`
 	FileName       string         `json:"file_name"`
 	DependencyType dependencyType `json:"dependency_type"`
-}
-
-// memberResponse
-//
-// Docs
-// https://docs.modrinth.com/api/operations/getprojectteammembers/
-//
-// Example
-// https://api.modrinth.com/v2/project/carpet/members
-type memberResponse struct {
-	Role         string       `json:"role"`
-	TeamId       string       `json:"team_id"`
-	User         userResponse `json:"user"`
-	Permissions  any          `json:"permissions"`
-	Accepted     bool         `json:"accepted"`
-	PayoutsSplit any          `json:"payouts_split"`
-	Ordering     int          `json:"ordering"`
-}
-
-// userResponse
-//
-// # The url can either be an id or username
-//
-// Example
-// https://modrinth.com/user/gnembon
-type userResponse struct {
-	ID                  string    `json:"id"`
-	Username            string    `json:"username"`
-	AvatarUrl           string    `json:"avatar_url"`
-	Bio                 string    `json:"bio"`
-	Created             time.Time `json:"created"`
-	Role                string    `json:"role"`
-	Badges              int       `json:"badges"`
-	AuthProviders       string    `json:"auth_providers"`
-	Email               string    `json:"email"`
-	EmailVerified       bool      `json:"email_verified"`
-	HasPassword         bool      `json:"has_password"`
-	HasTotp             bool      `json:"has_totp"`
-	PayoutData          string    `json:"payout_data"`
-	StripeCustomerId    string    `json:"stripe_customer_id"`
-	AllowFriendRequests bool      `json:"allow_friend_requests"`
-	GithubId            string    `json:"github_id"`
 }
