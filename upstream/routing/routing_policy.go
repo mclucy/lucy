@@ -43,8 +43,7 @@ func providersForEcosystem(
 		len(providersInPriorityOrder),
 	)
 	for _, provider := range providersInPriorityOrder {
-		support, ok := EcosystemSupportedBy(provider, ecosystem)
-		if !ok || !support.Supported {
+		if !EcosystemSupportedBy(provider, ecosystem) {
 			continue
 		}
 		if provider == catalog.ProviderCurseForge && !curseforge {

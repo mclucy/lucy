@@ -6,7 +6,7 @@
 //     candidates.
 //   - Map an explicit Provider (or Registry for search) to exactly one
 //     capability when supported.
-//   - Apply operation-aware routing policy (search/info/fetch/dependencies).
+//   - Route search, project metadata, package catalogues, and server products.
 //   - Return typed selection errors for invalid/unsupported inputs.
 //
 // Non-responsibilities:
@@ -173,28 +173,6 @@ func (r *Router) ResolveSearchProviders(
 		return r.resolveExplicitRegistry(registry)
 	}
 
-	if !platform.IsSearchable() {
-		keys := providersForEcosystem(platform, r.curseforgeAvailable())
-		if len(keys) == 0 {
-			r.logger.Debug(
-				"routing: search providers unavailable for ecosystem",
-				"platform", platform,
-				"reason", "unsupported ecosystem",
-			)
-			return nil, fmt.Errorf("%w: %s", ErrInvalidEcosystem, platform)
-		}
-		providers, err := r.searchersFromKeys(keys)
-		if err != nil {
-			return nil, err
-		}
-		r.logger.Debug(
-			"routing: search providers selected from ecosystem candidates",
-			"platform", platform,
-			"providers", keys,
-		)
-		return providers, nil
-	}
-
 	keys := providersForEcosystem(platform, r.curseforgeAvailable())
 	if len(keys) == 0 {
 		r.logger.Debug(
@@ -302,8 +280,7 @@ func validateSearchRegistryEcosystem(
 	}
 
 	provider := registry.Provider()
-	support, ok := EcosystemSupportedBy(provider, platform)
-	if ok && support.Supported {
+	if EcosystemSupportedBy(provider, platform) {
 		return nil
 	}
 
