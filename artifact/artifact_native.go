@@ -251,11 +251,13 @@ func inspectArchive(z *zip.Reader, loader catalog.Ecosystem, member string, dept
 			for _, mod := range d.Mods {
 				v := version.Version(mod.Version)
 				if v == "${file.jarVersion}" {
-					data, err := nativeEntry(z, "META-INF/MANIFEST.MF")
+					v, err = readManifestImplementationVersion(
+						z,
+						fsutil.MaxNestedZipEntryBytes,
+					)
 					if err != nil {
 						return nil, err
 					}
-					v = forgeManifestVersion(string(data))
 				}
 				m := catalog.DescriptorModule{
 					ID:             mod.ID,

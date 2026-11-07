@@ -11,7 +11,7 @@ import (
 	"github.com/mclucy/lucy/internal/fileschema"
 	"github.com/mclucy/lucy/internal/fsutil"
 
-	versionpkg "github.com/mclucy/lucy/version"
+	"github.com/mclucy/lucy/version"
 	"github.com/pelletier/go-toml/v2"
 )
 
@@ -21,8 +21,6 @@ const (
 )
 
 type neoforgeReader struct{}
-
-var _ = newNeoforgeReader
 
 func newNeoforgeReader() Reader {
 	return &neoforgeReader{}
@@ -58,9 +56,12 @@ func (r *neoforgeReader) Read(
 			continue
 		}
 
-		version := versionpkg.Version(mod.Version)
+		version := version.Version(mod.Version)
 		if version == "${file.jarVersion}" {
-			version = readNeoforgeManifestVersion(zipRdr)
+			version, _ = readManifestImplementationVersion(
+				zipRdr,
+				fsutil.MaxZipEntryBytes,
+			)
 		}
 
 		info := PackageInfo{
@@ -168,23 +169,6 @@ func hasLoaderDependency(
 	return false
 }
 
-func readNeoforgeManifestVersion(zipRdr *zip.Reader) versionpkg.Version {
-	raw, err := readZipEntryBytes(zipRdr, "META-INF/MANIFEST.MF")
-	if err != nil || raw == nil {
-		return versionpkg.Unknown
-	}
-
-	manifest := string(raw)
-	const versionField = "Implementation-Version: "
-	_, version, ok := strings.Cut(manifest, versionField)
-	if !ok {
-		return versionpkg.Unknown
-	}
-	version = strings.Split(version, "\r")[0]
-	version = strings.Split(version, "\n")[0]
-	return versionpkg.Version(version)
-}
-
 func readNeoforgeJarjarMeta(zipRdr *zip.Reader) *fileschema.FileNeoforgeJarjar {
 	raw, err := readZipEntryBytes(zipRdr, "META-INF/jarjar/metadata.json")
 	if err != nil || raw == nil {
@@ -278,6 +262,6 @@ func neoforgeJarjarEmbeddedDeps(meta *fileschema.FileNeoforgeJarjar) ([]Dependen
 	return deps, nil
 }
 
-func parseNeoforgeMavenVersionRange(interval string) (versionpkg.Expr, error) {
-	return versionpkg.ParseConstraint(interval, versionpkg.DialectMaven)
+func parseNeoforgeMavenVersionRange(interval string) (version.Expr, error) {
+	return version.ParseConstraint(interval, version.DialectMaven)
 }
