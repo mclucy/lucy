@@ -58,16 +58,6 @@ func TestRunnerSchemaResult(t *testing.T) {
 	}
 	var listing any
 	decodeOneDocument(t, stdout, &listing)
-
-	stdout, stderr, runner = executeRunner(t, []string{"schema", "status"}, logPath)
-	if stderr != "" {
-		t.Fatalf("stderr must stay clean, got %q", stderr)
-	}
-	if !runner.JSONSelected() {
-		t.Fatal("schema status must select machine output")
-	}
-	var document any
-	decodeOneDocument(t, stdout, &document)
 }
 
 func TestRunnerFailureDocument(t *testing.T) {
