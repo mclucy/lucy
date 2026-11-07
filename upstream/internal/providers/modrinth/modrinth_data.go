@@ -191,13 +191,6 @@ type versionResponse struct {
 
 type dependencyType string
 
-const (
-	required     dependencyType = "required"
-	optional     dependencyType = "optional"
-	incompatible dependencyType = "incompatible"
-	embedded     dependencyType = "embedded"
-)
-
 type fileResponse struct {
 	ID     string `json:"id"`
 	Hashes struct {

@@ -21,7 +21,6 @@ var (
 	ErrInvalidAPIResponse = errors.New("hangar: invalid api response")
 	ErrNoProject          = errors.New("hangar: project not found")
 	ErrNoVersion          = errors.New("hangar: version not found")
-	ErrNoDownload         = errors.New("hangar: download not found")
 	ErrAmbiguousProject   = errors.New("hangar: project name is ambiguous")
 )
 
@@ -186,8 +185,7 @@ func (p *Provider) listProjectVersions(
 		return nil, ErrNoProject
 	}
 
-	// Hangar caps a versions page at 25 entries, so walk every page to keep
-	// both resolution and build listing complete.
+	// pageSize respects Hangar's maximum of 25 versions per response.
 	const pageSize = 25
 	var versions []hangarVersion
 	for offset := 0; ; {

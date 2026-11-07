@@ -8,7 +8,7 @@ import (
 	"github.com/mclucy/lucy/upstream"
 )
 
-// SourceGitHub API file ref: https://api.github.com/repos/MCDReforged/PluginCatalogue/contents/plugins/{plugin_name}/plugin_info.json
+// pluginInfo supplies authorship from https://api.github.com/repos/MCDReforged/PluginCatalogue/contents/plugins/{plugin_name}/plugin_info.json.
 // Lucy uses this file only for authorship; metadata comes from meta.json on
 // the meta branch instead.
 type pluginInfo struct {
@@ -29,13 +29,11 @@ type author struct {
 	Link string `json:"link"`
 }
 
-// SourceGitHub API file ref: https://api.github.com/repos/MCDReforged/PluginCatalogue/{plugin_name}/release.json?ref=meta
+// pluginRelease contains releases from https://api.github.com/repos/MCDReforged/PluginCatalogue/{plugin_name}/release.json?ref=meta.
 type pluginRelease struct {
-	SchemaVersion      int       `json:"schema_version"`
-	ID                 string    `json:"id"`
-	LatestVersion      string    `json:"latest_version"`
-	LatestVersionIndex int       `json:"latest_version_index"`
-	Releases           []release `json:"releases"`
+	SchemaVersion int       `json:"schema_version"`
+	ID            string    `json:"id"`
+	Releases      []release `json:"releases"`
 }
 type release struct {
 	URL         string     `json:"url"`
@@ -77,7 +75,7 @@ type asset struct {
 	HashSha256         string    `json:"hash_sha256"`
 }
 
-// SourceGitHub API file ref: https://api.github.com/repos/MCDReforged/PluginCatalogue/contents/{plugin_name}/meta.json?ref=meta
+// pluginMeta contains metadata from https://api.github.com/repos/MCDReforged/PluginCatalogue/contents/{plugin_name}/meta.json?ref=meta.
 type pluginMeta struct {
 	SchemaVersion int               `json:"schema_version"`
 	ID            string            `json:"id"`
@@ -93,7 +91,7 @@ type pluginMeta struct {
 	} `json:"description"`
 }
 
-// SourceGitHub API file ref: https://api.github.com/repos/MCDReforged/PluginCatalogue/contents/{plugin_name}/repository.json?ref=meta
+// pluginRepo contains repository metadata from https://api.github.com/repos/MCDReforged/PluginCatalogue/contents/{plugin_name}/repository.json?ref=meta.
 type pluginRepo struct {
 	URL             string `json:"url"`
 	Name            string `json:"name"`

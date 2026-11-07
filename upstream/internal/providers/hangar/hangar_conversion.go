@@ -222,39 +222,6 @@ func (v *hangarVersion) platformDependenciesFor(platformKey string) (
 	return nil, false
 }
 
-func (v *hangarVersion) PluginDependencyNames() []catalog.Name {
-	var declared []hangarPluginDependency
-	for _, key := range hangarPreferredPlatforms {
-		if dependencies, known := v.platformPluginDependencies(key); known {
-			declared = dependencies
-			if len(declared) > 0 {
-				break
-			}
-		}
-	}
-	if len(declared) == 0 {
-		for _, key := range sortedMapKeys(v.PluginDependencies) {
-			if dependencies := v.PluginDependencies[key]; len(dependencies) > 0 {
-				declared = dependencies
-				break
-			}
-		}
-	}
-	if len(declared) == 0 {
-		return nil
-	}
-
-	deps := make([]catalog.Name, 0, len(declared))
-	for _, dep := range declared {
-		if dep.Name == "" || dep.ExternalURL != nil && *dep.ExternalURL != "" {
-			continue
-		}
-		deps = append(deps, input.ToProjectName(dep.Name))
-	}
-	slices.Sort(deps)
-	return deps
-}
-
 // safeHangarURL accepts only absolute HTTP(S) URLs. Remote metadata is
 // untrusted input and must not become a local file path or another scheme.
 func safeHangarURL(raw string) string {
