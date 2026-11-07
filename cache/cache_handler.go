@@ -1,7 +1,6 @@
 package cache
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -112,33 +111,6 @@ func (h *handler) newWriter() (*cas.Writer, error) {
 		return nil, ErrDisabled
 	}
 	return h.store.NewWriter()
-}
-
-func (h *handler) add(data []byte, filename, k string, expiration time.Duration) error {
-	return h.addEntry(data, filename, k, KindArtifact, Integrity{State: IntegrityUnverified}, expiration)
-}
-
-func (h *handler) addEntry(data []byte, filename, k string, kind EntryKind, integrity Integrity, expiration time.Duration) (resultErr error) {
-	writer, err := h.newWriter()
-	if errors.Is(err, ErrDisabled) {
-		return nil
-	}
-	if err != nil {
-		return err
-	}
-	defer func() { resultErr = errors.Join(resultErr, writer.Abort()) }()
-	if _, err := io.Copy(writer, bytes.NewReader(data)); err != nil {
-		return err
-	}
-	if _, err := writer.Seal(nil); err != nil {
-		return err
-	}
-	return h.commitEntry(writer, filename, k, kind, integrity, expiration)
-}
-
-// commitEntry publishes bytes before their reference and reclaims only after the index commits.
-func (h *handler) commitEntry(writer *cas.Writer, filename, k string, kind EntryKind, integrity Integrity, expiration time.Duration) (resultErr error) {
-	return h.commitEntryContext(context.Background(), writer, filename, k, kind, integrity, expiration)
 }
 
 func (h *handler) commitEntryContext(ctx context.Context, writer *cas.Writer, filename, k string, kind EntryKind, integrity Integrity, expiration time.Duration) (resultErr error) {
