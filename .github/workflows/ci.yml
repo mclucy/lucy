@@ -201,14 +201,10 @@ jobs:
     uses: ./.github/workflows/manifest-schema.yml
 
   wiki:
-    needs: test
     if: >-
-      always()
-      && (
-        (github.event_name == 'push' && startsWith(github.ref, 'refs/heads/'))
-        || github.event_name == 'pull_request'
-        || github.event_name == 'workflow_dispatch'
-      )
+      (github.event_name == 'push' && startsWith(github.ref, 'refs/heads/'))
+      || github.event_name == 'pull_request'
+      || github.event_name == 'workflow_dispatch'
     permissions:
       contents: write
     uses: ./.github/workflows/wiki.yml
