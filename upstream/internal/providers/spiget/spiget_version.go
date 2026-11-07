@@ -8,7 +8,6 @@ import (
 	"strings"
 
 	"github.com/mclucy/lucy/catalog"
-	versionpkg "github.com/mclucy/lucy/version"
 )
 
 // resolveResourceByProjectName resolves a resource for identity lookups such as
@@ -98,47 +97,6 @@ func (p *Provider) resolveCatalogueResource(
 			strings.Join(ids, ", "),
 		)
 	}
-}
-
-func (p *Provider) resolveVersion(
-	ctx context.Context,
-	resource *resourceResponse,
-	requested versionpkg.Version,
-) (resolvedVersion, error) {
-	if err := downloadCapabilityError(*resource); err != nil {
-		return resolvedVersion{}, err
-	}
-
-	currentVersionID := resource.currentVersionID()
-	versions, err := p.listVersions(ctx, resource.ID)
-	if err != nil {
-		return resolvedVersion{}, err
-	}
-
-	// Only the current version has a download Lucy can fetch: the resource-scoped
-	// endpoint always serves it, and the version-scoped endpoint is challenged by
-	// Cloudflare. Resolving any other version would promise bytes that do not
-	// arrive.
-	for _, version := range versions {
-		if version.ID != currentVersionID {
-			continue
-		}
-		resolved := NewResolvedVersion(*resource, version)
-		switch requested {
-		case "", versionpkg.Any, versionpkg.Beta, versionpkg.Stable:
-			return resolved, nil
-		}
-		if resolved.Matches(requested) {
-			return resolved, nil
-		}
-		return resolvedVersion{}, fmt.Errorf(
-			"%w: Spiget only serves the current version %s for download",
-			ErrNoVersion,
-			resolved.LucyVersion(),
-		)
-	}
-
-	return resolvedVersion{}, ErrNoVersion
 }
 
 // downloadCapabilityError reports why a resource cannot provide a pinned

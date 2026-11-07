@@ -21,7 +21,7 @@ import (
 	"time"
 
 	"github.com/mclucy/lucy/internal/toolchain"
-	"gopkg.in/yaml.v3"
+	"go.yaml.in/yaml/v4"
 )
 
 const userAgent = "lucy-sandbox/1.0 (+https://github.com/mclucy/lucy)"

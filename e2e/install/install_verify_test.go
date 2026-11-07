@@ -13,7 +13,7 @@ import (
 	"slices"
 	"strings"
 
-	"gopkg.in/yaml.v3"
+	"go.yaml.in/yaml/v4"
 )
 
 // Wire types keep assertions independent of Lucy's codecs and fingerprint code.

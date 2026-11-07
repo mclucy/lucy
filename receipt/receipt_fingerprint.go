@@ -5,7 +5,7 @@ import (
 	"encoding/hex"
 
 	"github.com/mclucy/lucy/document"
-	"gopkg.in/yaml.v3"
+	"go.yaml.in/yaml/v4"
 )
 
 // BootstrapFingerprint digests the server-only resolution fields that determine

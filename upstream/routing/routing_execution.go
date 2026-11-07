@@ -14,7 +14,7 @@ var ErrNoProviderSucceeded = errors.New("no provider succeeded")
 
 // SearchMany executes search on all providers in parallel.
 //
-// Default behavior is non-aggregated: each provider contributes one
+// Results are not aggregated: each provider contributes one
 // upstream.SearchResponse item in the returned slice.
 func (r *Router) SearchMany(
 	ctx context.Context,
@@ -37,7 +37,13 @@ func (r *Router) SearchMany(
 
 	for i, provider := range providers {
 		wg.Go(func() {
-			res, err := upstream.Search(ctx, provider, query)
+			res, err := provider.Search(ctx, query)
+			if err == nil && len(res.Items) == 0 {
+				err = fmt.Errorf(
+					"no projects found for \"%s\"",
+					query.Keyword,
+				)
+			}
 			if err != nil {
 				slots[i] = slot{
 					failed: true,
@@ -58,81 +64,6 @@ func (r *Router) SearchMany(
 	wg.Wait()
 
 	results := make([]upstream.SearchResponse, 0, len(providers))
-	providerErrors := make([]upstream.ProviderError, 0)
-	for _, item := range slots {
-		if item.ok {
-			results = append(results, item.res)
-		}
-		if item.failed {
-			providerErrors = append(providerErrors, item.err)
-		}
-	}
-
-	return results, providerErrors
-}
-
-// FetchMany executes fetch on all providers in parallel and returns all
-// successful results.
-func (r *Router) FetchMany(
-	ctx context.Context,
-	local upstream.LocalContext,
-	providers []upstream.PackageProvider,
-	id catalog.VersionedRef,
-) ([]upstream.ResolvedPackage, []upstream.ProviderError) {
-	if len(providers) == 0 {
-		return nil, nil
-	}
-
-	type slot struct {
-		res    upstream.ResolvedPackage
-		err    upstream.ProviderError
-		ok     bool
-		failed bool
-	}
-
-	slots := make([]slot, len(providers))
-	var wg sync.WaitGroup
-
-	for i, provider := range providers {
-		wg.Go(func() {
-			resolvedID, err := provider.ResolveVersionSelector(ctx, local, id)
-			if err != nil {
-				slots[i] = slot{
-					failed: true,
-					err: upstream.ProviderError{
-						Provider: provider.Provider(),
-						Err:      err,
-					},
-				}
-				return
-			}
-
-			remoteData, err := provider.Fetch(ctx, local, resolvedID)
-			if err != nil {
-				slots[i] = slot{
-					failed: true,
-					err: upstream.ProviderError{
-						Provider: provider.Provider(),
-						Err:      err,
-					},
-				}
-				return
-			}
-			// Routing binds the provider's concrete identity to the selected
-			// ecosystem/name/version coordinate returned by resolution.
-			remoteData.ID = catalog.VersionedRef{
-				Name:      resolvedID.Name,
-				Provider:  provider.Provider(),
-				Ecosystem: resolvedID.Ecosystem,
-				Version:   resolvedID.Version,
-			}
-			slots[i] = slot{ok: true, res: remoteData}
-		})
-	}
-
-	wg.Wait()
-
-	results := make([]upstream.ResolvedPackage, 0, len(providers))
 	providerErrors := make([]upstream.ProviderError, 0)
 	for _, item := range slots {
 		if item.ok {
@@ -218,83 +149,6 @@ func (r *Router) ResolveArtifactByHash(
 		}
 	}
 	return result
-}
-
-// DependenciesMany executes Dependencies on all providers in parallel and
-// returns the sets providers reported. A provider that fails or returns no set
-// is excluded and collected as a ProviderError: an empty result therefore means
-// the provider supplied one, not that dependency metadata was unavailable. When
-// every provider fails, no sets are returned and the ProviderError slice carries
-// each failure.
-func (r *Router) DependenciesMany(
-	ctx context.Context,
-	local upstream.LocalContext,
-	providers []upstream.PackageProvider,
-	id catalog.VersionedRef,
-) ([]upstream.DependencySet, []upstream.ProviderError) {
-	if len(providers) == 0 {
-		return nil, nil
-	}
-
-	type slot struct {
-		res    upstream.DependencySet
-		err    upstream.ProviderError
-		ok     bool
-		failed bool
-	}
-
-	slots := make([]slot, len(providers))
-	var wg sync.WaitGroup
-
-	for i, provider := range providers {
-		wg.Go(func() {
-			deps, err := provider.Dependencies(ctx, local, id)
-			if err != nil {
-				slots[i] = slot{
-					failed: true,
-					err: upstream.ProviderError{
-						Provider: provider.Provider(),
-						Err:      err,
-					},
-				}
-				return
-			}
-			if deps == nil {
-				slots[i] = slot{
-					failed: true,
-					err: upstream.ProviderError{
-						Provider: provider.Provider(),
-						Err: fmt.Errorf(
-							"%w: %s returned no dependency set",
-							upstream.ErrDependencyMetadataUnavailable,
-							provider.Provider(),
-						),
-					},
-				}
-				return
-			}
-			slots[i] = slot{ok: true, res: *deps}
-		})
-	}
-
-	wg.Wait()
-
-	results := make([]upstream.DependencySet, 0, len(providers))
-	providerErrors := make([]upstream.ProviderError, 0)
-	for _, item := range slots {
-		if item.ok {
-			results = append(results, item.res)
-		}
-		if item.failed {
-			providerErrors = append(providerErrors, item.err)
-		}
-	}
-
-	if len(results) == 0 && len(providerErrors) > 0 {
-		return nil, providerErrors
-	}
-
-	return results, providerErrors
 }
 
 func joinProviderErrors(providerErrors []upstream.ProviderError) error {

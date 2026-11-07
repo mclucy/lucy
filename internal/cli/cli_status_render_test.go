@@ -2,7 +2,7 @@ package cli
 
 import (
 	"bytes"
-	"encoding/json"
+	"encoding/json/v2"
 	"errors"
 	"os"
 	"path/filepath"
@@ -170,19 +170,67 @@ func TestStatusRenderLogoNone(t *testing.T) {
 func TestStatusRenderLogoModes(t *testing.T) {
 	document := loadStatusFixture(t, statusPackagesFixture)
 
-	none := renderStatusForTest(document, false, terminal.StatusLogoNone, 120, true)
-	small := renderStatusForTest(document, false, terminal.StatusLogoSmall, 120, true)
-	large := renderStatusForTest(document, false, terminal.StatusLogoLarge, 120, true)
+	const width = 60
 
-	if small == none {
-		t.Fatal("logo mode small did not compose a logo")
+	small := renderStatusForTest(document, false, terminal.StatusLogoSmall, width, true)
+	large := renderStatusForTest(document, false, terminal.StatusLogoLarge, width, true)
+
+	smallArt := statusRenderLogoLines(document, terminal.LogoSmallPlain)
+	largeArt := statusRenderLogoLines(document, terminal.LogoLargePlain)
+	smallOnly := statusExclusiveArt(smallArt, largeArt)
+	largeOnly := statusExclusiveArt(largeArt, smallArt)
+	if len(smallOnly) == 0 || len(largeOnly) == 0 {
+		t.Fatal("fixture logo variants carry no exclusive art lines")
 	}
-	if large == none {
-		t.Fatal("logo mode large did not compose a logo")
+
+	if missing := statusMissingArt(small, smallOnly); len(missing) > 0 {
+		t.Fatalf("logo mode small omitted its art:\n%s", strings.Join(missing, "\n"))
 	}
-	if large == small {
-		t.Fatal("logo mode large rendered the small logo")
+	if missing := statusMissingArt(large, largeOnly); len(missing) > 0 {
+		t.Fatalf("logo mode large omitted its art:\n%s", strings.Join(missing, "\n"))
 	}
+	if missing := statusMissingArt(small, largeOnly); len(missing) != len(largeOnly) {
+		t.Fatal("logo mode small also rendered large-only art")
+	}
+	if missing := statusMissingArt(large, smallOnly); len(missing) != len(smallOnly) {
+		t.Fatal("logo mode large also rendered small-only art")
+	}
+}
+
+// statusExclusiveArt returns the art lines that do not appear inside any line
+// of the other variant, so one variant's presence never satisfies the check.
+func statusExclusiveArt(art, other []string) []string {
+	var exclusive []string
+	for _, line := range art {
+		line = strings.TrimSpace(ansi.Strip(line))
+		if line == "" {
+			continue
+		}
+		contained := false
+		for _, otherLine := range other {
+			if strings.Contains(strings.TrimSpace(ansi.Strip(otherLine)), line) {
+				contained = true
+				break
+			}
+		}
+		if !contained {
+			exclusive = append(exclusive, line)
+		}
+	}
+	return exclusive
+}
+
+// statusMissingArt reports the art lines that do not appear in rendered.
+func statusMissingArt(rendered string, art []string) []string {
+	plain := ansi.Strip(rendered)
+	var missing []string
+	for _, line := range art {
+		line = strings.TrimSpace(line)
+		if line != "" && !strings.Contains(plain, line) {
+			missing = append(missing, line)
+		}
+	}
+	return missing
 }
 
 func TestStatusWarningPrecedesFrame(t *testing.T) {

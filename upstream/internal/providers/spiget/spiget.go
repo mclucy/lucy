@@ -9,7 +9,6 @@ import (
 	"github.com/mclucy/lucy/catalog"
 	"github.com/mclucy/lucy/log"
 	"github.com/mclucy/lucy/upstream"
-	"github.com/mclucy/lucy/version"
 )
 
 // Provider resolves Spiget resources and versions through one configured
@@ -64,30 +63,6 @@ func (p *Provider) Search(ctx context.Context, q upstream.Query) (upstream.Searc
 	return resp.ToSearchResults(p.Provider()), nil
 }
 
-func (p *Provider) Fetch(
-	ctx context.Context,
-	_ upstream.LocalContext,
-	id catalog.VersionedRef,
-) (upstream.ResolvedPackage, error) {
-	resource, err := p.resolveResourceByProjectName(ctx, id.Name)
-	if err != nil {
-		return upstream.ResolvedPackage{}, err
-	}
-
-	resolved, err := p.resolveVersion(ctx, resource, id.Version)
-	if err != nil {
-		return upstream.ResolvedPackage{}, err
-	}
-
-	r := resolved.ToPackageRemote()
-	return upstream.ResolvedPackage{
-		FileURL:       r.FileURL,
-		Filename:      r.Filename,
-		Hash:          r.Hash,
-		HashAlgorithm: r.HashAlgorithm,
-	}, nil
-}
-
 func (p *Provider) Info(ctx context.Context, ref catalog.Ref) (catalog.Metadata, error) {
 	resource, err := p.resolveResourceByProjectName(ctx, ref.Name)
 	if err != nil {
@@ -95,52 +70,6 @@ func (p *Provider) Info(ctx context.Context, ref catalog.Ref) (catalog.Metadata,
 	}
 	info := resource.ToProjectInformation()
 	return info, nil
-}
-
-// Dependencies reports that Spiget publishes no dependency declarations.
-//
-// The Spiget API exposes no dependency metadata for any resource version, so a
-// resource that declares nothing and one whose declarations are undocumented
-// upstream are indistinguishable. Returning an empty set would assert the
-// former; report the gap instead. Search, info, version selection, and fetch
-// remain available.
-func (p *Provider) Dependencies(
-	_ context.Context,
-	_ upstream.LocalContext,
-	id catalog.VersionedRef,
-) (*upstream.DependencySet, error) {
-	return nil, fmt.Errorf(
-		"%w: spiget does not publish dependency declarations for %s",
-		upstream.ErrDependencyMetadataUnavailable,
-		id.StringQualified(),
-	)
-}
-
-func (p *Provider) ResolveVersionSelector(
-	ctx context.Context,
-	_ upstream.LocalContext,
-	id catalog.VersionedRef,
-) (parsed catalog.VersionedRef, err error) {
-	parsed = id
-	switch id.Version {
-	case "", version.Any, version.Beta, version.Stable:
-	default:
-		return id, nil
-	}
-
-	resource, err := p.resolveResourceByProjectName(ctx, id.Name)
-	if err != nil {
-		return id, err
-	}
-
-	resolved, err := p.resolveVersion(ctx, resource, id.Version)
-	if err != nil {
-		return id, err
-	}
-
-	parsed.Version = resolved.LucyVersion()
-	p.logger.Debug("parsed from " + id.StringQualified() + " to " + parsed.StringQualified())
-	return parsed, nil
 }
 
 var (

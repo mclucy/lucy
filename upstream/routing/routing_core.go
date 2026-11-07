@@ -111,13 +111,8 @@ func (r *Router) ResolveServerProduct(
 		return out, err
 	}
 	out.JavaAdvisory = advisory
-	local := upstream.LocalContext{
-		Ecosystem:        catalog.EcosystemMinecraft,
-		MinecraftVersion: req.Minecraft,
-	}
 	vanilla, err := r.mojang.Fetch(
 		ctx,
-		local,
 		catalog.VersionedRef{
 			Name:      "minecraft",
 			Ecosystem: catalog.EcosystemMinecraft,
@@ -169,7 +164,6 @@ func (r *Router) ResolveServerProduct(
 		case server.ProductFabric:
 			selected, e := r.fabric.ResolveVersionSelector(
 				ctx,
-				local,
 				catalog.VersionedRef{
 					Name:      "fabric",
 					Ecosystem: catalog.EcosystemFabric,
@@ -251,7 +245,7 @@ func (r *Router) ResolveServerProduct(
 				provider = catalog.ProviderForge
 				remote, err = r.forge.Fetch(
 					ctx,
-					local,
+					req.Minecraft,
 					catalog.VersionedRef{
 						Name:      "forge",
 						Ecosystem: catalog.EcosystemForge,
@@ -262,7 +256,7 @@ func (r *Router) ResolveServerProduct(
 				provider = catalog.ProviderNeoForge
 				remote, err = r.neoforge.Fetch(
 					ctx,
-					local,
+					req.Minecraft,
 					catalog.VersionedRef{
 						Name:      "neoforge",
 						Ecosystem: catalog.EcosystemNeoForge,

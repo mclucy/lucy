@@ -21,7 +21,6 @@ var (
 	ErrInvalidAPIResponse = errors.New("hangar: invalid api response")
 	ErrNoProject          = errors.New("hangar: project not found")
 	ErrNoVersion          = errors.New("hangar: version not found")
-	ErrNoDownload         = errors.New("hangar: download not found")
 	ErrAmbiguousProject   = errors.New("hangar: project name is ambiguous")
 )
 
@@ -166,35 +165,6 @@ func (p *Provider) searchProjects(
 	return res, nil
 }
 
-func (p *Provider) getVersion(
-	ctx context.Context,
-	id catalog.VersionedRef,
-) (*hangarVersion, error) {
-	project, err := p.getProject(ctx, id.Name)
-	if err != nil {
-		return nil, err
-	}
-
-	version := &hangarVersion{}
-	if err := p.getJSON(
-		ctx,
-		hangarVersionURL(
-			hangarProjectLookup(project),
-			id.Version.String(),
-		), version,
-	); err != nil {
-		if errors.Is(err, ErrNoProject) {
-			return nil, ErrNoVersion
-		}
-		return nil, err
-	}
-	if version.ProjectID != 0 && project.ID != 0 &&
-		version.ProjectID != project.ID {
-		return nil, ErrInvalidAPIResponse
-	}
-	return version, nil
-}
-
 func (p *Provider) listVersions(
 	ctx context.Context,
 	name catalog.Name,
@@ -215,8 +185,7 @@ func (p *Provider) listProjectVersions(
 		return nil, ErrNoProject
 	}
 
-	// Hangar caps a versions page at 25 entries, so walk every page to keep
-	// both resolution and build listing complete.
+	// pageSize respects Hangar's maximum of 25 versions per response.
 	const pageSize = 25
 	var versions []hangarVersion
 	for offset := 0; ; {
@@ -300,10 +269,6 @@ func hangarProjectURL(lookupPath string) string {
 
 func hangarVersionsURL(lookupPath string, params url.Values) string {
 	return withQuery(hangarProjectURL(lookupPath)+"/versions", params)
-}
-
-func hangarVersionURL(lookupPath, version string) string {
-	return hangarProjectURL(lookupPath) + "/versions/" + url.PathEscape(version)
 }
 
 func withQuery(base string, params url.Values) string {

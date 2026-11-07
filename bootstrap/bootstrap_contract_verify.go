@@ -122,7 +122,6 @@ func ValidateStagedOutputs(stageRoot string, locked document.LockedServer) ([]Ou
 		return nil, err
 	}
 
-	// Shared method verification for staging: verify required outputs, pinned hashes, and launcher semantics.
 	// cachedDigests avoids re-reading and re-hashing all files from disk a second time.
 	verification, err := newTreeVerifier(serverRoot, locked, exact, true, cachedDigests, launcher).verify()
 	if err != nil {

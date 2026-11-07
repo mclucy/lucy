@@ -18,7 +18,7 @@ func systemDefaultJava(host *Host) string {
 	if host.goos != "linux" {
 		return ""
 	}
-	target, err := host.system.EvalSymlinks("/usr/bin/java")
+	target, err := filepath.EvalSymlinks("/usr/bin/java")
 	if err != nil {
 		return ""
 	}

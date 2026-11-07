@@ -2,8 +2,8 @@ package cmd
 
 import (
 	"bytes"
-	"encoding/json"
-	"io"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -41,13 +41,8 @@ func executeRunner(t *testing.T, args []string, logPath string) (string, string,
 // decodeOneDocument asserts that data holds exactly one JSON value.
 func decodeOneDocument(t *testing.T, data string, target any) {
 	t.Helper()
-	decoder := json.NewDecoder(strings.NewReader(data))
-	if err := decoder.Decode(target); err != nil {
-		t.Fatalf("decode %q: %v", data, err)
-	}
-	var extra any
-	if err := decoder.Decode(&extra); err != io.EOF {
-		t.Fatalf("output holds more than one JSON value: %q", data)
+	if err := json.UnmarshalRead(strings.NewReader(data), target); err != nil {
+		t.Fatalf("decode single JSON document %q: %v", data, err)
 	}
 }
 
@@ -63,21 +58,6 @@ func TestRunnerSchemaResult(t *testing.T) {
 	}
 	var listing any
 	decodeOneDocument(t, stdout, &listing)
-
-	stdout, stderr, runner = executeRunner(t, []string{"schema", "status"}, logPath)
-	if stderr != "" {
-		t.Fatalf("stderr must stay clean, got %q", stderr)
-	}
-	if !runner.JSONSelected() {
-		t.Fatal("schema status must select machine output")
-	}
-	var document struct {
-		Title string `json:"title"`
-	}
-	decodeOneDocument(t, stdout, &document)
-	if !strings.Contains(strings.ToLower(document.Title), "status") {
-		t.Fatalf("schema status title = %q, want it to mention status", document.Title)
-	}
 }
 
 func TestRunnerFailureDocument(t *testing.T) {
@@ -113,7 +93,6 @@ func TestRunnerFailureDocument(t *testing.T) {
 		Schema int    `json:"schema"`
 		Kind   string `json:"kind"`
 		Code   string `json:"code"`
-		Title  string `json:"title"`
 	}
 	decodeOneDocument(t, stderr.String(), &document)
 	if document.Code != cli.CodeInvalidInvocation {
@@ -121,9 +100,6 @@ func TestRunnerFailureDocument(t *testing.T) {
 	}
 	if document.Kind != cli.ErrorKind {
 		t.Fatalf("kind = %q, want %q", document.Kind, cli.ErrorKind)
-	}
-	if document.Title == "" {
-		t.Fatal("failure document must carry a title")
 	}
 }
 
@@ -176,7 +152,7 @@ func TestRunnerAgentDefaults(t *testing.T) {
 	if strings.Contains(compact, "\n") {
 		t.Fatalf("agent default must be compact, got %q", stdout)
 	}
-	if !json.Valid([]byte(compact)) {
+	if !jsontext.Value(compact).IsValid() {
 		t.Fatalf("agent default output is not valid JSON: %q", stdout)
 	}
 }

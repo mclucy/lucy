@@ -7,7 +7,8 @@
 package main
 
 import (
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"errors"
 	"flag"
 	"fmt"
@@ -27,7 +28,7 @@ const (
 
 type siteConfig struct {
 	Navigation struct {
-		Pages []json.RawMessage `json:"pages"`
+		Pages []jsontext.Value `json:"pages"`
 	} `json:"navigation"`
 }
 

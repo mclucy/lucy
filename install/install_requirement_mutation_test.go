@@ -1,4 +1,4 @@
-package install_test
+package install
 
 import (
 	"fmt"
@@ -7,28 +7,22 @@ import (
 
 	"github.com/mclucy/lucy/catalog"
 	"github.com/mclucy/lucy/document"
-	"github.com/mclucy/lucy/install"
 	serverpkg "github.com/mclucy/lucy/server"
 	versionpkg "github.com/mclucy/lucy/version"
 )
 
-// TestLockedMutationBindsEachDeclarationToLocation covers a
-// reference declared for two ecosystems. Each locked package must receive its
-// own declaration instead of the last one applied to every package that names
-// the same reference.
-func TestLockedMutationBindsEachDeclarationToLocation(t *testing.T) {
-	root := t.TempDir()
+// TestMutateLockBindsEachDeclarationToLocation covers a reference declared for
+// two ecosystems. Each locked package must receive its own declaration instead
+// of the last one applied to every package that names the same reference.
+func TestMutateLockBindsEachDeclarationToLocation(t *testing.T) {
 	initial := lockedMutationManifest(t, "modrinth:shared", versionpkg.Any)
-	if err := document.ManifestFile(root).Write(initial); err != nil {
-		t.Fatalf("manifest.Write() error = %v", err)
-	}
-	fingerprint, err := initial.Fingerprint()
+	initialFingerprint, err := initial.Fingerprint()
 	if err != nil {
 		t.Fatalf("manifest.Fingerprint() error = %v", err)
 	}
 	lock := &document.Lock{
 		SchemaVersion:       document.LockSchemaVersion,
-		ManifestFingerprint: fingerprint,
+		ManifestFingerprint: initialFingerprint,
 		Server: document.LockedServer{
 			Directory:   ".",
 			Minecraft:   versionpkg.Version("1.21.4"),
@@ -49,9 +43,6 @@ func TestLockedMutationBindsEachDeclarationToLocation(t *testing.T) {
 			lockedMutationPackage(catalog.EcosystemPaper, versionpkg.Any, true),
 		},
 	}
-	if err := document.LockFile(root).Write(lock); err != nil {
-		t.Fatalf("lockfile.Write() error = %v", err)
-	}
 
 	fabricSelector := versionpkg.Version("1.0.0")
 	disabled := false
@@ -59,27 +50,39 @@ func TestLockedMutationBindsEachDeclarationToLocation(t *testing.T) {
 	final.Server.Packages[catalog.EcosystemPaper] = map[string]document.Requirement{
 		"modrinth:shared": {Selector: versionpkg.Any, Enabled: &disabled},
 	}
-	if err := document.ManifestFile(root).Write(final); err != nil {
-		t.Fatalf("manifest.Write() error = %v", err)
-	}
-
-	onDiskManifest, err := document.ManifestFile(root).Read()
+	fingerprint, err := final.Fingerprint()
 	if err != nil {
-		t.Fatalf("manifest.Read() error = %v", err)
+		t.Fatalf("manifest.Fingerprint() error = %v", err)
 	}
-	onDiskLock, err := document.LockFile(root).Read()
+	manifestBefore := fingerprint
+	lockBefore, err := lock.Fingerprint()
 	if err != nil {
-		t.Fatalf("lockfile.Read() error = %v", err)
+		t.Fatalf("lockfile.Fingerprint() error = %v", err)
 	}
-	plan, err := install.NewService(nil, nil, nil, nil, nil, nil, "").PlanInstall(
-		t.Context(),
-		root,
-		onDiskManifest,
-		onDiskLock,
-		install.Options{Locked: true, RequirementChange: true, Offline: true},
-	)
+	resolved, err := mutateLock(final, lock, fingerprint)
 	if err != nil {
-		t.Fatalf("PlanInstall() error = %v", err)
+		t.Fatalf("mutateLock() error = %v", err)
+	}
+	manifestAfter, err := final.Fingerprint()
+	if err != nil {
+		t.Fatalf("manifest.Fingerprint() error = %v", err)
+	}
+	if manifestBefore != manifestAfter {
+		t.Fatal("mutateLock() mutated its input manifest")
+	}
+	lockAfter, err := lock.Fingerprint()
+	if err != nil {
+		t.Fatalf("lockfile.Fingerprint() error = %v", err)
+	}
+	if lockBefore != lockAfter {
+		t.Fatal("mutateLock() mutated its input lock")
+	}
+	if resolved.ManifestFingerprint != fingerprint {
+		t.Fatalf(
+			"resolved lock answers manifest %q, want %q",
+			resolved.ManifestFingerprint,
+			fingerprint,
+		)
 	}
 
 	want := map[catalog.Ecosystem]document.RequirementBinding{
@@ -94,13 +97,21 @@ func TestLockedMutationBindsEachDeclarationToLocation(t *testing.T) {
 			Enabled:   false,
 		},
 	}
-	if len(plan.Resolved.Packages) != len(want) {
-		t.Fatalf("resolved packages = %d, want %d: %+v", len(plan.Resolved.Packages), len(want), plan.Resolved.Packages)
+	if len(resolved.Packages) != len(want) {
+		t.Fatalf("resolved packages = %d, want %d: %+v", len(resolved.Packages), len(want), resolved.Packages)
 	}
-	for _, pkg := range plan.Resolved.Packages {
+	for _, pkg := range resolved.Packages {
 		wantBinding, ok := want[pkg.Ecosystem]
 		if !ok {
 			t.Fatalf("resolved unexpected ecosystem %q", pkg.Ecosystem)
+		}
+		if pkg.Environment != serverpkg.EnvironmentServer {
+			t.Fatalf(
+				"resolved %s environment = %q, want %q",
+				pkg.Ecosystem,
+				pkg.Environment,
+				serverpkg.EnvironmentServer,
+			)
 		}
 		if !reflect.DeepEqual(pkg.Requirements, []document.RequirementBinding{wantBinding}) {
 			t.Fatalf(

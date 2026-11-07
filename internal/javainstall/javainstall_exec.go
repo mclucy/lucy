@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 
@@ -185,14 +186,14 @@ func runStepWithCancel(
 		return errors.New("empty install step")
 	}
 	args := append([]string(nil), step.Args...)
-	path, err := host.lookPath(args[0])
+	path, err := exec.LookPath(args[0])
 	if err != nil {
 		return fmt.Errorf("%s: %w", step.command(host.isRoot()), err)
 	}
 	args[0] = path
 	root := host.isRoot()
 	if step.Elevation == ElevationRoot && !root {
-		sudo, err := host.lookPath("sudo")
+		sudo, err := exec.LookPath("sudo")
 		if err != nil {
 			return fmt.Errorf("%s: %w", step.command(root), err)
 		}
@@ -207,9 +208,9 @@ func runStepWithCancel(
 	if step.Input != "" {
 		stdin = strings.NewReader(step.Input)
 	}
-	if err := host.system.Run(ctx, Command{
+	if err := runCommand(ctx, Command{
 		Args:              args,
-		Env:               host.environ(),
+		Env:               os.Environ(),
 		Stdin:             stdin,
 		Stdout:            out,
 		Stderr:            out,

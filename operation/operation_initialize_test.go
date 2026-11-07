@@ -20,7 +20,7 @@ import (
 	versionpkg "github.com/mclucy/lucy/version"
 	"github.com/mclucy/lucy/workspace"
 	"github.com/mclucy/lucy/workspace/discovery"
-	"gopkg.in/yaml.v3"
+	"go.yaml.in/yaml/v4"
 )
 
 // initializeTestSource answers the workspace-observation capabilities

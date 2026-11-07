@@ -23,6 +23,8 @@ The network cache, the per-user artifact store, and each workspace's tracked-fil
 
 `lucy store list` shows every stored object. `lucy store gc` removes objects that no registered server's lock references. It takes the operation gate, every registered workspace's writer lock, and the registry mutation lock, then collects references before taking the content store lock for the sweep. A missing, unreadable, or unknowable reference set makes the command fail before deleting anything. Collection holds the operation gate from its lease check through the last removal, so an operation that acquires an artifact-store lease cannot acquire artifacts between the reference read and deletion.
 
+The operation gate and its leases occupy a private operations directory separate from the content store's staging namespace. Concurrent artifact operations and collection must use the same Lucy version. Each store owns its filesystem layout; consumers obtain object paths from the store rather than reconstructing digest paths.
+
 An operation acquires the artifact-store lease before its workspace writer lock and before its first artifact access. Installation planning holds the lease and the writer lock only while it resolves; the plan it returns carries fingerprints and a resolved lock, not a reservation on the objects resolution materialized, so collection may remove them once planning returns. Applying the plan acquires the lease again, rechecks the fingerprints, and materializes any object the store no longer holds.
 
 An object digest identifies content; it does not by itself assert upstream provenance. A verified lock hash ties expected bytes to an artifact record, while cache integrity metadata records what was checked when the response was acquired.

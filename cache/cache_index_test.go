@@ -3,7 +3,7 @@ package cache
 import (
 	"crypto/sha256"
 	"encoding/hex"
-	"encoding/json"
+	"encoding/json/v2"
 	"errors"
 	"os"
 	"path/filepath"
@@ -157,7 +157,7 @@ func TestIndexLoadResetsInvalidManifests(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
 			path := filepath.Join(t.TempDir(), "cache.json")
-			data, err := json.Marshal(test.manifest)
+			data, err := json.Marshal(test.manifest, json.FormatNilMapAsNull(true))
 			if err != nil {
 				t.Fatalf("marshal manifest: %v", err)
 			}
@@ -180,7 +180,7 @@ func TestIndexLoadResetsInvalidManifests(t *testing.T) {
 			if err != nil {
 				t.Fatalf("open rewritten manifest: %v", err)
 			}
-			decodeErr := json.NewDecoder(file).Decode(&rewritten)
+			decodeErr := json.UnmarshalRead(file, &rewritten)
 			closeErr := file.Close()
 			if err := errors.Join(decodeErr, closeErr); err != nil {
 				t.Fatalf("decode rewritten manifest: %v", err)
@@ -197,26 +197,5 @@ func TestIndexFlushRejectsUnwritablePath(t *testing.T) {
 	index := newIndex(t.TempDir())
 	if err := index.flush(); err == nil {
 		t.Fatal("flush accepted a directory as the index path")
-	}
-}
-
-func TestIndexExistsAndAll(t *testing.T) {
-	t.Parallel()
-	index := newIndex(filepath.Join(t.TempDir(), "cache.json"))
-	entry := &Entry{Key: "key", Filename: "file.jar"}
-	index.put("key", entry)
-	if !index.exists("key") {
-		t.Fatal("exists missed a stored key")
-	}
-	if index.exists("missing") {
-		t.Fatal("exists found an absent key")
-	}
-	all := index.all()
-	if len(all) != 1 || all["key"] != entry {
-		t.Fatalf("all = %+v, want the stored entry", all)
-	}
-	index.delete("key")
-	if index.exists("key") {
-		t.Fatal("delete kept the key")
 	}
 }

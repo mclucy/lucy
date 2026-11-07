@@ -10,7 +10,6 @@ import (
 	"time"
 
 	versionpkg "github.com/mclucy/lucy/version"
-	"gopkg.in/yaml.v3"
 )
 
 const mcdrConfigFileName = "config.yml"
@@ -41,19 +40,9 @@ func detectMCDRWrapper(dir string, wrappers *WrapperInfo) []error {
 		return nil
 	}
 
-	configFile, err := os.Open(configPath)
+	config, err := readMCDRConfig(configPath)
 	if err != nil {
-		warnErr := fmt.Errorf("cannot open %s: %w", configPath, err)
-		warnings = append(warnings, warnErr)
-		return warnings
-	}
-	defer configFile.Close()
-
-	config := &MCDRConfig{}
-	if err := yaml.NewDecoder(configFile).Decode(config); err != nil {
-		warnErr := fmt.Errorf("cannot decode %s: %w", configPath, err)
-		warnings = append(warnings, warnErr)
-		return warnings
+		return []error{err}
 	}
 
 	for i, pluginDir := range config.PluginDirectories {

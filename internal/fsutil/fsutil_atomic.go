@@ -79,14 +79,6 @@ func AtomicWrite(path string, data []byte, defaultMode os.FileMode) error {
 	return atomicCopy(bytes.NewReader(data), path, mode)
 }
 
-// CopyFileAtomic discards incomplete copies and returns the published file at offset zero.
-func CopyFileAtomic(reader io.Reader, path string, mode os.FileMode) (*os.File, error) {
-	if err := atomicCopy(reader, path, mode); err != nil {
-		return nil, err
-	}
-	return os.Open(path)
-}
-
 func atomicCopy(reader io.Reader, path string, mode os.FileMode) (resultErr error) {
 	if err := MkdirAllPrivate(filepath.Dir(path)); err != nil {
 		return fmt.Errorf("create file parent: %w", err)

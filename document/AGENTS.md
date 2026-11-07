@@ -14,6 +14,7 @@ Package `document` owns the persisted server specification files: the manifest d
   - Manifest fingerprint excludes the server name so renaming does not invalidate resolution.
   - Lock fingerprint normalizes declaration order and canonical forms so formatting variations do not change identity.
 - **Comment-Preserving Codec**: `Commenter` renders fresh documents with schema directives and documentation comments. Its `Merge` path updates existing YAML trees while preserving user comments and filling empty comment slots from struct tags.
+- **YAML Types**: Codecs and custom hooks use `go.yaml.in/yaml/v4`. Every `yaml.Node` hook must use that package's type; mixing major-version node types causes a migration error rather than invoking the hook.
 - **Path Safety**: Normalization and validation enforce safe relative paths and reject path traversal before persistence.
 
 ## Relevant Tests

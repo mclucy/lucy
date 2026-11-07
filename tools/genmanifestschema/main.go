@@ -9,8 +9,6 @@ import (
 
 	"github.com/mclucy/lucy/java"
 
-	stdjson "encoding/json"
-
 	"github.com/invopop/jsonschema"
 	"github.com/mclucy/lucy/document"
 
@@ -113,8 +111,8 @@ func main() {
 	javaSchema := func() *jsonschema.Schema {
 		major := func() *jsonschema.Schema {
 			return &jsonschema.Schema{
-				Type:    "integer",
-				Minimum: stdjson.Number(fmt.Sprint(document.MinimumJava)),
+				Type:   "integer",
+				Extras: map[string]any{"minimum": document.MinimumJava},
 			}
 		}
 		version := &jsonschema.Schema{

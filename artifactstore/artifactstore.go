@@ -5,16 +5,23 @@
 package artifactstore
 
 import (
+	"errors"
 	"fmt"
+	"os"
 	"path/filepath"
 
 	"github.com/mclucy/lucy/cas"
 	"github.com/mclucy/lucy/internal/appdata"
+	"github.com/mclucy/lucy/internal/fsutil"
 )
 
-// DirectoryName is the artifact store's directory inside Lucy's per-user data
-// root.
-const DirectoryName = "artifacts"
+const (
+	// DirectoryName is the artifact store's directory inside Lucy's per-user
+	// data root.
+	DirectoryName = "artifacts"
+
+	operationsDirectoryName = "operations"
+)
 
 // Directory reports the per-user artifact store directory without creating it.
 func Directory() (string, error) {
@@ -35,13 +42,17 @@ func Open() (*Store, error) {
 }
 
 // OpenAt opens a store at an explicit directory. It creates the same private
-// object and staging namespaces as the per-user store.
+// object, staging, and operation namespaces as the per-user store.
 func OpenAt(directory string) (*Store, error) {
 	store, err := cas.New(directory)
 	if err != nil {
 		return nil, fmt.Errorf("open artifact store: %w", err)
 	}
-	return &Store{Store: store, directory: directory}, nil
+	operations := filepath.Join(directory, operationsDirectoryName)
+	if err := createOperations(operations); err != nil {
+		return nil, errors.Join(fmt.Errorf("open artifact store operations: %w", err), store.Close())
+	}
+	return &Store{Store: store, operations: operations}, nil
 }
 
 // Store is the artifact store's content-addressed storage. Object names never
@@ -49,5 +60,21 @@ func OpenAt(directory string) (*Store, error) {
 // through their locks.
 type Store struct {
 	*cas.Store
-	directory string
+	operations string
+}
+
+// createOperations creates the private directory that holds the operation gate
+// and leases, separate from the content store's staging namespace.
+func createOperations(directory string) error {
+	if err := fsutil.MkdirAllPrivate(directory); err != nil {
+		return err
+	}
+	info, err := os.Lstat(directory)
+	if err != nil {
+		return err
+	}
+	if !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
+		return fmt.Errorf("operations namespace must be a regular directory")
+	}
+	return nil
 }

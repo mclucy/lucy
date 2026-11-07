@@ -3,6 +3,7 @@ package curseforge
 import (
 	"fmt"
 	"net/url"
+	"strconv"
 
 	"github.com/mclucy/lucy/catalog"
 )
@@ -27,7 +28,7 @@ func modLoaderType(p catalog.Ecosystem) int {
 	}
 }
 
-// Docs: https://docs.curseforge.com/rest-api/#search-mods
+// searchUrl builds a project search: https://docs.curseforge.com/rest-api/#search-mods.
 func searchUrl(
 	query catalog.Name,
 	ecosystem catalog.Ecosystem,
@@ -49,7 +50,7 @@ func searchUrl(
 	return baseUrl + "/v1/mods/search?" + params.Encode()
 }
 
-// Docs: https://docs.curseforge.com/rest-api/#search-mods
+// slugSearchUrl builds a slug lookup: https://docs.curseforge.com/rest-api/#search-mods.
 func slugSearchUrl(slug catalog.Name) string {
 	params := url.Values{}
 	params.Set("gameId", fmt.Sprintf("%d", minecraftGameId))
@@ -59,12 +60,12 @@ func slugSearchUrl(slug catalog.Name) string {
 	return baseUrl + "/v1/mods/search?" + params.Encode()
 }
 
-// Docs: https://docs.curseforge.com/rest-api/#get-mod
+// modUrl builds a project lookup: https://docs.curseforge.com/rest-api/#get-mod.
 func modUrl(modId int32) string {
 	return fmt.Sprintf("%s/v1/mods/%d", baseUrl, modId)
 }
 
-// Docs: https://docs.curseforge.com/rest-api/#get-mod-description
+// modDescriptionUrl builds a description request: https://docs.curseforge.com/rest-api/#get-mod-description.
 func modDescriptionUrl(modId int32, stripped bool) string {
 	params := url.Values{}
 	if stripped {
@@ -78,10 +79,10 @@ func modDescriptionUrl(modId int32, stripped bool) string {
 	return u + "?" + params.Encode()
 }
 
-// Docs: https://docs.curseforge.com/rest-api/#get-mod-files
+// modFilesUrl builds a file-list request: https://docs.curseforge.com/rest-api/#get-mod-files.
 func modFilesUrl(modId int32, gameVersion string, loaderType int) string {
 	params := url.Values{}
-	params.Set("pageSize", "50")
+	params.Set("pageSize", strconv.Itoa(modFilesPageSize))
 
 	if gameVersion != "" {
 		params.Set("gameVersion", gameVersion)
@@ -98,7 +99,7 @@ func modFilesUrl(modId int32, gameVersion string, loaderType int) string {
 	)
 }
 
-// Docs: https://docs.curseforge.com/rest-api/#get-mod-file
+// modFileURL builds a file lookup: https://docs.curseforge.com/rest-api/#get-mod-file.
 func modFileURL(modId, fileId int32) string {
 	return fmt.Sprintf("%s/v1/mods/%d/files/%d", baseUrl, modId, fileId)
 }

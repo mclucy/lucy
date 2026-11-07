@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/mclucy/lucy/catalog"
-	"github.com/mclucy/lucy/version"
 )
 
 // ProviderIdentifier exposes the execution-layer identity of a provider
@@ -16,66 +15,21 @@ type ProviderIdentifier interface {
 	Provider() catalog.Provider
 }
 
-// LocalContext is an immutable snapshot of local runtime facts that can affect
-// upstream resolution. Its zero value describes an unknown local runtime.
-//
-// The application layer derives LocalContext from workspace discovery. Upstream
-// must not depend on that discovery mechanism or its filesystem representation,
-// and providers must not prompt for missing facts: interactive input belongs to
-// the command boundary.
-type LocalContext struct {
-	Ecosystem        catalog.Ecosystem
-	MinecraftVersion version.Version
-	MCDRVersion      version.Version
-}
-
-// HasMinecraftVersion reports whether the local runtime provides a concrete
-// Minecraft version suitable for upstream compatibility filtering.
-func (c LocalContext) HasMinecraftVersion() bool {
-	return c.MinecraftVersion != "" &&
-		!c.MinecraftVersion.IsInvalid() &&
-		!c.MinecraftVersion.CanInfer()
-}
-
-type Fetcher interface {
-	Fetch(ctx context.Context, local LocalContext, id catalog.VersionedRef) (
-		ResolvedPackage,
-		error,
-	)
-}
-
-// DependencyResolver reports the dependencies a build declares.
-//
-// Implementations that cannot obtain dependency metadata must return
-// ErrDependencyMetadataUnavailable rather than an empty DependencySet: an
-// empty set asserts that the build declares none. A nil set with a nil error is
-// invalid; callers treat it as unavailable.
-type DependencyResolver interface {
-	Dependencies(
-		ctx context.Context,
-		local LocalContext,
-		id catalog.VersionedRef,
-	) (*DependencySet, error)
-}
-
-type PackageResolver interface {
-	ProviderIdentifier
-	VersionSelectorResolver
-	Fetcher
-}
-
-// PackageProvider composes package selection with dependency reporting.
-// Providers without dependency metadata report
-// ErrDependencyMetadataUnavailable from Dependencies and remain usable for
-// search, info, selection, and fetch.
-type PackageProvider interface {
-	PackageResolver
-	DependencyResolver
-}
-
 type SearchProvider interface {
 	ProviderIdentifier
 	Searcher
+}
+
+// PackageCatalogue lists the published builds of one repository and the
+// candidates it holds for an explicit project identity.
+type PackageCatalogue interface {
+	ProviderIdentifier
+	Builds(ctx context.Context, project string) ([]Build, error)
+	Candidates(
+		ctx context.Context,
+		project, minecraft string,
+		loader catalog.Ecosystem,
+	) ([]Candidate, error)
 }
 
 type InfoProvider interface {
@@ -86,13 +40,6 @@ type InfoProvider interface {
 type ArtifactMapProvider interface {
 	ProviderIdentifier
 	ArtifactMapper
-}
-
-// InstallerProvider installs a server product for one ecosystem.
-type InstallerProvider interface {
-	ProviderIdentifier
-	VersionSelectorResolver
-	Fetcher
 }
 
 type ArtifactMapper interface {
@@ -110,17 +57,6 @@ type ArtifactMapper interface {
 type ArtifactFingerprint interface {
 	SHA1() ([sha1.Size]byte, error)
 	MurmurHash() (uint32, error)
-}
-
-type VersionSelectorResolver interface {
-	ResolveVersionSelector(
-		ctx context.Context,
-		local LocalContext,
-		ref catalog.VersionedRef,
-	) (
-		resolved catalog.VersionedRef,
-		err error,
-	)
 }
 
 type Searcher interface {

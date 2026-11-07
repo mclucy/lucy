@@ -2,7 +2,10 @@ package javainstall
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
+	"os"
+	"os/exec"
 	"strconv"
 	"strings"
 	"time"
@@ -32,7 +35,7 @@ func (homebrew) ownsJava(ctx context.Context, host *Host) bool {
 	if host.isRoot() {
 		return false
 	}
-	if _, err := host.lookPath("brew"); err != nil {
+	if _, err := exec.LookPath("brew"); err != nil {
 		return false
 	}
 	formulae, err := homebrewList(ctx, host, "--formula")
@@ -62,7 +65,7 @@ func (homebrew) plans(ctx context.Context, req Request, host *Host) ([]Plan, err
 	if host.isRoot() {
 		return nil, nil
 	}
-	if _, err := host.lookPath("brew"); err != nil {
+	if _, err := exec.LookPath("brew"); err != nil {
 		return nil, nil
 	}
 	if req.Distribution == java.DistributionAny {
@@ -132,7 +135,7 @@ func homebrewBottledFormulaVersion(ctx context.Context, host *Host, token string
 			} `json:"versions"`
 			Bottle struct {
 				Stable struct {
-					Files map[string]json.RawMessage `json:"files"`
+					Files map[string]jsontext.Value `json:"files"`
 				} `json:"stable"`
 			} `json:"bottle"`
 		} `json:"formulae"`
@@ -173,7 +176,7 @@ func homebrewCaskVersion(ctx context.Context, host *Host, token string) (string,
 
 // homebrewInfo reads local Homebrew metadata without updating taps.
 func homebrewInfo(ctx context.Context, host *Host, kind, token string) ([]byte, error) {
-	environment := append(host.environ(), "HOMEBREW_NO_AUTO_UPDATE=1")
+	environment := append(os.Environ(), "HOMEBREW_NO_AUTO_UPDATE=1")
 	return host.probe(ctx, 30*time.Second, environment, "brew", "info", "--json=v2", kind, token)
 }
 

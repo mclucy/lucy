@@ -13,7 +13,7 @@ import (
 	javapkg "github.com/mclucy/lucy/java"
 	"github.com/mclucy/lucy/server"
 	"github.com/mclucy/lucy/version"
-	"gopkg.in/yaml.v3"
+	"go.yaml.in/yaml/v4"
 )
 
 const (

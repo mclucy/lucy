@@ -108,29 +108,6 @@ func (c *Client) Enabled(ctx context.Context) (bool, error) {
 	return enabled, nil
 }
 
-// InstallationID returns the persistent installation UUID, creating it on
-// first startup even when telemetry is disabled.
-func (c *Client) InstallationID(ctx context.Context) (string, error) {
-	release, err := c.enterOperation(ctx, c.limits.LockWait)
-	if err != nil {
-		return "", err
-	}
-	defer release()
-	now := c.now()
-	state, _, err := c.loadState(now)
-	if err != nil {
-		return "", err
-	}
-	if state.InstallationID != "" {
-		return state.InstallationID, nil
-	}
-	state.ensureIdentity(now)
-	if err := c.saveState(state, now); err != nil {
-		return "", err
-	}
-	return state.InstallationID, nil
-}
-
 // RecordEvent records one invocation observation. It never uploads; call
 // Flush separately when networking is allowed. Callers own InvocationID.
 func (c *Client) RecordEvent(ctx context.Context, event Event) (Submission, error) {
@@ -306,12 +283,6 @@ func payloadPolicy(policy CollectionPolicy) string {
 func (c *Client) debug(message string, fields ...any) {
 	if c.logger != nil {
 		c.logger.Debug(message, fields...)
-	}
-}
-
-func (c *Client) warn(err error) {
-	if c.logger != nil && err != nil {
-		c.logger.Warn(err)
 	}
 }
 

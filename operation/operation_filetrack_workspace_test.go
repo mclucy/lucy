@@ -93,9 +93,11 @@ func compositeWriteReceipt(t *testing.T, root string) {
 		Mode:   0o644,
 		Origin: receipt.OriginBootstrap,
 	}}
-	if err := recorded.Write(root); err != nil {
-		t.Fatalf("write receipt: %v", err)
+	data, err := recorded.Snapshot()
+	if err != nil {
+		t.Fatalf("snapshot receipt: %v", err)
 	}
+	operationTestWrite(t, root, receipt.Filename, data, 0o600)
 }
 
 func compositeServices(t *testing.T) (*filetrack.Service, *install.Service, *Service) {

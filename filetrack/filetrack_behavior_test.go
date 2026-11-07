@@ -15,7 +15,7 @@ import (
 	"github.com/mclucy/lucy/catalog"
 	documentpkg "github.com/mclucy/lucy/document"
 	serverpkg "github.com/mclucy/lucy/server"
-	"gopkg.in/yaml.v3"
+	"go.yaml.in/yaml/v4"
 )
 
 // behaviorWorkspace returns an isolated workspace with the manifest every

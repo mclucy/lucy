@@ -14,7 +14,7 @@ import (
 	documentpkg "github.com/mclucy/lucy/document"
 	serverpkg "github.com/mclucy/lucy/server"
 	versionpkg "github.com/mclucy/lucy/version"
-	"gopkg.in/yaml.v3"
+	"go.yaml.in/yaml/v4"
 )
 
 // printable keeps fuzz text inside the subset YAML represents unchanged.

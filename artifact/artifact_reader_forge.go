@@ -2,19 +2,16 @@ package artifact
 
 import (
 	"archive/zip"
-	"strings"
 
 	"github.com/mclucy/lucy/catalog"
 	"github.com/mclucy/lucy/internal/fileschema"
 	"github.com/mclucy/lucy/internal/fsutil"
 
-	versionpkg "github.com/mclucy/lucy/version"
-	"github.com/pelletier/go-toml"
+	"github.com/mclucy/lucy/version"
+	"github.com/pelletier/go-toml/v2"
 )
 
 type forgeReader struct{}
-
-var _ = newForgeReader
 
 func newForgeReader() Reader { return &forgeReader{} }
 
@@ -22,7 +19,6 @@ func (r *forgeReader) Read(
 	zipRdr *zip.Reader,
 	filePath string,
 ) ([]PackageInfo, error) {
-	_ = r
 	neoforgeLayout := false
 	for _, file := range zipRdr.File {
 		if file.Name == neoforgeModsTomlPath {
@@ -79,7 +75,7 @@ func readForgeModsToml(
 			continue
 		}
 
-		version := versionpkg.Version(mod.Version)
+		version := version.Version(mod.Version)
 		if version == "${file.jarVersion}" {
 			version = forgeJarVersion(zipRdr)
 		}
@@ -140,47 +136,17 @@ func forgeDependencies(
 	return translated, nil
 }
 
-func forgeVersionRange(versionRange string) (versionpkg.Expr, error) {
-	return versionpkg.ParseConstraint(versionRange, versionpkg.DialectMaven)
+func forgeVersionRange(versionRange string) (version.Expr, error) {
+	return version.ParseConstraint(versionRange, version.DialectMaven)
 }
 
-func forgeJarVersion(zipRdr *zip.Reader) versionpkg.Version {
-	for _, file := range zipRdr.File {
-		if file.Name != "META-INF/MANIFEST.MF" {
-			continue
-		}
-
-		reader, err := file.Open()
-		if err != nil {
-			return versionpkg.Unknown
-		}
-
-		data, err := fsutil.CopyBytes(reader, fsutil.MaxZipEntryBytes)
-		closeErr := reader.Close()
-		if err != nil {
-			return versionpkg.Unknown
-		}
-		if closeErr != nil {
-			return versionpkg.Unknown
-		}
-
-		return forgeManifestVersion(string(data))
+func forgeJarVersion(zipRdr *zip.Reader) version.Version {
+	v, err := readManifestImplementationVersion(
+		zipRdr,
+		fsutil.MaxZipEntryBytes,
+	)
+	if err != nil {
+		return version.Unknown
 	}
-
-	return versionpkg.Unknown
-}
-
-func forgeManifestVersion(manifest string) versionpkg.Version {
-	const versionField = "Implementation-Version: "
-	version, found := strings.CutPrefix(manifest, versionField)
-	if !found {
-		_, version, found = strings.Cut(manifest, "\n"+versionField)
-	}
-	if !found {
-		return versionpkg.Unknown
-	}
-
-	version = strings.Split(version, "\r")[0]
-	version = strings.Split(version, "\n")[0]
-	return versionpkg.Version(version)
+	return v
 }

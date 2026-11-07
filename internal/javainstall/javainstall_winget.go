@@ -3,6 +3,7 @@ package javainstall
 import (
 	"context"
 	"fmt"
+	"os/exec"
 	"slices"
 
 	"github.com/mclucy/lucy/java"
@@ -101,7 +102,7 @@ func (winget) plans(ctx context.Context, req Request, host *Host) ([]Plan, error
 	if host.goos != "windows" {
 		return nil, nil
 	}
-	if _, err := host.lookPath("winget.exe"); err != nil {
+	if _, err := exec.LookPath("winget.exe"); err != nil {
 		return nil, nil
 	}
 	return wingetPlans(req), nil

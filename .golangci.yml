@@ -2,6 +2,8 @@ version: "2"
 
 run:
   relative-path-mode: gomod
+  build-tags:
+    - e2e
   timeout: 5m
 
 linters:
@@ -16,6 +18,28 @@ linters:
       checks: ["all", "-QF*", "-ST*"]
     depguard:
       rules:
+        serialization:
+          list-mode: lax
+          files:
+            - $all
+          allow:
+            - encoding/json/v2$
+            - encoding/json/v2/
+            - encoding/json/jsontext$
+            - go.yaml.in/yaml/v4$
+            - go.yaml.in/yaml/v4/
+          deny:
+            - pkg: encoding/json
+              desc: Use encoding/json/v2 for JSON and encoding/json/jsontext for raw values.
+            - pkg: go.yaml.in/yaml
+              desc: Use go.yaml.in/yaml/v4.
+            - pkg: gopkg.in/yaml
+              desc: Use go.yaml.in/yaml/v4.
+            - pkg: github.com/go-yaml/yaml
+              desc: Use go.yaml.in/yaml/v4.
+            - pkg: github.com/yaml/go-yaml
+              desc: Use go.yaml.in/yaml/v4.
+
         catalog:
           list-mode: strict
           files:
@@ -59,7 +83,7 @@ linters:
             - github.com/mclucy/lucy/catalog$
             - github.com/mclucy/lucy/internal/fileschema$
             - github.com/mclucy/lucy/internal/fn$
-            - github.com/pelletier/go-toml$
+            - github.com/pelletier/go-toml/v2$
 
         appdata-leaf:
           list-mode: strict

@@ -12,7 +12,6 @@ import (
 	"github.com/mclucy/lucy/document"
 	"github.com/mclucy/lucy/log"
 	"github.com/mclucy/lucy/receipt"
-	"github.com/mclucy/lucy/server"
 )
 
 func validateUnmanagedArtifacts(ctx context.Context, root string, d *document.Lock, overwrite bool, logger *log.Logger) error {
@@ -26,15 +25,15 @@ func validateUnmanagedArtifacts(ctx context.Context, root string, d *document.Lo
 		return err
 	}
 	seenDirectories := map[string]bool{}
-	for _, planned := range d.Packages {
+	for index := range d.Packages {
+		planned := &d.Packages[index]
 		if !planned.Enabled() {
 			continue
 		}
-		directory, folder := d.Server.Directory, packageFolder(planned.Environment, planned.Ecosystem)
-		if planned.Environment == server.EnvironmentMCDR {
-			directory = d.MCDR.Directory
+		relative, err := d.PackageDirectory(planned)
+		if err != nil {
+			return err
 		}
-		relative := filepath.Join(directory, folder)
 		key := string(planned.Environment) + "/" + string(planned.Ecosystem) + "/" + relative
 		if seenDirectories[key] {
 			continue
@@ -62,12 +61,12 @@ func validateUnmanagedArtifacts(ctx context.Context, root string, d *document.Lo
 			if err != nil {
 				continue
 			}
-			conflict, moduleID := unmanagedConflict(d, &planned, mods)
+			conflict, moduleID := unmanagedConflict(d, planned, mods)
 			if conflict == nil {
 				continue
 			}
 			if overwrite {
-				destination, err := packageDestination(d, conflict)
+				destination, err := d.PackageDestination(conflict)
 				if err == nil && filepath.Clean(filename) == filepath.Clean(destination) {
 					logger.Debug(
 						"overwriting unmanaged artifact",

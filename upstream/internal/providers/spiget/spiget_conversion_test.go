@@ -5,7 +5,6 @@ import (
 	"testing"
 
 	"github.com/mclucy/lucy/catalog"
-	"github.com/mclucy/lucy/version"
 )
 
 func TestSearchResponseToSearchResults(t *testing.T) {
@@ -151,113 +150,55 @@ func TestProjectInfoDropsInvalidBase64(t *testing.T) {
 	}
 }
 
-func TestResolvedVersionToPackageRemote(t *testing.T) {
-	remote := NewResolvedVersion(
-		resourceResponse{
-			ID: 6245, Name: "PlaceholderAPI",
-			File: resourceFileResponse{Type: ".jar"},
-		},
-		versionResponse{ID: 625258, Name: "2.12.2"},
-	).ToPackageRemote()
-
-	if remote.ID.Provider != catalog.ProviderSpiget {
-		t.Fatalf(
-			"expected source %v, got %v",
-			catalog.ProviderSpiget,
-			remote.ID.Provider,
-		)
+// TestSpigetCurrentDownloadArtifact covers the live Candidates download inputs:
+// Spiget's resource-scoped current download URL and the filename derived from
+// provider fields.
+func TestSpigetCurrentDownloadArtifact(t *testing.T) {
+	resource := resourceResponse{
+		ID: 6245, Name: "PlaceholderAPI",
+		File: resourceFileResponse{Type: ".jar"},
 	}
-	if remote.FileURL != "https://api.spiget.org/v2/resources/6245/download" {
-		t.Fatalf("unexpected file url %q", remote.FileURL)
+	downloadURL := resourceDownloadURL(resource.ID)
+	if downloadURL != "https://api.spiget.org/v2/resources/6245/download" {
+		t.Fatalf("unexpected current download url %q", downloadURL)
 	}
-	if remote.Filename != "placeholderapi-2.12.2.jar" {
-		t.Fatalf("unexpected filename %q", remote.Filename)
-	}
-	if remote.Hash != "" || remote.HashAlgorithm != "" {
-		t.Fatalf(
-			"expected no hash metadata, got hash=%q algo=%q",
-			remote.Hash,
-			remote.HashAlgorithm,
-		)
-	}
-}
-
-func TestResolvedVersionUsesExternalDownload(t *testing.T) {
-	remote := resolvedVersion{
-		ResourceID:  10,
-		VersionID:   20,
-		VersionName: "1.0.0",
-		ProjectName: "external-plugin",
-		FileType:    "external",
-		External:    true,
-		ExternalURL: "https://downloads.example.com/plugin.jar",
-	}.ToPackageRemote()
-
-	if remote.FileURL != "https://downloads.example.com/plugin.jar" {
-		t.Fatalf("expected external url, got %q", remote.FileURL)
-	}
-	if remote.Filename != "plugin.jar" {
-		t.Fatalf("unexpected filename %q", remote.Filename)
-	}
-}
-
-func TestResolvedVersionIdentityPolicy(t *testing.T) {
-	resolved := NewResolvedVersion(
-		resourceResponse{ID: 6245, Name: "PlaceholderAPI"},
-		versionResponse{ID: 625258, Name: "2.12.2"},
+	filename := artifactFilename(
+		resource.ID,
+		normalizedProjectName(resource.Name).String(),
+		"2.12.2",
+		625258,
+		resource.File.Type,
+		downloadURL,
 	)
-
-	if got := resolved.LucyVersion(); got != "2.12.2" {
-		t.Fatalf(
-			"expected human version to drive lucy exact version, got %q",
-			got,
-		)
-	}
-	if !resolved.Matches("2.12.2") {
-		t.Fatalf("expected exact human version match")
-	}
-	if !resolved.Matches("625258") {
-		t.Fatalf("expected numeric version-id fallback match")
-	}
-	if resolved.Matches("2.12.1") {
-		t.Fatalf("did not expect mismatched version to match")
-	}
-	if resolved.Matches(version.Any) {
-		t.Fatalf("did not expect any alias to count as an exact resolved version")
-	}
-	if resolved.Matches(version.Beta) {
-		t.Fatalf("did not expect beta alias to count as an exact resolved version")
-	}
-	if resolved.Matches(version.Stable) {
-		t.Fatalf("did not expect stable alias to count as an exact resolved version")
+	if filename != "placeholderapi-2.12.2.jar" {
+		t.Fatalf("unexpected filename %q", filename)
 	}
 }
 
-func TestResolvedVersionIDFallbackPolicy(t *testing.T) {
-	resolved := NewResolvedVersion(
-		resourceResponse{
-			ID: 6245, Name: "PlaceholderAPI",
-			File: resourceFileResponse{Type: "jar"},
-		},
-		versionResponse{ID: 625258},
+// TestSpigetExternalArtifactFilename covers the live Candidates filename rule
+// for external downloads: the archive name comes from the external URL.
+func TestSpigetExternalArtifactFilename(t *testing.T) {
+	filename := artifactFilename(
+		10,
+		"external-plugin",
+		"1.0.0",
+		20,
+		"external",
+		"https://downloads.example.com/plugin.jar",
 	)
+	if filename != "plugin.jar" {
+		t.Fatalf("expected external archive filename, got %q", filename)
+	}
+}
 
-	if got := resolved.LucyVersion(); got != "625258" {
-		t.Fatalf(
-			"expected numeric version id fallback for exact resolution, got %q",
-			got,
-		)
+// TestSpigetVersionIdentity covers the live Candidates version label: the
+// published human name wins, with the numeric version ID as fallback.
+func TestSpigetVersionIdentity(t *testing.T) {
+	if got := spigetVersion("2.12.2", 625258); got != "2.12.2" {
+		t.Fatalf("expected human version, got %q", got)
 	}
-	if !resolved.Matches("625258") {
-		t.Fatalf("expected numeric version id to remain matchable")
-	}
-
-	remote := resolved.ToPackageRemote()
-	if remote.FileURL != "https://api.spiget.org/v2/resources/6245/download" {
-		t.Fatalf("unexpected fallback file url %q", remote.FileURL)
-	}
-	if remote.Filename != "placeholderapi-625258.jar" {
-		t.Fatalf("unexpected numeric fallback filename %q", remote.Filename)
+	if got := spigetVersion("", 625258); got != "625258" {
+		t.Fatalf("expected numeric version fallback, got %q", got)
 	}
 }
 

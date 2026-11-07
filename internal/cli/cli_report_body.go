@@ -1,7 +1,8 @@
 package cli
 
 import (
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"fmt"
 	"strings"
 )
@@ -48,7 +49,8 @@ func (b ReportBody) Encode() string {
 	if len(b.Stack) > maxReportStack {
 		b.Stack = b.Stack[:maxReportStack]
 	}
-	payload, err := json.Marshal(b)
+	// Subprocess diagnostics are arbitrary bytes, not necessarily UTF-8.
+	payload, err := json.Marshal(b, jsontext.AllowInvalidUTF8(true))
 	if err != nil {
 		return fmt.Sprintf("command=%s code=%s", b.Command, b.Code)
 	}

@@ -13,9 +13,8 @@ import (
 	"strings"
 
 	"github.com/mclucy/lucy/document"
-	"github.com/mclucy/lucy/internal/fsutil"
 	"github.com/mclucy/lucy/internal/workspacewrite"
-	"gopkg.in/yaml.v3"
+	"go.yaml.in/yaml/v4"
 )
 
 const (
@@ -205,25 +204,4 @@ func (r *Receipt) Snapshot() ([]byte, error) {
 		})
 	}
 	return yaml.Marshal(result)
-}
-
-// writeAt replaces the receipt at path atomically. A caller that must publish
-// the bytes inside a larger transaction takes a Snapshot instead.
-func (r *Receipt) writeAt(path string) error {
-	data, err := r.Snapshot()
-	if err != nil {
-		return err
-	}
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		return err
-	}
-	return fsutil.AtomicWrite(path, data, 0o600)
-}
-
-// Write replaces the receipt of the workspace at root atomically.
-func (r *Receipt) Write(root string) error {
-	if err := workspacewrite.SafePath(root, Filename); err != nil {
-		return err
-	}
-	return r.writeAt(filepath.Join(root, Filename))
 }

@@ -6,7 +6,7 @@
 //     candidates.
 //   - Map an explicit Provider (or Registry for search) to exactly one
 //     capability when supported.
-//   - Apply operation-aware routing policy (search/info/fetch/dependencies).
+//   - Route search, project metadata, package catalogues, and server products.
 //   - Return typed selection errors for invalid/unsupported inputs.
 //
 // Non-responsibilities:
@@ -22,7 +22,6 @@ import (
 	catalogpkg "github.com/mclucy/lucy/catalog"
 	"github.com/mclucy/lucy/log"
 	"github.com/mclucy/lucy/upstream"
-	"github.com/mclucy/lucy/upstream/internal/providers/bmclapi"
 	"github.com/mclucy/lucy/upstream/internal/providers/curseforge"
 	"github.com/mclucy/lucy/upstream/internal/providers/fabric"
 	"github.com/mclucy/lucy/upstream/internal/providers/forge"
@@ -42,11 +41,10 @@ var (
 )
 
 type providerCatalog struct {
-	packageProviders   map[catalogpkg.Provider]upstream.PackageProvider
-	searchProviders    map[catalogpkg.Registry]upstream.SearchProvider
-	infoProviders      map[catalogpkg.Provider]upstream.InfoProvider
-	artifactMappers    map[catalogpkg.Provider]upstream.ArtifactMapProvider
-	installerProviders map[catalogpkg.Provider]upstream.InstallerProvider
+	searchProviders map[catalogpkg.Registry]upstream.SearchProvider
+	infoProviders   map[catalogpkg.Provider]upstream.InfoProvider
+	artifactMappers map[catalogpkg.Provider]upstream.ArtifactMapProvider
+	catalogues      map[catalogpkg.Provider]upstream.PackageCatalogue
 }
 
 // Router binds configured provider instances to their capabilities and applies
@@ -58,15 +56,10 @@ type Router struct {
 
 	providers providerCatalog
 
-	modrinth   *modrinth.Provider
-	curseforge *curseforge.Provider
-	hangar     *hangar.Provider
-	spiget     *spiget.Provider
-	mcdr       *mcdr.Provider
-	mojang     *mojang.Provider
-	fabric     *fabric.Provider
-	forge      *forge.Provider
-	neoforge   *neoforge.Provider
+	mojang   *mojang.Provider
+	fabric   *fabric.Provider
+	forge    *forge.Provider
+	neoforge *neoforge.Provider
 }
 
 // New constructs a router over provider instances. network carries HTTP and
@@ -78,73 +71,55 @@ func New(
 	logger *log.Logger,
 	curseforgeAPIKey string,
 ) *Router {
+	modrinthProvider := modrinth.New(network, logger)
+	hangarProvider := hangar.New(network, logger)
+	spigetProvider := spiget.New(network, logger)
+	mcdrProvider := mcdr.New(network, logger)
+
 	router := &Router{
 		logger:   logger,
 		network:  network,
-		modrinth: modrinth.New(network, logger),
-		hangar:   hangar.New(network, logger),
-		spiget:   spiget.New(network, logger),
-		mcdr:     mcdr.New(network, logger),
 		mojang:   mojang.New(network),
 		fabric:   fabric.New(network),
 		forge:    forge.New(network),
 		neoforge: neoforge.New(network),
 	}
 	router.providers = providerCatalog{
-		packageProviders: map[catalogpkg.Provider]upstream.PackageProvider{
-			catalogpkg.ProviderModrinth: router.modrinth,
-			catalogpkg.ProviderMCDR:     router.mcdr,
-			catalogpkg.ProviderHangar:   router.hangar,
-			catalogpkg.ProviderSpiget:   router.spiget,
-		},
 		searchProviders: map[catalogpkg.Registry]upstream.SearchProvider{
-			catalogpkg.RegistryModrinth: router.modrinth,
-			catalogpkg.RegistryMCDR:     router.mcdr,
-			catalogpkg.RegistryHangar:   router.hangar,
-			catalogpkg.RegistrySpiget:   router.spiget,
+			catalogpkg.RegistryModrinth: modrinthProvider,
+			catalogpkg.RegistryMCDR:     mcdrProvider,
+			catalogpkg.RegistryHangar:   hangarProvider,
+			catalogpkg.RegistrySpiget:   spigetProvider,
 		},
 		infoProviders: map[catalogpkg.Provider]upstream.InfoProvider{
-			catalogpkg.ProviderModrinth: router.modrinth,
-			catalogpkg.ProviderMCDR:     router.mcdr,
-			catalogpkg.ProviderHangar:   router.hangar,
-			catalogpkg.ProviderSpiget:   router.spiget,
+			catalogpkg.ProviderModrinth: modrinthProvider,
+			catalogpkg.ProviderMCDR:     mcdrProvider,
+			catalogpkg.ProviderHangar:   hangarProvider,
+			catalogpkg.ProviderSpiget:   spigetProvider,
+		},
+		catalogues: map[catalogpkg.Provider]upstream.PackageCatalogue{
+			catalogpkg.ProviderModrinth: modrinthProvider,
+			catalogpkg.ProviderMCDR:     mcdrProvider,
+			catalogpkg.ProviderHangar:   hangarProvider,
+			catalogpkg.ProviderSpiget:   spigetProvider,
 		},
 		artifactMappers: map[catalogpkg.Provider]upstream.ArtifactMapProvider{
-			catalogpkg.ProviderModrinth: router.modrinth,
-		},
-		installerProviders: map[catalogpkg.Provider]upstream.InstallerProvider{
-			catalogpkg.ProviderBMCLAPI: bmclapi.New(
-				router.mojang,
-				router.forge,
-				router.neoforge,
-			),
-			catalogpkg.ProviderFabric:   router.fabric,
-			catalogpkg.ProviderForge:    router.forge,
-			catalogpkg.ProviderMojang:   router.mojang,
-			catalogpkg.ProviderNeoForge: router.neoforge,
+			catalogpkg.ProviderModrinth: modrinthProvider,
 		},
 	}
 	if key := strings.TrimSpace(curseforgeAPIKey); key != "" {
-		router.curseforge = curseforge.New(network, logger, key)
-		router.providers.packageProviders[catalogpkg.ProviderCurseForge] = router.curseforge
-		router.providers.searchProviders[catalogpkg.RegistryCurseForge] = router.curseforge
-		router.providers.infoProviders[catalogpkg.ProviderCurseForge] = router.curseforge
-		router.providers.artifactMappers[catalogpkg.ProviderCurseForge] = router.curseforge
+		curseforgeProvider := curseforge.New(network, logger, key)
+		router.providers.searchProviders[catalogpkg.RegistryCurseForge] = curseforgeProvider
+		router.providers.infoProviders[catalogpkg.ProviderCurseForge] = curseforgeProvider
+		router.providers.catalogues[catalogpkg.ProviderCurseForge] = curseforgeProvider
+		router.providers.artifactMappers[catalogpkg.ProviderCurseForge] = curseforgeProvider
 	}
 	return router
 }
 
 func (r *Router) curseforgeAvailable() bool {
-	return r.curseforge != nil
-}
-
-// ListAutoProviders returns the default ordered provider list used when the
-// provider is unspecified and the platform is unspecified.
-func (r *Router) ListAutoProviders() []upstream.PackageProvider {
-	capabilities, _ := r.packageProvidersFromKeys(
-		autoProviders(r.curseforgeAvailable()),
-	)
-	return capabilities
+	_, ok := r.providers.catalogues[catalogpkg.ProviderCurseForge]
+	return ok
 }
 
 // GetArtifactMapper returns the hash mapper registered for provider.
@@ -174,89 +149,6 @@ func (r *Router) artifactMappers() []upstream.ArtifactMapProvider {
 	return mappers
 }
 
-// InstallerFor returns the installer provider that can bootstrap the
-// ecosystem.
-func (r *Router) InstallerFor(ecosystem catalogpkg.Ecosystem) (
-	upstream.InstallerProvider,
-	bool,
-) {
-	provider, ok := installerProviderForEcosystem(ecosystem)
-	if !ok {
-		return nil, false
-	}
-	return r.InstallerForProvider(provider)
-}
-
-// InstallerForProvider returns the installer provider registered for the
-// provider key.
-func (r *Router) InstallerForProvider(provider catalogpkg.Provider) (
-	upstream.InstallerProvider,
-	bool,
-) {
-	installer, ok := r.providers.installerProviders[provider]
-	if !ok {
-		r.logger.Debug(
-			"routing: no installer provider",
-			"provider", provider,
-			"reason", "provider has no installer capability",
-		)
-	}
-	return installer, ok
-}
-
-func installerProviderForEcosystem(ecosystem catalogpkg.Ecosystem) (
-	catalogpkg.Provider,
-	bool,
-) {
-	switch ecosystem {
-	case catalogpkg.EcosystemMinecraft:
-		return catalogpkg.ProviderMojang, true
-	case catalogpkg.EcosystemForge:
-		return catalogpkg.ProviderForge, true
-	case catalogpkg.EcosystemNeoForge:
-		return catalogpkg.ProviderNeoForge, true
-	case catalogpkg.EcosystemFabric:
-		return catalogpkg.ProviderFabric, true
-	default:
-		return catalogpkg.ProviderUnknown, false
-	}
-}
-
-// ResolveProviders resolves ordered provider candidates for the platform and
-// user-specified provider.
-func (r *Router) ResolveProviders(
-	platform catalogpkg.Ecosystem,
-	provider catalogpkg.Provider,
-) ([]upstream.PackageProvider, error) {
-	if provider == catalogpkg.ProviderUnknown {
-		return nil, ErrUnknownProvider
-	}
-
-	if provider != catalogpkg.ProviderUnspecified {
-		return r.resolveExplicitProvider(provider)
-	}
-
-	keys, err := providersForEcosystem(platform, r.curseforgeAvailable())
-	if err != nil {
-		r.logger.Debug(
-			"routing: package providers unavailable for ecosystem",
-			"platform", platform,
-			"reason", "unsupported ecosystem",
-		)
-		return nil, fmt.Errorf("%w: %s", err, platform)
-	}
-	providers, err := r.packageProvidersFromKeys(keys)
-	if err != nil {
-		return nil, err
-	}
-	r.logger.Debug(
-		"routing: package providers selected from ecosystem candidates",
-		"platform", platform,
-		"providers", keys,
-	)
-	return providers, nil
-}
-
 // ResolveSearchProviders resolves search providers for the platform. With a
 // platform filter active, explicit registry selection is validated against
 // registry capability data.
@@ -281,29 +173,7 @@ func (r *Router) ResolveSearchProviders(
 		return r.resolveExplicitRegistry(registry)
 	}
 
-	if !platform.IsSearchable() {
-		keys, err := providersForEcosystem(platform, r.curseforgeAvailable())
-		if err != nil {
-			r.logger.Debug(
-				"routing: search providers unavailable for ecosystem",
-				"platform", platform,
-				"reason", "unsupported ecosystem",
-			)
-			return nil, fmt.Errorf("%w: %s", err, platform)
-		}
-		providers, err := r.searchersFromKeys(keys)
-		if err != nil {
-			return nil, err
-		}
-		r.logger.Debug(
-			"routing: search providers selected from ecosystem candidates",
-			"platform", platform,
-			"providers", keys,
-		)
-		return providers, nil
-	}
-
-	keys := searchProvidersForEcosystem(platform, r.curseforgeAvailable())
+	keys := providersForEcosystem(platform, r.curseforgeAvailable())
 	if len(keys) == 0 {
 		r.logger.Debug(
 			"routing: search providers unavailable for platform",
@@ -338,14 +208,14 @@ func (r *Router) ResolveInfoProviders(
 		return r.resolveExplicitInformer(provider)
 	}
 
-	keys, err := providersForEcosystem(platform, r.curseforgeAvailable())
-	if err != nil {
+	keys := providersForEcosystem(platform, r.curseforgeAvailable())
+	if len(keys) == 0 {
 		r.logger.Debug(
 			"routing: info providers unavailable for ecosystem",
 			"platform", platform,
 			"reason", "unsupported ecosystem",
 		)
-		return nil, fmt.Errorf("%w: %s", err, platform)
+		return nil, fmt.Errorf("%w: %s", ErrInvalidEcosystem, platform)
 	}
 	providers, err := r.informersFromKeys(keys)
 	if err != nil {
@@ -401,75 +271,6 @@ func (r *Router) resolveExplicitRegistry(registry catalogpkg.Registry) (
 	return []upstream.SearchProvider{searcher}, nil
 }
 
-// ResolveProvidersForRuntime resolves package providers from the runtime's
-// ecosystems and the user-specified provider.
-func (r *Router) ResolveProvidersForRuntime(
-	ecosystems []catalogpkg.Ecosystem,
-	provider catalogpkg.Provider,
-) ([]upstream.PackageProvider, error) {
-	if provider == catalogpkg.ProviderUnknown {
-		return nil, ErrUnknownProvider
-	}
-
-	if provider != catalogpkg.ProviderUnspecified {
-		return r.resolveExplicitProvider(provider)
-	}
-
-	if len(ecosystems) == 0 {
-		r.logger.Debug(
-			"routing: package providers unavailable for runtime",
-			"reason", "no runtime ecosystems",
-		)
-		return nil, fmt.Errorf("routing: runtime ecosystems unavailable, cannot resolve providers")
-	}
-
-	selection := providersFromEcosystems(ecosystems, r.curseforgeAvailable())
-	switch {
-	case len(selection.providers) > 0:
-		r.logger.Debug(
-			"routing: package providers selected from runtime ecosystems",
-			"ecosystems", ecosystems,
-			"providers", selection.providers,
-		)
-		return r.packageProvidersFromKeys(selection.providers)
-	case selection.fallback:
-		r.logger.Debug(
-			"routing: package providers fell back to auto list",
-			"ecosystems", ecosystems,
-			"reason", "no runtime ecosystem maps to package providers",
-		)
-		return r.ListAutoProviders(), nil
-	default:
-		r.logger.Debug(
-			"routing: package provider selection is empty",
-			"ecosystems", ecosystems,
-			"reason", "runtime ecosystems carry no package providers",
-		)
-		return []upstream.PackageProvider{}, nil
-	}
-}
-
-func (r *Router) resolveExplicitProvider(provider catalogpkg.Provider) (
-	[]upstream.PackageProvider,
-	error,
-) {
-	capability, ok := r.providers.packageProviders[provider]
-	if !ok {
-		r.logger.Debug(
-			"routing: explicit package provider rejected",
-			"provider", provider,
-			"reason", "provider has no package capability",
-		)
-		return nil, fmt.Errorf("%w: %s", ErrUnsupportedProvider, provider)
-	}
-	r.logger.Debug(
-		"routing: explicit package provider selected",
-		"provider", provider,
-		"capability", capability.Provider(),
-	)
-	return []upstream.PackageProvider{capability}, nil
-}
-
 func validateSearchRegistryEcosystem(
 	registry catalogpkg.Registry,
 	platform catalogpkg.Ecosystem,
@@ -479,8 +280,7 @@ func validateSearchRegistryEcosystem(
 	}
 
 	provider := registry.Provider()
-	support, ok := EcosystemSupportedBy(provider, platform)
-	if ok && support.Supported {
+	if EcosystemSupportedBy(provider, platform) {
 		return nil
 	}
 
@@ -489,21 +289,6 @@ func validateSearchRegistryEcosystem(
 		registry,
 		platform,
 	)
-}
-
-func (r *Router) packageProvidersFromKeys(providers []catalogpkg.Provider) (
-	[]upstream.PackageProvider,
-	error,
-) {
-	capabilities := make([]upstream.PackageProvider, 0, len(providers))
-	for _, provider := range providers {
-		capability, ok := r.providers.packageProviders[provider]
-		if !ok {
-			return nil, fmt.Errorf("%w: %s", ErrUnsupportedProvider, provider)
-		}
-		capabilities = append(capabilities, capability)
-	}
-	return capabilities, nil
 }
 
 func (r *Router) searchersFromKeys(keys []catalogpkg.Provider) (

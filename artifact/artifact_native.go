@@ -16,8 +16,8 @@ import (
 	"github.com/mclucy/lucy/catalog"
 	"github.com/mclucy/lucy/internal/fsutil"
 	"github.com/mclucy/lucy/version"
-	"github.com/pelletier/go-toml"
-	"gopkg.in/yaml.v3"
+	"github.com/pelletier/go-toml/v2"
+	"go.yaml.in/yaml/v4"
 )
 
 // ReadModules keeps each descriptor identity and nested container location
@@ -251,11 +251,13 @@ func inspectArchive(z *zip.Reader, loader catalog.Ecosystem, member string, dept
 			for _, mod := range d.Mods {
 				v := version.Version(mod.Version)
 				if v == "${file.jarVersion}" {
-					data, err := nativeEntry(z, "META-INF/MANIFEST.MF")
+					v, err = readManifestImplementationVersion(
+						z,
+						fsutil.MaxNestedZipEntryBytes,
+					)
 					if err != nil {
 						return nil, err
 					}
-					v = forgeManifestVersion(string(data))
 				}
 				m := catalog.DescriptorModule{
 					ID:             mod.ID,

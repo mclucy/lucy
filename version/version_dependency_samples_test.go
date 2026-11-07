@@ -11,7 +11,7 @@ import (
 	"github.com/mclucy/lucy/internal/fileschema"
 	"github.com/mclucy/lucy/internal/fn"
 	"github.com/mclucy/lucy/version"
-	"github.com/pelletier/go-toml"
+	"github.com/pelletier/go-toml/v2"
 )
 
 func TestMcdrDependencyParsingFromSample(t *testing.T) {

@@ -6,6 +6,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"net/http"
 	"os"
@@ -23,7 +24,7 @@ import (
 	"github.com/mclucy/lucy/serverregistry"
 	"github.com/mclucy/lucy/upstream"
 	versionpkg "github.com/mclucy/lucy/version"
-	"gopkg.in/yaml.v3"
+	"go.yaml.in/yaml/v4"
 )
 
 // isolateInstallHome keeps Java selection and configuration reads inside the
@@ -574,4 +575,165 @@ func installTestMiniVanillaJar(t *testing.T, id string) []byte {
 		t.Fatalf("seal miniature jar: %v", err)
 	}
 	return buffer.Bytes()
+}
+
+func TestLockedRequirementChangesConvergeWorkspace(t *testing.T) {
+	isolateInstallHome(t)
+	root := t.TempDir()
+	core := []byte("locked core bytes\n")
+	alpha := []byte("locked alpha bytes\n")
+	beta := []byte("locked beta bytes\n")
+	manifest := installTestManifest("1.21.4")
+	manifest.Server.Packages[catalog.EcosystemFabric] = map[string]document.Requirement{
+		"modrinth:beta": {Selector: "1.0.0"},
+	}
+	if err := document.ManifestFile(root).Write(manifest); err != nil {
+		t.Fatalf("write manifest: %v", err)
+	}
+	fingerprint, err := manifest.Fingerprint()
+	if err != nil {
+		t.Fatalf("fingerprint manifest: %v", err)
+	}
+	lock := &document.Lock{
+		SchemaVersion:       document.LockSchemaVersion,
+		ManifestFingerprint: fingerprint,
+		Server: document.LockedServer{
+			Minecraft:   "1.21.4",
+			Directory:   "server",
+			Product:     serverpkg.ProductMinecraft,
+			CoreVersion: "1.21.4",
+			Artifact: catalog.Artifact{
+				Provider: catalog.ProviderMojang,
+				Version:  "1.21.4",
+				Filename: "server.jar",
+				URL:      "https://example.invalid/server.jar",
+				Hashes:   map[string]string{"sha256": installTestDigest(core)},
+			},
+			Java: document.LockedJava{Advisory: 21},
+		},
+		Packages: []document.Package{
+			{
+				Environment: serverpkg.EnvironmentServer,
+				Ecosystem:   catalog.EcosystemFabric,
+				Artifact: catalog.Artifact{
+					Provider:  catalog.ProviderModrinth,
+					ProjectID: "alpha",
+					Version:   "1.0.0",
+					Filename:  "alpha.jar",
+					URL:       "https://example.invalid/alpha.jar",
+					Hashes:    map[string]string{"sha256": installTestDigest(alpha)},
+				},
+			},
+			{
+				Environment: serverpkg.EnvironmentServer,
+				Ecosystem:   catalog.EcosystemFabric,
+				Artifact: catalog.Artifact{
+					Provider:  catalog.ProviderModrinth,
+					ProjectID: "beta",
+					Version:   "1.0.0",
+					Filename:  "beta.jar",
+					URL:       "https://example.invalid/beta.jar",
+					Hashes:    map[string]string{"sha256": installTestDigest(beta)},
+				},
+				Requirements: []document.RequirementBinding{{
+					Reference: "modrinth:beta",
+					Selector:  "1.0.0",
+					Enabled:   true,
+				}},
+			},
+		},
+	}
+	if err := document.LockFile(root).Write(lock); err != nil {
+		t.Fatalf("write initial lock: %v", err)
+	}
+	added := installTestManifest("1.21.4")
+	added.Server.Packages[catalog.EcosystemFabric] = map[string]document.Requirement{
+		"modrinth:alpha": {Selector: "1.0.0"},
+		"modrinth:beta":  {Selector: "1.0.0"},
+	}
+	service := installTestService(t)
+	options := install.Options{
+		Locked:            true,
+		RequirementChange: true,
+		PublishManifest:   true,
+		Offline:           true,
+		Materialize: installTestMaterializer(t, map[string][]byte{
+			"server.jar": core,
+			"alpha.jar":  alpha,
+			"beta.jar":   beta,
+		}),
+	}
+	if _, err := service.Sync(t.Context(), root, added, lock, options); err != nil {
+		t.Fatalf("add locked requirement: %v", err)
+	}
+	if actual := installTestRead(t, root, "server/mods/alpha.jar"); !bytes.Equal(actual, alpha) {
+		t.Fatalf("added package bytes = %q, want %q", actual, alpha)
+	}
+	declared, err := document.ManifestFile(root).Read()
+	if err != nil {
+		t.Fatalf("read added declaration: %v", err)
+	}
+	if requirement, ok := declared.Server.Packages[catalog.EcosystemFabric]["modrinth:alpha"]; !ok || !requirement.IsEnabled() {
+		t.Fatal("added package has no enabled declaration")
+	}
+	locked, err := document.LockFile(root).Read()
+	if err != nil {
+		t.Fatalf("read added lock: %v", err)
+	}
+	bound := false
+	for _, pkg := range locked.Packages {
+		if pkg.ProjectID != "alpha" {
+			continue
+		}
+		for _, requirement := range pkg.Requirements {
+			if requirement.Reference == "modrinth:alpha" && requirement.Enabled {
+				bound = true
+			}
+		}
+	}
+	if !bound {
+		t.Fatal("published lock did not bind the added requirement")
+	}
+	if entry := installTestReceipt(t, root)["server/mods/alpha.jar"]; entry != installTestDigest(alpha) {
+		t.Fatalf("added package receipt digest = %q", entry)
+	}
+	removed := installTestManifest("1.21.4")
+	removed.Server.Packages[catalog.EcosystemFabric] = map[string]document.Requirement{
+		"modrinth:beta": {Selector: "1.0.0"},
+	}
+	if _, err := service.Sync(t.Context(), root, removed, locked, options); err != nil {
+		t.Fatalf("remove locked requirement: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(root, "server", "mods", "alpha.jar")); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("removed package still exists: %v", err)
+	}
+	declared, err = document.ManifestFile(root).Read()
+	if err != nil {
+		t.Fatalf("read removed declaration: %v", err)
+	}
+	if _, ok := declared.Server.Packages[catalog.EcosystemFabric]["modrinth:alpha"]; ok {
+		t.Fatal("removed package remains declared")
+	}
+	locked, err = document.LockFile(root).Read()
+	if err != nil {
+		t.Fatalf("read removed lock: %v", err)
+	}
+	if len(locked.Packages) != 1 || locked.Packages[0].ProjectID != "beta" {
+		t.Fatalf("retained package pins = %+v, want only beta", locked.Packages)
+	}
+	entries := installTestReceipt(t, root)
+	if _, owned := entries["server/mods/alpha.jar"]; owned {
+		t.Fatal("receipt still owns the removed package")
+	}
+	for relative, want := range map[string][]byte{
+		"server/server.jar":    core,
+		"server/mods/beta.jar": beta,
+	} {
+		if actual := installTestRead(t, root, relative); !bytes.Equal(actual, want) {
+			t.Fatalf("retained bytes at %s = %q, want %q", relative, actual, want)
+		}
+		if entries[relative] != installTestDigest(want) {
+			t.Fatalf("retained receipt digest at %s = %q", relative, entries[relative])
+		}
+	}
 }

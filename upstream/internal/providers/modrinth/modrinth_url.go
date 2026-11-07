@@ -2,8 +2,6 @@ package modrinth
 
 import (
 	"net/url"
-	"strings"
-	"text/template"
 
 	"github.com/mclucy/lucy/catalog"
 )
@@ -31,40 +29,13 @@ func projectUrl(suffix string) (urlString string) {
 	return projectUrlPrefix + url.PathEscape(suffix)
 }
 
-func projectMemberUrl(suffix string) (urlString string) {
-	return projectUrl(suffix) + "/members"
-}
-
-func projectDependencyUrl(suffix string) (urlString string) {
-	return projectUrl(suffix) + "/dependencies"
-}
-
-const searchUrlTemplate = `https://api.modrinth.com/v2/search?query={{.query}}&limit=100&index={{.index}}&facets={{.facets}}`
+const searchUrlPrefix = "https://api.modrinth.com/v2/search?query="
 
 func searchUrl(
 	query string,
 	option searchOptions,
-) (urlString string) {
-	urlTemplate, _ := template.New("modrinth_search_url").Parse(searchUrlTemplate)
-	urlBuilder := strings.Builder{}
-	// The template is a static constant; execution only fails on a writer
-	// error, which strings.Builder cannot produce.
-	_ = urlTemplate.Execute(
-		&urlBuilder,
-		map[string]any{
-			"query":  url.QueryEscape(query),
-			"index":  option.index,
-			"facets": url.QueryEscape(serializeFacet(option.facets...)),
-		},
-	)
-
-	urlString = urlBuilder.String()
-	return urlString
-}
-
-const userHomepageUrlPrefix = `https://modrinth.com/user/`
-
-// userHomepageUrl's suffix is the user's username or id.
-func userHomepageUrl(suffix string) (urlString string) {
-	return userHomepageUrlPrefix + suffix
+) string {
+	return searchUrlPrefix + url.QueryEscape(query) +
+		"&limit=100&index=" + option.index +
+		"&facets=" + url.QueryEscape(serializeFacet(option.facets...))
 }

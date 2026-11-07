@@ -21,7 +21,6 @@ const (
 	ProviderFabric   Provider = "fabric"
 	ProviderForge    Provider = "forge"
 	ProviderNeoForge Provider = "neoforge"
-	ProviderBMCLAPI  Provider = "bmclapi"
 	ProviderPaperMC  Provider = "papermc"
 	ProviderPurpur   Provider = "purpur"
 	ProviderMaven    Provider = "maven"
@@ -60,8 +59,6 @@ func (p Provider) Title() string {
 		return "Forge"
 	case ProviderNeoForge:
 		return "NeoForge"
-	case ProviderBMCLAPI:
-		return "BMCLAPI"
 	case ProviderPaperMC:
 		return "PaperMC"
 	case ProviderPurpur:
@@ -115,7 +112,6 @@ func ParseProvider(s string) (Provider, bool) {
 		ProviderFabric,
 		ProviderForge,
 		ProviderNeoForge,
-		ProviderBMCLAPI,
 		ProviderPaperMC,
 		ProviderPurpur,
 		ProviderMaven,

@@ -208,48 +208,6 @@ func productServedEcosystems(
 	return offers
 }
 
-// Supports reports whether pkg runs on the observed runtime. It returns the
-// ecosystem that serves pkg and the support level. ok is false when no
-// ecosystem serves pkg. A full offer wins over a degraded offer.
-func (ws *Workspace) Supports(
-	pkg catalog.VersionedRef,
-) (offered catalog.Ecosystem, level Compatibility, ok bool) {
-	offers := ws.ServedEcosystems()
-
-	serving := -1
-	for i, offer := range offers {
-		if !offer.Ecosystem.Satisfy(pkg.Ecosystem) {
-			continue
-		}
-		if serving < 0 ||
-			offers[serving].Compatibility == CompatDegraded &&
-				offer.Compatibility == CompatFull {
-			serving = i
-		}
-	}
-	if serving < 0 {
-		return catalog.EcosystemUnspecified, "", false
-	}
-
-	best := offers[serving]
-	if best.Compatibility == CompatFull {
-		return best.Ecosystem, CompatFull, true
-	}
-	return best.Ecosystem, CompatDegraded,
-		supportsDegraded(best.Ecosystem, pkg)
-}
-
-// supportsDegraded validates one package against a degraded offer. The
-// default rule accepts every package. Ecosystem-specific checks replace it
-// over time. Example: Fabric content over the Sinytra bridge needs a lookup
-// in the discovery compatibility report.
-func supportsDegraded(eco catalog.Ecosystem, pkg catalog.VersionedRef) bool {
-	switch eco {
-	default:
-		return true
-	}
-}
-
 func appendServedEcosystem(
 	offers []ServedEcosystem,
 	ecosystem catalog.Ecosystem,

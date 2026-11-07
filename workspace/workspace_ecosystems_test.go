@@ -56,92 +56,41 @@ func offerSet(offers []ServedEcosystem) map[catalog.Ecosystem]Compatibility {
 	return set
 }
 
-func TestSupports_FullAndMissing(t *testing.T) {
-	ws := compatWorkspace(compatTestCore(catalog.EcosystemFabric, "fabric"))
-
-	offered, level, ok := ws.Supports(
-		compatTestCore(catalog.EcosystemFabric, "lithium"),
-	)
-	if !ok || level != CompatFull || offered != catalog.EcosystemFabric {
-		t.Errorf(
-			"expected full Fabric support, got %q/%q/%v",
-			offered,
-			level,
-			ok,
-		)
-	}
-
-	if _, _, ok := ws.Supports(
-		compatTestCore(catalog.EcosystemForge, "luckperms"),
-	); ok {
-		t.Errorf("expected no Forge support on a Fabric runtime")
-	}
-}
-
-func TestSupports_ConnectorIsDegraded(t *testing.T) {
-	ws := compatWorkspace(compatTestCore(catalog.EcosystemNeoForge, "neoforge"))
-	ws.Packages = []DiscoveredPackage{
-		{
-			ID: compatTestCore(
-				catalog.EcosystemNeoForge,
-				"sinytra-connector",
-			),
-		},
-	}
-
-	offered, level, ok := ws.Supports(
-		compatTestCore(catalog.EcosystemFabric, "lithium"),
-	)
-	if !ok || level != CompatDegraded || offered != catalog.EcosystemFabric {
-		t.Fatalf(
-			"expected degraded Fabric support through the bridge, got %q/%q/%v",
-			offered,
-			level,
-			ok,
-		)
-	}
-}
-
-func TestSupports_PaperSatisfiesBukkit(t *testing.T) {
-	ws := compatWorkspace(compatTestCore(catalog.EcosystemPaper, "paper"))
-	_, level, ok := ws.Supports(compatTestCore(catalog.EcosystemBukkit, "essentials"))
-	if !ok || level != CompatFull {
-		t.Errorf("expected full Bukkit support on Paper, got %q/%v", level, ok)
-	}
-}
-
-func TestSupports_HybridCoreOffersBothEcosystems(t *testing.T) {
-	ws := compatWorkspace(
-		compatTestCore(catalog.EcosystemUnspecified, "arclight"),
-		compatTestCore(catalog.EcosystemNeoForge, "neoforge"),
-	)
-	for _, ecosystem := range []catalog.Ecosystem{
-		catalog.EcosystemNeoForge,
-		catalog.EcosystemBukkit,
-	} {
-		_, level, ok := ws.Supports(compatTestCore(ecosystem, "pkg"))
-		if !ok || level != CompatFull {
-			t.Errorf(
-				"expected full %s support, got %q/%v",
-				ecosystem,
-				level,
-				ok,
-			)
-		}
-	}
-}
-
 func TestServedEcosystems(t *testing.T) {
 	tests := []struct {
 		name       string
 		primary    catalog.VersionedRef
 		components []catalog.VersionedRef
+		packages   []DiscoveredPackage
 		want       map[catalog.Ecosystem]Compatibility
 	}{
 		{
 			name:    "vanilla offers nothing",
 			primary: compatTestCore(catalog.EcosystemMinecraft, "minecraft"),
 			want:    map[catalog.Ecosystem]Compatibility{},
+		},
+		{
+			name:    "fabric runtime offers fabric",
+			primary: compatTestCore(catalog.EcosystemFabric, "fabric"),
+			want: map[catalog.Ecosystem]Compatibility{
+				catalog.EcosystemFabric: CompatFull,
+			},
+		},
+		{
+			name:    "connector degrades fabric on neoforge",
+			primary: compatTestCore(catalog.EcosystemNeoForge, "neoforge"),
+			packages: []DiscoveredPackage{
+				{
+					ID: compatTestCore(
+						catalog.EcosystemNeoForge,
+						"sinytra-connector",
+					),
+				},
+			},
+			want: map[catalog.Ecosystem]Compatibility{
+				catalog.EcosystemNeoForge: CompatFull,
+				catalog.EcosystemFabric:   CompatDegraded,
+			},
 		},
 		{
 			name:    "purpur is a paper fork",
@@ -185,6 +134,17 @@ func TestServedEcosystems(t *testing.T) {
 			},
 		},
 		{
+			name:    "arclight with neoforge component",
+			primary: compatTestCore(catalog.EcosystemUnspecified, "arclight"),
+			components: []catalog.VersionedRef{
+				compatTestCore(catalog.EcosystemNeoForge, "neoforge"),
+			},
+			want: map[catalog.Ecosystem]Compatibility{
+				catalog.EcosystemNeoForge: CompatFull,
+				catalog.EcosystemBukkit:   CompatFull,
+			},
+		},
+		{
 			name:    "spongeforge offers sponge and forge",
 			primary: compatTestCore(catalog.EcosystemSponge, "spongeforge"),
 			components: []catalog.VersionedRef{
@@ -214,7 +174,8 @@ func TestServedEcosystems(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			ws := compatWorkspace(tt.primary, tt.components...)
-			got := offerSet(selectionServedEcosystems(ws.Runtime()))
+			ws.Packages = tt.packages
+			got := offerSet(ws.ServedEcosystems())
 			if len(got) != len(tt.want) {
 				t.Fatalf(
 					"offers = %v, want %v",

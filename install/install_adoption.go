@@ -121,7 +121,7 @@ func captureAdoptionDocument(root, name string) (adoptionPinned, error) {
 		exists: true,
 		raw:    raw,
 		mode:   mode,
-		image:  installBytesImage(raw, mode),
+		image:  workspacewrite.InstallBytesImage(raw, mode),
 	}, nil
 }
 

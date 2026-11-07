@@ -1,6 +1,9 @@
 package document
 
 import (
+	"fmt"
+	"path/filepath"
+
 	"github.com/mclucy/lucy/catalog"
 	"github.com/mclucy/lucy/server"
 	"github.com/mclucy/lucy/version"
@@ -39,4 +42,31 @@ func (p *Package) Enabled() bool {
 		}
 	}
 	return false
+}
+
+// PackageDirectory derives placement even for disabled or absent packages.
+// MCDR packages require a wrapper runtime in the lock.
+func (l *Lock) PackageDirectory(pkg *Package) (string, error) {
+	directory := l.Server.Directory
+	folder := "mods"
+	if pkg.Environment == server.EnvironmentMCDR {
+		if l.MCDR == nil {
+			return "", fmt.Errorf("MCDR package has no wrapper runtime")
+		}
+		directory, folder = l.MCDR.Directory, "plugins"
+	} else if pkg.Ecosystem == catalog.EcosystemBukkit ||
+		pkg.Ecosystem == catalog.EcosystemPaper {
+		folder = "plugins"
+	}
+	return filepath.Join(directory, folder), nil
+}
+
+// PackageDestination identifies a planned path, not filesystem existence or
+// ownership. Nested filenames remain relative to the package directory.
+func (l *Lock) PackageDestination(pkg *Package) (string, error) {
+	directory, err := l.PackageDirectory(pkg)
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(directory, pkg.Filename), nil
 }

@@ -49,21 +49,6 @@ func (h HashAlgorithm) String() string {
 	}
 }
 
-// ParseHashAlgorithm maps s to a HashAlgorithm, returning HashNone for
-// unrecognized inputs.
-func ParseHashAlgorithm(s string) HashAlgorithm {
-	switch s {
-	case "sha1":
-		return HashSHA1
-	case "sha256":
-		return HashSHA256
-	case "sha512":
-		return HashSHA512
-	default:
-		return HashNone
-	}
-}
-
 // IntegrityState tracks whether a cached entry's content has been verified
 // against an expected digest from an upstream source.
 type IntegrityState uint8
@@ -77,17 +62,6 @@ const (
 	// digest at cache-add time.
 	IntegrityVerified
 )
-
-func (s IntegrityState) String() string {
-	switch s {
-	case IntegrityUnverified:
-		return "unverified"
-	case IntegrityVerified:
-		return "verified"
-	default:
-		return "unknown"
-	}
-}
 
 // Integrity holds the expected or actual digest of a cache entry along with
 // its verification state. When Expected is empty, the entry operates in

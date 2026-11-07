@@ -123,34 +123,12 @@ func minecraftVersionOf(loader string) (versionpkg.Version, bool) {
 	return versionpkg.Version(fmt.Sprintf("1.%d.%d", major, minor)), true
 }
 
-func (p *Provider) ResolveVersionSelector(
-	ctx context.Context,
-	local upstream.LocalContext,
-	id catalog.VersionedRef,
-) (catalog.VersionedRef, error) {
-	gameVersion, err := minecraftVersionForInstall(local)
-	if err != nil {
-		return id, err
-	}
-
-	neoForgeVersion, err := p.neoForgeVersionFromPackageRef(ctx, id, gameVersion)
-	if err != nil {
-		return id, err
-	}
-
-	return catalog.VersionedRef{
-		Ecosystem: catalog.EcosystemNeoForge,
-		Name:      "neoforge",
-		Version:   versionpkg.Version(neoForgeVersion),
-	}, nil
-}
-
 func (p *Provider) Fetch(
 	ctx context.Context,
-	local upstream.LocalContext,
+	minecraft versionpkg.Version,
 	id catalog.VersionedRef,
 ) (upstream.ResolvedPackage, error) {
-	gameVersion, err := minecraftVersionForInstall(local)
+	gameVersion, err := minecraftVersionForInstall(minecraft)
 	if err != nil {
 		return upstream.ResolvedPackage{}, err
 	}
@@ -171,13 +149,13 @@ func (p *Provider) Fetch(
 	}, nil
 }
 
-func minecraftVersionForInstall(local upstream.LocalContext) (versionpkg.Version, error) {
-	if !local.HasMinecraftVersion() {
+func minecraftVersionForInstall(minecraft versionpkg.Version) (versionpkg.Version, error) {
+	if minecraft == "" || minecraft.IsInvalid() || minecraft.CanInfer() {
 		return "", errors.New(
 			"neoforge bootstrap requires a concrete Minecraft version",
 		)
 	}
-	return local.MinecraftVersion, nil
+	return minecraft, nil
 }
 
 func (p *Provider) neoForgeVersionFromPackageRef(

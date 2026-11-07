@@ -3,8 +3,6 @@ package workspace
 import (
 	"cmp"
 	"sort"
-
-	"github.com/mclucy/lucy/catalog"
 )
 
 // PackageIndex is a map-backed index over discovered packages, keyed by
@@ -64,38 +62,4 @@ func (idx *PackageIndex) Packages() []DiscoveredPackage {
 	})
 
 	return result
-}
-
-// LookupByID performs an exact lookup by the qualified identity
-// (StringQualified()), returning a zero package and false when absent.
-func (idx *PackageIndex) LookupByID(id catalog.VersionedRef) (
-	DiscoveredPackage,
-	bool,
-) {
-	pkg, ok := idx.pkgs[id.StringQualified()]
-	return pkg, ok
-}
-
-// LookupByEcosystemName returns all packages matching the given platform
-// and name, sorted by version string ascending, or nil when none match.
-func (idx *PackageIndex) LookupByEcosystemName(
-	platform catalog.Ecosystem,
-	name string,
-) []DiscoveredPackage {
-	var matches []DiscoveredPackage
-	for _, pkg := range idx.pkgs {
-		if pkg.ID.Ecosystem == platform && pkg.ID.Name.String() == name {
-			matches = append(matches, pkg)
-		}
-	}
-
-	if len(matches) == 0 {
-		return nil
-	}
-
-	sort.Slice(matches, func(i, j int) bool {
-		return cmp.Compare(matches[i].ID.Version.String(), matches[j].ID.Version.String()) < 0
-	})
-
-	return matches
 }

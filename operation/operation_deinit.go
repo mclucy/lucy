@@ -11,7 +11,6 @@ import (
 	"github.com/mclucy/lucy/document"
 	"github.com/mclucy/lucy/filetrack"
 	"github.com/mclucy/lucy/internal/fsutil"
-	"github.com/mclucy/lucy/internal/workspaceguard"
 	"github.com/mclucy/lucy/internal/workspacewrite"
 )
 
@@ -45,19 +44,8 @@ func (s *Service) Deinitialize(root string) (result *DeinitResult, resultErr err
 		return nil, err
 	}
 	defer func() { resultErr = errors.Join(resultErr, writer.Close()) }()
-	if err := workspaceguard.RecoverInstall(root, s.logger); err != nil {
+	if err := filetrack.RecoverLocked(root, s.logger); err != nil {
 		return nil, err
-	}
-	pending, err := filetrack.HasPendingTransaction(root)
-	if err != nil {
-		return nil, err
-	}
-	// State that only a pending transaction would touch is about to be
-	// deleted, so a damaged history alone must not block deinitialization.
-	if pending {
-		if err := filetrack.RecoverPending(root); err != nil {
-			return nil, err
-		}
 	}
 
 	// Recovery can publish declarations that an interrupted transaction

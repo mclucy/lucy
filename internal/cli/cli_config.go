@@ -7,7 +7,7 @@ import (
 	"github.com/mclucy/lucy/config"
 	"github.com/mclucy/lucy/internal/cli/help"
 	"github.com/spf13/cobra"
-	"gopkg.in/yaml.v3"
+	"go.yaml.in/yaml/v4"
 )
 
 const (

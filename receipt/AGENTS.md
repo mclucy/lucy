@@ -6,7 +6,7 @@ Package `receipt` owns the workspace installation receipt (`.lucy/install.yaml`)
 
 - **Committed State Ledger**: Records workspace-relative paths, SHA-256 conflict baseline digests, file modes, and origins (`bootstrap`, `package` with package identity, or `mcdr` for the independently reconciled wrapper runtime) for managed outputs committed by installation or adoption.
 - **Authoritative Ownership**: Lucy owns only files recorded in the receipt. Seed files are initialized when missing but user-owned thereafter, discard files are staging-only, and unrecorded files remain unmanaged.
-- **Atomic Persistence**: Provides atomic file replacement (`Write`) and memory snapshots (`Snapshot`) for transactional commit workflows.
+- **Persistence**: Provides canonical memory snapshots (`Snapshot`); installation publishes those bytes through the workspace transaction journal.
 - **Strict Validation**: Rejects unnormalized or unsafe paths, reserved filenames, path collisions (case-insensitive), and invalid digests. Legacy un-attributed receipts return `ErrLegacyReceipt` giving explicit remediation (`lucy init` or `lucy init --force`).
 
 ## Fingerprint Relationship

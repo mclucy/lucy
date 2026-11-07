@@ -20,7 +20,6 @@ import (
 	"github.com/mclucy/lucy/internal/workspacewrite"
 	"github.com/mclucy/lucy/javaruntime"
 	"github.com/mclucy/lucy/receipt"
-	"github.com/mclucy/lucy/server"
 	"github.com/mclucy/lucy/upstream"
 	"github.com/mclucy/lucy/version"
 )
@@ -92,7 +91,7 @@ func (s *Service) syncInstall(ctx context.Context, root string, d *document.Mani
 		return nil, err
 	}
 	defer func() { resultErr = errors.Join(resultErr, writer.Close()) }()
-	baseManifest, baseLock, err := preflightLocked(root, d, old, opts, true, s.logger)
+	baseManifest, baseLock, err := preflightLocked(root, d, old, opts, s.logger)
 	if err != nil {
 		return nil, err
 	}
@@ -440,7 +439,7 @@ func (s *Service) stagePackages(
 		if !p.Enabled() {
 			continue
 		}
-		destination, err := packageDestination(resolved, p)
+		destination, err := resolved.PackageDestination(p)
 		if err != nil {
 			return nil, err
 		}
@@ -591,7 +590,7 @@ func rejectSharedDestinations(
 		if !p.Enabled() {
 			continue
 		}
-		destination, err := packageDestination(resolved, p)
+		destination, err := resolved.PackageDestination(p)
 		if err != nil {
 			return err
 		}
@@ -632,34 +631,6 @@ func rejectSharedDestinations(
 		})
 	}
 	return nil
-}
-
-// packageFolder returns the directory that serves a package's environment and
-// ecosystem.
-func packageFolder(environment server.Environment, ecosystem catalog.Ecosystem) string {
-	if environment == server.EnvironmentMCDR {
-		return "plugins"
-	}
-	switch ecosystem {
-	case catalog.EcosystemBukkit, catalog.EcosystemPaper:
-		return "plugins"
-	default:
-		return "mods"
-	}
-}
-
-// packageDestination reports where an enabled package lands inside the staged
-// server tree.
-func packageDestination(resolved *document.Lock, p *document.Package) (string, error) {
-	directory := resolved.Server.Directory
-	folder := packageFolder(p.Environment, p.Ecosystem)
-	if p.Environment == server.EnvironmentMCDR {
-		if resolved.MCDR == nil {
-			return "", fmt.Errorf("MCDR package has no wrapper runtime")
-		}
-		directory = resolved.MCDR.Directory
-	}
-	return filepath.Join(directory, folder, p.Filename), nil
 }
 
 // provisionCommitted provisions tracked files after the lock is published. A

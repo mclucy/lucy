@@ -252,10 +252,3 @@ func sortedUnique(paths []string) []string {
 	}
 	return unique
 }
-
-func nonEmptyPaths(path string) []string {
-	if path == "" {
-		return nil
-	}
-	return []string{path}
-}

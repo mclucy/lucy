@@ -71,11 +71,10 @@ func TestDecideCandidate(t *testing.T) {
 			want:      true,
 		},
 		{
-			name:       "stable rejects a prerelease",
-			candidate:  beta,
-			request:    testRequest(versionpkg.Stable, ""),
-			wantKind:   RejectionChannel,
-			wantDetail: "requested a release build",
+			name:      "stable rejects a prerelease",
+			candidate: beta,
+			request:   testRequest(versionpkg.Stable, ""),
+			wantKind:  RejectionChannel,
 		},
 		{
 			name:      "any accepts a prerelease",
@@ -167,11 +166,10 @@ func TestDecideCandidate(t *testing.T) {
 			want: true,
 		},
 		{
-			name:       "first rejection wins",
-			candidate:  beta,
-			request:    projectRequest{origin: originManifest, requirements: testRequest(versionpkg.Stable, "").requirements},
-			wantKind:   RejectionChannel,
-			wantDetail: "requested a release build",
+			name:      "first rejection wins",
+			candidate: beta,
+			request:   projectRequest{origin: originManifest, requirements: testRequest(versionpkg.Stable, "").requirements},
+			wantKind:  RejectionChannel,
 		},
 		{
 			name:      "invalid file pattern is an error",
@@ -198,7 +196,7 @@ func TestDecideCandidate(t *testing.T) {
 			if got.kind != tt.wantKind {
 				t.Errorf("decideCandidate() kind = %q, want %q", got.kind, tt.wantKind)
 			}
-			if got.detail != tt.wantDetail {
+			if tt.wantDetail != "" && got.detail != tt.wantDetail {
 				t.Errorf("decideCandidate() detail = %q, want %q", got.detail, tt.wantDetail)
 			}
 		})

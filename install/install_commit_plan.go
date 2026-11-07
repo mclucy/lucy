@@ -2,14 +2,10 @@ package install
 
 import (
 	"bytes"
-	"crypto/sha256"
-	"encoding/hex"
 	"errors"
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 
 	"github.com/mclucy/lucy/document"
@@ -54,8 +50,8 @@ func installDocumentPlanFor(
 		}
 		return &installDocumentPlan{
 			Data:  data,
-			Base:  installBytesImage(existing, info.Mode().Perm()),
-			Image: *installBytesImage(data, info.Mode().Perm()),
+			Base:  workspacewrite.InstallBytesImage(existing, info.Mode().Perm()),
+			Image: *workspacewrite.InstallBytesImage(data, info.Mode().Perm()),
 		}, nil
 	case errors.Is(err, os.ErrNotExist):
 		data, err := snapshot()
@@ -64,7 +60,7 @@ func installDocumentPlanFor(
 		}
 		return &installDocumentPlan{
 			Data:  data,
-			Image: *installBytesImage(data, defaultMode),
+			Image: *workspacewrite.InstallBytesImage(data, defaultMode),
 		}, nil
 	default:
 		return nil, err
@@ -84,27 +80,6 @@ func installFileMode(path string, defaultMode os.FileMode) (os.FileMode, error) 
 	default:
 		return 0, err
 	}
-}
-
-func installBytesImage(data []byte, mode os.FileMode) *workspacewrite.InstallImage {
-	sum := sha256.Sum256(data)
-	return &workspacewrite.InstallImage{
-		SHA256: hex.EncodeToString(sum[:]),
-		Mode:   effectiveInstallMode(mode),
-	}
-}
-
-// effectiveInstallMode reports the permission bits the platform exposes after
-// a chmod to mode. Windows represents regular files as writable (0666) or
-// read-only (0444); Unix preserves the requested bits.
-func effectiveInstallMode(mode os.FileMode) uint32 {
-	if runtime.GOOS == "windows" {
-		if mode&0o200 != 0 {
-			return 0o666
-		}
-		return 0o444
-	}
-	return uint32(mode.Perm())
 }
 
 func publishInstallBytes(
@@ -133,7 +108,7 @@ func installBeforeCheck(
 	entry workspacewrite.InstallJournalEntry,
 ) func() error {
 	return func() error {
-		current, err := observeInstallPath(files, entry.Path)
+		current, err := workspacewrite.ObserveInstallImage(files, entry.Path)
 		if err != nil {
 			return err
 		}
@@ -145,52 +120,6 @@ func installBeforeCheck(
 		}
 		return nil
 	}
-}
-
-func observeInstallPath(
-	files *os.Root,
-	relative string,
-) (*workspacewrite.InstallImage, error) {
-	info, err := files.Lstat(relative)
-	if errors.Is(err, os.ErrNotExist) {
-		return nil, nil
-	}
-	if err != nil {
-		return nil, err
-	}
-	if !info.Mode().IsRegular() {
-		return nil, fmt.Errorf(
-			"installation output %s is not a regular file",
-			relative,
-		)
-	}
-	file, err := files.Open(relative)
-	if err != nil {
-		return nil, err
-	}
-	hasher := sha256.New()
-	_, copyErr := io.Copy(hasher, file)
-	closeErr := file.Close()
-	if copyErr != nil || closeErr != nil {
-		return nil, errors.Join(copyErr, closeErr)
-	}
-	return &workspacewrite.InstallImage{
-		SHA256: hex.EncodeToString(hasher.Sum(nil)),
-		Mode:   effectiveInstallMode(info.Mode().Perm()),
-	}, nil
-}
-
-func installFinalImageMatches(
-	current, expected *workspacewrite.InstallImage,
-	compareMode bool,
-) bool {
-	if current == nil || expected == nil {
-		return current == nil && expected == nil
-	}
-	if current.SHA256 != expected.SHA256 {
-		return false
-	}
-	return !compareMode || current.Mode == expected.Mode
 }
 
 func installPathReserved(root, name string) bool {

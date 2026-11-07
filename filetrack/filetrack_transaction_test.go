@@ -29,7 +29,7 @@ import (
 	"github.com/mclucy/lucy/internal/workspacewrite"
 	serverpkg "github.com/mclucy/lucy/server"
 	"github.com/mclucy/lucy/workspace"
-	"gopkg.in/yaml.v3"
+	"go.yaml.in/yaml/v4"
 )
 
 func testFileService() *Service {

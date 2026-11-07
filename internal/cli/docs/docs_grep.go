@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	docscontent "github.com/mclucy/lucy/docs"
 	"github.com/mclucy/lucy/internal/cli"
 	"github.com/mclucy/lucy/internal/cli/help"
 	"github.com/spf13/cobra"
@@ -182,13 +183,13 @@ func runGrep(cmd *cobra.Command, args []string, opts *grepOptions) error {
 	if err != nil {
 		return cli.ExitWith(2, fmt.Errorf("invalid pattern: %w", err))
 	}
-	pages, err := loadPages()
+	pages, err := docscontent.Load()
 	if err != nil {
 		return cli.ExitWith(2, err)
 	}
 	selected := pages
 	if len(pageArgs) > 0 {
-		selected = make([]page, 0, len(pageArgs))
+		selected = make([]docscontent.Page, 0, len(pageArgs))
 		for _, raw := range pageArgs {
 			slug, err := normalizeSlug(raw)
 			if err != nil {
@@ -206,7 +207,7 @@ func runGrep(cmd *cobra.Command, args []string, opts *grepOptions) error {
 	out := cmd.OutOrStdout()
 	success := false
 	for _, selectedPage := range selected {
-		lines := splitLines(selectedPage.content)
+		lines := splitLines(selectedPage.Content)
 		matched := make([]bool, len(lines))
 		anyMatch := false
 		for index, line := range lines {
@@ -229,14 +230,14 @@ func runGrep(cmd *cobra.Command, args []string, opts *grepOptions) error {
 		case opts.filesWithMatches:
 			if anyMatch {
 				success = true
-				if _, err := fmt.Fprintln(out, selectedPage.slug); err != nil {
+				if _, err := fmt.Fprintln(out, selectedPage.Slug); err != nil {
 					return err
 				}
 			}
 		case opts.filesWithoutMatch:
 			if !anyMatch {
 				success = true
-				if _, err := fmt.Fprintln(out, selectedPage.slug); err != nil {
+				if _, err := fmt.Fprintln(out, selectedPage.Slug); err != nil {
 					return err
 				}
 			}
@@ -244,7 +245,7 @@ func runGrep(cmd *cobra.Command, args []string, opts *grepOptions) error {
 			if anyMatch {
 				success = true
 			}
-			if err := writeCount(out, selectedPage.slug, matched, showFilename); err != nil {
+			if err := writeCount(out, selectedPage.Slug, matched, showFilename); err != nil {
 				return err
 			}
 		default:
@@ -252,7 +253,7 @@ func runGrep(cmd *cobra.Command, args []string, opts *grepOptions) error {
 				success = true
 				if err := writeMatches(
 					out,
-					selectedPage.slug,
+					selectedPage.Slug,
 					lines,
 					matched,
 					opts,

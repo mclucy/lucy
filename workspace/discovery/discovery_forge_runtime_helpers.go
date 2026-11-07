@@ -175,25 +175,6 @@ func hasConcreteVersion(version versionpkg.Version) bool {
 	return version != "" && !version.IsInvalid() && !version.CanInfer()
 }
 
-func compareForgeMajor(version versionpkg.Version, target int) int {
-	major, _, _ := strings.Cut(string(version), ".")
-	if major == "" {
-		return -1
-	}
-	n, err := strconv.Atoi(major)
-	if err != nil {
-		return -1
-	}
-	switch {
-	case n < target:
-		return -1
-	case n > target:
-		return 1
-	default:
-		return 0
-	}
-}
-
 // parseLoaderArgs extracts the loader and Minecraft versions from the
 // generated Forge/NeoForge argument sidecar. Both `--fml.forgeVersion` and
 // `--fml.neoForgeVersion` are accepted because the installer uses the same

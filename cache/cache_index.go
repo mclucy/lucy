@@ -105,12 +105,3 @@ func (idx *index) put(k key, entry *Entry) {
 func (idx *index) delete(k key) {
 	delete(idx.entries, k)
 }
-
-func (idx *index) exists(k key) bool {
-	_, ok := idx.entries[k]
-	return ok
-}
-
-func (idx *index) all() map[key]*Entry {
-	return idx.entries
-}

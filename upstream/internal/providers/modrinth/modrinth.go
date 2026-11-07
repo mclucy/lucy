@@ -11,13 +11,11 @@ import (
 	"encoding/json/v2"
 	"errors"
 	"fmt"
-	"path"
 
 	"github.com/mclucy/lucy/cache"
 	"github.com/mclucy/lucy/catalog"
 	"github.com/mclucy/lucy/log"
 	"github.com/mclucy/lucy/upstream"
-	versionpkg "github.com/mclucy/lucy/version"
 )
 
 // Provider is one configured Modrinth API client. Every request it performs
@@ -105,24 +103,6 @@ func (p *Provider) Search(ctx context.Context, q upstream.Query) (
 	return
 }
 
-func (p *Provider) Fetch(
-	ctx context.Context,
-	local upstream.LocalContext,
-	id catalog.VersionedRef,
-) (upstream.ResolvedPackage, error) {
-	version, err := p.getVersion(ctx, local, id)
-	if err != nil {
-		return upstream.ResolvedPackage{}, err
-	}
-	if len(version.Files) == 0 || path.Ext(version.Files[0].Filename) != ".jar" {
-		return upstream.ResolvedPackage{}, ErrUnsupportedFileType
-	}
-	resolved := resolvedPackageFromVersion(*version)
-	resolved.ID.Ref = id.Ref
-	resolved.ID.Version = id.Version
-	return resolved, nil
-}
-
 func (p *Provider) Info(
 	ctx context.Context,
 	ref catalog.Ref,
@@ -136,57 +116,3 @@ func (p *Provider) Info(
 }
 
 var ErrInvalidAPIResponse = errors.New("received non-200 code from modrinth api")
-
-// Modrinth may publish non-JAR files; Lucy accepts only JAR artifacts.
-var ErrUnsupportedFileType = errors.New("modrinth: only .jar files are supported")
-
-func (p *Provider) Dependencies(
-	ctx context.Context,
-	local upstream.LocalContext,
-	id catalog.VersionedRef,
-) (*upstream.DependencySet, error) {
-	version, err := p.getVersion(ctx, local, id)
-	if err != nil {
-		return nil, fmt.Errorf("modrinth: dependencies fetch failed: %w", err)
-	}
-	dependencies, err := (&modrinthDependencies{
-		provider: p,
-		version:  version,
-		platform: id.Ecosystem,
-	}).ToDependencySet(ctx)
-	if err != nil {
-		return nil, err
-	}
-	return &dependencies, nil
-}
-
-func (p *Provider) ResolveVersionSelector(
-	ctx context.Context,
-	local upstream.LocalContext,
-	id catalog.VersionedRef,
-) (parsed catalog.VersionedRef, err error) {
-	if id.Ecosystem.IsUnspecified() {
-		id.Ecosystem = catalog.EcosystemUnspecified
-	}
-	parsed.Ecosystem = id.Ecosystem
-	parsed.Name = id.Name
-
-	var v *versionResponse
-	switch id.Version {
-	case versionpkg.Stable, versionpkg.Beta, versionpkg.Any:
-		v, err = p.latestVersion(
-			ctx,
-			id.Name,
-			id.Ecosystem,
-			local.MinecraftVersion,
-			id.Version,
-		)
-	default:
-		return id, nil
-	}
-	if err != nil {
-		return id, err
-	}
-	parsed.Version = versionpkg.Version(v.VersionNumber)
-	return parsed, nil
-}

@@ -1,4 +1,4 @@
-package install_test
+package install
 
 import (
 	"fmt"
@@ -7,7 +7,6 @@ import (
 
 	"github.com/mclucy/lucy/catalog"
 	"github.com/mclucy/lucy/document"
-	"github.com/mclucy/lucy/install"
 	serverpkg "github.com/mclucy/lucy/server"
 	versionpkg "github.com/mclucy/lucy/version"
 )
@@ -27,13 +26,13 @@ type mutationScenario struct {
 	second []int
 }
 
-// FuzzPlanInstallLockedRequirementMutation exercises locked requirement
-// mutations over a generated dependency graph. The oracle derives retained and
-// active packages by enumerating simple paths from declared and enabled
-// packages respectively, and derives the dependency provenance the lock must
-// persist from the retained edges. It asserts the replay behavior consumers
-// observe: retained identities, Enabled, dependency provenance, direct binding
-// intent, and unchanged pins.
+// FuzzLockedRequirementMutation exercises the locked requirement mutation that
+// a locked installation applies over a generated dependency graph. The oracle
+// derives retained and active packages by enumerating simple paths from
+// declared and enabled packages respectively, and derives the dependency
+// provenance the lock must persist from the retained edges. It asserts the
+// replay behavior consumers observe: retained identities, Enabled, dependency
+// provenance, direct binding intent, and unchanged pins.
 //
 // Round one mutates every initial direct root. Round two mutates only packages
 // retained by round one, including adding a disabled binding to a dormant,
@@ -42,7 +41,7 @@ type mutationScenario struct {
 // byte per ordered source/target pair (odd means the edge exists), then one
 // mutation byte per node for round one, then one per node for round two. A
 // state is 0 absent, 1 disabled, 2 enabled.
-func FuzzPlanInstallLockedRequirementMutation(f *testing.F) {
+func FuzzLockedRequirementMutation(f *testing.F) {
 	// alpha requires beta; removing both roots leaves no reachability seed, so
 	// beta does not survive on historical dependency state alone.
 	f.Add([]byte{1, 1, 0, mutationAbsent, mutationAbsent, mutationAbsent, mutationAbsent})
@@ -97,29 +96,38 @@ func FuzzPlanInstallLockedRequirementMutation(f *testing.F) {
 
 	f.Fuzz(func(t *testing.T, raw []byte) {
 		scenario := decodeMutationScenario(raw)
-		root := t.TempDir()
-		writeInitialWorkspace(t, root, scenario)
 		description := scenario.describe()
+
+		initial := make([]int, scenario.nodes)
+		for index := range initial {
+			initial[index] = mutationEnabled
+		}
+		initialFingerprint, err := mutationManifest(initial).Fingerprint()
+		if err != nil {
+			t.Fatalf("manifest.Fingerprint() error = %v; %s", err, description)
+		}
+		lock := initialLock(scenario, initialFingerprint)
 
 		retained1 := mutationReachable(scenario.edges, retainedSeeds(scenario.first))
 		active1 := mutationReachable(scenario.edges, enabledSeeds(scenario.first))
-		plan1 := runLockedMutation(t, root, scenario, scenario.first)
-		checkMutationPlan(t, plan1, scenario, scenario.first, retained1, active1,
+		lock1 := runLockedMutation(t, mutationManifest(scenario.first), lock,
+			fmt.Sprintf("%s first=%v", description, scenario.first))
+		checkMutationLock(t, lock1, scenario, scenario.first, retained1, active1,
 			fmt.Sprintf("%s first=%v", description, scenario.first))
 
-		writeResolvedLock(t, root, plan1.Resolved)
 		retained2 := mutationReachable(scenario.edges, retainedSeeds(scenario.second))
 		active2 := mutationReachable(scenario.edges, enabledSeeds(scenario.second))
-		plan2 := runLockedMutation(t, root, scenario, scenario.second)
-		checkMutationPlan(t, plan2, scenario, scenario.second, retained2, active2,
+		lock2 := runLockedMutation(t, mutationManifest(scenario.second), lock1,
+			fmt.Sprintf("%s second=%v", description, scenario.second))
+		checkMutationLock(t, lock2, scenario, scenario.second, retained2, active2,
 			fmt.Sprintf("%s second=%v", description, scenario.second))
 
-		writeResolvedLock(t, root, plan2.Resolved)
 		third := reenabledStates(scenario.second)
 		retained3 := mutationReachable(scenario.edges, retainedSeeds(third))
 		active3 := mutationReachable(scenario.edges, enabledSeeds(third))
-		plan3 := runLockedMutation(t, root, scenario, third)
-		checkMutationPlan(t, plan3, scenario, third, retained3, active3,
+		lock3 := runLockedMutation(t, mutationManifest(third), lock2,
+			fmt.Sprintf("%s reenabled=%v", description, third))
+		checkMutationLock(t, lock3, scenario, third, retained3, active3,
 			fmt.Sprintf("%s reenabled=%v", description, third))
 	})
 }
@@ -231,97 +239,52 @@ func reenabledStates(states []int) []int {
 	return out
 }
 
-func writeInitialWorkspace(t *testing.T, root string, scenario mutationScenario) {
-	t.Helper()
-	initial := make([]int, scenario.nodes)
-	for index := range initial {
-		initial[index] = mutationEnabled
-	}
-	m := mutationManifest(initial)
-	if err := document.ManifestFile(root).Write(m); err != nil {
-		t.Fatalf("manifest.Write() error = %v", err)
-	}
-	fingerprint, err := m.Fingerprint()
-	if err != nil {
-		t.Fatalf("manifest.Fingerprint() error = %v", err)
-	}
-	if err := document.LockFile(root).Write(initialLock(scenario, fingerprint)); err != nil {
-		t.Fatalf("lockfile.Write() error = %v", err)
-	}
-	if _, err := document.LockFile(root).Read(); err != nil {
-		t.Fatalf("lockfile.Read() error = %v", err)
-	}
-}
-
 func runLockedMutation(
 	t *testing.T,
-	root string,
-	scenario mutationScenario,
-	states []int,
-) *install.Plan {
+	d *document.Manifest,
+	old *document.Lock,
+	description string,
+) *document.Lock {
 	t.Helper()
-	if err := document.ManifestFile(root).Write(mutationManifest(states)); err != nil {
-		t.Fatalf("manifest.Write() error = %v", err)
-	}
-	d, err := document.ManifestFile(root).Read()
+	fingerprint, err := d.Fingerprint()
 	if err != nil {
-		t.Fatalf("manifest.Read() error = %v", err)
+		t.Fatalf("manifest.Fingerprint() error = %v; %s", err, description)
 	}
-	old, err := document.LockFile(root).Read()
-	if err != nil {
-		t.Fatalf("lockfile.Read() error = %v", err)
-	}
-	manifestBefore, err := d.Fingerprint()
-	if err != nil {
-		t.Fatalf("manifest.Fingerprint() error = %v", err)
-	}
+	manifestBefore := fingerprint
 	lockBefore, err := old.Fingerprint()
 	if err != nil {
-		t.Fatalf("lockfile.Fingerprint() error = %v", err)
+		t.Fatalf("lockfile.Fingerprint() error = %v; %s", err, description)
 	}
-	plan, err := install.NewService(nil, nil, nil, nil, nil, nil, "").PlanInstall(
-		t.Context(),
-		root,
-		d,
-		old,
-		install.Options{Locked: true, RequirementChange: true, Offline: true},
-	)
+	resolved, err := mutateLock(d, old, fingerprint)
 	if err != nil {
-		t.Fatalf("PlanInstall() error = %v; %s states=%v", err, scenario.describe(), states)
+		t.Fatalf("mutateLock() error = %v; %s", err, description)
 	}
 	manifestAfter, err := d.Fingerprint()
 	if err != nil {
-		t.Fatalf("manifest.Fingerprint() error = %v", err)
+		t.Fatalf("manifest.Fingerprint() error = %v; %s", err, description)
 	}
 	lockAfter, err := old.Fingerprint()
 	if err != nil {
-		t.Fatalf("lockfile.Fingerprint() error = %v", err)
+		t.Fatalf("lockfile.Fingerprint() error = %v; %s", err, description)
 	}
 	if manifestBefore != manifestAfter {
-		t.Fatalf("PlanInstall() mutated its input manifest; %s states=%v", scenario.describe(), states)
+		t.Fatalf("mutateLock() mutated its input manifest; %s", description)
 	}
 	if lockBefore != lockAfter {
-		t.Fatalf("PlanInstall() mutated its input lock; %s states=%v", scenario.describe(), states)
+		t.Fatalf("mutateLock() mutated its input lock; %s", description)
 	}
-	if got := plan.Resolved.ManifestFingerprint; got != manifestBefore {
+	if resolved == nil {
+		t.Fatalf("mutateLock() returned no resolved lock; %s", description)
+	}
+	if resolved.ManifestFingerprint != fingerprint {
 		t.Fatalf(
 			"resolved lock answers manifest %q, want %q; %s",
-			got,
-			manifestBefore,
-			scenario.describe(),
+			resolved.ManifestFingerprint,
+			fingerprint,
+			description,
 		)
 	}
-	return plan
-}
-
-func writeResolvedLock(t *testing.T, root string, resolved *document.Lock) {
-	t.Helper()
-	if resolved == nil {
-		t.Fatal("PlanInstall() returned a plan without a resolved lock")
-	}
-	if err := document.LockFile(root).Write(resolved); err != nil {
-		t.Fatalf("lockfile.Write() error = %v", err)
-	}
+	return resolved
 }
 
 func mutationManifest(states []int) *document.Manifest {
@@ -424,9 +387,9 @@ func packageHash(index int) string {
 	return fmt.Sprintf("%064x", index+1)
 }
 
-func checkMutationPlan(
+func checkMutationLock(
 	t *testing.T,
-	plan *install.Plan,
+	resolved *document.Lock,
 	scenario mutationScenario,
 	states []int,
 	retained map[int]bool,
@@ -434,21 +397,21 @@ func checkMutationPlan(
 	description string,
 ) {
 	t.Helper()
-	if plan == nil || plan.Resolved == nil {
-		t.Fatalf("PlanInstall() returned no resolved lock; %s", description)
+	if resolved == nil {
+		t.Fatalf("mutateLock() returned no resolved lock; %s", description)
 	}
 	declared := declaredReferences(states)
-	seen := make(map[string]bool, len(plan.Resolved.Packages))
-	if len(plan.Resolved.Packages) != len(retained) {
+	seen := make(map[string]bool, len(resolved.Packages))
+	if len(resolved.Packages) != len(retained) {
 		t.Fatalf(
 			"retained packages = %d, want %d; %s states=%v",
-			len(plan.Resolved.Packages),
+			len(resolved.Packages),
 			len(retained),
 			description,
 			states,
 		)
 	}
-	for _, pkg := range plan.Resolved.Packages {
+	for _, pkg := range resolved.Packages {
 		index := mutationIndex(pkg.ProjectID)
 		if index < 0 {
 			t.Fatalf("selected unknown project %q; %s", pkg.ProjectID, description)

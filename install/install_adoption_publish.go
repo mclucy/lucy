@@ -12,7 +12,7 @@ import (
 	"github.com/mclucy/lucy/internal/workspacewrite"
 	"github.com/mclucy/lucy/log"
 	"github.com/mclucy/lucy/receipt"
-	"gopkg.in/yaml.v3"
+	"go.yaml.in/yaml/v4"
 )
 
 // adoptionDocument is one metadata file the adoption transaction publishes.
@@ -165,7 +165,7 @@ func verifyPinnedCurrent(
 	name string,
 	pinned adoptionPinned,
 ) error {
-	before, err := observeInstallPath(files, name)
+	before, err := workspacewrite.ObserveInstallImage(files, name)
 	if err != nil {
 		return err
 	}
@@ -197,7 +197,7 @@ func pinnedPlan(
 	return &installDocumentPlan{
 		Data:  data,
 		Base:  base,
-		Image: *installBytesImage(data, mode),
+		Image: *workspacewrite.InstallBytesImage(data, mode),
 	}
 }
 
@@ -240,7 +240,7 @@ func publishAdoptionDocuments(
 			return err
 		}
 		target := filepath.Join(root, filepath.FromSlash(document.name))
-		before, err := observeInstallPath(files, document.name)
+		before, err := workspacewrite.ObserveInstallImage(files, document.name)
 		if err != nil {
 			return err
 		}
@@ -360,11 +360,11 @@ func recheckJournaledDocuments(
 	entries []workspacewrite.InstallJournalEntry,
 ) error {
 	for _, entry := range entries {
-		current, err := observeInstallPath(files, entry.Path)
+		current, err := workspacewrite.ObserveInstallImage(files, entry.Path)
 		if err != nil {
 			return err
 		}
-		if !installFinalImageMatches(current, entry.After, true) {
+		if !workspacewrite.InstallImagesEqual(current, entry.After) {
 			return fmt.Errorf(
 				"adoption document %s changed before commit",
 				entry.Path,
@@ -390,7 +390,7 @@ func recheckProtectedDocuments(
 		if _, ok := rewritten[pin.name]; ok {
 			continue
 		}
-		current, err := observeInstallPath(files, pin.name)
+		current, err := workspacewrite.ObserveInstallImage(files, pin.name)
 		if err != nil {
 			return err
 		}

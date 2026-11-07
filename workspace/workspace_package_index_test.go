@@ -78,21 +78,30 @@ func TestPackageIndexKeepsLocalPath(t *testing.T) {
 func TestPackageIndex_PackagesSortOrder(t *testing.T) {
 	idx := NewPackageIndex()
 	idx.Add(makeDiscoveredPackage(t, catalog.EcosystemForge, "jei", "1.0.0", ""))
+	idx.Add(makeDiscoveredPackage(t, catalog.EcosystemFabric, "sodium", "0.6.0", ""))
 	idx.Add(makeDiscoveredPackage(t, catalog.EcosystemFabric, "sodium", "0.5.0", ""))
 	idx.Add(makeDiscoveredPackage(t, catalog.EcosystemFabric, "lithium", "0.11.0", ""))
 	pkgs := idx.Packages()
-	if len(pkgs) != 3 {
-		t.Fatalf("expected 3 packages, got %d", len(pkgs))
+	if len(pkgs) != 4 {
+		t.Fatalf("expected 4 packages, got %d", len(pkgs))
 	}
-	// fabric < forge by string; within fabric: lithium < sodium
-	if string(pkgs[0].ID.Ecosystem) != "fabric" || pkgs[0].ID.Name.String() != "lithium" {
-		t.Errorf("wrong sort order at [0]: %+v", pkgs[0].ID)
+	// fabric < forge by string; within fabric: lithium < sodium, then version.
+	want := []struct {
+		ecosystem catalog.Ecosystem
+		name      string
+		version   string
+	}{
+		{catalog.EcosystemFabric, "lithium", "0.11.0"},
+		{catalog.EcosystemFabric, "sodium", "0.5.0"},
+		{catalog.EcosystemFabric, "sodium", "0.6.0"},
+		{catalog.EcosystemForge, "jei", "1.0.0"},
 	}
-	if string(pkgs[1].ID.Ecosystem) != "fabric" || pkgs[1].ID.Name.String() != "sodium" {
-		t.Errorf("wrong sort order at [1]: %+v", pkgs[1].ID)
-	}
-	if string(pkgs[2].ID.Ecosystem) != "forge" {
-		t.Errorf("wrong sort order at [2]: %+v", pkgs[2].ID)
+	for i, expected := range want {
+		if pkgs[i].ID.Ecosystem != expected.ecosystem ||
+			pkgs[i].ID.Name.String() != expected.name ||
+			pkgs[i].ID.Version.String() != expected.version {
+			t.Errorf("wrong sort order at [%d]: %+v", i, pkgs[i].ID)
+		}
 	}
 }
 
@@ -113,49 +122,5 @@ func TestPackageIndex_MergeBulk(t *testing.T) {
 	result := idx.Packages()
 	if len(result) != 2 {
 		t.Fatalf("expected 2 packages after merge, got %d", len(result))
-	}
-}
-
-func TestPackageIndex_LookupByID_Found(t *testing.T) {
-	idx := NewPackageIndex()
-	pkg := makeDiscoveredPackage(t, catalog.EcosystemFabric, "sodium", "0.5.0", "")
-	idx.Add(pkg)
-	found, ok := idx.LookupByID(pkg.ID)
-	if !ok {
-		t.Fatal("expected to find package by ID")
-	}
-	if found.ID.Name.String() != "sodium" {
-		t.Errorf("unexpected package: %+v", found.ID)
-	}
-}
-
-func TestPackageIndex_LookupByID_NotFound(t *testing.T) {
-	idx := NewPackageIndex()
-	id := catalog.VersionedRef{
-		Ecosystem: catalog.EcosystemFabric,
-		Name:      "missing",
-		Version:   "1.0.0",
-	}
-	_, ok := idx.LookupByID(id)
-	if ok {
-		t.Fatal("expected not found")
-	}
-}
-
-func TestPackageIndexFindsAllVersions(t *testing.T) {
-	idx := NewPackageIndex()
-	idx.Add(makeDiscoveredPackage(t, catalog.EcosystemFabric, "sodium", "0.6.0", ""))
-	idx.Add(makeDiscoveredPackage(t, catalog.EcosystemFabric, "sodium", "0.5.0", ""))
-	idx.Add(makeDiscoveredPackage(t, catalog.EcosystemFabric, "lithium", "0.11.0", ""))
-	results := idx.LookupByEcosystemName(catalog.EcosystemFabric, "sodium")
-	if len(results) != 2 {
-		t.Fatalf("expected 2 sodium versions, got %d", len(results))
-	}
-	// sorted by version string ascending: 0.5.0 < 0.6.0
-	if results[0].ID.Version.String() != "0.5.0" {
-		t.Errorf(
-			"wrong version sort: got %q first",
-			results[0].ID.Version.String(),
-		)
 	}
 }

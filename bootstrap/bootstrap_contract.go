@@ -161,7 +161,6 @@ func validateContract(locked document.LockedServer) (map[string]OutputSpec, []Ou
 		return nil, nil, fmt.Errorf("unsupported bootstrap adapter %q", locked.Bootstrapper)
 	}
 
-	// Normalize scopes
 	for i := range scopes {
 		sc := filepath.ToSlash(filepath.Clean(scopes[i].Scope))
 		if !strings.HasSuffix(sc, "/") {
@@ -193,7 +192,7 @@ func validateContract(locked document.LockedServer) (map[string]OutputSpec, []Ou
 		}
 		seenInputs[clean] = true
 
-		// Check collision with generated output: independent origin collision must fail even if same policy
+		// An independent origin collision fails even when the policies agree.
 		if gen, ok := genMap[clean]; ok {
 			return nil, nil, fmt.Errorf("collision between locked input and generated bootstrap output claiming %q (input policy %s vs generated policy %s)", clean, PolicyManaged, gen.Policy)
 		}
@@ -208,7 +207,6 @@ func validateContract(locked document.LockedServer) (map[string]OutputSpec, []Ou
 			}
 		}
 
-		// Validate input against scope rules: input cannot conflict with scope policy
 		for _, sc := range scopes {
 			if strings.HasPrefix(clean, sc.Scope) {
 				if policy != sc.Policy || role != sc.Role {
@@ -225,7 +223,6 @@ func validateContract(locked document.LockedServer) (map[string]OutputSpec, []Ou
 		}
 	}
 
-	// Validate generated outputs against scopes
 	for _, gen := range genMap {
 		for _, sc := range scopes {
 			if strings.HasPrefix(gen.Path, sc.Scope) {
@@ -236,7 +233,6 @@ func validateContract(locked document.LockedServer) (map[string]OutputSpec, []Ou
 		}
 	}
 
-	// Validate overlapping scopes
 	for i := range scopes {
 		for j := i + 1; j < len(scopes); j++ {
 			s1 := scopes[i]

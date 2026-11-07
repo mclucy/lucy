@@ -36,8 +36,8 @@ type sdkman struct{}
 func (sdkman) method() Method { return MethodSDKMAN }
 func (sdkman) system() bool   { return false }
 
-func (sdkman) ownsJava(_ context.Context, host *Host) bool {
-	home, ok := sdkmanHome(host)
+func (sdkman) ownsJava(_ context.Context, _ *Host) bool {
+	home, ok := sdkmanHome()
 	if !ok {
 		return false
 	}
@@ -57,7 +57,7 @@ func (sdkman) plans(ctx context.Context, req Request, host *Host) ([]Plan, error
 	if host.goos == "windows" {
 		return nil, nil
 	}
-	home, ok := sdkmanHome(host)
+	home, ok := sdkmanHome()
 	if !ok {
 		return nil, nil
 	}
@@ -106,11 +106,11 @@ func (sdkman) plans(ctx context.Context, req Request, host *Host) ([]Plan, error
 
 // sdkmanHome returns the SDKMAN directory. It is unavailable when neither
 // SDKMAN_DIR nor the home directory names one.
-func sdkmanHome(host *Host) (string, bool) {
-	if dir := host.getenv("SDKMAN_DIR"); dir != "" {
+func sdkmanHome() (string, bool) {
+	if dir := os.Getenv("SDKMAN_DIR"); dir != "" {
 		return dir, true
 	}
-	home, err := host.userHomeDir()
+	home, err := os.UserHomeDir()
 	if err != nil {
 		return "", false
 	}

@@ -6,14 +6,14 @@ import (
 
 	"github.com/mclucy/lucy/catalog"
 	documentpkg "github.com/mclucy/lucy/document"
-	"github.com/mclucy/lucy/install"
 	"github.com/mclucy/lucy/resolve"
 	"github.com/mclucy/lucy/server"
 	"github.com/mclucy/lucy/version"
 )
 
-// Rejected candidates must not leave dependency demand in the successful lock.
-// Varying the parent count crosses slice capacity boundaries during backtracking.
+// FuzzPackagesBacktrackDemand checks that resolution retains only the dependency
+// closure of current declarations. Varying the parent count crosses slice
+// capacity boundaries during backtracking.
 func FuzzPackagesBacktrackDemand(f *testing.F) {
 	f.Add(uint8(0), uint8(2))
 	f.Add(uint8(0), uint8(3))
@@ -67,38 +67,22 @@ func FuzzPackagesBacktrackDemand(f *testing.F) {
 		if err != nil || len(warnings) != 0 {
 			t.Fatalf("resolve graph with valid fallback: %v; warnings=%v", err, warnings)
 		}
-		if err := documentpkg.ManifestFile(fixture.dir).Write(document); err != nil {
-			t.Fatal(err)
+		wantFull := map[string]version.Version{"a": "2.0.0", "b": "1.0.0"}
+		for _, root := range roots {
+			wantFull[root] = "1.0.0"
 		}
-		fingerprint, err := document.Fingerprint()
-		if err != nil {
-			t.Fatal(err)
-		}
-		locked := &documentpkg.Lock{
-			SchemaVersion: documentpkg.LockSchemaVersion, ManifestFingerprint: fingerprint,
-			Server: documentpkg.LockedServer{
-				Directory: ".", Minecraft: fuzzMinecraft, Product: server.ProductFabric,
-				CoreVersion: fuzzLoaderVersion, Version: fuzzLoaderVersion,
-				Filename: "fabric.jar", Java: documentpkg.LockedJava{Advisory: 21},
-			},
-			Packages: packages,
-		}
-		if err := documentpkg.LockFile(fixture.dir).Write(locked); err != nil {
-			t.Fatal(err)
-		}
-		replayed, err := documentpkg.LockFile(fixture.dir).Read()
-		if err != nil {
-			t.Fatal(err)
-		}
+		checkResolvedPackages(t, packages, wantFull, "full graph")
 		keep := roots[int(survivor)%len(roots)]
 		document.Server.Packages[catalog.EcosystemFabric] = map[string]documentpkg.Requirement{
 			"modrinth:" + keep: {Selector: version.Any},
 		}
-		plan, err := install.NewService(nil, nil, nil, nil, nil, nil, "").PlanInstall(t.Context(), fixture.dir, document, replayed, install.Options{
-			Locked: true, RequirementChange: true,
+		reduced, warnings, err := resolve.Packages(resolve.PackagesRequest{
+			Context: t.Context(), Manifest: document, Target: fuzzTarget,
+			Candidates:  fixture.candidates,
+			Materialize: fixture.materialize, ExpandDependencies: true,
 		})
-		if err != nil {
-			t.Fatalf("plan locked removal: %v", err)
+		if err != nil || len(warnings) != 0 {
+			t.Fatalf("resolve reduced graph keeping %q: %v; warnings=%v", keep, err, warnings)
 		}
 		want := map[string]version.Version{keep: "1.0.0"}
 		if keep == "zz-wrapper" {
@@ -106,14 +90,24 @@ func FuzzPackagesBacktrackDemand(f *testing.F) {
 		} else {
 			want["b"] = "1.0.0"
 		}
-		if len(plan.Resolved.Packages) != len(want) {
-			t.Fatalf("keeping %q selected %+v, want %v", keep, plan.Resolved.Packages, want)
-		}
-		for _, pkg := range plan.Resolved.Packages {
-			if pin, ok := want[pkg.ProjectID]; !ok || pin != pkg.Version || !pkg.Enabled() {
-				t.Fatalf("keeping %q produced unexpected/inactive pin %+v, want %v", keep, pkg, want)
-			}
-			delete(want, pkg.ProjectID)
-		}
+		checkResolvedPackages(t, reduced, want, fmt.Sprintf("keeping %q", keep))
 	})
+}
+
+func checkResolvedPackages(
+	t *testing.T,
+	packages []documentpkg.Package,
+	want map[string]version.Version,
+	description string,
+) {
+	t.Helper()
+	if len(packages) != len(want) {
+		t.Fatalf("%s selected %+v, want %v", description, packages, want)
+	}
+	for _, pkg := range packages {
+		if pin, ok := want[pkg.ProjectID]; !ok || pin != pkg.Version || !pkg.Enabled() {
+			t.Fatalf("%s produced unexpected/inactive pin %+v, want %v", description, pkg, want)
+		}
+		delete(want, pkg.ProjectID)
+	}
 }

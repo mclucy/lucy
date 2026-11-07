@@ -95,7 +95,7 @@ func lockedPackageID(lock *document.Lock, path string) string {
 	}
 	for i := range lock.Packages {
 		pkg := &lock.Packages[i]
-		dest, err := packageDestination(lock, pkg)
+		dest, err := lock.PackageDestination(pkg)
 		if err != nil || cleanWorkspacePath(dest) != path {
 			continue
 		}

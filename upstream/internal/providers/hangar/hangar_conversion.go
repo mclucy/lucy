@@ -177,77 +177,6 @@ func hangarPublishedAt(raw string) time.Time {
 	return published
 }
 
-func hangarPackageRef() catalog.VersionedRef {
-	return catalog.VersionedRef{
-		Ref: catalog.Ref{Provider: catalog.ProviderHangar},
-	}
-}
-
-func (v *hangarVersion) ToPackageRemote() upstream.ResolvedPackage {
-	for _, key := range hangarPreferredPlatforms {
-		if remote, ok := v.packageRemoteForPlatformKey(key); ok {
-			return remote
-		}
-	}
-	for _, key := range sortedMapKeys(v.Downloads) {
-		if remote, ok := v.packageRemoteForPlatformKey(key); ok {
-			return remote
-		}
-	}
-	return upstream.ResolvedPackage{ID: hangarPackageRef()}
-}
-
-// ToPackageRemoteForPlatform resolves the artifact for exactly the requested
-// platform. A request for one platform never receives another platform's
-// file, because a Hangar version publishes platform-specific downloads.
-func (v *hangarVersion) ToPackageRemoteForPlatform(platform catalog.Ecosystem) (
-	upstream.ResolvedPackage,
-	bool,
-) {
-	keys, supported := hangarPlatformKeysFor(platform)
-	if !supported || len(keys) == 0 {
-		return upstream.ResolvedPackage{ID: hangarPackageRef()}, false
-	}
-	for _, key := range keys {
-		if remote, ok := v.packageRemoteForPlatformKey(key); ok {
-			return remote, true
-		}
-	}
-	return upstream.ResolvedPackage{ID: hangarPackageRef()}, false
-}
-
-func (v *hangarVersion) packageRemoteForPlatformKey(platformKey string) (
-	upstream.ResolvedPackage,
-	bool,
-) {
-	download, ok := v.downloadForPlatformKey(platformKey)
-	if !ok {
-		return upstream.ResolvedPackage{ID: hangarPackageRef()}, false
-	}
-	filename := download.metadataFilename()
-	if filename == "" {
-		return upstream.ResolvedPackage{ID: hangarPackageRef()}, false
-	}
-
-	remote := upstream.ResolvedPackage{
-		ID:       hangarPackageRef(),
-		FileURL:  download.URL(),
-		Filename: filename,
-	}
-	if hash := download.SHA256(); hash != "" {
-		remote.Hash = hash
-		remote.HashAlgorithm = "sha256"
-	}
-	return remote, true
-}
-
-// IsReleaseChannel reports whether the version was published on Hangar's
-// Release channel. A version without channel data is treated as a release so
-// older cached payloads keep resolving.
-func (v *hangarVersion) IsReleaseChannel() bool {
-	return v.Channel.Name == "" || strings.EqualFold(v.Channel.Name, "Release")
-}
-
 // platformPluginDependencies returns the plugin dependencies Hangar declared
 // for one platform. known is false only when the response carried no
 // dependency object at all, which is different from an empty declaration.
@@ -291,39 +220,6 @@ func (v *hangarVersion) platformDependenciesFor(platformKey string) (
 		}
 	}
 	return nil, false
-}
-
-func (v *hangarVersion) PluginDependencyNames() []catalog.Name {
-	var declared []hangarPluginDependency
-	for _, key := range hangarPreferredPlatforms {
-		if dependencies, known := v.platformPluginDependencies(key); known {
-			declared = dependencies
-			if len(declared) > 0 {
-				break
-			}
-		}
-	}
-	if len(declared) == 0 {
-		for _, key := range sortedMapKeys(v.PluginDependencies) {
-			if dependencies := v.PluginDependencies[key]; len(dependencies) > 0 {
-				declared = dependencies
-				break
-			}
-		}
-	}
-	if len(declared) == 0 {
-		return nil
-	}
-
-	deps := make([]catalog.Name, 0, len(declared))
-	for _, dep := range declared {
-		if dep.Name == "" || dep.ExternalURL != nil && *dep.ExternalURL != "" {
-			continue
-		}
-		deps = append(deps, input.ToProjectName(dep.Name))
-	}
-	slices.Sort(deps)
-	return deps
 }
 
 // safeHangarURL accepts only absolute HTTP(S) URLs. Remote metadata is

@@ -140,39 +140,16 @@ func workspaceDocuments(root string) (*document.Manifest, *document.Lock, error)
 	return currentManifest, currentLock, nil
 }
 
-// recoveredLock prefers the caller's lock when it still describes the recovered
-// lock, so a replay returns the document the caller already holds. A stale
-// caller lock is replaced by the recovered one; a caller lock whose recovered
-// counterpart disappeared is discarded.
-func recoveredLock(caller, recovered *document.Lock) (*document.Lock, error) {
-	if caller == nil || recovered == nil {
-		return recovered, nil
-	}
-	callerFingerprint, err := caller.Fingerprint()
-	if err != nil {
-		return nil, err
-	}
-	recoveredFingerprint, err := recovered.Fingerprint()
-	if err != nil {
-		return nil, err
-	}
-	if callerFingerprint == recoveredFingerprint {
-		return caller, nil
-	}
-	return recovered, nil
-}
-
 // preflightLocked replays interrupted journals before anything reads the
 // documents they describe, then validates the state both planning and applying
 // depend on. It returns the recovered documents, which are the only safe base
-// for resolution and staging. The running-server check only applies when the
-// operation will mutate the runtime tree.
+// for resolution and staging. Because every caller mutates the runtime tree,
+// it also refuses to continue while a server still runs there.
 func preflightLocked(
 	root string,
 	d *document.Manifest,
 	old *document.Lock,
 	opts Options,
-	mutating bool,
 	logger *log.Logger,
 ) (*document.Manifest, *document.Lock, error) {
 	if d == nil && old == nil {
@@ -188,38 +165,36 @@ func preflightLocked(
 	if err != nil {
 		return nil, nil, err
 	}
-	if mutating {
-		// Recovery may restore a different runtime location than the caller
-		// requested. Both the recovered locations and a manifest being
-		// published must be stopped before staging rewrites their files.
-		directories := make([]string, 0, 3)
-		add := func(directory string) {
-			if !slices.Contains(directories, directory) {
-				directories = append(directories, directory)
-			}
+	// Recovery may restore a different runtime location than the caller
+	// requested. Both the recovered locations and a manifest being published
+	// must be stopped before staging rewrites their files.
+	directories := make([]string, 0, 3)
+	add := func(directory string) {
+		if !slices.Contains(directories, directory) {
+			directories = append(directories, directory)
 		}
-		if baseManifest != nil {
-			add(baseManifest.Server.Directory)
-		}
-		if baseLock != nil {
-			add(baseLock.Server.Directory)
-		}
-		if opts.PublishManifest && d != nil {
+	}
+	if baseManifest != nil {
+		add(baseManifest.Server.Directory)
+	}
+	if baseLock != nil {
+		add(baseLock.Server.Directory)
+	}
+	if opts.PublishManifest && d != nil {
+		add(d.Server.Directory)
+	}
+	if baseManifest == nil && baseLock == nil {
+		switch {
+		case d != nil:
 			add(d.Server.Directory)
+		case old != nil:
+			add(old.Server.Directory)
 		}
-		if baseManifest == nil && baseLock == nil {
-			switch {
-			case d != nil:
-				add(d.Server.Directory)
-			case old != nil:
-				add(old.Server.Directory)
-			}
-		}
-		for _, directory := range directories {
-			if workspace.RunningAt(filepath.Join(root, directory)) ||
-				(directory != "." && workspace.RunningAt(root)) {
-				return nil, nil, fmt.Errorf("stop the running Minecraft server before installation")
-			}
+	}
+	for _, directory := range directories {
+		if workspace.RunningAt(filepath.Join(root, directory)) ||
+			(directory != "." && workspace.RunningAt(root)) {
+			return nil, nil, fmt.Errorf("stop the running Minecraft server before installation")
 		}
 	}
 	// Callers that read the documents before the writer lock pin what they

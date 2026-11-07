@@ -9,6 +9,7 @@ import (
 
 	"github.com/mclucy/lucy/catalog"
 	"github.com/mclucy/lucy/document"
+	"github.com/mclucy/lucy/internal/workspacewrite"
 	serverpkg "github.com/mclucy/lucy/server"
 	versionpkg "github.com/mclucy/lucy/version"
 )
@@ -64,56 +65,63 @@ func testInstallService() *Service {
 	return &Service{}
 }
 
-func TestPlanInstallReplaysMatchingLock(t *testing.T) {
+func TestResolveReplaysUnchangedLock(t *testing.T) {
 	root, d, lock := testWorkspace(t)
-	plan, err := testInstallService().PlanInstall(context.Background(), root, d, lock, Options{})
+	holdWorkspaceLock(t, root)
+	resolved, result, err := testInstallService().Resolve(
+		context.Background(),
+		root,
+		d,
+		lock,
+		Options{},
+	)
 	if err != nil {
-		t.Fatalf("PlanInstall() error = %v", err)
+		t.Fatalf("Resolve() error = %v", err)
 	}
-	if plan.Result.Mode != ModeReplay {
-		t.Fatalf("PlanInstall() mode = %q, want %q", plan.Result.Mode, ModeReplay)
+	if result.Mode != ModeReplay {
+		t.Fatalf("Resolve() mode = %q, want %q", result.Mode, ModeReplay)
 	}
-	if plan.Resolved != lock {
-		t.Fatal("PlanInstall() did not replay the matching lock")
+	if resolved != lock {
+		t.Fatal("Resolve() did not replay the matching lock")
 	}
-	if plan.PublishLock {
-		t.Fatal("PlanInstall() planned a lock publication for a replay")
-	}
-	if plan.BaseManifestFingerprint == "" || plan.BaseLockFingerprint == "" {
-		t.Fatal("PlanInstall() did not record both base fingerprints")
+	if result.PublishedLock {
+		t.Fatal("Resolve() reported a lock publication for a replay")
 	}
 }
 
-func TestPlanInstallRejectsExpectedManifestMismatch(t *testing.T) {
+func TestPreflightRejectsExpectedManifestMismatch(t *testing.T) {
 	root, d, lock := testWorkspace(t)
-	_, err := testInstallService().PlanInstall(
-		context.Background(),
+	holdWorkspaceLock(t, root)
+	_, _, err := preflightLocked(
 		root,
 		d,
 		lock,
 		Options{ExpectedManifest: "sha256:not-the-manifest"},
+		nil,
 	)
 	if err == nil || !strings.Contains(err.Error(), "manifest changed") {
-		t.Fatalf("PlanInstall() error = %v, want a manifest-change error", err)
+		t.Fatalf("preflightLocked() error = %v, want a manifest-change error", err)
 	}
 }
 
-func TestPlanInstallRejectsExpectedLockMismatch(t *testing.T) {
+func TestPreflightRejectsExpectedLockMismatch(t *testing.T) {
 	root, d, lock := testWorkspace(t)
-	_, err := testInstallService().PlanInstall(
-		context.Background(),
+	holdWorkspaceLock(t, root)
+	_, _, err := preflightLocked(
 		root,
 		d,
 		lock,
 		Options{ExpectedLock: "sha256:not-the-lock"},
+		nil,
 	)
 	if err == nil || !strings.Contains(err.Error(), "lock changed") {
-		t.Fatalf("PlanInstall() error = %v, want a lock-change error", err)
+		t.Fatalf("preflightLocked() error = %v, want a lock-change error", err)
 	}
 }
 
-func TestPlanInstallAcceptsExpectedFingerprints(t *testing.T) {
+func TestPreflightAcceptsExpectedFingerprints(t *testing.T) {
 	root, d, lock := testWorkspace(t)
+	holdWorkspaceLock(t, root)
 	manifestFingerprint, err := d.Fingerprint()
 	if err != nil {
 		t.Fatalf("manifest.Fingerprint() error = %v", err)
@@ -122,8 +130,7 @@ func TestPlanInstallAcceptsExpectedFingerprints(t *testing.T) {
 	if err != nil {
 		t.Fatalf("lockfile.Fingerprint() error = %v", err)
 	}
-	if _, err := testInstallService().PlanInstall(
-		context.Background(),
+	if _, _, err := preflightLocked(
 		root,
 		d,
 		lock,
@@ -131,75 +138,46 @@ func TestPlanInstallAcceptsExpectedFingerprints(t *testing.T) {
 			ExpectedManifest: manifestFingerprint,
 			ExpectedLock:     lockFingerprint,
 		},
+		nil,
 	); err != nil {
-		t.Fatalf("PlanInstall() error = %v", err)
+		t.Fatalf("preflightLocked() error = %v", err)
 	}
 }
 
-// A plan answers the workspace, not the documents the caller passed: planning
-// for a publication keeps the on-disk state as its baseline, so ApplyPlan does
-// not mistake the intended edit for drift.
-func TestPlanInstallFingerprintsWorkspaceState(t *testing.T) {
-	t.Run("manifest edited in memory", func(t *testing.T) {
-		root, d, lock := testWorkspace(t)
-		onDisk, err := document.ManifestFile(root).Read()
-		if err != nil {
-			t.Fatalf("manifest.Read() error = %v", err)
-		}
-		baseFingerprint, err := onDisk.Fingerprint()
-		if err != nil {
-			t.Fatalf("manifest.Fingerprint() error = %v", err)
-		}
-		d.Server.Java = &document.ManifestJava{Version: 17}
-		plan, err := testInstallService().PlanInstall(
-			context.Background(),
-			root,
-			d,
-			lock,
-			Options{PublishManifest: true},
+// TestPlanFromResolutionFingerprintsWorkspaceState keeps the on-disk baseline
+// distinct from intended publication edits, so ApplyPlan does not mistake the
+// intended edit for drift.
+func TestPlanFromResolutionFingerprintsWorkspaceState(t *testing.T) {
+	root, d, lock := testWorkspace(t)
+	onDisk, err := document.ManifestFile(root).Read()
+	if err != nil {
+		t.Fatalf("manifest.Read() error = %v", err)
+	}
+	baseFingerprint, err := onDisk.Fingerprint()
+	if err != nil {
+		t.Fatalf("manifest.Fingerprint() error = %v", err)
+	}
+	d.Server.Java = &document.ManifestJava{Version: 17}
+	finalFingerprint, err := d.Fingerprint()
+	if err != nil {
+		t.Fatalf("manifest.Fingerprint() error = %v", err)
+	}
+	resolved := *lock
+	resolved.ManifestFingerprint = finalFingerprint
+	plan, err := PlanFromResolution(d, lock, &resolved, baseFingerprint, true)
+	if err != nil {
+		t.Fatalf("PlanFromResolution() error = %v", err)
+	}
+	if plan.BaseManifestFingerprint != baseFingerprint {
+		t.Fatalf(
+			"plan base manifest fingerprint = %q, want on-disk %q",
+			plan.BaseManifestFingerprint,
+			baseFingerprint,
 		)
-		if err != nil {
-			t.Fatalf("PlanInstall() error = %v", err)
-		}
-		if plan.BaseManifestFingerprint != baseFingerprint {
-			t.Fatalf(
-				"PlanInstall() base manifest fingerprint = %q, want on-disk %q",
-				plan.BaseManifestFingerprint,
-				baseFingerprint,
-			)
-		}
-		if err := checkPlannedState(root, plan); err != nil {
-			t.Fatalf("checkPlannedState() error = %v, want a plan the workspace satisfies", err)
-		}
-	})
-
-	t.Run("lock differs from workspace", func(t *testing.T) {
-		root, d, lock := testWorkspace(t)
-		onDisk, err := document.LockFile(root).Read()
-		if err != nil {
-			t.Fatalf("lockfile.Read() error = %v", err)
-		}
-		baseFingerprint, err := onDisk.Fingerprint()
-		if err != nil {
-			t.Fatalf("lockfile.Fingerprint() error = %v", err)
-		}
-		stale := *lock
-		stale.Files = []document.TrackedFile{{Path: "server.properties"}}
-		plan, err := testInstallService().PlanInstall(context.Background(), root, d, &stale, Options{})
-		if err != nil {
-			t.Fatalf("PlanInstall() error = %v", err)
-		}
-		if plan.BaseLockFingerprint != baseFingerprint {
-			t.Fatalf(
-				"PlanInstall() base lock fingerprint = %q, want on-disk %q",
-				plan.BaseLockFingerprint,
-				baseFingerprint,
-			)
-		}
-		if err := checkPlannedState(root, plan); err != nil {
-			t.Fatalf("checkPlannedState() error = %v, want a plan the workspace satisfies", err)
-		}
-	})
+	}
+	if err := checkPlannedState(root, plan); err != nil {
+		t.Fatalf("checkPlannedState() error = %v, want a plan the workspace satisfies", err)
+	}
 }
 
 func TestResolveLockRejectsForceWithLocked(t *testing.T) {
@@ -218,13 +196,41 @@ func TestResolveLockRejectsForceWithLocked(t *testing.T) {
 	}
 }
 
+func holdWorkspaceLock(t *testing.T, root string) {
+	t.Helper()
+	writer, err := workspacewrite.Lock(root, nil)
+	if err != nil {
+		t.Fatalf("workspacewrite.Lock() error = %v", err)
+	}
+	t.Cleanup(func() {
+		if err := writer.Close(); err != nil {
+			t.Errorf("writer.Close() error = %v", err)
+		}
+	})
+}
+
+func testPlanFixture(
+	t *testing.T,
+	root string,
+	d *document.Manifest,
+	lock *document.Lock,
+) *Plan {
+	t.Helper()
+	manifestFingerprint, _, err := workspaceFingerprints(root)
+	if err != nil {
+		t.Fatalf("workspaceFingerprints() error = %v", err)
+	}
+	plan, err := PlanFromResolution(d, lock, lock, manifestFingerprint, false)
+	if err != nil {
+		t.Fatalf("PlanFromResolution() error = %v", err)
+	}
+	return plan
+}
+
 func TestCheckPlannedStateRejectsChanges(t *testing.T) {
 	t.Run("unchanged", func(t *testing.T) {
 		root, d, lock := testWorkspace(t)
-		plan, err := testInstallService().PlanInstall(context.Background(), root, d, lock, Options{})
-		if err != nil {
-			t.Fatalf("PlanInstall() error = %v", err)
-		}
+		plan := testPlanFixture(t, root, d, lock)
 		if err := checkPlannedState(root, plan); err != nil {
 			t.Fatalf("checkPlannedState() error = %v", err)
 		}
@@ -232,10 +238,7 @@ func TestCheckPlannedStateRejectsChanges(t *testing.T) {
 
 	t.Run("manifest changed", func(t *testing.T) {
 		root, d, lock := testWorkspace(t)
-		plan, err := testInstallService().PlanInstall(context.Background(), root, d, lock, Options{})
-		if err != nil {
-			t.Fatalf("PlanInstall() error = %v", err)
-		}
+		plan := testPlanFixture(t, root, d, lock)
 		d.Server.Core.ProductVersion = versionpkg.Version("0.16.10")
 		if err := document.ManifestFile(root).Write(d); err != nil {
 			t.Fatalf("manifest.Write() error = %v", err)
@@ -247,10 +250,7 @@ func TestCheckPlannedStateRejectsChanges(t *testing.T) {
 
 	t.Run("manifest removed", func(t *testing.T) {
 		root, d, lock := testWorkspace(t)
-		plan, err := testInstallService().PlanInstall(context.Background(), root, d, lock, Options{})
-		if err != nil {
-			t.Fatalf("PlanInstall() error = %v", err)
-		}
+		plan := testPlanFixture(t, root, d, lock)
 		if err := os.Remove(filepath.Join(root, document.ManifestFilename)); err != nil {
 			t.Fatalf("remove manifest: %v", err)
 		}
@@ -261,10 +261,7 @@ func TestCheckPlannedStateRejectsChanges(t *testing.T) {
 
 	t.Run("lock changed", func(t *testing.T) {
 		root, d, lock := testWorkspace(t)
-		plan, err := testInstallService().PlanInstall(context.Background(), root, d, lock, Options{})
-		if err != nil {
-			t.Fatalf("PlanInstall() error = %v", err)
-		}
+		plan := testPlanFixture(t, root, d, lock)
 		lock.ManifestFingerprint = "sha256:different"
 		if err := document.LockFile(root).Write(lock); err != nil {
 			t.Fatalf("lockfile.Write() error = %v", err)
