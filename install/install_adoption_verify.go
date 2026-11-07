@@ -155,7 +155,7 @@ func packageSetObserved(
 		if !pkg.Enabled() {
 			continue
 		}
-		dest, err := packageDestination(lock, pkg)
+		dest, err := lock.PackageDestination(pkg)
 		if err != nil {
 			return false
 		}

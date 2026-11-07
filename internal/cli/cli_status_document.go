@@ -285,7 +285,7 @@ func newLockStatusDocument(
 			Provider:    pkg.Provider.String(),
 			Ecosystem:   pkg.Ecosystem.String(),
 			Environment: string(pkg.Environment),
-			Path:        statusLockPackagePath(root, lock, pkg),
+			Path:        statusRelativePath(root, statusLockPackageDestination(lock, pkg)),
 		})
 	}
 	return document
@@ -429,62 +429,39 @@ func statusLockPackageDirectories(
 		seen[relative] = true
 		result = append(result, relative)
 	}
-	switch statusLockProductEcosystem(lock) {
-	case catalog.EcosystemFabric, catalog.EcosystemForge, catalog.EcosystemNeoForge:
-		add(filepath.Join(lock.Server.Directory, "mods"))
-	case catalog.EcosystemBukkit, catalog.EcosystemPaper:
-		add(filepath.Join(lock.Server.Directory, "plugins"))
+	ecosystem := statusLockProductEcosystem(lock)
+	switch ecosystem {
+	case catalog.EcosystemFabric, catalog.EcosystemForge, catalog.EcosystemNeoForge,
+		catalog.EcosystemBukkit, catalog.EcosystemPaper:
+		directory, err := lock.PackageDirectory(&documentpkg.Package{
+			Environment: serverpkg.EnvironmentServer,
+			Ecosystem:   ecosystem,
+		})
+		if err == nil {
+			add(directory)
+		}
 	}
 	for i := range lock.Packages {
-		add(statusLockPackageDirectory(lock, &lock.Packages[i]))
+		if destination := statusLockPackageDestination(lock, &lock.Packages[i]); destination != "" {
+			add(filepath.Dir(destination))
+		}
 	}
 	return result
-}
-
-// statusLockPackagePath reports the destination the lock's layout assigns to a
-// package. It mirrors the install and filetrack placement rules: server
-// packages live under mods/, Bukkit-family packages under plugins/, and MCDR
-// packages under the MCDR wrapper's plugins/ directory.
-func statusLockPackagePath(
-	root string,
-	lock *documentpkg.Lock,
-	pkg *documentpkg.Package,
-) string {
-	return statusRelativePath(root, statusLockPackageDestination(lock, pkg))
-}
-
-func statusLockPackageDirectory(
-	lock *documentpkg.Lock,
-	pkg *documentpkg.Package,
-) string {
-	destination := statusLockPackageDestination(lock, pkg)
-	if destination == "" {
-		return ""
-	}
-	return filepath.Dir(destination)
 }
 
 func statusLockPackageDestination(
 	lock *documentpkg.Lock,
 	pkg *documentpkg.Package,
 ) string {
-	directory := lock.Server.Directory
-	folder := "mods"
-	switch pkg.Environment {
-	case serverpkg.EnvironmentMCDR:
-		if lock.MCDR == nil {
-			return ""
-		}
-		directory, folder = lock.MCDR.Directory, "plugins"
-	case serverpkg.EnvironmentServer:
-		if pkg.Ecosystem == catalog.EcosystemBukkit ||
-			pkg.Ecosystem == catalog.EcosystemPaper {
-			folder = "plugins"
-		}
-	default:
+	if pkg.Environment != serverpkg.EnvironmentServer &&
+		pkg.Environment != serverpkg.EnvironmentMCDR {
 		return ""
 	}
-	return filepath.Join(directory, folder, pkg.Filename)
+	destination, err := lock.PackageDestination(pkg)
+	if err != nil {
+		return ""
+	}
+	return destination
 }
 
 // statusLockPackageName prefers the project a lock binding names. The lock's

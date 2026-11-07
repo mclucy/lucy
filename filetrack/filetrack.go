@@ -16,14 +16,12 @@ import (
 
 	"github.com/mclucy/lucy/bootstrap"
 	"github.com/mclucy/lucy/cas"
-	"github.com/mclucy/lucy/catalog"
 	documentpkg "github.com/mclucy/lucy/document"
 	"github.com/mclucy/lucy/input"
 	"github.com/mclucy/lucy/internal/workspaceguard"
 	"github.com/mclucy/lucy/internal/workspacewrite"
 	"github.com/mclucy/lucy/log"
 	"github.com/mclucy/lucy/receipt"
-	serverpkg "github.com/mclucy/lucy/server"
 )
 
 // Service executes file tracking with an explicit HTTP client and diagnostic
@@ -508,21 +506,16 @@ func ValidateOwnership(root string, files []documentpkg.TrackedFile, locked *doc
 		if locked.MCDR != nil {
 			add(locked.MCDR.Directory, "run-mcdr.sh")
 		}
-		for _, pkg := range locked.Packages {
+		for index := range locked.Packages {
+			pkg := &locked.Packages[index]
 			if !pkg.Enabled() {
 				continue
 			}
-			directory, folder := server.Directory, "mods"
-			if pkg.Ecosystem == catalog.EcosystemBukkit || pkg.Ecosystem == catalog.EcosystemPaper {
-				folder = "plugins"
+			destination, err := locked.PackageDestination(pkg)
+			if err != nil {
+				return err
 			}
-			if pkg.Environment == serverpkg.EnvironmentMCDR {
-				if locked.MCDR == nil {
-					return fmt.Errorf("MCDR package has no wrapper runtime")
-				}
-				directory, folder = locked.MCDR.Directory, "plugins"
-			}
-			add(directory, filepath.Join(folder, pkg.Filename))
+			add(".", destination)
 		}
 	}
 	for _, file := range files {

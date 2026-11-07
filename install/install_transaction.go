@@ -226,7 +226,7 @@ func applyCommitFiles(root, stage string, d *document.Manifest, l *document.Lock
 			if !p.Enabled() {
 				continue
 			}
-			dest, err := packageDestination(l, p)
+			dest, err := l.PackageDestination(p)
 			if err != nil {
 				continue
 			}

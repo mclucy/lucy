@@ -181,7 +181,7 @@ func packagesCurrent(root string, l *document.Lock, current *receipt.Receipt, lo
 		if !p.Enabled() {
 			continue
 		}
-		dest, err := packageDestination(l, p)
+		dest, err := l.PackageDestination(p)
 		if err != nil {
 			return false, err
 		}
