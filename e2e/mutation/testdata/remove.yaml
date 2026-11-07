@@ -1,0 +1,1610 @@
+- id: smoke-remove-tech-mod-fabric
+  smoke: true
+  setup:
+    - install
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.21.1"
+      directory: server
+      core:
+        product: fabric
+        product_version: "0.19.5"
+      packages:
+        fabric:
+          modrinth:fabric-api: "0.116.17+1.21.1"
+          modrinth:lithium: "mc1.21.1-0.15.4-fabric"
+          modrinth:ferrite-core: "7.0.3-fabric"
+          modrinth:krypton: "0.2.8"
+          modrinth:spark: "1.10.97-fabric"
+          modrinth:c2me-fabric: "any"
+          modrinth:alternate-current: "any"
+          modrinth:threadtweak: "any"
+          modrinth:noisium: "any"
+          modrinth:servercore: "any"
+          modrinth:vmp-fabric: "any"
+  args:
+    - "modrinth:c2me-fabric"
+
+- id: smoke-remove-uninstalled-not-found
+  smoke: true
+  setup:
+    - install
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.21.4"
+      directory: server
+      core:
+        product: fabric
+        product_version: "0.16.9"
+      packages:
+        fabric:
+          modrinth:fabric-api: "0.119.4+1.21.4"
+          modrinth:lithium: "mc1.21.4-0.15.3-fabric"
+          modrinth:ferrite-core: "7.1.3-fabric"
+          modrinth:spark: "1.10.121-fabric"
+          modrinth:servercore: "1.5.8+1.21.4"
+          modrinth:chunky: "1.4.27"
+          modrinth:noisium: "any"
+          modrinth:c2me-fabric: "any"
+          modrinth:scalablelux: "0.1.2+fabric.87468e8"
+          modrinth:ledger: "1.3.7"
+  args:
+    - "modrinth:krypton"
+
+- id: smoke-remove-paper-community-plugin
+  smoke: true
+  setup:
+    - install
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.21.4"
+      directory: server
+      core:
+        product: paper
+        product_version: "171"
+      packages:
+        paper:
+          modrinth:luckperms: "v5.5.71-bukkit"
+          modrinth:chunky: "1.4.28"
+          modrinth:squaremap: "any"
+          modrinth:viaversion: "any"
+          modrinth:viabackwards: "any"
+          modrinth:geyser: "any"
+          modrinth:vaultunlocked: "2.20.1"
+          modrinth:essentialsx: "2.21.0"
+          modrinth:griefprevention: "any"
+          modrinth:multiverse-core: "5.8.0"
+          modrinth:placeholderapi: "2.12.3"
+  files:
+    server/eula.txt: |-
+      eula=true
+    server/server.properties: |-
+      motd=Paper Survival Server
+      server-port=25565
+  args:
+    - "modrinth:chunky"
+
+- id: remove-c2me-chunk-engine-fabric
+  setup:
+    - install
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.21.4"
+      directory: server
+      core:
+        product: fabric
+        product_version: "0.16.9"
+      packages:
+        fabric:
+          modrinth:fabric-api: "0.119.4+1.21.4"
+          modrinth:c2me-fabric: "0.3.1.3.0+1.21.4"
+          modrinth:lithium: "mc1.21.4-0.15.3-fabric"
+          modrinth:servercore: "1.5.8+1.21.4"
+          modrinth:scalablelux: "0.1.2+fabric.87468e8"
+          modrinth:vmp-fabric: "0.2.0+beta.7.190+1.21.4"
+          modrinth:chunky: "1.4.27"
+          modrinth:chunkyborder: "any"
+          modrinth:threadtweak: "any"
+          modrinth:noisium: "any"
+  args:
+    - "modrinth:c2me-fabric"
+
+- id: remove-loot-from-cobblemon-official
+  setup:
+    - install
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.21.1"
+      directory: server
+      core:
+        product: fabric
+        product_version: "0.19.5"
+      packages:
+        fabric:
+          modrinth:cobblemon: "1.8.2"
+          modrinth:fabric-api: "0.116.17+1.21.1"
+          modrinth:advanced-loot-info: "1.21.1-2.4.0"
+          modrinth:bookshelf-lib: "21.1.81"
+          modrinth:cloth-config: "15.0.140+fabric"
+          modrinth:clumps: "19.0.0.1"
+          modrinth:crafting-tweaks: "21.1.11+fabric-1.21.1"
+          modrinth:open-loader: "21.1.5"
+          modrinth:owo-lib: "0.12.15.4+1.21"
+          modrinth:placeholder-api: "2.4.2+1.21"
+          modrinth:yacl: "3.8.2+1.21.1-fabric"
+  args:
+    - "modrinth:advanced-loot-info"
+
+- id: remove-outbreaks-cobblemon-gameplay
+  setup:
+    - install
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.21.1"
+      directory: server
+      core:
+        product: fabric
+        product_version: "0.19.5"
+      packages:
+        fabric:
+          modrinth:cobblemon: "1.8.2"
+          modrinth:fabric-api: "0.116.17+1.21.1"
+          modrinth:cobblemon-outbreaks: "any"
+          modrinth:cobblemon-fight-or-flight-reborn: "any"
+          modrinth:cobblemon-counter: "any"
+          modrinth:cobblemon-tim-core: "any"
+          modrinth:cobblemon-capture-xp: "any"
+          modrinth:lithium: "mc1.21.1-0.15.4-fabric"
+          modrinth:ferrite-core: "7.0.3-fabric"
+          modrinth:spark: "1.10.97-fabric"
+          modrinth:chunky: "1.4.23"
+  args:
+    - "modrinth:cobblemon-outbreaks"
+
+- id: remove-claims-flan-fabric
+  setup:
+    - install
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.21.4"
+      directory: server
+      core:
+        product: fabric
+        product_version: "0.16.9"
+      packages:
+        fabric:
+          modrinth:fabric-api: "0.119.4+1.21.4"
+          modrinth:flan: "1.21.4-1.11.7.b-fabric"
+          modrinth:lithium: "mc1.21.4-0.15.3-fabric"
+          modrinth:ferrite-core: "7.1.3-fabric"
+          modrinth:servercore: "1.5.8+1.21.4"
+          modrinth:spark: "1.10.121-fabric"
+          modrinth:ledger: "1.3.7"
+          modrinth:luckperms: "any"
+          modrinth:chunky: "1.4.27"
+          modrinth:noisium: "any"
+  files:
+    server/config/flan/flan_config.json: |-
+      {"claimRadius":100}
+  args:
+    - "flan"
+
+- id: remove-carpet-tis-technical-fabric
+  setup:
+    - install
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.21.4"
+      directory: server
+      core:
+        product: fabric
+        product_version: "0.16.9"
+      packages:
+        fabric:
+          modrinth:fabric-api: "0.119.4+1.21.4"
+          modrinth:carpet: "1.4.161"
+          modrinth:carpet-extra: "1.4.161"
+          modrinth:carpet-tis-addition: "v1.81.0-mc1.21.4"
+          modrinth:alternate-current: "any"
+          modrinth:lithium: "mc1.21.4-0.15.3-fabric"
+          modrinth:ferrite-core: "7.1.3-fabric"
+          modrinth:krypton: "0.2.8"
+          modrinth:spark: "1.10.121-fabric"
+          modrinth:noisium: "any"
+  args:
+    - "modrinth:carpet-tis-addition"
+
+- id: remove-audioplayer-voice-fabric
+  setup:
+    - install
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.21.4"
+      directory: server
+      core:
+        product: fabric
+        product_version: "0.16.9"
+      packages:
+        fabric:
+          modrinth:fabric-api: "0.119.4+1.21.4"
+          modrinth:simple-voice-chat: "any"
+          modrinth:audioplayer: "any"
+          modrinth:voice-chat-interaction: "any"
+          modrinth:lithium: "mc1.21.4-0.15.3-fabric"
+          modrinth:ferrite-core: "7.1.3-fabric"
+          modrinth:krypton: "0.2.8"
+          modrinth:servercore: "1.5.8+1.21.4"
+          modrinth:chunky: "1.4.27"
+          modrinth:sound-physics-remastered: "any"
+  args:
+    - "modrinth:audioplayer"
+
+- id: remove-floodgate-crossplay-fabric
+  setup:
+    - install
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.21.4"
+      directory: server
+      core:
+        product: fabric
+        product_version: "0.16.9"
+      packages:
+        fabric:
+          modrinth:fabric-api: "0.119.4+1.21.4"
+          modrinth:geyser: "any"
+          modrinth:floodgate: "any"
+          modrinth:fabricproxy-lite: "v2.9.0"
+          modrinth:lithium: "mc1.21.4-0.15.3-fabric"
+          modrinth:servercore: "1.5.8+1.21.4"
+          modrinth:krypton: "0.2.8"
+          modrinth:spark: "1.10.121-fabric"
+          modrinth:viaversion: "any"
+          modrinth:viabackwards: "any"
+  args:
+    - "modrinth:floodgate"
+
+- id: remove-waystones-teleport-fabric
+  setup:
+    - install
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.21.4"
+      directory: server
+      core:
+        product: fabric
+        product_version: "0.16.9"
+      packages:
+        fabric:
+          modrinth:fabric-api: "0.119.4+1.21.4"
+          modrinth:waystones: "21.4.19+fabric-1.21.4"
+          modrinth:balm: "21.4.40+fabric-1.21.4"
+          modrinth:lithium: "mc1.21.4-0.15.3-fabric"
+          modrinth:ferrite-core: "7.1.3-fabric"
+          modrinth:essentialcommands: "any"
+          modrinth:travelersbackpack: "1.21.4-10.4.6"
+          modrinth:chunky: "1.4.27"
+          modrinth:servercore: "1.5.8+1.21.4"
+          modrinth:spark: "1.10.121-fabric"
+  args:
+    - "modrinth:waystones"
+
+- id: remove-puzzles-easyanvils-fabric
+  setup:
+    - install
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.21.4"
+      directory: server
+      core:
+        product: fabric
+        product_version: "0.16.9"
+      packages:
+        fabric:
+          modrinth:fabric-api: "0.119.4+1.21.4"
+          modrinth:puzzles-lib: "v21.4.10-1.21.4-Fabric"
+          modrinth:easy-anvils: "v21.4.1-1.21.4-Fabric"
+          modrinth:easy-magic: "v21.4.1-1.21.4-Fabric"
+          modrinth:lithium: "mc1.21.4-0.15.3-fabric"
+          modrinth:ferrite-core: "7.1.3-fabric"
+          modrinth:servercore: "1.5.8+1.21.4"
+          modrinth:chunky: "1.4.27"
+          modrinth:krypton: "0.2.8"
+          modrinth:spark: "1.10.121-fabric"
+  args:
+    - "modrinth:easy-anvils"
+
+- id: remove-mc2discord-bridge-fabric
+  setup:
+    - install
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.21.4"
+      directory: server
+      core:
+        product: fabric
+        product_version: "0.16.9"
+      packages:
+        fabric:
+          modrinth:fabric-api: "0.119.4+1.21.4"
+          modrinth:mc2discord: "any"
+          modrinth:lithium: "mc1.21.4-0.15.3-fabric"
+          modrinth:ferrite-core: "7.1.3-fabric"
+          modrinth:servercore: "1.5.8+1.21.4"
+          modrinth:spark: "1.10.121-fabric"
+          modrinth:ledger: "1.3.7"
+          modrinth:chunky: "1.4.27"
+          modrinth:luckperms: "any"
+          modrinth:krypton: "0.2.8"
+  args:
+    - "modrinth:mc2discord"
+
+- id: remove-ledger-rollback-fabric
+  setup:
+    - install
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.21.4"
+      directory: server
+      core:
+        product: fabric
+        product_version: "0.16.9"
+      packages:
+        fabric:
+          modrinth:fabric-api: "0.119.4+1.21.4"
+          modrinth:ledger: "1.3.7"
+          modrinth:lithium: "mc1.21.4-0.15.3-fabric"
+          modrinth:ferrite-core: "7.1.3-fabric"
+          modrinth:servercore: "1.5.8+1.21.4"
+          modrinth:spark: "1.10.121-fabric"
+          modrinth:essentialcommands: "any"
+          modrinth:travelersbackpack: "1.21.4-10.4.6"
+          modrinth:simple-voice-chat: "any"
+          modrinth:voice-chat-interaction: "any"
+  args:
+    - "modrinth:ledger"
+
+- id: remove-installed-offline-fabric
+  setup:
+    - install
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.21.4"
+      directory: server
+      core:
+        product: fabric
+        product_version: "0.16.9"
+      packages:
+        fabric:
+          modrinth:fabric-api: "0.119.4+1.21.4"
+          modrinth:lithium: "mc1.21.4-0.15.3-fabric"
+          modrinth:ferrite-core: "7.1.3-fabric"
+          modrinth:krypton: "0.2.8"
+          modrinth:spark: "1.10.121-fabric"
+          modrinth:flan: "1.21.4-1.11.7.b-fabric"
+          modrinth:servercore: "1.5.8+1.21.4"
+          modrinth:alternate-current: "any"
+          modrinth:noisium: "any"
+          modrinth:scalablelux: "0.1.2+fabric.87468e8"
+  args:
+    - "--offline"
+    - "modrinth:flan"
+
+- id: remove-flan-preserves-world-fabric
+  setup:
+    - install
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.21.4"
+      directory: server
+      core:
+        product: fabric
+        product_version: "0.16.9"
+      packages:
+        fabric:
+          modrinth:fabric-api: "0.119.4+1.21.4"
+          modrinth:lithium: "mc1.21.4-0.15.3-fabric"
+          modrinth:ferrite-core: "7.1.3-fabric"
+          modrinth:spark: "1.10.121-fabric"
+          modrinth:flan: "1.21.4-1.11.7.b-fabric"
+          modrinth:servercore: "1.5.8+1.21.4"
+          modrinth:krypton: "0.2.8"
+          modrinth:noisium: "any"
+          modrinth:chunky: "1.4.27"
+          modrinth:chunkyborder: "any"
+  files:
+    server/eula.txt: |-
+      eula=true
+    server/config/flan/flan_config.json: |-
+      {"claimRadius":100}
+    server/world/level.dat: |-
+      dummy level data
+    server/server.properties: |-
+      motd=Survival World Server
+  args:
+    - "modrinth:flan"
+
+- id: remove-pl3xmap-web-fabric
+  setup:
+    - install
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.21.4"
+      directory: server
+      core:
+        product: fabric
+        product_version: "0.16.9"
+      packages:
+        fabric:
+          modrinth:fabric-api: "0.119.4+1.21.4"
+          modrinth:pl3xmap: "any"
+          modrinth:lithium: "mc1.21.4-0.15.3-fabric"
+          modrinth:ferrite-core: "7.1.3-fabric"
+          modrinth:krypton: "0.2.8"
+          modrinth:spark: "1.10.121-fabric"
+          modrinth:servercore: "1.5.8+1.21.4"
+          modrinth:chunky: "1.4.27"
+          modrinth:chunkyborder: "any"
+          modrinth:scalablelux: "0.1.2+fabric.87468e8"
+  args:
+    - "modrinth:pl3xmap"
+
+- id: remove-curseforge-ferritecore-fabric
+  setup:
+    - install
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.21.4"
+      directory: server
+      core:
+        product: fabric
+        product_version: "0.16.9"
+      packages:
+        fabric:
+          curseforge:ferritecore-fabric: "any"
+          curseforge:carpet: "any"
+          modrinth:fabric-api: "0.119.4+1.21.4"
+          modrinth:lithium: "mc1.21.4-0.15.3-fabric"
+          modrinth:krypton: "0.2.8"
+          modrinth:spark: "1.10.121-fabric"
+          modrinth:servercore: "1.5.8+1.21.4"
+          modrinth:c2me-fabric: "any"
+          modrinth:noisium: "any"
+          modrinth:chunky: "1.4.27"
+  args:
+    - "curseforge:ferritecore-fabric"
+
+- id: remove-create-automation-neoforge
+  setup:
+    - install
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.21.1"
+      directory: server
+      core:
+        product: neoforge
+        product_version: "21.1.233"
+      packages:
+        neoforge:
+          modrinth:create: "1.21.1-6.0.4"
+          modrinth:aileron: "1.21.1-neoforge-1.1.4"
+          modrinth:kotlin-for-forge: "5.11.0"
+          modrinth:txnilib: "neoforge-1.21.1-1.0.24"
+          modrinth:spark: "1.10.124-neoforge-1.21.1"
+          modrinth:ferrite-core: "7.0.3-neoforge"
+          modrinth:chunky: "1.4.23"
+          modrinth:curios-continuation: "any"
+          modrinth:ae2: "any"
+          modrinth:waystones: "21.1.21+neoforge-1.21.1"
+  args:
+    - "--ecosystem"
+    - "neoforge"
+    - "modrinth:create"
+
+- id: remove-kubejs-scripting-neoforge
+  setup:
+    - install
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.21.1"
+      directory: server
+      core:
+        product: neoforge
+        product_version: "21.1.233"
+      packages:
+        neoforge:
+          modrinth:kubejs: "any"
+          modrinth:rhino: "any"
+          modrinth:spark: "1.10.124-neoforge-1.21.1"
+          modrinth:ferrite-core: "7.0.3-neoforge"
+          modrinth:chunky: "1.4.23"
+          modrinth:curios-continuation: "any"
+          modrinth:ae2: "any"
+          modrinth:kotlin-for-forge: "5.11.0"
+          modrinth:moonlight: "any"
+          modrinth:supplementaries: "any"
+  args:
+    - "modrinth:kubejs"
+
+- id: remove-occultism-magic-neoforge
+  setup:
+    - install
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.21.1"
+      directory: server
+      core:
+        product: neoforge
+        product_version: "21.1.233"
+      packages:
+        neoforge:
+          modrinth:occultism: "any"
+          modrinth:curios-continuation: "any"
+          modrinth:spark: "1.10.124-neoforge-1.21.1"
+          modrinth:ferrite-core: "7.0.3-neoforge"
+          modrinth:chunky: "1.4.23"
+          modrinth:waystones: "21.1.21+neoforge-1.21.1"
+          modrinth:balm: "any"
+          modrinth:forge-config-api-port: "any"
+          modrinth:simply-swords: "any"
+          modrinth:better-combat: "any"
+  args:
+    - "modrinth:occultism"
+
+- id: remove-ars-nouveau-magic-neoforge
+  setup:
+    - install
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.21.1"
+      directory: server
+      core:
+        product: neoforge
+        product_version: "21.1.233"
+      packages:
+        neoforge:
+          modrinth:ars-nouveau: "any"
+          modrinth:curios-continuation: "any"
+          modrinth:spark: "1.10.124-neoforge-1.21.1"
+          modrinth:ferrite-core: "7.0.3-neoforge"
+          modrinth:chunky: "1.4.23"
+          modrinth:patchouli: "any"
+          modrinth:create: "1.21.1-6.0.4"
+          modrinth:kotlin-for-forge: "5.11.0"
+          modrinth:jade-addons-forge: "any"
+          modrinth:travelersbackpack: "any"
+  args:
+    - "modrinth:ars-nouveau"
+
+- id: remove-powah-energy-neoforge
+  setup:
+    - install
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.21.1"
+      directory: server
+      core:
+        product: neoforge
+        product_version: "21.1.233"
+      packages:
+        neoforge:
+          modrinth:powah: "6.2.8-neoforge"
+          modrinth:ae2: "any"
+          modrinth:spark: "1.10.124-neoforge-1.21.1"
+          modrinth:ferrite-core: "7.0.3-neoforge"
+          modrinth:chunky: "1.4.23"
+          modrinth:refined-storage: "any"
+          modrinth:industrial-foregoing: "any"
+          modrinth:titanium: "any"
+          modrinth:cyclops-core: "any"
+          modrinth:integrated-dynamics: "any"
+  args:
+    - "modrinth:powah"
+
+- id: remove-curseforge-ftb-chunks-neoforge
+  setup:
+    - install
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.21.1"
+      directory: server
+      core:
+        product: neoforge
+        product_version: "21.1.233"
+      packages:
+        neoforge:
+          curseforge:ftb-chunks-forge: "any"
+          curseforge:ftb-teams-forge: "any"
+          curseforge:ftb-library-forge: "any"
+          modrinth:spark: "1.10.124-neoforge-1.21.1"
+          modrinth:ferrite-core: "7.0.3-neoforge"
+          modrinth:chunky: "1.4.23"
+          modrinth:create: "1.21.1-6.0.4"
+          modrinth:kotlin-for-forge: "5.11.0"
+          modrinth:waystones: "21.1.21+neoforge-1.21.1"
+          modrinth:curios-continuation: "any"
+  args:
+    - "curseforge:ftb-chunks-forge"
+
+- id: remove-waystones-bare-neoforge
+  setup:
+    - install
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.21.1"
+      directory: server
+      core:
+        product: neoforge
+        product_version: "21.1.233"
+      packages:
+        neoforge:
+          modrinth:waystones: "21.1.21+neoforge-1.21.1"
+          modrinth:balm: "any"
+          modrinth:spark: "1.10.124-neoforge-1.21.1"
+          modrinth:ferrite-core: "7.0.3-neoforge"
+          modrinth:chunky: "1.4.23"
+          modrinth:curios-continuation: "any"
+          modrinth:ae2: "any"
+          modrinth:kotlin-for-forge: "5.11.0"
+          modrinth:comforts: "any"
+          modrinth:corpse: "any"
+  args:
+    - "waystones"
+
+- id: remove-commandify-utilities-neoforge
+  setup:
+    - install
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.21.1"
+      directory: server
+      core:
+        product: neoforge
+        product_version: "21.1.233"
+      packages:
+        neoforge:
+          modrinth:commandify: "any"
+          modrinth:spark: "1.10.124-neoforge-1.21.1"
+          modrinth:ferrite-core: "7.0.3-neoforge"
+          modrinth:chunky: "1.4.23"
+          modrinth:tquickswap: "any"
+          modrinth:underground-beacons: "any"
+          modrinth:humbling-bundle: "any"
+          modrinth:chorus-fruit-drops-nearby: "any"
+          modrinth:fast-paintings: "any"
+          modrinth:easy-anvils: "any"
+  args:
+    - "modrinth:commandify"
+
+- id: remove-curseforge-industrial-foregoing
+  setup:
+    - install
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.20.1"
+      directory: server
+      core:
+        product: forge
+        product_version: "47.4.10"
+      packages:
+        forge:
+          curseforge:industrial-foregoing: "any"
+          curseforge:titanium: "any"
+          modrinth:spark: "1.10.53-forge"
+          modrinth:ferrite-core: "6.0.1"
+          modrinth:canary: "any"
+          modrinth:chunky: "any"
+          curseforge:connectivity: "any"
+          modrinth:curios: "5.13.0+1.20.1"
+          modrinth:fastworkbench: "any"
+          modrinth:waystones: "any"
+  args:
+    - "curseforge:industrial-foregoing"
+
+- id: remove-curseforge-mekanism-generators
+  setup:
+    - install
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.20.1"
+      directory: server
+      core:
+        product: forge
+        product_version: "47.4.10"
+      packages:
+        forge:
+          curseforge:mekanism: "any"
+          curseforge:mekanism-generators: "any"
+          curseforge:mekanism-tools: "any"
+          modrinth:spark: "1.10.53-forge"
+          modrinth:ferrite-core: "6.0.1"
+          modrinth:canary: "any"
+          modrinth:chunky: "any"
+          curseforge:connectivity: "any"
+          modrinth:curios: "5.13.0+1.20.1"
+          modrinth:waystones: "any"
+  args:
+    - "curseforge:mekanism-generators"
+
+- id: remove-curseforge-thermal-expansion
+  setup:
+    - install
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.20.1"
+      directory: server
+      core:
+        product: forge
+        product_version: "47.4.10"
+      packages:
+        forge:
+          curseforge:thermal-expansion: "any"
+          curseforge:thermal-foundation: "any"
+          curseforge:cofh-core: "any"
+          modrinth:spark: "1.10.53-forge"
+          modrinth:ferrite-core: "6.0.1"
+          modrinth:canary: "any"
+          modrinth:chunky: "any"
+          curseforge:connectivity: "any"
+          modrinth:curios: "5.13.0+1.20.1"
+          modrinth:fastworkbench: "any"
+  args:
+    - "curseforge:thermal-expansion"
+
+- id: remove-curseforge-ender-io
+  setup:
+    - install
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.20.1"
+      directory: server
+      core:
+        product: forge
+        product_version: "47.4.10"
+      packages:
+        forge:
+          curseforge:ender-io: "any"
+          modrinth:spark: "1.10.53-forge"
+          modrinth:ferrite-core: "6.0.1"
+          modrinth:canary: "any"
+          modrinth:chunky: "any"
+          curseforge:connectivity: "any"
+          modrinth:curios: "5.13.0+1.20.1"
+          modrinth:waystones: "any"
+          modrinth:fastworkbench: "any"
+          curseforge:cofh-core: "any"
+  args:
+    - "curseforge:ender-io"
+
+- id: remove-curseforge-rftools-power
+  setup:
+    - install
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.20.1"
+      directory: server
+      core:
+        product: forge
+        product_version: "47.4.10"
+      packages:
+        forge:
+          curseforge:rftools-power: "any"
+          curseforge:rftools-base: "any"
+          curseforge:mcjtylib: "any"
+          modrinth:spark: "1.10.53-forge"
+          modrinth:ferrite-core: "6.0.1"
+          modrinth:canary: "any"
+          modrinth:chunky: "any"
+          curseforge:connectivity: "any"
+          modrinth:curios: "5.13.0+1.20.1"
+          modrinth:fastworkbench: "any"
+  args:
+    - "curseforge:rftools-power"
+
+- id: remove-curseforge-sophisticated-backpacks
+  setup:
+    - install
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.20.1"
+      directory: server
+      core:
+        product: forge
+        product_version: "47.4.10"
+      packages:
+        forge:
+          curseforge:sophisticated-backpacks: "any"
+          curseforge:sophisticated-core: "any"
+          modrinth:spark: "1.10.53-forge"
+          modrinth:ferrite-core: "6.0.1"
+          modrinth:canary: "any"
+          modrinth:chunky: "any"
+          curseforge:connectivity: "any"
+          modrinth:curios: "5.13.0+1.20.1"
+          modrinth:waystones: "any"
+          modrinth:fastworkbench: "any"
+  args:
+    - "curseforge:sophisticated-backpacks"
+
+- id: remove-farmers-delight-culinary-addons
+  setup:
+    - install
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.20.1"
+      directory: server
+      core:
+        product: forge
+        product_version: "47.4.10"
+      packages:
+        forge:
+          modrinth:farmers-delight: "1.20.1-1.3.3"
+          modrinth:nethers-delight: "1.20.1-4.0"
+          modrinth:brewin-and-chewin: "1.20.1-3.2.1"
+          modrinth:spark: "1.10.53-forge"
+          modrinth:ferrite-core: "6.0.1"
+          modrinth:canary: "any"
+          modrinth:chunky: "any"
+          curseforge:connectivity: "any"
+          modrinth:curios: "5.13.0+1.20.1"
+          modrinth:fastworkbench: "any"
+  args:
+    - "modrinth:brewin-and-chewin"
+
+- id: remove-apotheosis-enchanting-forge
+  setup:
+    - install
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.20.1"
+      directory: server
+      core:
+        product: forge
+        product_version: "47.4.10"
+      packages:
+        forge:
+          modrinth:apotheosis: "any"
+          modrinth:placebo: "8.6.3"
+          modrinth:patchouli: "1.20.1-81-forge"
+          modrinth:curios: "5.13.0+1.20.1"
+          modrinth:spark: "1.10.53-forge"
+          modrinth:ferrite-core: "6.0.1"
+          modrinth:canary: "any"
+          modrinth:chunky: "any"
+          curseforge:connectivity: "any"
+          modrinth:fastworkbench: "any"
+  args:
+    - "modrinth:apotheosis"
+
+- id: remove-integrated-dynamics-forge
+  setup:
+    - install
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.20.1"
+      directory: server
+      core:
+        product: forge
+        product_version: "47.4.10"
+      packages:
+        forge:
+          modrinth:integrated-dynamics: "1.20.1-1.23.5"
+          modrinth:cyclops-core: "1.20.1-1.19.6"
+          modrinth:spark: "1.10.53-forge"
+          modrinth:ferrite-core: "6.0.1"
+          modrinth:canary: "any"
+          modrinth:chunky: "any"
+          curseforge:connectivity: "any"
+          modrinth:curios: "5.13.0+1.20.1"
+          modrinth:fastworkbench: "any"
+          modrinth:waystones: "any"
+  args:
+    - "modrinth:integrated-dynamics"
+
+- id: remove-curseforge-dungeons-arise-forge
+  setup:
+    - install
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.20.1"
+      directory: server
+      core:
+        product: forge
+        product_version: "47.4.10"
+      packages:
+        forge:
+          curseforge:when-dungeons-arise: "any"
+          curseforge:structure-gel-api: "any"
+          curseforge:citadel: "any"
+          curseforge:alexs-mobs: "any"
+          modrinth:spark: "1.10.53-forge"
+          modrinth:ferrite-core: "6.0.1"
+          modrinth:canary: "any"
+          modrinth:chunky: "any"
+          curseforge:connectivity: "any"
+          modrinth:curios: "5.13.0+1.20.1"
+  args:
+    - "curseforge:when-dungeons-arise"
+
+- id: remove-curseforge-twilight-forest
+  setup:
+    - install
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.20.1"
+      directory: server
+      core:
+        product: forge
+        product_version: "47.4.10"
+      packages:
+        forge:
+          curseforge:the-twilight-forest: "any"
+          modrinth:patchouli: "1.20.1-81-forge"
+          modrinth:spark: "1.10.53-forge"
+          modrinth:ferrite-core: "6.0.1"
+          modrinth:canary: "any"
+          modrinth:chunky: "any"
+          curseforge:connectivity: "any"
+          modrinth:curios: "5.13.0+1.20.1"
+          modrinth:fastworkbench: "any"
+          modrinth:waystones: "any"
+  args:
+    - "curseforge:the-twilight-forest"
+
+- id: remove-curseforge-security-craft
+  setup:
+    - install
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.20.1"
+      directory: server
+      core:
+        product: forge
+        product_version: "47.4.10"
+      packages:
+        forge:
+          curseforge:security-craft: "any"
+          modrinth:spark: "1.10.53-forge"
+          modrinth:ferrite-core: "6.0.1"
+          modrinth:canary: "any"
+          modrinth:chunky: "any"
+          curseforge:connectivity: "any"
+          modrinth:curios: "5.13.0+1.20.1"
+          modrinth:fastworkbench: "any"
+          curseforge:waystones: "any"
+          curseforge:building-gadgets: "any"
+  args:
+    - "curseforge:security-craft"
+
+- id: remove-quickshop-economy-paper
+  setup:
+    - install
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.21.4"
+      directory: server
+      core:
+        product: paper
+        product_version: "171"
+      packages:
+        paper:
+          modrinth:quickshop-hikari: "any"
+          modrinth:vaultunlocked: "2.20.1"
+          modrinth:essentialsx: "2.21.0"
+          modrinth:luckperms: "v5.5.71-bukkit"
+          modrinth:chunky: "1.4.28"
+          modrinth:placeholderapi: "2.12.3"
+          modrinth:openinv: "any"
+          modrinth:squaremap: "any"
+          modrinth:coreprotect: "any"
+          modrinth:griefprevention: "any"
+  args:
+    - "--ecosystem"
+    - "paper"
+    - "modrinth:quickshop-hikari"
+
+- id: remove-worldguard-protection-paper
+  setup:
+    - install
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.21.4"
+      directory: server
+      core:
+        product: paper
+        product_version: "171"
+      packages:
+        paper:
+          modrinth:worldguard: "any"
+          modrinth:worldedit: "7.4.6"
+          modrinth:luckperms: "v5.5.71-bukkit"
+          modrinth:chunky: "1.4.28"
+          modrinth:vaultunlocked: "2.20.1"
+          modrinth:essentialsx: "2.21.0"
+          modrinth:coreprotect: "any"
+          modrinth:placeholderapi: "2.12.3"
+          modrinth:viaversion: "any"
+          modrinth:viabackwards: "any"
+  args:
+    - "modrinth:worldguard"
+
+- id: remove-fawe-builder-paper
+  setup:
+    - install
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.21.4"
+      directory: server
+      core:
+        product: paper
+        product_version: "171"
+      packages:
+        paper:
+          modrinth:fastasyncworldedit: "any"
+          modrinth:luckperms: "v5.5.71-bukkit"
+          modrinth:chunky: "1.4.28"
+          modrinth:multiverse-core: "5.8.0"
+          modrinth:vaultunlocked: "2.20.1"
+          modrinth:essentialsx: "2.21.0"
+          modrinth:squaremap: "any"
+          modrinth:coreprotect: "any"
+          modrinth:placeholderapi: "2.12.3"
+          modrinth:tab-was-taken: "any"
+  args:
+    - "modrinth:fastasyncworldedit"
+
+- id: remove-coreprotect-inspection-paper
+  setup:
+    - install
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.21.4"
+      directory: server
+      core:
+        product: paper
+        product_version: "171"
+      packages:
+        paper:
+          modrinth:coreprotect: "any"
+          modrinth:luckperms: "v5.5.71-bukkit"
+          modrinth:chunky: "1.4.28"
+          modrinth:vaultunlocked: "2.20.1"
+          modrinth:essentialsx: "2.21.0"
+          modrinth:griefprevention: "any"
+          modrinth:placeholderapi: "2.12.3"
+          modrinth:openinv: "any"
+          modrinth:viaversion: "any"
+          modrinth:viabackwards: "any"
+  args:
+    - "modrinth:coreprotect"
+
+- id: remove-huskhomes-teleport-paper
+  setup:
+    - install
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.21.4"
+      directory: server
+      core:
+        product: paper
+        product_version: "171"
+      packages:
+        paper:
+          modrinth:huskhomes: "any"
+          modrinth:luckperms: "v5.5.71-bukkit"
+          modrinth:chunky: "1.4.28"
+          modrinth:vaultunlocked: "2.20.1"
+          modrinth:placeholderapi: "2.12.3"
+          modrinth:tab-was-taken: "any"
+          modrinth:discordsrv: "any"
+          modrinth:squaremap: "any"
+          modrinth:viaversion: "any"
+          modrinth:viabackwards: "any"
+  args:
+    - "modrinth:huskhomes"
+
+- id: remove-towny-nations-paper
+  setup:
+    - install
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.21.4"
+      directory: server
+      core:
+        product: paper
+        product_version: "171"
+      packages:
+        paper:
+          modrinth:towny: "any"
+          modrinth:vaultunlocked: "2.20.1"
+          modrinth:essentialsx: "2.21.0"
+          modrinth:luckperms: "v5.5.71-bukkit"
+          modrinth:chunky: "1.4.28"
+          modrinth:openinv: "any"
+          modrinth:placeholderapi: "2.12.3"
+          modrinth:dynmap: "any"
+          modrinth:tab-was-taken: "any"
+          modrinth:viaversion: "any"
+  args:
+    - "modrinth:towny"
+
+- id: remove-decentholograms-display-paper
+  setup:
+    - install
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.21.4"
+      directory: server
+      core:
+        product: paper
+        product_version: "171"
+      packages:
+        paper:
+          modrinth:decentholograms: "any"
+          modrinth:placeholderapi: "2.12.3"
+          modrinth:luckperms: "v5.5.71-bukkit"
+          modrinth:chunky: "1.4.28"
+          modrinth:vaultunlocked: "2.20.1"
+          modrinth:essentialsx: "2.21.0"
+          modrinth:tab-was-taken: "any"
+          modrinth:squaremap: "any"
+          modrinth:multiverse-core: "5.8.0"
+          modrinth:openinv: "any"
+  args:
+    - "modrinth:decentholograms"
+
+- id: remove-grimac-anticheat-paper
+  setup:
+    - install
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.21.4"
+      directory: server
+      core:
+        product: paper
+        product_version: "171"
+      packages:
+        paper:
+          modrinth:grimac: "any"
+          modrinth:packetevents: "any"
+          modrinth:luckperms: "v5.5.71-bukkit"
+          modrinth:chunky: "1.4.28"
+          modrinth:vaultunlocked: "2.20.1"
+          modrinth:essentialsx: "2.21.0"
+          modrinth:coreprotect: "any"
+          modrinth:placeholderapi: "2.12.3"
+          modrinth:libertybans: "any"
+          modrinth:viaversion: "any"
+  args:
+    - "modrinth:grimac"
+
+- id: remove-purpur-chat-moderation-locked
+  setup:
+    - install
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.21.4"
+      directory: server
+      core:
+        product: purpur
+        product_version: "2416"
+      packages:
+        paper:
+          modrinth:luckperms: "v5.5.71-bukkit"
+          modrinth:chunky: "1.4.28"
+          modrinth:placeholderapi: "2.12.3"
+          modrinth:tab-was-taken: "any"
+          modrinth:libertybans: "1.1.0"
+          modrinth:coreprotect: "any"
+          modrinth:worldguard: "any"
+          modrinth:worldedit: "7.4.6"
+          modrinth:skinsrestorer: "any"
+          modrinth:vaultunlocked: "2.20.1"
+  args:
+    - "--locked"
+    - "--offline"
+    - "modrinth:libertybans"
+
+- id: remove-purpur-2416-coreprotect
+  setup:
+    - install
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.21.4"
+      directory: server
+      core:
+        product: purpur
+        product_version: "2416"
+      packages:
+        paper:
+          modrinth:coreprotect: "any"
+          modrinth:luckperms: "v5.5.71-bukkit"
+          modrinth:chunky: "1.4.28"
+          modrinth:vaultunlocked: "2.20.1"
+          modrinth:essentialsx: "2.21.0"
+          modrinth:squaremap: "any"
+          modrinth:placeholderapi: "2.12.3"
+          modrinth:viaversion: "any"
+          modrinth:viabackwards: "any"
+          modrinth:clear-lagg: "any"
+  args:
+    - "modrinth:coreprotect"
+
+- id: remove-mcdr-prime-backup-hybrid
+  setup:
+    - install
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.21.4"
+      directory: server
+      core:
+        product: fabric
+        product_version: "0.16.9"
+      packages:
+        fabric:
+          modrinth:fabric-api: "0.119.4+1.21.4"
+          modrinth:lithium: "mc1.21.4-0.15.3-fabric"
+          modrinth:ferrite-core: "7.1.3-fabric"
+          modrinth:spark: "1.10.121-fabric"
+          modrinth:carpet: "1.4.161"
+          modrinth:chunky: "1.4.27"
+          modrinth:krypton: "0.2.8"
+          modrinth:servercore: "1.5.8+1.21.4"
+          modrinth:c2me-fabric: "any"
+          modrinth:noisium: "any"
+    mcdr:
+      packages:
+        mcdr:prime_backup: "1.8.2"
+        mcdr:where_is: "any"
+  args:
+    - "--ecosystem"
+    - "mcdr"
+    - "mcdr:prime_backup"
+
+- id: remove-from-vanilla-manifest-without-packages
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.21.4"
+      directory: server
+      core:
+        product: vanilla
+        product_version: "1.21.4"
+  args:
+    - "modrinth:fabric-api"
+
+- id: smoke-remove-hangar-placeholderapi-paper
+  smoke: true
+  setup:
+    - install
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.21.4"
+      directory: server
+      core:
+        product: paper
+        product_version: "171"
+      packages:
+        paper:
+          hangar:HelpChat/PlaceholderAPI: "2.12.3"
+          modrinth:chunky: "1.4.28"
+          modrinth:squaremap: "any"
+          modrinth:vaultunlocked: "2.20.1"
+          modrinth:essentialsx: "2.21.0"
+          modrinth:luckperms: "v5.5.71-bukkit"
+          modrinth:coreprotect: "any"
+          modrinth:viaversion: "any"
+          modrinth:viabackwards: "any"
+          modrinth:worldguard: "any"
+          modrinth:worldedit: "7.4.6"
+  args:
+    - "hangar:HelpChat/PlaceholderAPI"
+
+- id: remove-hangar-viaversion-required-by-viabackwards
+  setup:
+    - install
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.21.4"
+      directory: server
+      core:
+        product: paper
+        product_version: "171"
+      packages:
+        paper:
+          hangar:ViaVersion/ViaVersion: "5.12.2"
+          hangar:ViaVersion/ViaBackwards: "5.12.2"
+          hangar:HelpChat/PlaceholderAPI: "2.12.3"
+          modrinth:essentialsx: "2.21.0"
+          modrinth:luckperms: "v5.5.71-bukkit"
+          modrinth:chunky: "1.4.28"
+          modrinth:squaremap: "any"
+          modrinth:coreprotect: "any"
+          modrinth:worldguard: "any"
+          modrinth:worldedit: "7.4.6"
+  args:
+    - "--locked"
+    - "--offline"
+    - "hangar:ViaVersion/ViaVersion"
+
+- id: remove-hangar-chunky-border-dependency-purpur
+  setup:
+    - install
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.21.4"
+      directory: server
+      core:
+        product: purpur
+        product_version: "2416"
+      packages:
+        paper:
+          hangar:pop4959/Chunky: "1.4.40"
+          modrinth:chunkyborder: "any"
+          hangar:HelpChat/PlaceholderAPI: "2.12.3"
+          modrinth:luckperms: "v5.5.71-bukkit"
+          modrinth:essentialsx: "2.21.0"
+          modrinth:coreprotect: "any"
+          modrinth:squaremap: "any"
+          modrinth:vaultunlocked: "2.20.1"
+          modrinth:viaversion: "any"
+          modrinth:viabackwards: "any"
+  args:
+    - "hangar:pop4959/Chunky"
+
+- id: smoke-remove-unverified-spiget-vault-paper
+  smoke: true
+  setup:
+    - install
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.21.4"
+      directory: server
+      core:
+        product: paper
+        product_version: "171"
+      packages:
+        paper:
+          spiget:34315: "any"
+          hangar:HelpChat/PlaceholderAPI: "2.12.3"
+          modrinth:essentialsx: "2.21.0"
+          modrinth:luckperms: "v5.5.71-bukkit"
+          modrinth:chunky: "1.4.28"
+          modrinth:squaremap: "any"
+          modrinth:coreprotect: "any"
+          modrinth:worldguard: "any"
+          modrinth:worldedit: "7.4.6"
+  args:
+    - "--locked"
+    - "--offline"
+    - "spiget:34315"
+
+- id: remove-unverified-spiget-luckperms-purpur
+  setup:
+    - install
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.21.4"
+      directory: server
+      core:
+        product: purpur
+        product_version: "2416"
+      packages:
+        paper:
+          spiget:28140: "any"
+          spiget:34315: "any"
+          hangar:HelpChat/PlaceholderAPI: "2.12.3"
+          hangar:ViaVersion/ViaVersion: "5.12.2"
+          modrinth:libertybans: "any"
+          modrinth:essentialsx: "2.21.0"
+          modrinth:chunky: "1.4.28"
+          modrinth:coreprotect: "any"
+          modrinth:squaremap: "any"
+          modrinth:worldguard: "any"
+          modrinth:worldedit: "7.4.6"
+  args:
+    - "spiget:28140"
+
+- id: remove-hangar-only-package-paper
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.21.4"
+      directory: server
+      core:
+        product: paper
+        product_version: "171"
+      packages:
+        paper:
+          hangar:HelpChat/PlaceholderAPI: "2.12.3"
+  args:
+    - "hangar:HelpChat/PlaceholderAPI"
+
+- id: remove-unverified-spiget-citizens-paper
+  setup:
+    - install
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.21.4"
+      directory: server
+      core:
+        product: paper
+        product_version: "171"
+      packages:
+        paper:
+          spiget:13811: "any"
+          hangar:HelpChat/PlaceholderAPI: "2.12.3"
+          hangar:ViaVersion/ViaVersion: "5.12.2"
+          hangar:pop4959/Chunky: "1.4.40"
+          modrinth:luckperms: "v5.5.71-bukkit"
+          modrinth:coreprotect: "any"
+          modrinth:squaremap: "any"
+          modrinth:essentialsx: "2.21.0"
+          modrinth:worldguard: "any"
+          modrinth:worldedit: "7.4.6"
+  args:
+    - "--locked"
+    - "--offline"
+    - "spiget:13811"
+
+- id: remove-forge-ftb-library-dependents
+  setup:
+    - install
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.20.1"
+      directory: server
+      core:
+        product: forge
+        product_version: "47.4.10"
+      packages:
+        forge:
+          curseforge:ftb-library-forge: "any"
+          curseforge:ftb-quests-forge: "any"
+          curseforge:ftb-teams-forge: "any"
+          curseforge:ftb-chunks-forge: "any"
+          modrinth:spark: "1.10.53-forge"
+          modrinth:ferrite-core: "6.0.1"
+          modrinth:canary: "any"
+          modrinth:chunky: "any"
+          curseforge:connectivity: "any"
+          modrinth:curios: "5.13.0+1.20.1"
+          modrinth:waystones: "any"
+  args:
+    - "curseforge:ftb-library-forge"
+
+- id: remove-forge-create-addons-without-create
+  setup:
+    - install
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.19.2"
+      directory: server
+      core:
+        product: forge
+        product_version: "43.4.0"
+      packages:
+        forge:
+          modrinth:create: "1.19.2-0.5.1.i"
+          modrinth:createaddition: "1.19.2-1.2.2"
+          modrinth:create-steam-n-rails: "1.6.6+forge-mc1.19.2"
+          modrinth:create-central-kitchen: "1.3.11.c"
+          modrinth:patchouli: "any"
+          modrinth:curios: "any"
+          modrinth:spark: "any"
+          modrinth:ferrite-core: "any"
+          modrinth:canary: "any"
+          modrinth:chunky: "any"
+          curseforge:connectivity: "any"
+          modrinth:waystones: "any"
+  args:
+    - "modrinth:create"
+
+- id: remove-mcdr-minecraft-data-api-dependents
+  setup:
+    - install
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.21.4"
+      directory: server
+      core:
+        product: vanilla
+        product_version: "1.21.4"
+    mcdr:
+      directory: mcdr
+      version: "2.12.2"
+      packages:
+        mcdr:minecraft_data_api: "any"
+        mcdr:mg_events: "any"
+        mcdr:death_back: "any"
+        mcdr:where_is: "any"
+        mcdr:player_last_play: "any"
+  args:
+    - "--ecosystem"
+    - "mcdr"
+    - "mcdr:minecraft_data_api"
+
+- id: remove-neoforge-kubejs-rhino-dependency
+  setup:
+    - install
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.21.1"
+      directory: server
+      core:
+        product: neoforge
+        product_version: "21.1.233"
+      packages:
+        neoforge:
+          modrinth:kubejs: "any"
+          modrinth:rhino: "any"
+          modrinth:spark: "1.10.124-neoforge-1.21.1"
+          modrinth:ferrite-core: "7.0.3-neoforge"
+          modrinth:chunky: "1.4.23"
+          modrinth:curios-continuation: "any"
+          modrinth:ae2: "any"
+          modrinth:kotlin-for-forge: "5.11.0"
+          modrinth:moonlight: "any"
+          modrinth:supplementaries: "any"
+  args:
+    - "modrinth:rhino"
+

@@ -14,4 +14,3 @@
 ## Testing
 
 - Unit tests: `go test -count=1 ./workspace`
-- E2E status probes: `go test -tags e2e -count=1 ./e2e/status`

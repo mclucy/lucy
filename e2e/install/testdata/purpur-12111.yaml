@@ -1,7 +1,0 @@
-manifest_version: 1
-server:
-  minecraft: "1.21.11"
-  directory: server
-  core:
-    product: purpur
-    product_version: "2568"

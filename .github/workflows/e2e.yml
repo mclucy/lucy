@@ -30,7 +30,7 @@ jobs:
       contents: read
       pull-requests: read
     outputs:
-      domains: ${{ inputs.force && '["status","init","install","compile"]' || steps.filter.outputs.changes }}
+      domains: ${{ inputs.force && '["mutation","init","compile"]' || steps.filter.outputs.changes }}
       compile-full: ${{ inputs.compile-full || (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'ci:compile-full')) }}
     steps:
       - name: Check out repository
@@ -38,110 +38,134 @@ jobs:
         with:
           persist-credentials: false
 
-      # The filters mirror the paths each suite is built from. A change that
-      # matches no filter runs no e2e domain, as before the split.
+      # The filters mirror the paths each suite is built from. The init and mutation
+      # suites run the real CLI binary, so they share its full dependency closure:
+      # every package the CLI command tree links, not only the packages their own
+      # test directories name. A change that matches no filter runs no e2e domain.
       - name: Filter changed domains
         id: filter
         if: ${{ !inputs.force }}
         uses: dorny/paths-filter@v4
         with:
           filters: |
-            status:
-              - 'e2e/status/**'
-              - 'artifact/**'
-              - 'e2e/sandbox/**'
-              - 'e2e/internal/**'
-              - 'e2e/testdata/sandboxes/**'
-              - 'workspace/**'
-              - 'document/**'
-              - 'config/**'
-              - 'operation/**'
-              - 'cmd/*.go'
-              - 'internal/cli/*.go'
-              - 'internal/telemetry/**'
-              - 'terminal/report/**'
-              - 'go.mod'
-              - 'go.sum'
-              - 'Taskfile.yml'
-              - 'scripts/**'
+            mutation:
               - '.github/workflows/ci.yml'
-              - '.github/workflows/e2e.yml'
               - '.github/workflows/e2e-run.yml'
-            init:
-              - 'e2e/init/**'
+              - '.github/workflows/e2e.yml'
               - 'artifact/**'
               - 'artifactstore/**'
-              - 'cas/**'
-              - 'serverregistry/**'
-              - 'e2e/sandbox/**'
-              - 'e2e/internal/**'
-              - 'e2e/testdata/sandboxes/**'
-              - 'operation/**'
-              - 'document/**'
-              - 'config/**'
-              - 'workspace/**'
-              - 'resolve/**'
-              - 'upstream/**'
-              - 'cmd/*.go'
-              - 'internal/cli/*.go'
-              - 'internal/github/**'
-              - 'internal/telemetry/**'
-              - 'terminal/report/**'
-              - 'go.mod'
-              - 'go.sum'
-              - 'Taskfile.yml'
-              - 'scripts/**'
-              - '.github/workflows/ci.yml'
-              - '.github/workflows/e2e.yml'
-              - '.github/workflows/e2e-run.yml'
-            install:
-              - 'e2e/install/**'
-              - 'artifact/**'
-              - 'artifactstore/**'
-              - 'cas/**'
-              - 'serverregistry/**'
-              - 'e2e/sandbox/**'
-              - 'e2e/internal/**'
-              - 'e2e/testdata/sandboxes/**'
-              - 'install/**'
               - 'bootstrap/**'
-              - 'document/**'
-              - 'config/**'
-              - 'resolve/**'
-              - 'upstream/**'
-              - 'operation/**'
-              - 'workspace/**'
+              - 'cache/**'
+              - 'cas/**'
+              - 'catalog/**'
               - 'cmd/*.go'
-              - 'internal/cli/*.go'
+              - 'config/**'
+              - 'document/**'
+              - 'e2e/internal/**'
+              - 'e2e/mutation/**'
+              - 'filetrack/**'
+              - 'go.mod'
+              - 'go.sum'
+              - 'input/**'
+              - 'install/**'
+              - 'internal/appdata/**'
+              - 'internal/bisect/**'
+              - 'internal/cli/**'
+              - 'internal/depgraph/**'
+              - 'internal/fileschema/**'
+              - 'internal/fn/**'
+              - 'internal/fsutil/**'
               - 'internal/github/**'
               - 'internal/javainstall/**'
+              - 'internal/maven/**'
+              - 'internal/shell/**'
               - 'internal/telemetry/**'
-              - 'terminal/report/**'
+              - 'internal/toolchain/**'
+              - 'internal/workspaceguard/**'
+              - 'internal/workspacewrite/**'
+              - 'java/**'
+              - 'javaruntime/**'
+              - 'log/**'
+              - 'operation/**'
+              - 'receipt/**'
+              - 'resolve/**'
+              - 'scripts/**'
+              - 'server/**'
+              - 'serverregistry/**'
+              - 'Taskfile.yml'
+              - 'terminal/**'
+              - 'upstream/**'
+              - 'version/**'
+              - 'workspace/**'
+            init:
+              - '.github/workflows/ci.yml'
+              - '.github/workflows/e2e-run.yml'
+              - '.github/workflows/e2e.yml'
+              - 'artifact/**'
+              - 'artifactstore/**'
+              - 'bootstrap/**'
+              - 'cache/**'
+              - 'cas/**'
+              - 'catalog/**'
+              - 'cmd/*.go'
+              - 'config/**'
+              - 'document/**'
+              - 'e2e/init/**'
+              - 'e2e/internal/**'
+              - 'e2e/sandbox/**'
+              - 'e2e/testdata/sandboxes/**'
+              - 'filetrack/**'
               - 'go.mod'
               - 'go.sum'
-              - 'Taskfile.yml'
+              - 'input/**'
+              - 'install/**'
+              - 'internal/appdata/**'
+              - 'internal/bisect/**'
+              - 'internal/cli/**'
+              - 'internal/depgraph/**'
+              - 'internal/fileschema/**'
+              - 'internal/fn/**'
+              - 'internal/fsutil/**'
+              - 'internal/github/**'
+              - 'internal/javainstall/**'
+              - 'internal/maven/**'
+              - 'internal/shell/**'
+              - 'internal/telemetry/**'
+              - 'internal/toolchain/**'
+              - 'internal/workspaceguard/**'
+              - 'internal/workspacewrite/**'
+              - 'java/**'
+              - 'javaruntime/**'
+              - 'log/**'
+              - 'operation/**'
+              - 'receipt/**'
+              - 'resolve/**'
               - 'scripts/**'
-              - '.github/workflows/ci.yml'
-              - '.github/workflows/e2e.yml'
-              - '.github/workflows/e2e-run.yml'
+              - 'server/**'
+              - 'serverregistry/**'
+              - 'Taskfile.yml'
+              - 'terminal/**'
+              - 'upstream/**'
+              - 'version/**'
+              - 'workspace/**'
             compile:
+              - '.github/workflows/ci.yml'
+              - '.github/workflows/e2e-run.yml'
+              - '.github/workflows/e2e.yml'
+              - 'cmd/*.go'
               - 'e2e/compile/**'
               - 'e2e/internal/**'
               - 'e2e/testdata/repo/**'
-              - 'internal/cli/compile/**'
-              - 'internal/buildrepo/**'
-              - 'internal/toolchain/**'
-              - 'cmd/*.go'
-              - 'internal/cli/*.go'
-              - 'internal/telemetry/**'
-              - 'terminal/report/**'
               - 'go.mod'
               - 'go.sum'
-              - 'Taskfile.yml'
+              - 'internal/buildrepo/**'
+              - 'internal/cli/*.go'
+              - 'internal/cli/compile/**'
+              - 'internal/telemetry/**'
+              - 'internal/toolchain/**'
               - 'scripts/**'
-              - '.github/workflows/ci.yml'
-              - '.github/workflows/e2e.yml'
-              - '.github/workflows/e2e-run.yml'
+              - 'Taskfile.yml'
+              - 'terminal/report/**'
 
   plan:
     name: Plan suites
@@ -184,6 +208,8 @@ jobs:
       - name: Set up Task
         uses: go-task/setup-task@v2
 
+      # Only the build reads the key: it is bound into the binary as cipher
+      # material, so suite runs never receive it.
       - name: Build Lucy
         env:
           CURSEFORGE_API_KEY: ${{ secrets.CURSEFORGE_API_KEY }}
@@ -219,5 +245,4 @@ jobs:
       cache-key: ${{ matrix.cache-key }}
       cache-pattern: ${{ matrix.cache-pattern }}
       binary-artifact: lucy-e2e
-    secrets:
-      CURSEFORGE_API_KEY: ${{ secrets.CURSEFORGE_API_KEY }}
+      report-artifact: ${{ matrix.report-artifact }}
