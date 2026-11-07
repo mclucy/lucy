@@ -33,7 +33,7 @@ func liveProcessGroup(group int) (bool, error) {
 			continue
 		}
 		state, processGroup, err := linuxProcessState(pid)
-		if errors.Is(err, os.ErrNotExist) {
+		if errors.Is(err, os.ErrNotExist) || errors.Is(err, syscall.ESRCH) {
 			continue
 		}
 		if err != nil {
@@ -48,7 +48,7 @@ func liveProcessGroup(group int) (bool, error) {
 
 func liveProcess(pid int) (bool, error) {
 	state, _, err := linuxProcessState(pid)
-	if errors.Is(err, os.ErrNotExist) {
+	if errors.Is(err, os.ErrNotExist) || errors.Is(err, syscall.ESRCH) {
 		return false, nil
 	}
 	if err != nil {
