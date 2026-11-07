@@ -8,30 +8,13 @@ import (
 	docscontent "github.com/mclucy/lucy/docs"
 )
 
-type page struct {
-	slug    string
-	content []byte
-}
-
-func loadPages() ([]page, error) {
-	corpus, err := docscontent.Load()
-	if err != nil {
-		return nil, err
-	}
-	pages := make([]page, len(corpus))
-	for i, entry := range corpus {
-		pages[i] = page{slug: entry.Slug, content: entry.Content}
-	}
-	return pages, nil
-}
-
-func findPage(pages []page, slug string) (page, bool) {
+func findPage(pages []docscontent.Page, slug string) (docscontent.Page, bool) {
 	for _, candidate := range pages {
-		if candidate.slug == slug {
+		if candidate.Slug == slug {
 			return candidate, true
 		}
 	}
-	return page{}, false
+	return docscontent.Page{}, false
 }
 
 func normalizeSlug(raw string) (string, error) {

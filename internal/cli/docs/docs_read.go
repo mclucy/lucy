@@ -3,6 +3,7 @@ package docs
 import (
 	"fmt"
 
+	docscontent "github.com/mclucy/lucy/docs"
 	"github.com/mclucy/lucy/internal/cli/help"
 	"github.com/spf13/cobra"
 )
@@ -13,13 +14,13 @@ func newReadCommand() *cobra.Command {
 		Short: help.DocsReadShort,
 		Args:  cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			pages, err := loadPages()
+			pages, err := docscontent.Load()
 			if err != nil {
 				return err
 			}
 			// Resolve every argument before writing, so a mistyped page name
 			// never leaves half the request on stdout.
-			selected := make([]page, 0, len(args))
+			selected := make([]docscontent.Page, 0, len(args))
 			for _, arg := range args {
 				slug, err := normalizeSlug(arg)
 				if err != nil {
@@ -37,14 +38,14 @@ func newReadCommand() *cobra.Command {
 			out := cmd.OutOrStdout()
 			for _, current := range selected {
 				if len(selected) > 1 {
-					if _, err := fmt.Fprintf(out, "===== %s =====\n", current.slug); err != nil {
+					if _, err := fmt.Fprintf(out, "===== %s =====\n", current.Slug); err != nil {
 						return err
 					}
 				}
-				if _, err := out.Write(current.content); err != nil {
+				if _, err := out.Write(current.Content); err != nil {
 					return err
 				}
-				if len(current.content) > 0 && current.content[len(current.content)-1] != '\n' {
+				if len(current.Content) > 0 && current.Content[len(current.Content)-1] != '\n' {
 					if _, err := fmt.Fprintln(out); err != nil {
 						return err
 					}
