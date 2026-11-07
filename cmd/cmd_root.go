@@ -176,9 +176,7 @@ func NewRootCommand(contracts *cli.JSONContracts, invocation *cli.Invocation, de
 		cli.NewCreateCommand(contracts, invocation, dependencies),
 		cli.NewDeinitCommand(contracts, invocation, dependencies),
 		docs,
-		cli.NewDoctorCommand(),
 		file.NewCommand(contracts, invocation, dependencies),
-		cli.NewExportCommand(invocation),
 		cli.NewInitCommand(contracts, invocation, dependencies),
 		cli.NewInstallCommand(contracts, invocation, dependencies),
 		cli.NewJavaCommand(contracts, invocation, dependencies),
@@ -325,7 +323,7 @@ func (r *Runner) configureServices(cmd *cobra.Command) error {
 func canRepairSettings(cmd *cobra.Command) bool {
 	for current := cmd; current != nil; current = current.Parent() {
 		switch current.Name() {
-		case "config", "docs", "doctor", "schema",
+		case "config", "docs", "schema",
 			"__complete", "__completeNoDesc":
 			return true
 		}

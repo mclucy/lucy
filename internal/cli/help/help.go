@@ -51,10 +51,6 @@ const (
 		"matches, 1 when no line matches, and 2 on error."
 	DocsReadShort = "Print documentation pages"
 
-	DoctorShort = "Diagnose the server environment"
-
-	ExportShort = "Export server configuration, or generate client"
-
 	InfoShort = "Display information of a package"
 	InfoLong  = "Pass a local .jar, .zip, .pyz, or .mcdr file or specify a " +
 		"package identifier. When no registry is specified, all registries are queried"
