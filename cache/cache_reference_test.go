@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"context"
 	"io"
+	"net/http"
+	"net/http/httptest"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -118,35 +120,71 @@ func TestCacheEvictionCountsSharedObjectsOnce(t *testing.T) {
 	h := installNetworkCache(t, cfg)
 	shared := bytes.Repeat([]byte("shared"), 20)
 	unique := bytes.Repeat([]byte("unique"), 20)
-
-	for i, key := range []string{"key-shared-a", "key-shared-b", "key-shared-c"} {
-		if err := h.cache().add(shared, "shared.jar", key, time.Duration(i+1)*time.Hour); err != nil {
-			t.Fatalf("add alias %s: %v", key, err)
-		}
-	}
-	if err := h.cache().add(unique, "unique.jar", "key-unique", 5*time.Hour); err != nil {
-		t.Fatalf("add the unique entry: %v", err)
-	}
-	for _, key := range []string{"key-shared-a", "key-shared-b", "key-shared-c"} {
-		hit, data, err := h.GetBytes(key)
-		if err != nil || !hit || !bytes.Equal(data, shared) {
-			t.Fatalf("shared object within quota lost alias %s (hit=%v, err=%v, data=%q)", key, hit, err, data)
-		}
-	}
-
 	newest := bytes.Repeat([]byte("newest"), 20)
-	if err := h.cache().add(newest, "newest.jar", "key-newest", 6*time.Hour); err != nil {
-		t.Fatalf("add the entry exceeding physical quota: %v", err)
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case strings.HasPrefix(r.URL.Path, "/shared/"):
+			_, _ = w.Write(shared)
+		case r.URL.Path == "/unique":
+			_, _ = w.Write(unique)
+		case r.URL.Path == "/newest":
+			_, _ = w.Write(newest)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	t.Cleanup(server.Close)
+
+	aliases := []string{
+		server.URL + "/shared/a",
+		server.URL + "/shared/b",
+		server.URL + "/shared/c",
 	}
-	for _, key := range []string{"key-shared-a", "key-shared-b", "key-shared-c"} {
-		if h.Exist(key) {
-			t.Fatalf("alias %s survived after its object was selected for eviction", key)
+	for i, alias := range aliases {
+		if _, err := h.CachedGetBytes(
+			context.Background(),
+			alias,
+			BytesRequestOptions{
+				Kind: KindArtifact,
+				TTL:  time.Duration(i+1) * time.Hour,
+			},
+		); err != nil {
+			t.Fatalf("cache alias %s: %v", alias, err)
+		}
+	}
+	uniqueURL := server.URL + "/unique"
+	if _, err := h.CachedGetBytes(
+		context.Background(),
+		uniqueURL,
+		BytesRequestOptions{Kind: KindArtifact, TTL: 5 * time.Hour},
+	); err != nil {
+		t.Fatalf("cache the unique entry: %v", err)
+	}
+	for _, alias := range aliases {
+		hit, data, err := h.GetBytes(alias)
+		if err != nil || !hit || !bytes.Equal(data, shared) {
+			t.Fatalf("shared object within quota lost alias %s (hit=%v, err=%v, data=%q)", alias, hit, err, data)
+		}
+	}
+
+	newestURL := server.URL + "/newest"
+	if _, err := h.CachedGetBytes(
+		context.Background(),
+		newestURL,
+		BytesRequestOptions{Kind: KindArtifact, TTL: 6 * time.Hour},
+	); err != nil {
+		t.Fatalf("cache the entry exceeding physical quota: %v", err)
+	}
+	for _, alias := range aliases {
+		if h.Exist(alias) {
+			t.Fatalf("alias %s survived after its object was selected for eviction", alias)
 		}
 	}
 	for _, test := range []struct {
 		key  string
 		data []byte
-	}{{"key-unique", unique}, {"key-newest", newest}} {
+	}{{uniqueURL, unique}, {newestURL, newest}} {
 		hit, data, err := h.GetBytes(test.key)
 		if err != nil || !hit || !bytes.Equal(data, test.data) {
 			t.Fatalf("retained object %s is unreadable (hit=%v, err=%v, data=%q)", test.key, hit, err, data)

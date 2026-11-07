@@ -2,6 +2,7 @@ package cache
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"io"
 	"os"
@@ -37,12 +38,22 @@ func TestClientCloseUnusedDoesNotCreateRoot(t *testing.T) {
 
 func TestClientGetKeepsReaderAcrossIndexChanges(t *testing.T) {
 	t.Parallel()
+	fixture := newCacheFixture(t)
 	client := installNetworkCache(t, DefaultCacheConfig())
-	content := []byte("reader lifetime contents\n")
-	if err := client.cache().add(content, "first.jar", "key-first", time.Hour); err != nil {
-		t.Fatalf("add first entry: %v", err)
+	first := fixture.artifactURL("first.jar")
+	second := fixture.artifactURL("second.jar")
+	content := []byte(fixturePayload("first.jar"))
+	firstResult, err := client.CachedDownload(
+		context.Background(),
+		first,
+		t.TempDir(),
+		DownloadOptions{Kind: KindArtifact, Filename: "first.jar"},
+	)
+	if err != nil {
+		t.Fatalf("cache first entry: %v", err)
 	}
-	hit, reader, filename, err := client.Get("key-first")
+	_ = firstResult.File.Close()
+	hit, reader, filename, err := client.Get(first)
 	if err != nil {
 		t.Fatalf("get first entry: %v", err)
 	}
@@ -52,9 +63,16 @@ func TestClientGetKeepsReaderAcrossIndexChanges(t *testing.T) {
 	if filename != "first.jar" {
 		t.Fatalf("get filename = %q, want first.jar", filename)
 	}
-	if err := client.cache().add([]byte("other contents"), "second.jar", "key-second", time.Hour); err != nil {
-		t.Fatalf("add second entry: %v", err)
+	secondResult, err := client.CachedDownload(
+		context.Background(),
+		second,
+		t.TempDir(),
+		DownloadOptions{Kind: KindArtifact, Filename: "second.jar"},
+	)
+	if err != nil {
+		t.Fatalf("cache second entry: %v", err)
 	}
+	_ = secondResult.File.Close()
 	data, readErr := io.ReadAll(reader)
 	closeErr := reader.Close()
 	if err := errors.Join(readErr, closeErr); err != nil {
@@ -72,19 +90,40 @@ func TestClientGetKeepsReaderAcrossIndexChanges(t *testing.T) {
 
 func TestClientGetRejectsExpiredEntry(t *testing.T) {
 	t.Parallel()
+	fixture := newCacheFixture(t)
 	client := installNetworkCache(t, DefaultCacheConfig())
-	content := []byte("expired entry")
-	if err := client.cache().addEntry(
-		content,
-		"expired.jar",
-		"key-expired",
-		KindArtifact,
-		Integrity{State: IntegrityUnverified},
-		-time.Hour,
-	); err != nil {
-		t.Fatalf("add expired entry: %v", err)
+	entryKey := fixture.artifactURL("expired.jar")
+	data, err := client.CachedGetBytes(
+		context.Background(),
+		entryKey,
+		BytesRequestOptions{Kind: KindArtifact},
+	)
+	if err != nil {
+		t.Fatalf("cache entry: %v", err)
 	}
-	hit, reader, _, err := client.Get("key-expired")
+	if want := []byte(fixturePayload("expired.jar")); !bytes.Equal(data, want) {
+		t.Fatalf("cached bytes = %q, want %q", data, want)
+	}
+	hit, reader, _, err := client.Get(entryKey)
+	if err != nil || !hit || reader == nil {
+		t.Fatalf("live Get = %v, %v, %v", hit, reader, err)
+	}
+	if err := reader.Close(); err != nil {
+		t.Fatalf("close live reader: %v", err)
+	}
+
+	handler := client.cache()
+	handler.mu.Lock()
+	entry, ok := handler.index.get(canonicalizeKey(entryKey))
+	if ok {
+		entry.Expiration = time.Now().Add(-time.Second)
+	}
+	handler.mu.Unlock()
+	if !ok {
+		t.Fatal("cached entry is missing from the index")
+	}
+
+	hit, reader, _, err = client.Get(entryKey)
 	if err != nil || hit || reader != nil {
 		t.Fatalf("expired Get = %v, %v, %v", hit, reader, err)
 	}
@@ -92,18 +131,27 @@ func TestClientGetRejectsExpiredEntry(t *testing.T) {
 
 func TestClientFlushPersistsIndex(t *testing.T) {
 	t.Parallel()
+	fixture := newCacheFixture(t)
 	root := filepath.Join(t.TempDir(), "cache")
 	client := installNetworkCacheAt(t, root, DefaultCacheConfig())
-	if err := client.cache().add([]byte("flushed contents"), "flushed.jar", "key-original", time.Hour); err != nil {
-		t.Fatalf("add entry: %v", err)
+	result, err := client.CachedDownload(
+		context.Background(),
+		fixture.artifactURL("flushed.jar"),
+		t.TempDir(),
+		DownloadOptions{Kind: KindArtifact, Filename: "flushed.jar"},
+	)
+	if err != nil {
+		t.Fatalf("cache entry: %v", err)
 	}
+	_ = result.File.Close()
 	entries := client.All()
 	if len(entries) != 1 {
 		t.Fatalf("index holds %d entries, want 1", len(entries))
 	}
 	entry := *entries[0]
+	original := key(entry.Key)
 	entry.Key = "key-flushed"
-	client.cache().index.delete("key-original")
+	client.cache().index.delete(original)
 	client.cache().index.put("key-flushed", &entry)
 	if err := client.Flush(); err != nil {
 		t.Fatalf("flush index: %v", err)
@@ -121,17 +169,23 @@ func TestClientFlushPersistsIndex(t *testing.T) {
 
 func TestClientCloseDisablesOpenedStore(t *testing.T) {
 	t.Parallel()
+	fixture := newCacheFixture(t)
 	client := installNetworkCache(t, DefaultCacheConfig())
-	if err := client.cache().add([]byte("contents"), "file.jar", "key", time.Hour); err != nil {
-		t.Fatalf("add entry: %v", err)
+	entryKey := fixture.artifactURL("file.jar")
+	if _, err := client.CachedGetBytes(
+		context.Background(),
+		entryKey,
+		BytesRequestOptions{Kind: KindArtifact},
+	); err != nil {
+		t.Fatalf("cache entry: %v", err)
 	}
 	if err := client.Close(); err != nil {
 		t.Fatalf("close client: %v", err)
 	}
-	if client.Exist("key") {
+	if client.Exist(entryKey) {
 		t.Fatal("closed client reported a hit")
 	}
-	hit, reader, _, err := client.Get("key")
+	hit, reader, _, err := client.Get(entryKey)
 	if err != nil || hit || reader != nil {
 		t.Fatalf("closed Get = %v, %v, %v", hit, reader, err)
 	}

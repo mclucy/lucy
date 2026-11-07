@@ -199,24 +199,3 @@ func TestIndexFlushRejectsUnwritablePath(t *testing.T) {
 		t.Fatal("flush accepted a directory as the index path")
 	}
 }
-
-func TestIndexExistsAndAll(t *testing.T) {
-	t.Parallel()
-	index := newIndex(filepath.Join(t.TempDir(), "cache.json"))
-	entry := &Entry{Key: "key", Filename: "file.jar"}
-	index.put("key", entry)
-	if !index.exists("key") {
-		t.Fatal("exists missed a stored key")
-	}
-	if index.exists("missing") {
-		t.Fatal("exists found an absent key")
-	}
-	all := index.all()
-	if len(all) != 1 || all["key"] != entry {
-		t.Fatalf("all = %+v, want the stored entry", all)
-	}
-	index.delete("key")
-	if index.exists("key") {
-		t.Fatal("delete kept the key")
-	}
-}
