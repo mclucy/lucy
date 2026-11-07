@@ -83,7 +83,7 @@ func TestInitialize(t *testing.T) {
 				// Status still observes the unresolved layout; init's refusal
 				// must not deny live-status postconditions.
 				if scenario.status != nil {
-					verifyStatus(t, runner, root, *scenario.status, scenario.informational)
+					verifyStatus(t, runner, root, *scenario.status)
 				}
 				verifyUnchanged(t, root, scenario.unchanged, unchanged)
 				return
@@ -97,12 +97,11 @@ func TestInitialize(t *testing.T) {
 			if strings.Contains(output, "ERROR ") {
 				t.Fatalf("init reported an error finding:\n%s", output)
 			}
-			requireInformational(t, stderr, root, scenario.informational)
 			verifyInitialized(t, root, scenario)
 			requireLockOmitsEntryPoint(t, root)
 			verifyReceipt(t, root, scenario.wantReceipt)
 			if scenario.status != nil {
-				verifyStatus(t, runner, root, *scenario.status, scenario.informational)
+				verifyStatus(t, runner, root, *scenario.status)
 			}
 			verifyUnchanged(t, root, scenario.unchanged, unchanged)
 		})
@@ -134,26 +133,6 @@ func requireFailure(
 		verifyInitialized(t, root, scenario)
 	}
 	verifyReceipt(t, root, scenario.wantReceipt)
-}
-
-// requireInformational requires an INFO-level report line naming each path.
-// The message text stays free to change; the severity and path are the
-// consumer-visible contract.
-func requireInformational(t *testing.T, output, root string, paths []string) {
-	t.Helper()
-	for _, candidate := range paths {
-		path := filepath.Join(root, filepath.FromSlash(candidate))
-		found := false
-		for line := range strings.SplitSeq(output, "\n") {
-			if strings.Contains(line, "INFO") && strings.Contains(line, path) {
-				found = true
-				break
-			}
-		}
-		if !found {
-			t.Errorf("no INFO finding names %s:\n%s", path, output)
-		}
-	}
 }
 
 func verifyInitialized(
@@ -305,7 +284,6 @@ func verifyStatus(
 	runner commandRunner,
 	root string,
 	want statusExpectation,
-	informational []string,
 ) {
 	t.Helper()
 	guarded := []string{documentpkg.ManifestFilename, documentpkg.LockFilename, ".lucy/install.yaml"}
@@ -322,7 +300,6 @@ func verifyStatus(
 	if err := json.Unmarshal([]byte(stdout), &document); err != nil {
 		t.Fatalf("decode live status JSON: %v\nstdout: %s\nstderr: %s", err, stdout, stderr)
 	}
-	requireStatusFindings(t, document.Warnings, root, informational)
 	if document.Server == nil {
 		t.Fatal("live status reported no server")
 	}

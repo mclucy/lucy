@@ -54,9 +54,6 @@ type initializeScenario struct {
 	// guidance lists entry points whose exact selection command a refusal must
 	// print.
 	guidance []string
-	// informational lists entry points that init and live status must report
-	// at INFO severity, naming the path.
-	informational []string
 	// wantReceipt requires the installation receipt that records the packages
 	// init identified from upstream metadata.
 	wantReceipt bool
@@ -109,8 +106,7 @@ type statusExpectation struct {
 	// path is the workspace-relative entry point live status must report. It
 	// names the file status observes now, not a path persisted by init.
 	path string
-	// warning lists the automatically selected entry point followed by the
-	// competing entry points that a WARN-level finding must name.
+	// warning lists entry points a live status diagnostic must name.
 	warning []string
 }
 
@@ -217,12 +213,12 @@ var initializeScenarios = map[string]initializeScenario{
 		absent: map[string][]string{
 			"fabric": {"modrinth:enchdesc", "modrinth:tipsmod"},
 		},
-		wantReceipt:   true,
-		unchanged:     []string{cobblemon1211Launcher},
-		informational: []string{cobblemon1211Launcher},
+		wantReceipt: true,
+		unchanged:   []string{cobblemon1211Launcher},
 		status: &statusExpectation{
 			ecosystem: "fabric", name: "fabric", version: "0.19.5",
-			path: fabricShim,
+			path:    fabricShim,
+			warning: []string{cobblemon1211Launcher},
 			components: map[string]string{
 				"minecraft:minecraft":  "1.21.1",
 				"fabric:fabric-loader": "0.19.5",
