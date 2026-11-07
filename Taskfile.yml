@@ -137,7 +137,7 @@ tasks:
   lint:
     desc: Run static analysis and enforce package dependency boundaries
     cmds:
-      - go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.15.0 run --config .golangci.yml {{default "./..." .CLI_ARGS}}
+      - go tool golangci-lint run --config .golangci.yml {{default "./..." .CLI_ARGS}}
 
   check:
     desc: Run the default local verification tasks
