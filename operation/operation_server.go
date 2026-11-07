@@ -8,7 +8,6 @@ import (
 
 	"github.com/mclucy/lucy/document"
 	"github.com/mclucy/lucy/filetrack"
-	"github.com/mclucy/lucy/internal/workspaceguard"
 	"github.com/mclucy/lucy/internal/workspacewrite"
 )
 
@@ -33,17 +32,8 @@ func (s *Service) RenameServer(root string, name string) (previous string, resul
 		return "", err
 	}
 	defer func() { resultErr = errors.Join(resultErr, writer.Close()) }()
-	if err := workspaceguard.RecoverInstall(root, s.logger); err != nil {
+	if err := filetrack.RecoverLocked(root, s.logger); err != nil {
 		return "", err
-	}
-	pending, err := filetrack.HasPendingTransaction(root)
-	if err != nil {
-		return "", err
-	}
-	if pending {
-		if err := filetrack.RecoverPending(root); err != nil {
-			return "", err
-		}
 	}
 	manifest, err := document.ManifestFile(root).Read()
 	if errors.Is(err, os.ErrNotExist) {
