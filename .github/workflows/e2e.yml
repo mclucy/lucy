@@ -23,15 +23,16 @@ permissions:
   contents: read
 
 jobs:
-  changes:
-    name: Detect changed domains
+  # One job detects the changed domains and plans the matrix: both steps only
+  # read the repository, so a second runner would buy a checkout and nothing else.
+  plan:
+    name: Plan suites
     runs-on: ubuntu-latest
     permissions:
       contents: read
       pull-requests: read
     outputs:
-      domains: ${{ inputs.force && '["mutation","init","compile"]' || steps.filter.outputs.changes }}
-      compile-full: ${{ inputs.compile-full || (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'ci:compile-full')) }}
+      matrix: ${{ steps.plan.outputs.matrix }}
     steps:
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -167,25 +168,13 @@ jobs:
               - 'Taskfile.yml'
               - 'terminal/report/**'
 
-  plan:
-    name: Plan suites
-    needs: changes
-    runs-on: ubuntu-latest
-    outputs:
-      matrix: ${{ steps.plan.outputs.matrix }}
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-        with:
-          persist-credentials: false
-
       # The suite derives its cases from the same manifests, so its matrix and a
       # local `go test ./e2e/compile` can never disagree about which fixtures exist.
       - name: Plan suite matrix
         id: plan
         env:
-          DOMAINS: ${{ needs.changes.outputs.domains }}
-          COMPILE_FULL: ${{ needs.changes.outputs.compile-full }}
+          DOMAINS: ${{ inputs.force && '["mutation","init","compile"]' || steps.filter.outputs.changes }}
+          COMPILE_FULL: ${{ inputs.compile-full || (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'ci:compile-full')) }}
         run: bash scripts/e2e-plan.sh
 
   build:
