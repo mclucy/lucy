@@ -23,7 +23,7 @@ import (
 
 	documentpkg "github.com/mclucy/lucy/document"
 	"github.com/mclucy/lucy/e2e/internal/testkit"
-	"gopkg.in/yaml.v3"
+	"go.yaml.in/yaml/v4"
 )
 
 // TestInitialize runs lucy init against each real sandbox composition and

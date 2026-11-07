@@ -8,7 +8,7 @@ import (
 	documentpkg "github.com/mclucy/lucy/document"
 	"github.com/mclucy/lucy/internal/workspacewrite"
 	"github.com/mclucy/lucy/server"
-	"gopkg.in/yaml.v3"
+	"go.yaml.in/yaml/v4"
 )
 
 // TestActivityGuardBlocksSharedReplays runs one workspace whose

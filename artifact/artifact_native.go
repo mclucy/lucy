@@ -17,7 +17,7 @@ import (
 	"github.com/mclucy/lucy/internal/fsutil"
 	"github.com/mclucy/lucy/version"
 	"github.com/pelletier/go-toml/v2"
-	"gopkg.in/yaml.v3"
+	"go.yaml.in/yaml/v4"
 )
 
 // ReadModules keeps each descriptor identity and nested container location

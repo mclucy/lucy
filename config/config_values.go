@@ -9,7 +9,7 @@ import (
 	"strings"
 
 	"github.com/mclucy/lucy/document"
-	"gopkg.in/yaml.v3"
+	"go.yaml.in/yaml/v4"
 )
 
 // Values describes one configuration layer. A nil scalar inherits from the

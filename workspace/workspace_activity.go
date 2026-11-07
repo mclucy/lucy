@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 
 	"github.com/mclucy/lucy/workspace/discovery"
-	"gopkg.in/yaml.v3"
+	"go.yaml.in/yaml/v4"
 )
 
 // RunningAt checks the native world session lock without catalogue or app lookup.

@@ -13,7 +13,7 @@ import (
 	"github.com/mclucy/lucy/javaruntime"
 	serverpkg "github.com/mclucy/lucy/server"
 	versionpkg "github.com/mclucy/lucy/version"
-	"gopkg.in/yaml.v3"
+	"go.yaml.in/yaml/v4"
 )
 
 var acceptedDigest = strings.Repeat("0123456789abcdef", 4)

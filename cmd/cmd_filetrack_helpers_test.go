@@ -24,7 +24,7 @@ import (
 	documentpkg "github.com/mclucy/lucy/document"
 	"github.com/mclucy/lucy/internal/fsutil"
 	serverpkg "github.com/mclucy/lucy/server"
-	"gopkg.in/yaml.v3"
+	"go.yaml.in/yaml/v4"
 )
 
 // baseManifest is the declaration every process-level file tracking case
