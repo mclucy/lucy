@@ -138,6 +138,16 @@ jobs:
           path: ~/.cache/lucy-sandbox
           key: sandbox-${{ hashFiles('e2e/testdata/sandboxes/sandboxes.yaml') }}
 
+      # The generator skips an output directory that already exists, so a restored
+      # set of complete sandboxes skips the installer work. The key tracks the
+      # manifest, the fixtures, and the generator, which together decide the content.
+      - name: Cache generated sandboxes
+        if: ${{ inputs.sandboxes != '' }}
+        uses: actions/cache@v6
+        with:
+          path: .sandboxes
+          key: sandboxes-${{ inputs.sandboxes }}-${{ hashFiles('e2e/testdata/sandboxes/**', 'e2e/sandbox/**') }}
+
       - name: Generate sandboxes
         if: ${{ inputs.sandboxes != '' }}
         env:
