@@ -17,6 +17,9 @@ jobs:
       - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
+          # This job compiles one generator. Sharing the repository-wide Go
+          # cache key would freeze it at that generator's dependency subset.
+          cache: false
 
       - name: Regenerate manifest schema
         run: go run ./tools/genmanifestschema
