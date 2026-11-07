@@ -2,8 +2,8 @@ package cmd
 
 import (
 	"bytes"
-	"encoding/json"
-	"io"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -41,13 +41,8 @@ func executeRunner(t *testing.T, args []string, logPath string) (string, string,
 // decodeOneDocument asserts that data holds exactly one JSON value.
 func decodeOneDocument(t *testing.T, data string, target any) {
 	t.Helper()
-	decoder := json.NewDecoder(strings.NewReader(data))
-	if err := decoder.Decode(target); err != nil {
-		t.Fatalf("decode %q: %v", data, err)
-	}
-	var extra any
-	if err := decoder.Decode(&extra); err != io.EOF {
-		t.Fatalf("output holds more than one JSON value: %q", data)
+	if err := json.UnmarshalRead(strings.NewReader(data), target); err != nil {
+		t.Fatalf("decode single JSON document %q: %v", data, err)
 	}
 }
 
@@ -176,7 +171,7 @@ func TestRunnerAgentDefaults(t *testing.T) {
 	if strings.Contains(compact, "\n") {
 		t.Fatalf("agent default must be compact, got %q", stdout)
 	}
-	if !json.Valid([]byte(compact)) {
+	if !jsontext.Value(compact).IsValid() {
 		t.Fatalf("agent default output is not valid JSON: %q", stdout)
 	}
 }

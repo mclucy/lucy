@@ -2,7 +2,8 @@ package javainstall
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"strconv"
 	"strings"
 	"time"
@@ -132,7 +133,7 @@ func homebrewBottledFormulaVersion(ctx context.Context, host *Host, token string
 			} `json:"versions"`
 			Bottle struct {
 				Stable struct {
-					Files map[string]json.RawMessage `json:"files"`
+					Files map[string]jsontext.Value `json:"files"`
 				} `json:"stable"`
 			} `json:"bottle"`
 		} `json:"formulae"`
