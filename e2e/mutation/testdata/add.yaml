@@ -1727,3 +1727,527 @@
           modrinth:sophisticated-backpacks: "any"
   args:
     - "spiget:6245"
+
+- id: smoke-downgrade-fabric-lithium-one-step
+  smoke: true
+  setup:
+    - install
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.21.4"
+      directory: server
+      core:
+        product: fabric
+        product_version: "0.16.10"
+      packages:
+        fabric:
+          modrinth:fabric-api: "0.119.4+1.21.4"
+          modrinth:lithium: "mc1.21.4-0.15.3-fabric"
+          modrinth:ferrite-core: "7.1.3-fabric"
+          modrinth:krypton: "0.2.8"
+          modrinth:chunky: "1.4.27"
+          modrinth:servercore: "1.5.8+1.21.4"
+          modrinth:modernfix: "5.20.3+mc1.21.4"
+          modrinth:c2me-fabric: "any"
+          modrinth:vmp-fabric: "any"
+          modrinth:carpet: "1.4.161"
+  args:
+    - "--downgrade"
+    - "modrinth:lithium"
+
+- id: downgrade-fabric-fabric-api-two-steps
+  setup:
+    - install
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.21.4"
+      directory: server
+      core:
+        product: fabric
+        product_version: "0.16.10"
+      packages:
+        fabric:
+          modrinth:fabric-api: "0.119.4+1.21.4"
+          modrinth:lithium: "mc1.21.4-0.15.3-fabric"
+          modrinth:ferrite-core: "7.1.3-fabric"
+          modrinth:krypton: "0.2.8"
+          modrinth:chunky: "1.4.27"
+          modrinth:servercore: "1.5.8+1.21.4"
+          modrinth:modernfix: "5.20.3+mc1.21.4"
+          modrinth:invview: "any"
+          modrinth:fastback: "any"
+          modrinth:polysit: "any"
+  args:
+    - "--downgrade=2"
+    - "modrinth:fabric-api"
+
+- id: downgrade-fabric-multiple-roots
+  setup:
+    - install
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.21.1"
+      directory: server
+      core:
+        product: fabric
+        product_version: "0.16.9"
+      packages:
+        fabric:
+          modrinth:fabric-api: "0.116.17+1.21.1"
+          modrinth:lithium: "mc1.21.1-0.15.4-fabric"
+          modrinth:ferrite-core: "7.0.3-fabric"
+          modrinth:krypton: "0.2.8"
+          modrinth:chunky: "any"
+          modrinth:clumps: "19.0.0.1"
+          modrinth:spark: "any"
+          modrinth:waystones: "any"
+          modrinth:open-parties-and-claims: "any"
+          modrinth:fastback: "any"
+  args:
+    - "--downgrade"
+    - "modrinth:lithium"
+    - "modrinth:ferrite-core"
+
+- id: downgrade-fabric-modernfix-force
+  setup:
+    - install
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.21.4"
+      directory: server
+      core:
+        product: fabric
+        product_version: "0.16.10"
+      packages:
+        fabric:
+          modrinth:fabric-api: "0.119.4+1.21.4"
+          modrinth:lithium: "mc1.21.4-0.15.3-fabric"
+          modrinth:ferrite-core: "7.1.3-fabric"
+          modrinth:servercore: "1.5.8+1.21.4"
+          modrinth:modernfix: "5.20.3+mc1.21.4"
+          modrinth:chunky: "1.4.27"
+          modrinth:carpet: "1.4.161"
+          modrinth:c2me-fabric: "any"
+          modrinth:vmp-fabric: "any"
+          modrinth:alternate-current: "any"
+  args:
+    - "--downgrade"
+    - "--force"
+    - "modrinth:modernfix"
+
+- id: downgrade-fabric-voice-chat-optional
+  setup:
+    - install
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.21.4"
+      directory: server
+      core:
+        product: fabric
+        product_version: "0.16.10"
+      packages:
+        fabric:
+          modrinth:fabric-api: "0.119.4+1.21.4"
+          modrinth:lithium: "mc1.21.4-0.15.3-fabric"
+          modrinth:ferrite-core: "7.1.3-fabric"
+          modrinth:krypton: "0.2.8"
+          modrinth:servercore: "1.5.8+1.21.4"
+          modrinth:chunky: "1.4.27"
+          modrinth:carpet: "1.4.161"
+          modrinth:ledger: "any"
+          modrinth:flan: "1.21.4-1.11.7.b-fabric"
+          modrinth:simple-voice-chat: "fabric-1.21.4-2.6.27"
+  args:
+    - "--downgrade"
+    - "--with-optional"
+    - "modrinth:simple-voice-chat"
+
+- id: downgrade-forge-ae2-two-steps
+  setup:
+    - install
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.20.1"
+      directory: server
+      core:
+        product: forge
+        product_version: "47.4.10"
+      packages:
+        forge:
+          modrinth:ae2: "15.4.12"
+          modrinth:curios: "5.9.1+1.20.1"
+          modrinth:mekanism: "10.4.16.80"
+          modrinth:create: "1.20.1-6.0.4"
+          modrinth:geckolib: "any"
+          modrinth:patchouli: "any"
+          modrinth:waystones: "any"
+          modrinth:spark: "any"
+          modrinth:chunky: "any"
+          modrinth:ferrite-core: "any"
+  args:
+    - "--downgrade=2"
+    - "modrinth:ae2"
+
+- id: downgrade-forge-multiple-roots
+  setup:
+    - install
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.20.1"
+      directory: server
+      core:
+        product: forge
+        product_version: "47.4.10"
+      packages:
+        forge:
+          modrinth:create: "1.20.1-6.0.4"
+          modrinth:curios: "5.9.1+1.20.1"
+          modrinth:ae2: "15.3.3"
+          modrinth:mekanism: "10.4.16.80"
+          modrinth:geckolib: "any"
+          modrinth:patchouli: "any"
+          modrinth:waystones: "any"
+          modrinth:spark: "any"
+          modrinth:chunky: "any"
+          modrinth:sophisticated-backpacks: "any"
+  args:
+    - "--downgrade"
+    - "modrinth:create"
+    - "modrinth:curios"
+
+- id: downgrade-neoforge-create-one-step
+  setup:
+    - install
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.21.1"
+      directory: server
+      core:
+        product: neoforge
+        product_version: "21.1.65"
+      packages:
+        neoforge:
+          modrinth:create: "1.21.1-6.0.4"
+          modrinth:ae2: "19.2.18"
+          modrinth:mekanism: "10.7.19.85"
+          modrinth:curios: "9.5.1+1.21.1"
+          modrinth:storagedrawers: "1.21.1-13.11.4"
+          modrinth:comforts: "9.0.5+1.21.1"
+          modrinth:sophisticated-backpacks: "1.21.1-3.26.20.2244"
+          modrinth:spark: "any"
+          modrinth:ferrite-core: "any"
+          modrinth:chunky: "any"
+  args:
+    - "--downgrade"
+    - "modrinth:create"
+
+- id: downgrade-neoforge-two-roots
+  setup:
+    - install
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.21.1"
+      directory: server
+      core:
+        product: neoforge
+        product_version: "21.1.65"
+      packages:
+        neoforge:
+          modrinth:mekanism: "10.7.19.85"
+          modrinth:ae2: "19.2.18"
+          modrinth:create: "1.21.1-6.0.4"
+          modrinth:curios: "9.5.1+1.21.1"
+          modrinth:storagedrawers: "1.21.1-13.11.4"
+          modrinth:comforts: "9.0.5+1.21.1"
+          modrinth:spark: "any"
+          modrinth:ferrite-core: "any"
+          modrinth:chunky: "any"
+          modrinth:open-parties-and-claims: "any"
+  args:
+    - "--downgrade=2"
+    - "modrinth:mekanism"
+    - "modrinth:ae2"
+
+- id: downgrade-past-oldest-servercore
+  setup:
+    - install
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.21.4"
+      directory: server
+      core:
+        product: fabric
+        product_version: "0.16.10"
+      packages:
+        fabric:
+          modrinth:servercore: "1.5.8+1.21.4"
+          modrinth:fabric-api: "0.119.4+1.21.4"
+          modrinth:lithium: "mc1.21.4-0.15.3-fabric"
+          modrinth:ferrite-core: "7.1.3-fabric"
+          modrinth:krypton: "0.2.8"
+          modrinth:chunky: "1.4.27"
+          modrinth:carpet: "1.4.161"
+          modrinth:modernfix: "5.20.3+mc1.21.4"
+          modrinth:c2me-fabric: "any"
+          modrinth:vmp-fabric: "any"
+  args:
+    - "--downgrade"
+    - "modrinth:servercore"
+
+- id: downgrade-missing-lock
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.21.4"
+      directory: server
+      core:
+        product: fabric
+        product_version: "0.16.10"
+      packages:
+        fabric:
+          modrinth:lithium: "mc1.21.4-0.15.3-fabric"
+          modrinth:fabric-api: "0.119.4+1.21.4"
+          modrinth:ferrite-core: "7.1.3-fabric"
+          modrinth:krypton: "0.2.8"
+          modrinth:chunky: "1.4.27"
+          modrinth:servercore: "1.5.8+1.21.4"
+          modrinth:carpet: "1.4.161"
+          modrinth:modernfix: "5.20.3+mc1.21.4"
+  args:
+    - "--downgrade"
+    - "modrinth:lithium"
+
+- id: downgrade-disabled-root
+  setup:
+    - install
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.21.4"
+      directory: server
+      core:
+        product: fabric
+        product_version: "0.16.10"
+      packages:
+        fabric:
+          modrinth:fabric-api: "0.119.4+1.21.4"
+          modrinth:lithium:
+            selector: "mc1.21.4-0.15.3-fabric"
+            enabled: false
+          modrinth:ferrite-core: "7.1.3-fabric"
+          modrinth:krypton: "0.2.8"
+          modrinth:chunky: "1.4.27"
+          modrinth:servercore: "1.5.8+1.21.4"
+          modrinth:carpet: "1.4.161"
+          modrinth:modernfix: "5.20.3+mc1.21.4"
+          modrinth:vmp-fabric: "any"
+  args:
+    - "--downgrade"
+    - "modrinth:lithium"
+
+- id: downgrade-rejected-locked-flag
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.21.4"
+      directory: server
+      core:
+        product: fabric
+        product_version: "0.16.10"
+      packages:
+        fabric:
+          modrinth:lithium: "mc1.21.4-0.15.3-fabric"
+          modrinth:fabric-api: "0.119.4+1.21.4"
+          modrinth:ferrite-core: "7.1.3-fabric"
+          modrinth:krypton: "0.2.8"
+          modrinth:chunky: "1.4.27"
+          modrinth:servercore: "1.5.8+1.21.4"
+          modrinth:carpet: "1.4.161"
+  args:
+    - "--downgrade"
+    - "--locked"
+    - "modrinth:lithium"
+
+- id: downgrade-rejected-offline-flag
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.21.4"
+      directory: server
+      core:
+        product: fabric
+        product_version: "0.16.10"
+      packages:
+        fabric:
+          modrinth:lithium: "mc1.21.4-0.15.3-fabric"
+          modrinth:fabric-api: "0.119.4+1.21.4"
+          modrinth:ferrite-core: "7.1.3-fabric"
+          modrinth:krypton: "0.2.8"
+          modrinth:chunky: "1.4.27"
+          modrinth:servercore: "1.5.8+1.21.4"
+          modrinth:carpet: "1.4.161"
+  args:
+    - "--downgrade"
+    - "--offline"
+    - "modrinth:lithium"
+
+- id: downgrade-rejected-version-selector
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.21.4"
+      directory: server
+      core:
+        product: fabric
+        product_version: "0.16.10"
+      packages:
+        fabric:
+          modrinth:lithium: "mc1.21.4-0.15.3-fabric"
+          modrinth:fabric-api: "0.119.4+1.21.4"
+          modrinth:ferrite-core: "7.1.3-fabric"
+          modrinth:krypton: "0.2.8"
+          modrinth:chunky: "1.4.27"
+          modrinth:servercore: "1.5.8+1.21.4"
+          modrinth:carpet: "1.4.161"
+  args:
+    - "--downgrade"
+    - "modrinth:lithium@mc1.21.4-0.15.2-fabric"
+
+- id: downgrade-rejected-zero-steps
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.21.4"
+      directory: server
+      core:
+        product: fabric
+        product_version: "0.16.10"
+      packages:
+        fabric:
+          modrinth:lithium: "mc1.21.4-0.15.3-fabric"
+          modrinth:fabric-api: "0.119.4+1.21.4"
+          modrinth:ferrite-core: "7.1.3-fabric"
+          modrinth:krypton: "0.2.8"
+          modrinth:chunky: "1.4.27"
+          modrinth:servercore: "1.5.8+1.21.4"
+          modrinth:carpet: "1.4.161"
+  args:
+    - "--downgrade=0"
+    - "modrinth:lithium"
+
+- id: downgrade-force-without-downgrade
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.21.4"
+      directory: server
+      core:
+        product: fabric
+        product_version: "0.16.10"
+      packages:
+        fabric:
+          modrinth:lithium: "mc1.21.4-0.15.3-fabric"
+          modrinth:fabric-api: "0.119.4+1.21.4"
+          modrinth:ferrite-core: "7.1.3-fabric"
+          modrinth:krypton: "0.2.8"
+          modrinth:chunky: "1.4.27"
+          modrinth:servercore: "1.5.8+1.21.4"
+          modrinth:carpet: "1.4.161"
+  args:
+    - "--force"
+    - "modrinth:lithium"
+
+- id: downgrade-hangar-unordered
+  setup:
+    - install
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.21.1"
+      directory: server
+      core:
+        product: paper
+        product_version: "133"
+      packages:
+        paper:
+          hangar:HelpChat/PlaceholderAPI: "any"
+          modrinth:luckperms: "any"
+          modrinth:coreprotect: "any"
+          modrinth:chunky: "1.4.28"
+          modrinth:tabtps: "any"
+          modrinth:plan: "any"
+          modrinth:discordsrv: "any"
+          modrinth:worldedit: "any"
+          modrinth:worldguard: "any"
+          modrinth:decentholograms: "any"
+          modrinth:squaremap: "any"
+  args:
+    - "--downgrade"
+    - "hangar:HelpChat/PlaceholderAPI"
+
+- id: downgrade-paper-modrinth-plugin-unordered
+  setup:
+    - install
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.21.4"
+      directory: server
+      core:
+        product: paper
+        product_version: "232"
+      packages:
+        paper:
+          modrinth:luckperms: "any"
+          modrinth:coreprotect: "any"
+          modrinth:chunky: "any"
+          modrinth:tabtps: "any"
+          modrinth:plan: "any"
+          modrinth:discordsrv: "any"
+          modrinth:worldedit: "any"
+          modrinth:worldguard: "any"
+          modrinth:decentholograms: "any"
+          modrinth:squaremap: "any"
+          modrinth:placeholderapi: "any"
+  args:
+    - "--downgrade"
+    - "modrinth:luckperms"
+
+- id: downgrade-spiget-unordered
+  setup:
+    - install
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.21.1"
+      directory: server
+      core:
+        product: paper
+        product_version: "133"
+      packages:
+        paper:
+          spiget:34315: "any"
+          modrinth:luckperms: "any"
+          modrinth:coreprotect: "any"
+          modrinth:chunky: "1.4.28"
+          modrinth:tabtps: "any"
+          modrinth:plan: "any"
+          modrinth:discordsrv: "any"
+          modrinth:worldedit: "any"
+          modrinth:worldguard: "any"
+          modrinth:decentholograms: "any"
+          modrinth:squaremap: "any"
+          modrinth:placeholderapi: "any"
+  args:
+    - "--downgrade"
+    - "spiget:34315"
