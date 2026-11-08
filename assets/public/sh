@@ -1,6 +1,12 @@
 #!/bin/sh
 set -eu
 
+# Set LUCY_SITE_URL to install from a mirror. The default is the public site.
+site="${LUCY_SITE_URL:-https://lucy.lc}"
+site=${site%/}
+github="https://github.com/mclucy/lucy/releases/download"
+
+step() { printf '  %s\n' "$*" >&2; }
 fail() { printf 'lucy installer: %s\n' "$*" >&2; exit 1; }
 
 case "$(uname -s)" in
@@ -26,36 +32,56 @@ fi
 
 fetch() { curl -fsSL --retry 3 --retry-delay 1 "$1" -o "$2"; }
 
-github="https://github.com/mclucy/lucy/releases/download"
 if [ -n "${LUCY_VERSION:-}" ]; then
   version=$LUCY_VERSION
-  base="https://lucy.lc/dl/v${version}"
+  base="$site/dl/v${version}"
+  checksums="$base/checksums.txt"
 else
-  manifest=$(curl -fsSL --retry 3 --retry-delay 1 https://lucy.lc/latest.json) ||
-    fail 'could not fetch the release manifest'
-  version=$(printf '%s\n' "$manifest" | sed -n 's/^ *"version": *"\([^"]*\)".*/\1/p' | head -n 1)
-  base=$(printf '%s\n' "$manifest" | sed -n 's/^ *"base": *"\([^"]*\)".*/\1/p' | head -n 1)
-  [ -n "$version" ] || fail 'could not find a published release'
-  case "$base" in
-    https://*/) ;;
-    *) base="https://lucy.lc/dl/v${version}" ;;
-  esac
-  base=${base%/}
+  step 'Fetching the release manifest'
+  if manifest=$(curl -fsSL --retry 3 --retry-delay 1 "$site/latest.json" 2>/dev/null); then
+    version=$(printf '%s\n' "$manifest" | sed -n 's/^ *"version": *"\([^"]*\)".*/\1/p' | head -n 1)
+    base=$(printf '%s\n' "$manifest" | sed -n 's/^ *"base": *"\([^"]*\)".*/\1/p' | head -n 1)
+    checksums=$(printf '%s\n' "$manifest" | sed -n 's/^ *"checksums": *"\([^"]*\)".*/\1/p' | head -n 1)
+  else
+    step 'Cloudflare is unavailable; asking GitHub'
+    version=$(curl -fsSL --retry 3 --retry-delay 1 \
+      'https://api.github.com/repos/mclucy/lucy/releases?per_page=10' 2>/dev/null |
+      sed -n 's/.*"tag_name": *"v\([^"]*\)".*/\1/p' | head -n 1)
+    [ -n "$version" ] || fail 'could not resolve the latest release'
+    base="$github/v${version}"
+    checksums="$base/checksums.txt"
+  fi
 fi
+[ -n "$version" ] || fail 'could not find a published release'
 case "$version" in ''|*[!a-zA-Z0-9.+-]*) fail 'invalid release version' ;; esac
+
+case "$base" in
+  http://*|https://*) ;;
+  /*) base="$site$base" ;;
+  *) base="$site/dl/v${version}" ;;
+esac
+base=${base%/}
+case "$checksums" in
+  http://*|https://*) ;;
+  /*) checksums="$site$checksums" ;;
+  *) checksums="$base/checksums.txt" ;;
+esac
 
 archive="lucy_${version}_${os}_${arch}.tar.gz"
 tmp=$(mktemp -d) || fail 'could not create a temporary directory'
 trap 'rm -rf "$tmp"' EXIT HUP INT TERM
 
+step "Downloading lucy ${version} (${os}/${arch})"
 if ! fetch "$base/$archive" "$tmp/$archive"; then
+  step 'Cloudflare download failed; trying GitHub'
   base="$github/v${version}"
   fetch "$base/$archive" "$tmp/$archive" || fail "could not download $archive"
 fi
 
-# The digest from GitHub is independent of the mirror that served the archive.
-if ! fetch "$github/v${version}/checksums.txt" "$tmp/checksums.txt"; then
-  fetch "$base/checksums.txt" "$tmp/checksums.txt" || fail 'could not download checksums'
+step 'Verifying checksum'
+if ! fetch "$checksums" "$tmp/checksums.txt"; then
+  step 'Cloudflare checksums unavailable; trying GitHub'
+  fetch "$github/v${version}/checksums.txt" "$tmp/checksums.txt" || fail 'could not download checksums'
 fi
 
 expected=$(while read -r digest filename; do
@@ -73,8 +99,9 @@ tar -xzf "$tmp/$archive" -C "$tmp" lucy || fail 'could not extract lucy'
 [ -f "$tmp/lucy" ] || fail 'archive does not contain lucy'
 install_dir="$HOME/.local/bin"
 mkdir -p "$install_dir"
+step "Installing to ${install_dir}"
 install -m 755 "$tmp/lucy" "$install_dir/lucy"
-printf 'Installed lucy to %s/lucy\n' "$install_dir"
+printf 'Installed lucy %s to %s/lucy\n' "$version" "$install_dir"
 case ":$PATH:" in
   *:"$install_dir":*) ;;
   *) printf 'Add %s to your PATH to run lucy.\n' "$install_dir" ;;

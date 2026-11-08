@@ -1,0 +1,35 @@
+---
+title: "lucy self-update"
+description: "Update the lucy binary in place"
+---
+
+```bash
+lucy self-update
+lucy self-update --check
+```
+
+The command reads the release manifest at `https://lucy.lc/latest.json`, selects the archive for the running operating system and architecture, verifies its SHA-256 digest, runs the staged binary once, and replaces the current executable.
+
+`--check` reports the manifest version and whether an update is available without writing. `--force` reinstalls the selected release over a development build or the same version.
+
+## Managed installations
+
+The command only replaces a binary installed by the script or a release archive. It refuses and names the correct update path for:
+
+- Homebrew: `brew upgrade --cask lucy`
+- Go: `go install github.com/mclucy/lucy@latest`
+- Nix: upgrade the flake input or profile
+- Docker: pull the latest image
+- A directory the current user cannot write
+
+A development build created by `task build` is also refused unless `--force` is used.
+
+The command works outside a workspace. A broken workspace configuration does not block it.
+
+## Output
+
+`--json` returns a `self-update` document with the current and latest versions, whether an update is available, the action taken, the selected asset and checksum, the executable path, and the release URL.
+
+A failed checksum or a staged binary that does not start leaves the installed binary unchanged.
+
+See [Global Flags](/commands/global-flags) for JSON and output options.

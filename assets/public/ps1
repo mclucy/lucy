@@ -1,10 +1,16 @@
 $ErrorActionPreference = 'Stop'
+$ProgressPreference = 'SilentlyContinue'
 
 if ($env:OS -ne 'Windows_NT') { throw 'Lucy installer requires Windows.' }
 $architecture = if ($env:PROCESSOR_ARCHITEW6432) { $env:PROCESSOR_ARCHITEW6432 } else { $env:PROCESSOR_ARCHITECTURE }
 if ($architecture -ne 'AMD64') { throw "Unsupported Windows architecture: $architecture" }
 
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+
+$site = if ($env:LUCY_SITE_URL) { $env:LUCY_SITE_URL.TrimEnd('/') } else { 'https://lucy.lc' }
+$github = 'https://github.com/mclucy/lucy/releases/download'
+
+function Write-Step($message) { Write-Host "  $message" }
 
 function Get-File($uri, $path) {
     for ($attempt = 1; $attempt -le 3; $attempt++) {
@@ -18,21 +24,44 @@ function Get-File($uri, $path) {
     }
 }
 
-$github = 'https://github.com/mclucy/lucy/releases/download'
 if ($env:LUCY_VERSION) {
     $version = $env:LUCY_VERSION
-    $base = "https://lucy.lc/dl/v$version"
+    $base = "$site/dl/v$version"
+    $checksums = "$base/checksums.txt"
 } else {
+    Write-Step 'Fetching the release manifest'
     try {
-        $manifest = Invoke-RestMethod -Uri 'https://lucy.lc/latest.json' -UseBasicParsing
+        $manifest = Invoke-RestMethod -Uri "$site/latest.json" -UseBasicParsing
+        $version = [string]$manifest.version
+        $base = [string]$manifest.base
+        $checksums = [string]$manifest.checksums
     } catch {
-        throw 'Could not fetch the release manifest.'
+        Write-Step 'Cloudflare is unavailable; asking GitHub'
+        $releases = Invoke-RestMethod -Uri 'https://api.github.com/repos/mclucy/lucy/releases?per_page=10' -UseBasicParsing
+        $tag = [string]($releases | Select-Object -First 1).tag_name
+        $version = $tag.TrimStart('v')
+        if (-not $version) { throw 'Could not resolve the latest release.' }
+        $base = "$github/v$version"
+        $checksums = "$base/checksums.txt"
     }
-    $version = [string]$manifest.version
-    if (-not $version) { throw 'Could not find a published release.' }
-    $base = if ($manifest.base) { ([string]$manifest.base).TrimEnd('/') } else { "https://lucy.lc/dl/v$version" }
 }
+if (-not $version) { throw 'Could not find a published release.' }
 if ($version -notmatch '^[a-zA-Z0-9.+-]+$') { throw 'Invalid release version.' }
+
+if (-not $base) {
+    $base = "$site/dl/v$version"
+} elseif ($base.StartsWith('/')) {
+    $base = $site + $base
+} elseif ($base -notmatch '^https?://') {
+    $base = "$site/dl/v$version"
+}
+$base = $base.TrimEnd('/')
+
+if (-not $checksums) {
+    $checksums = "$base/checksums.txt"
+} elseif ($checksums.StartsWith('/')) {
+    $checksums = $site + $checksums
+}
 
 $archive = "lucy_${version}_windows_amd64.zip"
 $temp = Join-Path ([IO.Path]::GetTempPath()) ([IO.Path]::GetRandomFileName())
@@ -41,14 +70,17 @@ try {
     $archivePath = Join-Path $temp $archive
     $checksumsPath = Join-Path $temp 'checksums.txt'
 
+    Write-Step "Downloading lucy $version (windows/amd64)"
     if (-not (Get-File -uri "$base/$archive" -path $archivePath)) {
+        Write-Step 'Cloudflare download failed; trying GitHub'
         $base = "$github/v$version"
         if (-not (Get-File -uri "$base/$archive" -path $archivePath)) { throw "Could not download $archive." }
     }
 
-    # The digest from GitHub is independent of the mirror that served the archive.
-    if (-not (Get-File -uri "$github/v$version/checksums.txt" -path $checksumsPath)) {
-        if (-not (Get-File -uri "$base/checksums.txt" -path $checksumsPath)) { throw 'Could not download checksums.' }
+    Write-Step 'Verifying checksum'
+    if (-not (Get-File -uri $checksums -path $checksumsPath)) {
+        Write-Step 'Cloudflare checksums unavailable; trying GitHub'
+        if (-not (Get-File -uri "$github/v$version/checksums.txt" -path $checksumsPath)) { throw 'Could not download checksums.' }
     }
 
     $checksumLine = Get-Content $checksumsPath | Where-Object { $_ -match ('^([a-fA-F0-9]{64})\s+\*?' + [regex]::Escape($archive) + '$') } | Select-Object -First 1
@@ -61,6 +93,7 @@ try {
     if (-not (Test-Path -LiteralPath $binary -PathType Leaf)) { throw 'Archive does not contain lucy.exe.' }
     $installDir = Join-Path $HOME '.local\bin'
     New-Item -ItemType Directory -Force -Path $installDir | Out-Null
+    Write-Step "Installing to $installDir"
     Copy-Item -LiteralPath $binary -Destination (Join-Path $installDir 'lucy.exe') -Force
     $userPath = [Environment]::GetEnvironmentVariable('Path', 'User')
     if (@($userPath -split ';' | Where-Object { $_.TrimEnd('\') -ieq $installDir.TrimEnd('\') }).Count -eq 0) {
@@ -70,7 +103,7 @@ try {
     if (@($env:Path -split ';' | Where-Object { $_.TrimEnd('\') -ieq $installDir.TrimEnd('\') }).Count -eq 0) {
         $env:Path += ';' + $installDir
     }
-    Write-Host "Installed lucy to $installDir\lucy.exe"
+    Write-Host "Installed lucy $version to $installDir\lucy.exe"
 } finally {
     Remove-Item -LiteralPath $temp -Recurse -Force
 }

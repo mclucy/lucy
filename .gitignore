@@ -45,6 +45,10 @@ release
 .sandboxes
 /docs/docs.tar.gz
 
+# Release mirror work directories
+release-assets
+release-meta
+
 # Local testing environments
 test_*
 
