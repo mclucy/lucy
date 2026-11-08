@@ -31,6 +31,12 @@ func buildVersion() (string, string) {
 	return displayVersion, displayCommit
 }
 
+// isOfficialBuild reports whether the binary came from a published release
+// archive. Development and go-install builds leave the linker marker empty.
+func isOfficialBuild() bool {
+	return official == "true"
+}
+
 func isTelemetryRelease() bool {
 	if telemetryRelease == "true" {
 		return true

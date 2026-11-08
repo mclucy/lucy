@@ -41,7 +41,7 @@ macOS and Linux:
 curl -fsSL https://lucy.lc/sh | sh
 ```
 
-The installer places Lucy in `~/.local/bin`; add that directory to your `PATH` if needed.
+The installer places Lucy in `~/.local/bin`; add that directory to your `PATH` if needed. Script and archive installs update in place with `lucy self-update`; Homebrew, Go, Nix, and Docker installs update through their manager.
 
 Windows (PowerShell):
 

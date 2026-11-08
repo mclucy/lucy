@@ -38,6 +38,7 @@ import (
 var (
 	version          string
 	commit           string
+	official         string
 	telemetryRelease string
 )
 
@@ -166,6 +167,7 @@ func NewRootCommand(contracts *cli.JSONContracts, invocation *cli.Invocation, de
 		"Same as --no-color --no-interactive",
 	)
 
+	displayVersion, displayCommit := buildVersion()
 	docs := docscli.NewCommand()
 	contracts.Ignore(docs)
 	root.AddCommand(
@@ -191,6 +193,16 @@ func NewRootCommand(contracts *cli.JSONContracts, invocation *cli.Invocation, de
 		cli.NewStatusCommand(contracts, invocation, dependencies),
 		search.NewCommand(contracts, invocation, dependencies),
 		cli.NewSchemaCommand(contracts, invocation),
+		cli.NewSelfUpdateCommand(
+			contracts,
+			invocation,
+			dependencies,
+			cli.BuildInfo{
+				Version:  displayVersion,
+				Commit:   displayCommit,
+				Official: isOfficialBuild(),
+			},
+		),
 	)
 	return root
 }
@@ -283,7 +295,7 @@ func (r *Runner) configureServices(cmd *cobra.Command) error {
 	proxy, proxyErr := settings.GitHubProxy()
 	key, keyErr := settings.CurseForgeAPIKey()
 	if err := errors.Join(proxyErr, keyErr); err != nil {
-		if !canRepairSettings(cmd) {
+		if !toleratesUnreadableSettings(cmd) {
 			return fmt.Errorf("%w\nrun `lucy config` to inspect or repair machine settings", err)
 		}
 		r.invocation.Logger.Warn(err)
@@ -317,13 +329,13 @@ func (r *Runner) configureServices(cmd *cobra.Command) error {
 	return nil
 }
 
-// canRepairSettings reports whether cmd belongs to the surfaces that stay
-// runnable while machine settings are unreadable, so the user can inspect and
-// repair the configuration that fails the other commands.
-func canRepairSettings(cmd *cobra.Command) bool {
+// toleratesUnreadableSettings reports whether cmd stays runnable while machine
+// settings are unreadable. These surfaces either repair the configuration or
+// repair the binary, so a broken workspace file must not block them.
+func toleratesUnreadableSettings(cmd *cobra.Command) bool {
 	for current := cmd; current != nil; current = current.Parent() {
 		switch current.Name() {
-		case "config", "docs", "schema",
+		case "config", "docs", "schema", "self-update",
 			"__complete", "__completeNoDesc":
 			return true
 		}

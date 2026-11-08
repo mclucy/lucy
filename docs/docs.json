@@ -42,6 +42,7 @@
           "commands/create",
           "commands/init",
           "commands/install",
+          "commands/self-update",
           "commands/java",
           "commands/config",
           "commands/telemetry",
