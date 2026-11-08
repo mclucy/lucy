@@ -105,7 +105,11 @@ dockers_v2:
 
 release:
   prerelease: auto
+  # Closes the repository-changes details block that the changelog group title
+  # opens. An unmatched closing tag renders as nothing when that block is absent.
   footer: |
+    </details>
+
     ## Installation
 
     macOS and Linux:
@@ -129,6 +133,12 @@ release:
     go install github.com/mclucy/lucy@latest
     ```
 
+    Or run without installing with Nix (x86_64-linux, aarch64-linux, aarch64-darwin):
+
+    ```sh
+    nix run github:mclucy/lucy
+    ```
+
     To run the CLI from a container:
 
     ```sh
@@ -137,10 +147,12 @@ release:
 
     Full documentation: <https://lucy.lc/docs>
 
-# Release notes follow the commit convention. Refactors, documentation, tests,
-# CI, and chores describe the repository rather than a user-visible change, so
-# they stay out. Every remaining entry keeps its subject and gains the GitHub
-# handle of its author.
+# Release notes follow the commit convention. User-visible changes get their
+# own heading; refactors, documentation, tests, CI, and chores stay available
+# but collapse into one details block, labelled by kind. Every entry keeps its
+# subject, which squash merges end with the pull request number (#123). GitHub
+# renders that reference as a link, so the notes name the pull request rather
+# than its author.
 changelog:
   use: github
   sort: asc
@@ -157,12 +169,43 @@ changelog:
     - title: Performance
       regexp: '^.*?perf(\([^)]*\))?!?:.+$'
       order: 3
+    # GoReleaser omits a group whose regexp matched nothing, title included.
+    # One group therefore collects every repository change, so the details
+    # wrapper appears whenever any of them exists. The format labels each entry
+    # by its conventional type because per-kind groups cannot share a wrapper
+    # that must exist independently of which kinds a release contains. This
+    # group must precede the catch-all below, which consumes all remaining
+    # entries.
+    - title: "\n<details><summary>Repository changes</summary>\n\n"
+      regexp: '^(refactor|docs|test|ci|chore|style|wip)(\([^)]*\))?!?:'
+      order: 5
     - title: Other changes
       order: 4
-  format: '{{ .Message }}{{ if .AuthorUsername }} (@{{ .AuthorUsername }}){{ else }} ({{ .AuthorName }}){{ end }}'
+  format: >-
+    {{- $parts := split .Message ":" -}}
+    {{- $head := index (split .Message "(") 0 -}}
+    {{- $kind := trimsuffix (index (split $head ":") 0) "!" -}}
+    {{- $label := "" -}}
+    {{- if eq $kind "ci" -}}{{- $label = "CI" -}}
+    {{- else if eq $kind "test" -}}{{- $label = "Tests" -}}
+    {{- else if eq $kind "docs" -}}{{- $label = "Documentation" -}}
+    {{- else if eq $kind "refactor" -}}{{- $label = "Refactors" -}}
+    {{- else if or (eq $kind "chore") (eq $kind "style") (eq $kind "wip") -}}{{- $label = "Chores" -}}
+    {{- end -}}
+    {{- if $label -}}
+    {{- $tail := "" -}}
+    {{- range $i, $p := $parts -}}
+    {{- if eq $i 1 -}}{{- $tail = $p -}}
+    {{- else if gt $i 1 -}}{{- $tail = print $tail ":" $p -}}
+    {{- end -}}
+    {{- end -}}
+    {{- $tail = trim $tail -}}
+    **{{ $label }}** — {{ $tail }}
+    {{- else -}}
+    {{ .Message }}
+    {{- end }}
   filters:
     exclude:
-      - '^(refactor|docs|test|ci|chore|style|wip)(\([^)]*\))?!?:'
       - '^Merge '
 
 snapshot:
