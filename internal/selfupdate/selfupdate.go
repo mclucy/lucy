@@ -36,6 +36,9 @@ type Options struct {
 	Official bool
 	// Force reinstalls the selected release even when it is not newer.
 	Force bool
+	// OnResolved runs after installation and manifest checks pass, before the
+	// download starts. It receives the release that will be installed.
+	OnResolved func(*Result)
 	// Progress reports the archive transfer in bytes.
 	Progress func(name string, read, total int64)
 }
@@ -96,6 +99,22 @@ func (s *Service) Check(ctx context.Context, opts Options) (*Result, error) {
 // Apply resolves the manifest and replaces the running executable when the
 // release is newer, or when the caller forces a reinstall.
 func (s *Service) Apply(ctx context.Context, opts Options) (*Result, error) {
+	resolved, err := s.resolve(ctx, opts)
+	if err != nil {
+		return nil, err
+	}
+	result := resolved.result(opts)
+	if !resolved.updateAvailable && !opts.Force {
+		installation, err := s.detect(opts, false)
+		if err != nil {
+			return nil, err
+		}
+		result.Action = "up-to-date"
+		result.Executable = installation.Executable
+		result.Notes = append(result.Notes, installation.Notes...)
+		return result, nil
+	}
+
 	installation, err := s.detect(opts, true)
 	if err != nil {
 		return nil, err
@@ -112,17 +131,7 @@ func (s *Service) Apply(ctx context.Context, opts Options) (*Result, error) {
 	case !installation.Updatable && !opts.Force:
 		return nil, fmt.Errorf("this lucy cannot replace itself; %s", installation.Guidance)
 	}
-
-	resolved, err := s.resolve(ctx, opts)
-	if err != nil {
-		return nil, err
-	}
-	result := resolved.result(opts)
 	result.Executable = installation.Executable
-	if !resolved.updateAvailable && !opts.Force {
-		result.Action = "up-to-date"
-		return result, nil
-	}
 
 	lock, err := acquireLock()
 	if err != nil {
@@ -140,6 +149,9 @@ func (s *Service) Apply(ctx context.Context, opts Options) (*Result, error) {
 		"asset", resolved.file.Name,
 		"executable", installation.Executable,
 	)
+	if opts.OnResolved != nil {
+		opts.OnResolved(result)
+	}
 	if err := s.downloadAndReplace(ctx, opts, resolved, installation.Executable); err != nil {
 		return nil, err
 	}

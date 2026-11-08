@@ -246,13 +246,14 @@ func copyStaged(reader io.Reader, dir string, size int64, suffix string) (staged
 	if err != nil {
 		return "", fmt.Errorf("stage the new lucy: %w", err)
 	}
-	staged = file.Name()
+	stagedPath := file.Name()
+	staged = stagedPath
 	defer func() {
 		if file != nil {
 			resultErr = errors.Join(resultErr, file.Close())
 		}
 		if resultErr != nil {
-			_ = os.Remove(staged)
+			_ = os.Remove(stagedPath)
 		}
 	}()
 

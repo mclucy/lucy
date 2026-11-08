@@ -105,25 +105,20 @@ func actionSelfUpdate(
 		return writeSelfUpdate(output, result, true)
 	}
 
-	preview, err := service.Check(ctx, options)
-	if err != nil {
-		return err
-	}
-	if !preview.UpdateAvailable && !force {
-		return writeSelfUpdate(output, preview, false)
-	}
-	if !output.JSON() {
+	progress := output.Progress()
+	options.OnResolved = func(result *selfupdate.Result) {
+		if output.JSON() {
+			return
+		}
 		fmt.Fprintf(
 			output.Human(),
 			"Updating lucy %s → %s (%s/%s)\n",
-			selfUpdateVersionLabel(preview.CurrentVersion),
-			preview.LatestVersion,
+			selfUpdateVersionLabel(result.CurrentVersion),
+			result.LatestVersion,
 			runtime.GOOS,
 			runtime.GOARCH,
 		)
 	}
-
-	progress := output.Progress()
 	options.Progress = progress.Download
 	result, err := service.Apply(ctx, options)
 	progress.DownloadDone()
