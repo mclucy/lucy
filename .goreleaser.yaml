@@ -133,7 +133,7 @@ release:
     go install github.com/mclucy/lucy@latest
     ```
 
-    Or run without installing with Nix:
+    Or run without installing with Nix (x86_64-linux, aarch64-linux, aarch64-darwin):
 
     ```sh
     nix run github:mclucy/lucy
