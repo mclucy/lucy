@@ -126,7 +126,7 @@ tasks:
   test:race:
     desc: Run the Go test suite with the race detector and a coverage profile
     cmds:
-      - go test -race -coverprofile=cover.out ./...
+      - go test -race -count=1 -coverprofile=cover.out ./...
 
   coverage:xml:
     desc: Convert the Go coverage profile to Cobertura XML
