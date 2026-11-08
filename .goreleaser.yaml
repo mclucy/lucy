@@ -144,7 +144,7 @@ release:
 
 # Release notes follow the commit convention. User-visible changes get their
 # own heading; refactors, documentation, tests, CI, and chores stay available
-# but collapse into one details block, grouped by kind. Every entry keeps its
+# but collapse into one details block, labelled by kind. Every entry keeps its
 # subject, which squash merges end with the pull request number (#123). GitHub
 # renders that reference as a link, so the notes name the pull request rather
 # than its author.
@@ -164,28 +164,41 @@ changelog:
     - title: Performance
       regexp: '^.*?perf(\([^)]*\))?!?:.+$'
       order: 3
-    # These groups must precede the catch-all below: an empty regexp consumes
-    # every remaining entry. The first title starts the HTML block; the empty
-    # heading it leaves behind is invisible, and the release footer closes the
-    # block after the last entry.
-    - title: "\n<details><summary>Repository changes</summary>\n\n### CI\n\n"
-      regexp: '^ci(\([^)]*\))?!?:'
+    # GoReleaser omits a group whose regexp matched nothing, title included.
+    # One group therefore collects every repository change, so the details
+    # wrapper appears whenever any of them exists. The format labels each entry
+    # by its conventional type because per-kind groups cannot share a wrapper
+    # that must exist independently of which kinds a release contains. This
+    # group must precede the catch-all below, which consumes all remaining
+    # entries.
+    - title: "\n<details><summary>Repository changes</summary>\n\n"
+      regexp: '^(refactor|docs|test|ci|chore|style|wip)(\([^)]*\))?!?:'
       order: 5
-    - title: Tests
-      regexp: '^test(\([^)]*\))?!?:'
-      order: 6
-    - title: Documentation
-      regexp: '^docs(\([^)]*\))?!?:'
-      order: 7
-    - title: Refactors
-      regexp: '^refactor(\([^)]*\))?!?:'
-      order: 8
-    - title: Chores
-      regexp: '^(chore|style|wip)(\([^)]*\))?!?:'
-      order: 9
     - title: Other changes
       order: 4
-  format: '{{ .Message }}'
+  format: >-
+    {{- $parts := split .Message ":" -}}
+    {{- $head := index (split .Message "(") 0 -}}
+    {{- $kind := trimsuffix (index (split $head ":") 0) "!" -}}
+    {{- $label := "" -}}
+    {{- if eq $kind "ci" -}}{{- $label = "CI" -}}
+    {{- else if eq $kind "test" -}}{{- $label = "Tests" -}}
+    {{- else if eq $kind "docs" -}}{{- $label = "Documentation" -}}
+    {{- else if eq $kind "refactor" -}}{{- $label = "Refactors" -}}
+    {{- else if or (eq $kind "chore") (eq $kind "style") (eq $kind "wip") -}}{{- $label = "Chores" -}}
+    {{- end -}}
+    {{- if $label -}}
+    {{- $tail := "" -}}
+    {{- range $i, $p := $parts -}}
+    {{- if eq $i 1 -}}{{- $tail = $p -}}
+    {{- else if gt $i 1 -}}{{- $tail = print $tail ":" $p -}}
+    {{- end -}}
+    {{- end -}}
+    {{- $tail = trim $tail -}}
+    **{{ $label }}** — {{ $tail }}
+    {{- else -}}
+    {{ .Message }}
+    {{- end }}
   filters:
     exclude:
       - '^Merge '
