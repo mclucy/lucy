@@ -139,8 +139,9 @@ release:
 
 # Release notes follow the commit convention. Refactors, documentation, tests,
 # CI, and chores describe the repository rather than a user-visible change, so
-# they stay out. Every remaining entry keeps its subject and gains the GitHub
-# handle of its author.
+# they stay out. Every remaining entry keeps its subject, which squash merges
+# end with the pull request number (#123). GitHub renders that reference as a
+# link, so the notes name the pull request rather than its author.
 changelog:
   use: github
   sort: asc
@@ -159,7 +160,7 @@ changelog:
       order: 3
     - title: Other changes
       order: 4
-  format: '{{ .Message }}{{ if .AuthorUsername }} (@{{ .AuthorUsername }}){{ else }} ({{ .AuthorName }}){{ end }}'
+  format: '{{ .Message }}'
   filters:
     exclude:
       - '^(refactor|docs|test|ci|chore|style|wip)(\([^)]*\))?!?:'
