@@ -16,7 +16,7 @@ task clean              # Remove dist/ and release/ directories
 task lint               # golangci-lint with the package dependency rules
 task run -- [args]      # go run from repo root with CLI args
 task test               # go test ./...
-task test:race          # go test -race ./...
+task test:race          # go test -race -count=1 with a coverage profile
 ```
 
 ## Architecture

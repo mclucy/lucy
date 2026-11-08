@@ -126,7 +126,7 @@ Gating is limited to harness errors and contract anchor failures, which fail the
 
 ### Runtime and Network
 
-Cases execute the real CLI and may resolve packages over the network, so runs take time and depend on network availability. Each command invocation (setup and main) gets its own timeout from `LUCY_HEURISTIC_COMMAND_TIMEOUT`: a Go duration with a unit, such as `90s`, `10m`, or `1h30m`. The default is `3m`. Blank counts as unset; bare numbers, zero, and negative values fail the test as harness errors. A timeout kills the whole process tree and is recorded as an observation (`killed after <duration>`), not a failure. `report.json` records the resolved value in `invocation.timeout`, for example `3m0s`. Do not add sandbox setup to these cases; they must not depend on `.sandboxes`.
+Cases execute the real CLI and may resolve packages over the network, so runs take time and depend on network availability. The add, remove, and upgrade operations run concurrently, sharing the `-parallel` budget: a slow case in one operation does not hold back the others. Each command invocation (setup and main) gets its own timeout from `LUCY_HEURISTIC_COMMAND_TIMEOUT`: a Go duration with a unit, such as `90s`, `10m`, or `1h30m`. The default is `3m`. Blank counts as unset; bare numbers, zero, and negative values fail the test as harness errors. A timeout kills the whole process tree and is recorded as an observation (`killed after <duration>`), not a failure. `report.json` records the resolved value in `invocation.timeout`, for example `3m0s`. Do not add sandbox setup to these cases; they must not depend on `.sandboxes`.
 
 ### Contract Anchors
 

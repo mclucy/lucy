@@ -53,6 +53,9 @@ suites="$(cat <<'EOF'
 EOF
 )"
 
+# Full compile runs skip the Gradle cache. One multi-gigabyte entry per fixture
+# would crowd the repository cache budget, and a full run is an explicit request
+# to build every fixture.
 matrix="$(jq -c \
   --argjson domains "$DOMAINS" \
   --argjson fixtures "$fixtures" \
@@ -71,8 +74,8 @@ matrix="$(jq -c \
             "sandboxes": "",
             "java": "",
             "gradle": true,
-            "cache-key": $fixture,
-            "cache-pattern": ("e2e/testdata/repo/" + $fixture + ".yaml"),
+            "cache-key": "",
+            "cache-pattern": "",
             "report-artifact": ""
           }
         ]
