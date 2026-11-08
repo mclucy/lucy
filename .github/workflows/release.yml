@@ -13,6 +13,22 @@ on:
         description: Post the release announcement to Discord again
         type: boolean
         default: false
+      revoke:
+        description: Exclude this tag from latest selection
+        type: boolean
+        default: false
+      unrevoke:
+        description: Remove an existing exclusion for this tag
+        type: boolean
+        default: false
+      reason:
+        description: Why the release is being excluded
+        type: string
+        default: manual revocation
+
+concurrency:
+  group: release
+  cancel-in-progress: false
 
 permissions:
   contents: write
@@ -20,6 +36,7 @@ permissions:
 
 jobs:
   release:
+    if: github.event_name == 'push' || (github.event.inputs.revoke != 'true' && github.event.inputs.unrevoke != 'true')
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -120,3 +137,31 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           INPUT_TAG: ${{ github.event.inputs.tag }}
         run: bash scripts/release-announce-discord.sh
+
+  revoke:
+    if: github.event_name == 'workflow_dispatch' && (github.event.inputs.revoke == 'true' || github.event.inputs.unrevoke == 'true')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Set up Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: assets/package-lock.json
+
+      - name: Install Cloudflare CLI
+        run: npm ci --prefix assets --no-audit --no-fund
+
+      - name: Update release eligibility
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          INPUT_TAG: ${{ github.event.inputs.tag }}
+          INPUT_UNREVOKE: ${{ github.event.inputs.unrevoke }}
+          INPUT_REASON: ${{ github.event.inputs.reason }}
+        run: bash scripts/release-revoke-r2.sh

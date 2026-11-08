@@ -1,18 +1,18 @@
 /**
- * Serves the installers, the manifest schema, and published release binaries.
+ * Serves the installers, the release manifest, and published release binaries.
  *
- * `latest.json` resolves the release to install from the bucket contents, so a
- * prerelease appears only while no stable release exists. Binaries under
- * `/dl/` are immutable: their key carries the version.
+ * `meta/<version>.json` is written by the release pipeline after the artifacts
+ * and checksums are uploaded. The Worker only considers versions that have one,
+ * excludes revoked versions, and serves the selected object as `latest.json`.
+ * Binaries under `/dl/` are immutable: their key carries the version.
  */
 
-import { chooseRelease, groupReleases } from "./releases";
+import { chooseVersion } from "./releases";
 
-const RELEASE_PREFIX = "v";
+const META_PREFIX = "meta/";
 const IMMUTABLE = "public, max-age=31536000, immutable";
 const LATEST = "public, max-age=60";
 const DOWNLOAD_PREFIX = "/dl/";
-const PROJECT_RELEASE_URL = "https://github.com/mclucy/lucy/releases/tag/v";
 
 interface Range {
 	offset?: number;
@@ -58,33 +58,41 @@ export default {
 };
 
 async function latest(request: Request, env: Env): Promise<Response> {
-	const release = chooseRelease(await listReleases(env.DOWNLOADS));
-	if (!release) return respond(503, { error: "no releases published" }, LATEST);
+	const version = chooseVersion(await listReleases(env.DOWNLOADS));
+	if (!version) return respond(503, { error: "no releases published" }, LATEST);
 
-	const base = `${new URL(request.url).origin}${DOWNLOAD_PREFIX}v${release.version}/`;
-	return respond(
-		200,
-		{
-			version: release.version,
-			channel: release.parsed.pre.length === 0 ? "stable" : "prerelease",
-			base,
-			checksums: `${base}checksums.txt`,
-			files: release.files.sort(),
-			release: `${PROJECT_RELEASE_URL}${release.version}`,
+	const object = await env.DOWNLOADS.get(`${META_PREFIX}${version}.json`);
+	if (!object) return respond(503, { error: "release metadata is unavailable" }, LATEST);
+
+	return new Response(request.method === "HEAD" ? null : object.body, {
+		status: 200,
+		headers: {
+			"cache-control": LATEST,
+			"content-type": object.httpMetadata?.contentType ?? "application/json",
+			etag: object.etag,
 		},
-		LATEST,
-	);
+	});
 }
 
-async function listReleases(downloads: Downloads) {
-	const keys: string[] = [];
+/** Lists completion objects and drops versions carrying a revocation marker. */
+async function listReleases(downloads: Downloads): Promise<string[]> {
+	const versions = new Set<string>();
+	const revoked = new Set<string>();
 	let cursor: string | undefined;
 	do {
-		const page = await downloads.list({ prefix: RELEASE_PREFIX, cursor });
-		for (const { key } of page.objects) keys.push(key);
+		const page = await downloads.list({ prefix: META_PREFIX, cursor });
+		for (const { key } of page.objects) {
+			const name = key.slice(META_PREFIX.length);
+			if (name.endsWith(".json")) {
+				versions.add(name.slice(0, -".json".length));
+			} else if (name.endsWith(".revoked")) {
+				revoked.add(name.slice(0, -".revoked".length));
+			}
+		}
 		cursor = page.truncated ? page.cursor : undefined;
 	} while (cursor);
-	return groupReleases(keys);
+
+	return [...versions].filter((version) => !revoked.has(version));
 }
 
 async function download(request: Request, env: Env, url: URL): Promise<Response> {

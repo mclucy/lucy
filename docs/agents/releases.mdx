@@ -1,0 +1,28 @@
+---
+title: "Release distribution"
+description: "How release artifacts, metadata, and latest selection are published"
+---
+
+GitHub Releases remain the build provenance. The release workflow mirrors the published artifacts to the `lucy-releases` R2 bucket, then promotes the release by writing `meta/<version>.json` last. Cloudflare is the client-facing distribution path; clients do not query the GitHub API for version selection.
+
+## R2 layout
+
+- `v<version>/<asset>` holds immutable archives and `checksums.txt`.
+- `meta/<version>.json` is the completion and promotion object. It carries the version, channel, commit, publish time, relative base path, checksums path, release URL, and each archive's size and SHA-256. A version without this object is invisible to clients.
+- `meta/<version>.revoked` excludes a version from selection without deleting its artifacts. Removing the marker restores it.
+
+The mirror verifies every downloaded asset against GoReleaser's `checksums.txt` before uploading. Re-running a tag must not replace an existing metadata object with different content.
+
+## Worker selection
+
+`latest.json` is served by the `lucy-static-assets` Worker. The Worker lists `meta/`, drops versions with a revocation marker, and applies one policy: the highest stable release wins; while no stable exists, the highest prerelease stands in. It then serves the selected metadata object verbatim, so a future signature over that object remains valid.
+
+The metadata object uses relative paths (`/dl/v<version>/`). Clients resolve them against the manifest URL.
+
+The Worker caches `latest.json` for 60 seconds. Artifacts under `/dl/` are immutable and cached for a year.
+
+## Clients
+
+`lucy self-update` reads the manifest, picks the archive for `GOOS`/`GOARCH`, verifies the manifest SHA-256, stages the binary beside the executable, runs the staged binary's `--version`, and renames it into place. It refuses managed installations and development builds. The installer scripts use the same manifest, prefer Cloudflare for the manifest, archive, and checksums, and fall back to GitHub only when a Cloudflare request fails.
+
+The update path never contacts GitHub when Cloudflare succeeds.
