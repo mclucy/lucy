@@ -124,13 +124,18 @@ release:
     irm https://lucy.lc/ps1 | iex
     ```
 
-    Or install with Homebrew, Go, or Nix:
+    Or install with Homebrew or Go:
 
     ```sh
     brew tap mclucy/tap
     brew trust --tap mclucy/tap
     brew install --cask lucy
     go install github.com/mclucy/lucy@latest
+    ```
+
+    Or run without installing with Nix:
+
+    ```sh
     nix run github:mclucy/lucy
     ```
 
