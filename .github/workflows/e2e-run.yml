@@ -76,7 +76,7 @@ jobs:
 
       - name: Install Temurin
         if: ${{ inputs.java-version != '' }}
-        uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6
+        uses: actions/setup-java@77dd5b2ce225ea11469928ac317850245a74ae78 # v6.2.0
         with:
           distribution: temurin
           java-version: ${{ inputs.java-version }}
@@ -84,7 +84,7 @@ jobs:
       - name: Install Temurin 17
         id: java17
         if: ${{ inputs.gradle }}
-        uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6
+        uses: actions/setup-java@77dd5b2ce225ea11469928ac317850245a74ae78 # v6.2.0
         with:
           distribution: temurin
           java-version: "17"
@@ -94,7 +94,7 @@ jobs:
       - name: Install Temurin 21
         id: java21
         if: ${{ inputs.gradle }}
-        uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6
+        uses: actions/setup-java@77dd5b2ce225ea11469928ac317850245a74ae78 # v6.2.0
         with:
           distribution: temurin
           java-version: "21"
@@ -104,7 +104,7 @@ jobs:
       - name: Install Temurin 25
         id: java25
         if: ${{ inputs.gradle }}
-        uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6
+        uses: actions/setup-java@77dd5b2ce225ea11469928ac317850245a74ae78 # v6.2.0
         with:
           distribution: temurin
           java-version: "25"
@@ -163,7 +163,7 @@ jobs:
         run: go run ./e2e/sandbox --only "$SANDBOXES"
 
       - name: Download Lucy
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           name: ${{ inputs.binary-artifact }}
           path: dist
