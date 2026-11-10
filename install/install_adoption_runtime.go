@@ -8,8 +8,12 @@ import (
 	"strings"
 
 	"github.com/mclucy/lucy/bootstrap"
+	"github.com/mclucy/lucy/document"
 	"github.com/mclucy/lucy/internal/workspacewrite"
 	"github.com/mclucy/lucy/receipt"
+	"github.com/mclucy/lucy/server"
+	versionpkg "github.com/mclucy/lucy/version"
+	"github.com/mclucy/lucy/workspace/discovery"
 )
 
 // errAdoptionOutputConflict reports that a verified runtime output no longer
@@ -37,15 +41,14 @@ func adoptRuntime(
 	}
 
 	baselines := runtimeBaselines(opts)
-	entryPoint := selectedEntryPoint(root, opts)
-	if check.Current && entryPoint != "" &&
-		!selectedRuntimeVerified(check.Outputs, entryPoint) {
+	if check.Current && opts.Runtime != nil &&
+		!observedRuntimeMatchesLocked(opts.Runtime, opts.Lock.Server) {
 		check.Current = false
-		check.Reason = "selected runtime does not match verified server output"
+		check.Reason = "observed runtime does not match the locked server"
 	}
 
 	if check.Current {
-		if err := verifyCurrentRuntime(root, check.Outputs, baselines, entryPoint, tracked); err != nil {
+		if err := verifyCurrentRuntime(root, check.Outputs, baselines, tracked); err != nil {
 			return err
 		}
 		fingerprint, err := receipt.BootstrapFingerprint(opts.Lock)
@@ -83,30 +86,35 @@ func runtimeBaselines(opts AdoptOptions) map[string]AdoptedRuntimeFile {
 	return baselines
 }
 
-// selectedEntryPoint returns the workspace-relative path of the runtime
-// observation this initialization selected, or empty without a selection.
-func selectedEntryPoint(root string, opts AdoptOptions) string {
-	if opts.Runtime == nil || opts.Runtime.EntryPoint == nil {
-		return ""
+// observedRuntimeMatchesLocked reports whether the observed installation
+// identity agrees with the resolved lock. Unknown observed versions do not
+// contradict the lock.
+func observedRuntimeMatchesLocked(
+	installation *discovery.Installation,
+	locked document.LockedServer,
+) bool {
+	if installation == nil {
+		return false
 	}
-	rel, err := filepath.Rel(root, opts.Runtime.EntryPoint.Path)
-	if err != nil || !filepath.IsLocal(rel) {
-		return ""
+	identity := installation.Identity
+	product := identity.Product()
+	if product == server.ProductUnknown {
+		product = server.Product(identity.Primary.Name.String())
 	}
-	return cleanWorkspacePath(rel)
+	if product != locked.Product {
+		return false
+	}
+	return !observedVersionConflicts(identity.MinecraftVersion(), locked.Minecraft) &&
+		!observedVersionConflicts(identity.Primary.Version, locked.CoreVersion)
 }
 
-// selectedRuntimeVerified reports whether the verified tree contains the
-// selected runtime. Another shared library inside the same installation files
-// must not prove that the selected entry point satisfies the contract.
-func selectedRuntimeVerified(outputs []bootstrap.Output, entryPoint string) bool {
-	for _, out := range outputs {
-		if out.Role == bootstrap.RoleRuntime &&
-			cleanWorkspacePath(out.Path) == entryPoint {
-			return true
-		}
+// observedVersionConflicts reports a concrete observed version that differs
+// from the locked version. Unknown observed metadata proves nothing.
+func observedVersionConflicts(observed, locked versionpkg.Version) bool {
+	if observed == "" || observed.IsInvalid() || observed.CanInfer() {
+		return false
 	}
-	return false
+	return observed != locked
 }
 
 // verifyCurrentRuntime rechecks every managed runtime output against its
@@ -115,7 +123,6 @@ func verifyCurrentRuntime(
 	root string,
 	outputs []bootstrap.Output,
 	baselines map[string]AdoptedRuntimeFile,
-	entryPoint string,
 	tracked map[string]bool,
 ) error {
 	for _, out := range outputs {
@@ -142,16 +149,6 @@ func verifyCurrentRuntime(
 				(observed.ExpectedMode != 0 && observed.ExpectedMode != out.Mode) {
 				return errAdoptionOutputConflict
 			}
-		}
-	}
-	if entryPoint != "" {
-		if _, observed := baselines[filepath.Clean(
-			filepath.Join(root, filepath.FromSlash(entryPoint)),
-		)]; !observed {
-			return fmt.Errorf(
-				"selected entry point %s has no observed baseline",
-				entryPoint,
-			)
 		}
 	}
 	return nil
@@ -218,7 +215,7 @@ func adoptInconclusiveRuntime(
 		}
 	}
 
-	if opts.Runtime == nil || opts.Runtime.Installation == nil {
+	if opts.Runtime == nil {
 		return nil
 	}
 	specs := bootstrap.OutputSpecs(opts.Lock.Server)
@@ -226,7 +223,7 @@ func adoptInconclusiveRuntime(
 	if serverDir == "." {
 		serverDir = ""
 	}
-	for _, file := range opts.Runtime.Installation.Files {
+	for _, file := range opts.Runtime.Files {
 		cleanRel, ok := workspaceRelative(root, file.Path)
 		if !ok {
 			return fmt.Errorf("runtime file %s escapes the workspace", file.Path)

@@ -11,11 +11,7 @@ const (
 	cobblemon1211Launcher = "fabric-server-mc.1.21.1-loader.0.19.5-launcher.1.1.2.jar"
 	fabric262Launcher     = "fabric-server-mc.26.2-loader.0.19.3-launcher.1.1.2.jar"
 	fabric1214Launcher    = "fabric-server-mc.1.21.4-loader.0.16.9-launcher.1.0.1.jar"
-	fabricShim            = "fabric-server-launch.jar"
 	paperJar              = "paper-1.21.11-130.jar"
-
-	forge1201EntryPoint   = "libraries/net/minecraftforge/forge/1.20.1-47.4.10/unix_args.txt"
-	neoforge262EntryPoint = "libraries/net/neoforged/neoforge/26.2.0.67/unix_args.txt"
 )
 
 type manifestDocument struct {
@@ -47,12 +43,14 @@ type initializeScenario struct {
 	symlinks []initializeSymlink
 	// removeBefore removes generated state after preparation and before init.
 	removeBefore []string
-	// selectEntryPoint passes --entry-point for this workspace-relative file.
-	selectEntryPoint string
+	// selectCore, selectCoreVersion, and selectMinecraft narrow the adopted
+	// installation for this invocation only.
+	selectCore        string
+	selectCoreVersion string
+	selectMinecraft   string
 	// expectFailure requires init to refuse the directory.
 	expectFailure bool
-	// guidance lists entry points whose exact selection command a refusal must
-	// print.
+	// guidance lists exact selection commands a refusal must print.
 	guidance []string
 	// wantReceipt requires the installation receipt that records the packages
 	// init identified from upstream metadata.
@@ -75,11 +73,8 @@ type initializeScenario struct {
 }
 
 // initializeCommand is one Lucy invocation that builds the pre-init directory.
-// selectEntryPoint is an ephemeral choice for this invocation only; it is
-// never persisted.
 type initializeCommand struct {
-	args             []string
-	selectEntryPoint string
+	args []string
 }
 
 // initializeArtifact copies one pinned file from a generated sandbox.
@@ -103,10 +98,7 @@ type statusExpectation struct {
 	name       string
 	version    string
 	components map[string]string
-	// path is the workspace-relative entry point live status must report. It
-	// names the file status observes now, not a path persisted by init.
-	path string
-	// warning lists entry points a live status diagnostic must name.
+	// warning lists identity labels a live status diagnostic must name.
 	warning []string
 }
 
@@ -217,8 +209,6 @@ var initializeScenarios = map[string]initializeScenario{
 		unchanged:   []string{cobblemon1211Launcher},
 		status: &statusExpectation{
 			ecosystem: "fabric", name: "fabric", version: "0.19.5",
-			path:    fabricShim,
-			warning: []string{cobblemon1211Launcher},
 			components: map[string]string{
 				"minecraft:minecraft":  "1.21.1",
 				"fabric:fabric-loader": "0.19.5",
@@ -237,15 +227,20 @@ var initializeScenarios = map[string]initializeScenario{
 			dest:    fabric1214Launcher,
 		}},
 		expectFailure: true,
-		guidance:      []string{fabric262Launcher, fabric1214Launcher},
+		guidance: []string{
+			"lucy init --core fabric --core-version 0.19.3 --minecraft 26.2",
+			"lucy init --core fabric --core-version 0.16.9 --minecraft 1.21.4",
+		},
 		status: &statusExpectation{
 			ecosystem: "fabric", name: "fabric", version: "0.16.9",
-			path: fabric1214Launcher,
 			components: map[string]string{
 				"minecraft:minecraft":  "1.21.4",
 				"fabric:fabric-loader": "0.16.9",
 			},
-			warning: []string{fabric1214Launcher, fabric262Launcher},
+			warning: []string{
+				"Fabric 0.19.3 / Minecraft 26.2",
+				"Fabric 0.16.9 / Minecraft 1.21.4",
+			},
 		},
 	},
 
@@ -256,7 +251,6 @@ var initializeScenarios = map[string]initializeScenario{
 		minecraft: "1.20.1", product: "forge", coreVersion: "47.4.10",
 		status: &statusExpectation{
 			ecosystem: "forge", name: "forge", version: "47.4.10",
-			path: forge1201EntryPoint,
 			components: map[string]string{
 				"minecraft:minecraft": "1.20.1",
 				"forge:forge":         "47.4.10",
@@ -267,7 +261,6 @@ var initializeScenarios = map[string]initializeScenario{
 		minecraft: "26.2", product: "neoforge", coreVersion: "26.2.0.67",
 		status: &statusExpectation{
 			ecosystem: "neoforge", name: "neoforge", version: "26.2.0.67",
-			path: neoforge262EntryPoint,
 			components: map[string]string{
 				"minecraft:minecraft": "26.2",
 				"neoforge:neoforge":   "26.2.0.67",
@@ -276,20 +269,18 @@ var initializeScenarios = map[string]initializeScenario{
 	},
 
 	// A real Paper jar and a server.jar symlink alias are one physical
-	// installation. Explicit selection through the alias records the Paper
-	// identity and the installed build; live status reports the canonical file
-	// for that identity with the same build.
+	// installation. The core filter records the Paper identity and the
+	// installed build.
 	"paper-symlink-alias": {
 		sandbox: "paper",
 		symlinks: []initializeSymlink{{
 			target: paperJar,
 			link:   "server.jar",
 		}},
-		selectEntryPoint: "server.jar",
-		minecraft:        "1.21.11", product: "paper", coreVersion: "130",
+		selectCore: "paper",
+		minecraft:  "1.21.11", product: "paper", coreVersion: "130",
 		status: &statusExpectation{
 			name: "paper", version: "130",
-			path: paperJar,
 			components: map[string]string{
 				"minecraft:minecraft": "1.21.11",
 			},
@@ -313,7 +304,6 @@ var initializeScenarios = map[string]initializeScenario{
 		minecraft: "1.20.1", product: "minecraft", coreVersion: "1.20.1",
 		status: &statusExpectation{
 			ecosystem: "minecraft", name: "minecraft", version: "1.20.1",
-			path: "server.jar",
 			components: map[string]string{
 				"minecraft:minecraft": "1.20.1",
 			},

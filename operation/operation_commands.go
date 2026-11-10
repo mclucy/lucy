@@ -30,12 +30,12 @@ type InitOptions struct {
 	MCDRVersion string
 	Force       bool
 	NoComments  bool
-	// EntryPoint selects the runtime observation uses for this
-	// initialization only; it is never persisted.
-	EntryPoint string
-	// PromptRuntime asks which entry point to use when observation finds
+	// Expectation narrows the observed installations by product and version
+	// for this initialization only; it is never persisted.
+	Expectation *discovery.Expectation
+	// PromptRuntime asks which installation to use when observation finds
 	// several equally valid runtimes. Nil keeps the strict failure.
-	PromptRuntime func(discovery.Result) (string, error)
+	PromptRuntime func(discovery.Result) (*discovery.Installation, error)
 	// Trace receives progress for the lock resolution initialization runs.
 	Trace *install.Trace
 	// Materialize supplies artifact bytes for adoption planning. Nil uses the

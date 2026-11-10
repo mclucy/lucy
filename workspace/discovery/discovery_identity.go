@@ -431,9 +431,12 @@ func concreteVersion(value versionpkg.Version) bool {
 
 // Installation is one observed runtime together with every member the
 // recognizer proved belongs to it. All entry points, payloads, libraries, and
-// configuration sidecars live in the single Files collection.
+// configuration sidecars live in the single Files collection. CorePath names
+// the server core artifact when the recognizer proved one; it is evidence for
+// identifying the installed build, not a selection target.
 type Installation struct {
 	Identity Identity
+	CorePath string
 	Files    []File
 }
 
@@ -445,6 +448,15 @@ func NewInstallation(identity Identity, entryPoint string) Installation {
 		installation.AddFile(entryPoint, RoleEntryPoint)
 	}
 	return installation
+}
+
+// SetCore records the server core artifact the recognizer proved. The same
+// file may also be an entry-point member.
+func (i *Installation) SetCore(path string) {
+	if i == nil || path == "" {
+		return
+	}
+	i.CorePath = filepath.Clean(path)
 }
 
 // AddFile unions a member by path. A dependency member upgrades to an entry

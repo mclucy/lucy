@@ -57,13 +57,15 @@ func TestDiscoverMergesDuplicateVanillaJars(t *testing.T) {
 	if err := result.Select(Request{}); err != nil {
 		t.Fatalf("Select inferred installation: %v", err)
 	}
-	if result.Selection.EntryPoint == nil ||
-		result.Selection.EntryPoint.Path != backup {
+	if result.Selection.Installation == nil ||
+		!result.Selection.Installation.Identity.Equal(installation.Identity) {
 		t.Fatalf(
-			"selected entry point = %+v, want the lexical first copy %s",
-			result.Selection.EntryPoint,
-			backup,
+			"selected installation = %+v, want the merged runtime",
+			result.Selection.Installation,
 		)
+	}
+	if entry := chooseEntryPoint(&result.Installations[0]); entry == nil || entry.Path != backup {
+		t.Fatalf("launch evidence = %+v, want the lexical first copy %s", entry, backup)
 	}
 }
 
@@ -113,15 +115,17 @@ func TestDiscoverResolvesPaperSymlinkAlias(t *testing.T) {
 		t.Fatalf("entry points = %v, want the canonical jar %s", got, paperPath)
 	}
 
-	if err := result.Select(Request{EntryPoint: aliasPath}); err != nil {
-		t.Fatalf("Select alias entry point: %v", err)
+	if got := result.Installations[0].CorePath; got != paperPath {
+		t.Fatalf("core artifact = %q, want the canonical %s", got, paperPath)
 	}
-	if result.Selection.EntryPoint == nil ||
-		result.Selection.EntryPoint.Path != paperPath {
+	if err := result.Select(Request{}); err != nil {
+		t.Fatalf("Select inferred installation: %v", err)
+	}
+	if result.Selection.Installation == nil ||
+		result.Selection.Installation.CorePath != paperPath {
 		t.Fatalf(
-			"selected entry point = %+v, want the canonical %s",
-			result.Selection.EntryPoint,
-			paperPath,
+			"selected installation = %+v, want the canonical paper jar",
+			result.Selection.Installation,
 		)
 	}
 }
@@ -170,8 +174,13 @@ func TestDiscoverKeepsVanillaIdentityUnderLoaderServerPaths(t *testing.T) {
 	if err := result.Select(Request{}); err != nil {
 		t.Fatalf("Select inferred installation: %v", err)
 	}
-	if got := result.Selection.EntryPoint.Path; got != serverPath {
-		t.Fatalf("selected entry point = %q, want %q", got, serverPath)
+	if result.Selection.Installation == nil ||
+		!slices.Contains(entryPointPaths(*result.Selection.Installation), serverPath) {
+		t.Fatalf(
+			"selected installation = %+v, want the root jar %s",
+			result.Selection.Installation,
+			serverPath,
+		)
 	}
 }
 
@@ -205,7 +214,12 @@ func TestDiscoverFabricMetaLauncherIdentity(t *testing.T) {
 	if err := result.Select(Request{}); err != nil {
 		t.Fatalf("Select inferred installation: %v", err)
 	}
-	if got := result.Selection.EntryPoint.Path; got != launcherPath {
-		t.Fatalf("selected entry point = %q, want %q", got, launcherPath)
+	if result.Selection.Installation == nil ||
+		!slices.Contains(entryPointPaths(*result.Selection.Installation), launcherPath) {
+		t.Fatalf(
+			"selected installation = %+v, want the launcher %s",
+			result.Selection.Installation,
+			launcherPath,
+		)
 	}
 }

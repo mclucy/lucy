@@ -46,7 +46,6 @@ type statusDocument struct {
 type statusServer struct {
 	Product              statusProduct     `json:"product"`
 	Minecraft            string            `json:"minecraft"`
-	EntryPoint           string            `json:"entry_point"`
 	Activity             string            `json:"activity"`
 	Components           []statusComponent `json:"components"`
 	CompatibleEcosystems []statusEcosystem `json:"compatible_ecosystems"`
@@ -122,10 +121,6 @@ func statusServerFromObservation(
 	selection *discovery.Selection,
 	root string,
 ) *statusServer {
-	entryPoint := ""
-	if selection.EntryPoint != nil {
-		entryPoint = statusRelativePath(root, selection.EntryPoint.Path)
-	}
 	activity := statusActivityStopped
 	if observed.Running() {
 		activity = statusActivityRunning
@@ -133,7 +128,6 @@ func statusServerFromObservation(
 	return &statusServer{
 		Product:              statusProductFromSelection(selection),
 		Minecraft:            selection.MinecraftVersion().String(),
-		EntryPoint:           entryPoint,
 		Activity:             activity,
 		Components:           statusComponents(depgraph.RuntimeComponents(selection)),
 		CompatibleEcosystems: statusCompatibleEcosystems(observed.ServedEcosystems()),
@@ -264,7 +258,6 @@ func newLockStatusDocument(
 			Ecosystem: statusLockProductEcosystem(lock).String(),
 		},
 		Minecraft:            lock.Server.Minecraft.String(),
-		EntryPoint:           "",
 		Activity:             statusActivityUnknown,
 		Components:           statusLockComponents(lock),
 		CompatibleEcosystems: statusLockCompatibleEcosystems(lock),

@@ -3,8 +3,6 @@ package cli
 import (
 	"cmp"
 	"fmt"
-	"os"
-	"path/filepath"
 	"slices"
 	"strings"
 
@@ -451,7 +449,6 @@ func statusViewFacts(
 	valueWidth := statusViewValueWidth(groups, width)
 	if serverRow >= 0 {
 		runtime[serverRow].Value = statusViewServer(
-			document.Root,
 			document.Server,
 			valueWidth,
 			theme,
@@ -481,45 +478,15 @@ func statusViewValueWidth(groups [][]terminal.Fact, width int) int {
 }
 
 func statusViewServer(
-	root string,
 	server *statusServer,
 	width int,
 	theme style.Theme,
 ) string {
-	product := terminal.TruncateMiddle(statusViewProduct(server.Product), width)
-	value := product
-	if server.EntryPoint != "" {
-		filename := statusViewLauncher(root, server.EntryPoint)
-		remaining := width - ansi.StringWidth(product) - 3
-		if remaining >= min(8, ansi.StringWidth(filename)) {
-			value += "   " + theme.Muted(
-				terminal.TruncateMiddle(filename, remaining),
-			)
-		} else {
-			value += "\n" + theme.Muted(
-				terminal.TruncateMiddle(filename, width),
-			)
-		}
-	}
+	value := terminal.TruncateMiddle(statusViewProduct(server.Product), width)
 	if components := statusViewComponents(server); components != "" {
 		value += "\n" + theme.Muted(components)
 	}
 	return value
-}
-
-// Loader installs expose runtime arguments as their entry point. Operators
-// start the server through the generated launch script, so show that instead.
-func statusViewLauncher(root, entryPoint string) string {
-	filename := filepath.Base(terminal.DisplayPath(root, entryPoint))
-	if filename != "unix_args.txt" && filename != "win_args.txt" {
-		return filename
-	}
-	for _, candidate := range []string{"run.sh", "run.bat", "start.sh", "start.bat"} {
-		if _, err := os.Stat(filepath.Join(root, candidate)); err == nil {
-			return candidate
-		}
-	}
-	return filename
 }
 
 func statusViewProduct(product statusProduct) string {
