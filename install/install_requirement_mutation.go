@@ -152,7 +152,10 @@ func rebindRequirements(d *document.Manifest, resolved *document.Lock) error {
 			if !lockPackageFor(key.reference, *p) {
 				continue
 			}
-			if !lockedSelectorSatisfied(requirement.Selector, *p) {
+			// A disabled declaration keeps its dormant pin without
+			// constraining resolution, so that pin need not answer the
+			// manifest's current selector.
+			if requirement.IsEnabled() && !lockedSelectorSatisfied(requirement.Selector, *p) {
 				return fmt.Errorf(
 					"lucy-lock.yaml pins %s %s, which does not satisfy selector %s; install it without --locked first",
 					key.reference,
