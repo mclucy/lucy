@@ -132,6 +132,123 @@ func TestMutateLockBindsEachDeclarationToLocation(t *testing.T) {
 	}
 }
 
+// TestMutateLockBindsRecordedRequirement covers a locked declaration whose
+// reference cannot be recovered from the pin: Modrinth names the project by an
+// opaque ID and the jar's module ID need not equal the project slug. The
+// requirement binding the earlier resolution recorded is the only evidence
+// that the pin answers modrinth:ferrite-core, so a locked removal of another
+// package must not report it as unpinned. The Quilt product mirrors the server
+// integration case that exposed it.
+func TestMutateLockBindsRecordedRequirement(t *testing.T) {
+	const reference = "modrinth:ferrite-core"
+	selector := versionpkg.Version("7.1.3-fabric")
+	initial := lockedMutationManifest(t, reference, selector)
+	initial.Server.Core.Product = serverpkg.ProductQuilt
+	initialFingerprint, err := initial.Fingerprint()
+	if err != nil {
+		t.Fatalf("manifest.Fingerprint() error = %v", err)
+	}
+
+	pkg := lockedMutationPackage(catalog.EcosystemFabric, selector, true)
+	pkg.ProjectID = "uXXizFIs"
+	pkg.ReleaseID = "7KqeXPRS"
+	pkg.FileID = "Rr0mcpKp"
+	pkg.Version = selector
+	pkg.Filename = "ferritecore-7.1.3-fabric.jar"
+	pkg.Modules = []catalog.DescriptorModule{{
+		ID:             "ferritecore",
+		Version:        versionpkg.Version("7.1.3"),
+		Ecosystem:      catalog.EcosystemFabric,
+		VersionDialect: versionpkg.DialectFabric,
+	}}
+	pkg.Requirements = []document.RequirementBinding{{
+		Reference: reference,
+		Selector:  selector,
+		Enabled:   true,
+	}}
+	lock := &document.Lock{
+		SchemaVersion:       document.LockSchemaVersion,
+		ManifestFingerprint: initialFingerprint,
+		Server: document.LockedServer{
+			Directory:   "server",
+			Minecraft:   versionpkg.Version("1.21.4"),
+			Product:     serverpkg.ProductQuilt,
+			CoreVersion: versionpkg.Version("0.29.1"),
+			Artifact: catalog.Artifact{
+				Provider:  catalog.ProviderQuilt,
+				ProjectID: "quilt-loader",
+				Version:   versionpkg.Version("0.29.1"),
+				Filename:  "quilt-loader-0.29.1.jar",
+				Hashes:    map[string]string{"sha256": fmt.Sprintf("%064x", 8)},
+			},
+			Bootstrapper: serverpkg.BootstrapMethodQuilt,
+			Java:         document.LockedJava{Advisory: 21},
+		},
+		Packages: []document.Package{pkg},
+	}
+
+	resolved, err := mutateLock(initial, lock, initialFingerprint)
+	if err != nil {
+		t.Fatalf("mutateLock() error = %v", err)
+	}
+	if len(resolved.Packages) != 1 {
+		t.Fatalf("resolved packages = %d, want 1: %+v", len(resolved.Packages), resolved.Packages)
+	}
+	got := resolved.Packages[0]
+	if got.ProjectID != "uXXizFIs" {
+		t.Fatalf("resolved project ID = %q, want the opaque pin", got.ProjectID)
+	}
+	want := []document.RequirementBinding{{
+		Reference: reference,
+		Selector:  selector,
+		Enabled:   true,
+	}}
+	if !reflect.DeepEqual(got.Requirements, want) {
+		t.Fatalf("resolved requirements = %#v, want %#v", got.Requirements, want)
+	}
+	if !got.Enabled() {
+		t.Fatal("resolved package lost its enabled declaration")
+	}
+}
+
+// TestLockPackageForRequirementBinding pins the association order: a recorded
+// binding identifies the pin only for the reference's own provider, while
+// identity matching stays limited to the project ID and module identities.
+func TestLockPackageForRequirementBinding(t *testing.T) {
+	pkg := document.Package{
+		Artifact: catalog.Artifact{
+			Provider:  catalog.ProviderModrinth,
+			ProjectID: "uXXizFIs",
+			Modules: []catalog.DescriptorModule{{
+				ID:        "ferritecore",
+				Ecosystem: catalog.EcosystemFabric,
+			}},
+		},
+		Requirements: []document.RequirementBinding{
+			{Reference: "modrinth:ferrite-core", Selector: versionpkg.Any, Enabled: true},
+			{Reference: "curseforge:other", Selector: versionpkg.Any, Enabled: true},
+		},
+	}
+	tests := []struct {
+		name string
+		ref  string
+		want bool
+	}{
+		{name: "recorded project slug", ref: "modrinth:ferrite-core", want: true},
+		{name: "recorded binding needs the same provider", ref: "curseforge:other", want: false},
+		{name: "unrecorded slug", ref: "modrinth:other", want: false},
+		{name: "opaque project ID", ref: "modrinth:uXXizFIs", want: true},
+		{name: "module ID", ref: "modrinth:ferritecore", want: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := lockPackageFor(tt.ref, pkg); got != tt.want {
+				t.Fatalf("lockPackageFor(%q) = %v, want %v", tt.ref, got, tt.want)
+			}
+		})
+	}
+}
+
 func lockedMutationManifest(
 	t *testing.T,
 	reference string,
