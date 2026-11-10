@@ -19,6 +19,7 @@ a runtime library, not an entry point.
 | ---------------- | ------------------------------------------- | ---------------- | ------------ |
 | cobblemon-1211   | Cobblemon Official Modpack [Fabric] 1.8.2   | Fabric 0.19.5    | 34 mods      |
 | create-plus-1211 | Create+ 6.0.0 Alpha f                       | NeoForge 21.1.233 | 105 mods    |
+| quilt-modpack-1201 | Quilt Minims 1.0.0                        | Quilt 0.20.0     | 26 mods      |
 
 Generation verifies each downloaded file against the sha512 in the pack
 index. The pack archive itself is pinned by sha256 in the manifest.
