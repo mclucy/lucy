@@ -1,0 +1,76 @@
+---
+title: "lucy import"
+description: "Create a workspace from a server archive or modpack"
+---
+
+`lucy import` turns a server archive into a lucy workspace. It reads a local file or a direct `http` or `https` download link, unpacks the server into the target directory, and writes `lucy.yaml` and `lucy-lock.yaml`, the same files [`lucy init`](/commands/init) produces for a server that is already on disk.
+
+```bash
+lucy import ~/Downloads/server-pack.zip
+lucy import https://example.com/packs/all-the-mods.mrpack --directory mods
+```
+
+## Supported sources
+
+Import accepts two kinds of source:
+
+- A Modrinth modpack in `.mrpack` format. Import reads the declared Minecraft version and loader, installs that loader into the workspace, and records the modpack's server-side files.
+- A server directory packed as a `.zip` or `.tar.gz` archive. Import detects the server software the same way `lucy init` does.
+
+Sources are either a local path or a direct link to the archive. Relative local paths resolve against the current directory.
+
+Client packs, launcher instances, and remote identifiers such as project slugs are not supported yet.
+
+## Choose the target directory
+
+By default, import uses the current directory when it is empty or does not exist. When the current directory has files in it, import creates a new directory named after the archive. For example, `All The Mods.mrpack` becomes `all-the-mods`.
+
+Pass `--directory` to choose the target yourself. A relative path resolves against the current directory. Import never writes into a non-empty directory you name, and it fails rather than overwriting an existing workspace.
+
+The workspace name defaults to the target directory's name. Pass `--name` to store a different one.
+
+## Verify the download
+
+Pass `--sha256` with the expected checksum of the archive, as 64 hexadecimal characters. Import fails when the archive does not match it.
+
+## What gets reported
+
+After a successful import, lucy prints the workspace, the server product and Minecraft version, the number of server files written, the number of client-only files skipped, and the number of packages lucy manages. Files it does not recognize are listed as unmanaged, so you can decide whether to add them yourself. Review lines name anything that needs your attention. Warnings appear on stderr.
+
+Imported packages are managed from then on, the same as packages recorded by `lucy init`. See [`lucy install`](/commands/install) for how later changes take effect.
+
+## Flags
+
+<ParamField query="--directory, -d" type="string">
+  Directory to create the workspace in. Resolves against the current directory. Defaults to the current directory when it is empty or absent, and otherwise to a new directory named after the source.
+</ParamField>
+
+<ParamField query="--name" type="string">
+  Server name stored as the top-level `name` in `lucy.yaml`. Defaults to the target directory's name. The name is trimmed and must be non-empty and printable.
+</ParamField>
+
+<ParamField query="--mcdr-version" type="string">
+  Record MCDReforged at this version as the server wrapper.
+</ParamField>
+
+<ParamField query="--sha256" type="string">
+  Expected SHA-256 checksum of the source archive, as 64 hexadecimal characters.
+</ParamField>
+
+<ParamField query="--core" type="string">
+  Expect this server product. No match fails and lists the products found.
+</ParamField>
+
+<ParamField query="--core-version" type="string">
+  Expect this exact server product version. Requires `--core`.
+</ParamField>
+
+<ParamField query="--minecraft" type="string">
+  Expect this exact Minecraft version.
+</ParamField>
+
+<ParamField query="--no-comments" type="boolean" default="false">
+  Omit generated comments and examples from `lucy.yaml`.
+</ParamField>
+
+See also [Global Flags](/commands/global-flags), [`lucy init`](/commands/init), and [`lucy create`](/commands/create).

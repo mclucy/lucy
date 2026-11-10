@@ -41,6 +41,7 @@
           "commands/global-flags",
           "commands/create",
           "commands/init",
+          "commands/import",
           "commands/install",
           "commands/self-update",
           "commands/java",

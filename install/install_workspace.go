@@ -56,6 +56,10 @@ type (
 		// already holds a working set that resolution must not extend.
 		declaredOnly bool
 		publishLock  bool
+		// SkipRegistration leaves the workspace unregistered. Staging callers
+		// set it because a staged tree is not yet a server; they register the
+		// workspace once its documents exist.
+		SkipRegistration bool
 		// Trace receives operation facts for the command layer to present.
 		Trace *Trace
 		// ProvisionJava runs before staging when the selected runtime misses
@@ -95,8 +99,10 @@ func (s *Service) syncInstall(ctx context.Context, root string, d *document.Mani
 	if err != nil {
 		return nil, err
 	}
-	if err := s.registerServer(root, result); err != nil {
-		return nil, err
+	if !opts.SkipRegistration {
+		if err := s.registerServer(root, result); err != nil {
+			return nil, err
+		}
 	}
 	// Resolution and staging must start from the recovered documents. A
 	// publishing caller still supplies the manifest it intends to write.

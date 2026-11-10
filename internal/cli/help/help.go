@@ -55,6 +55,8 @@ const (
 	InfoLong  = "Pass a local .jar, .zip, .pyz, or .mcdr file or specify a " +
 		"package identifier. When no registry is specified, all registries are queried"
 
+	ImportShort = "Create a workspace from a server archive or modpack"
+
 	InitShort = "Generate a manifest file for an existing server directory"
 
 	InstallShort = "Sync the server with the manifest and lock"
