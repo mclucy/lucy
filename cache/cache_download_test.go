@@ -717,3 +717,35 @@ func TestNewIntegrityHasherSelectsAlgorithm(t *testing.T) {
 		t.Fatal("SHA-512 did not select a SHA-512 hasher")
 	}
 }
+
+// A MaxBytes download must fail before it stages an oversized response and
+// again when materializing an oversized cache hit.
+func TestCachedDownloadEnforcesMaxBytes(t *testing.T) {
+	fixture := newCacheFixture(t)
+	h := installNetworkCache(t, DefaultCacheConfig())
+	url := fixture.artifactURL("large.jar")
+
+	_, err := h.CachedDownload(context.Background(), url, t.TempDir(), DownloadOptions{
+		Kind:     KindArtifact,
+		MaxBytes: 8,
+	})
+	if !errors.Is(err, ErrDownloadTooLarge) {
+		t.Fatalf("oversized download error = %v, want ErrDownloadTooLarge", err)
+	}
+
+	full, err := h.CachedDownload(context.Background(), url, t.TempDir(), DownloadOptions{
+		Kind: KindArtifact,
+	})
+	if err != nil {
+		t.Fatalf("unbounded download: %v", err)
+	}
+	full.File.Close()
+
+	_, err = h.CachedDownload(context.Background(), url, t.TempDir(), DownloadOptions{
+		Kind:     KindArtifact,
+		MaxBytes: 8,
+	})
+	if !errors.Is(err, ErrDownloadTooLarge) {
+		t.Fatalf("oversized cache hit error = %v, want ErrDownloadTooLarge", err)
+	}
+}
