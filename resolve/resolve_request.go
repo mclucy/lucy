@@ -73,6 +73,9 @@ func SupportsPackages(target Target, ecosystem catalog.Ecosystem) bool {
 	switch target.Product {
 	case serverpkg.ProductFabric:
 		return ecosystem == catalog.EcosystemFabric
+	case serverpkg.ProductQuilt:
+		return ecosystem == catalog.EcosystemQuilt ||
+			ecosystem == catalog.EcosystemFabric
 	case serverpkg.ProductForge:
 		return ecosystem == catalog.EcosystemForge
 	case serverpkg.ProductNeoForge:
@@ -83,6 +86,21 @@ func SupportsPackages(target Target, ecosystem catalog.Ecosystem) bool {
 		return target.Bootstrapper == serverpkg.BootstrapMethodPaperclip &&
 			(ecosystem == catalog.EcosystemPaper || ecosystem == catalog.EcosystemBukkit)
 	}
+}
+
+// descriptorEcosystem returns the descriptor family the active server loader
+// reads for a package. Quilt Loader selects quilt.mod.json from an artifact
+// that carries both descriptors, so a Fabric-declared package on a Quilt
+// server must be analyzed as Quilt.
+func descriptorEcosystem(
+	target Target,
+	ecosystem catalog.Ecosystem,
+) catalog.Ecosystem {
+	if target.Product == serverpkg.ProductQuilt &&
+		ecosystem == catalog.EcosystemFabric {
+		return catalog.EcosystemQuilt
+	}
+	return ecosystem
 }
 
 // CandidateSource lists the published builds of one project. Callers inject

@@ -26,6 +26,8 @@ func (r *Router) LatestMinecraftVersion(
 		return r.LatestMojangMinecraft(ctx, false)
 	case server.ProductFabric:
 		return r.fabric.LatestGameVersion(ctx)
+	case server.ProductQuilt:
+		return r.quilt.LatestGameVersion(ctx)
 	case server.ProductForge:
 		return r.forge.LatestMinecraftVersion(ctx)
 	case server.ProductNeoForge:

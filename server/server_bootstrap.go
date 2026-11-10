@@ -15,6 +15,9 @@ const (
 	// BootstrapMethodFabric places the loader in the library layout and
 	// generates launch files.
 	BootstrapMethodFabric BootstrapMethod = "fabric"
+	// BootstrapMethodQuilt places the Quilt loader in the library layout and
+	// generates the Quilt launcher JAR and its properties.
+	BootstrapMethodQuilt BootstrapMethod = "quilt"
 	// BootstrapMethodForgeInstaller executes the pinned installer's processors.
 	BootstrapMethodForgeInstaller BootstrapMethod = "forge-installer"
 )

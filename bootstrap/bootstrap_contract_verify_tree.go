@@ -86,6 +86,8 @@ func (v *treeVerifier) verify() (CheckResult, error) {
 		result = v.verifyPaperclip()
 	case serverpkg.BootstrapMethodFabric:
 		result = v.verifyFabric()
+	case serverpkg.BootstrapMethodQuilt:
+		result = v.verifyQuilt()
 	case serverpkg.BootstrapMethodForgeInstaller:
 		result = v.verifyForgeInstaller()
 	default:
@@ -128,6 +130,32 @@ func (v *treeVerifier) verifyFabric() CheckResult {
 			"run.bat",
 			"fabric-server-launcher.properties",
 			"fabric-server-launch.jar",
+		} {
+			v.collectRequiredOutput(rel, PolicyManaged)
+		}
+	}
+	if v.failed {
+		return v.mismatch()
+	}
+	return v.result(CurrentnessCurrent, "")
+}
+
+func (v *treeVerifier) verifyQuilt() CheckResult {
+	loaderRel, err := quiltLoaderPath(v.locked.CoreVersion.String())
+	if err != nil {
+		v.fail("resolving Quilt loader path: %v", err)
+	} else if out, ok := v.verifyPinned(loaderRel, v.locked.Artifact.Hashes); ok {
+		out.Policy, out.Role = PolicyManaged, RoleRuntime
+		v.add(out)
+	}
+	v.verifyInputs()
+
+	if v.launcher.err != nil {
+		v.fail("%v", v.launcher.err)
+	} else {
+		for _, rel := range []string{
+			"quilt-server-launch.jar",
+			"quilt-server-launcher.properties",
 		} {
 			v.collectRequiredOutput(rel, PolicyManaged)
 		}

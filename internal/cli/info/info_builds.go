@@ -209,6 +209,8 @@ func infoBuildEcosystem(loader string) (catalog.Ecosystem, bool) {
 	switch strings.ToLower(strings.TrimSpace(loader)) {
 	case "fabric":
 		return catalog.EcosystemFabric, true
+	case "quilt":
+		return catalog.EcosystemQuilt, true
 	case "forge":
 		return catalog.EcosystemForge, true
 	case "neoforge":

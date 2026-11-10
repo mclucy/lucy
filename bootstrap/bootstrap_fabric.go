@@ -20,18 +20,13 @@ func prepareFabric(root string, server document.LockedServer, corePath string) e
 	if err := fsutil.AtomicCopyFile(corePath, filepath.Join(root, filepath.FromSlash(loaderPath)), 0o644); err != nil {
 		return err
 	}
-	classpath := []string{loaderPath}
-	for _, input := range server.Inputs {
-		if strings.HasPrefix(input.Path, "libraries/") {
-			classpath = append(classpath, input.Path)
-		}
-	}
+	classpath := loaderClasspath(loaderPath, server.Inputs)
 	unix := strings.Join(classpath, ":")
 	windows := strings.Join(classpath, ";")
-	if err := os.WriteFile(filepath.Join(root, "run.sh"), []byte("#!/bin/sh\ncd -- \"$(dirname -- \"$0\")\"\nexec java -cp '"+unix+"' net.fabricmc.loader.impl.launch.server.FabricServerLauncher nogui \"$@\"\n"), 0o755); err != nil {
+	if err := os.WriteFile(filepath.Join(root, "run.sh"), []byte("#!/bin/sh\ncd -- \"$(dirname -- \"$0\")\"\nexec java -cp '"+unix+"' "+fabricLauncherMainClass+" nogui \"$@\"\n"), 0o755); err != nil {
 		return err
 	}
-	if err := os.WriteFile(filepath.Join(root, "run.bat"), []byte("@echo off\r\ncd /d %~dp0\r\njava -cp \""+windows+"\" net.fabricmc.loader.impl.launch.server.FabricServerLauncher nogui %*\r\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(root, "run.bat"), []byte("@echo off\r\ncd /d %~dp0\r\njava -cp \""+windows+"\" "+fabricLauncherMainClass+" nogui %*\r\n"), 0o644); err != nil {
 		return err
 	}
 	if err := writeFabricShimJar(filepath.Join(root, "fabric-server-launch.jar"), classpath); err != nil {
@@ -43,7 +38,26 @@ func prepareFabric(root string, server document.LockedServer, corePath string) e
 	return nil
 }
 
+const (
+	// fabricLauncherMainClass is the entry point of the Fabric launcher JAR.
+	fabricLauncherMainClass = "net.fabricmc.loader.impl.launch.server.FabricServerLauncher"
+	// fabricKnotMainClass is the server main class the launcher starts.
+	fabricKnotMainClass = "net.fabricmc.loader.impl.launch.knot.KnotServer"
+)
+
 func writeFabricShimJar(path string, classpath []string) error {
+	return writeLauncherShimJar(
+		path,
+		"fabric-server-launch.properties",
+		fabricLauncherMainClass,
+		fabricKnotMainClass,
+		classpath,
+	)
+}
+
+// writeLauncherShimJar writes the manifest-only launcher JAR shared by the
+// loader adapters. The embedded properties entry selects the server main class.
+func writeLauncherShimJar(path, propertiesEntry, mainClass, launchMainClass string, classpath []string) error {
 	file, err := os.Create(path)
 	if err != nil {
 		return err
@@ -52,22 +66,21 @@ func writeFabricShimJar(path string, classpath []string) error {
 	writer := zip.NewWriter(file)
 	defer writer.Close()
 
-	classpathLine := "Class-Path: " + strings.Join(classpath, " ")
-	manifest := "Manifest-Version: 1.0\nMain-Class: net.fabricmc.loader.impl.launch.server.FabricServerLauncher\n" + wrapLongLine(classpathLine, 70) + "\n"
-	wrapped := manifest
+	manifest := "Manifest-Version: 1.0\nMain-Class: " + mainClass + "\n" +
+		wrapLongLine("Class-Path: "+strings.Join(classpath, " "), 70) + "\n"
 	manifestEntry, err := writer.Create("META-INF/MANIFEST.MF")
 	if err != nil {
 		return err
 	}
-	if _, err := manifestEntry.Write([]byte(wrapped)); err != nil {
+	if _, err := manifestEntry.Write([]byte(manifest)); err != nil {
 		return err
 	}
 
-	propertiesEntry, err := writer.Create("fabric-server-launch.properties")
+	propertiesEntryWriter, err := writer.Create(propertiesEntry)
 	if err != nil {
 		return err
 	}
-	_, err = propertiesEntry.Write([]byte("launch.mainClass=net.fabricmc.loader.impl.launch.knot.KnotServer\n"))
+	_, err = propertiesEntryWriter.Write([]byte("launch.mainClass=" + launchMainClass + "\n"))
 	return err
 }
 

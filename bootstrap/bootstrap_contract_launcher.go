@@ -37,12 +37,35 @@ func verifyLauncher(serverDir string, locked document.LockedServer) launcherChec
 	switch locked.Bootstrapper {
 	case serverpkg.BootstrapMethodFabric:
 		return launcherCheck{err: verifyFabricLauncher(serverDir, locked)}
+	case serverpkg.BootstrapMethodQuilt:
+		return launcherCheck{err: verifyQuiltLauncher(serverDir, locked)}
 	case serverpkg.BootstrapMethodForgeInstaller:
 		rootShim, err := verifyForgeLauncher(serverDir, locked)
 		return launcherCheck{rootShim: rootShim, err: err}
 	default:
 		return launcherCheck{}
 	}
+}
+
+// verifyLauncherJarEntries rejects launcher JARs that carry entries beyond the
+// generated contract, so a bundled class cannot shadow the pinned loader, and
+// rejects duplicate entries so one name cannot have two payloads.
+func verifyLauncherJarEntries(zr *zip.Reader, allowed ...string) error {
+	permitted := make(map[string]bool, len(allowed))
+	for _, name := range allowed {
+		permitted[name] = true
+	}
+	seen := make(map[string]bool, len(zr.File))
+	for _, entry := range zr.File {
+		if !permitted[entry.Name] {
+			return fmt.Errorf("unexpected entry %q", entry.Name)
+		}
+		if seen[entry.Name] {
+			return fmt.Errorf("duplicate entry %q", entry.Name)
+		}
+		seen[entry.Name] = true
+	}
+	return nil
 }
 
 // verifyFabricLauncher checks the Fabric launch scripts, launcher properties,
@@ -67,12 +90,7 @@ func verifyFabricLauncher(serverDir string, locked document.LockedServer) error 
 	if err != nil {
 		return fmt.Errorf("resolving fabric loader path: %w", err)
 	}
-	classpath := []string{loaderPath}
-	for _, input := range locked.Inputs {
-		if strings.HasPrefix(input.Path, "libraries/") {
-			classpath = append(classpath, input.Path)
-		}
-	}
+	classpath := loaderClasspath(loaderPath, locked.Inputs)
 	unixClasspath := strings.Join(classpath, ":")
 	windowsClasspath := strings.Join(classpath, ";")
 
@@ -81,7 +99,7 @@ func verifyFabricLauncher(serverDir string, locked document.LockedServer) error 
 	if err != nil {
 		return fmt.Errorf("reading run.sh: %w", err)
 	}
-	expectedRunSh := "#!/bin/sh\ncd -- \"$(dirname -- \"$0\")\"\nexec java -cp '" + unixClasspath + "' net.fabricmc.loader.impl.launch.server.FabricServerLauncher nogui \"$@\"\n"
+	expectedRunSh := "#!/bin/sh\ncd -- \"$(dirname -- \"$0\")\"\nexec java -cp '" + unixClasspath + "' " + fabricLauncherMainClass + " nogui \"$@\"\n"
 	if normalizeNewlines(string(runShData)) != normalizeNewlines(expectedRunSh) {
 		return errors.New("run.sh does not match expected Fabric launch script")
 	}
@@ -91,7 +109,7 @@ func verifyFabricLauncher(serverDir string, locked document.LockedServer) error 
 	if err != nil {
 		return fmt.Errorf("reading run.bat: %w", err)
 	}
-	expectedRunBat := "@echo off\r\ncd /d %~dp0\r\njava -cp \"" + windowsClasspath + "\" net.fabricmc.loader.impl.launch.server.FabricServerLauncher nogui %*\r\n"
+	expectedRunBat := "@echo off\r\ncd /d %~dp0\r\njava -cp \"" + windowsClasspath + "\" " + fabricLauncherMainClass + " nogui %*\r\n"
 	if normalizeNewlines(string(runBatData)) != normalizeNewlines(expectedRunBat) {
 		return errors.New("run.bat does not match expected Fabric launch script")
 	}
@@ -107,7 +125,7 @@ func verifyFabricLauncher(serverDir string, locked document.LockedServer) error 
 	if err != nil {
 		return errors.New("missing META-INF/MANIFEST.MF in fabric-server-launch.jar")
 	}
-	expectedManifest := "Manifest-Version: 1.0\nMain-Class: net.fabricmc.loader.impl.launch.server.FabricServerLauncher\n" + wrapLongLine("Class-Path: "+strings.Join(classpath, " "), 70) + "\n"
+	expectedManifest := "Manifest-Version: 1.0\nMain-Class: " + fabricLauncherMainClass + "\n" + wrapLongLine("Class-Path: "+strings.Join(classpath, " "), 70) + "\n"
 	if normalizeNewlines(string(manifestBytes)) != normalizeNewlines(expectedManifest) {
 		return errors.New("fabric-server-launch.jar manifest does not match expected FabricServerLauncher manifest")
 	}
@@ -116,8 +134,68 @@ func verifyFabricLauncher(serverDir string, locked document.LockedServer) error 
 	if err != nil {
 		return errors.New("missing fabric-server-launch.properties in fabric-server-launch.jar")
 	}
-	if strings.TrimSpace(string(propBytes)) != "launch.mainClass=net.fabricmc.loader.impl.launch.knot.KnotServer" {
+	if strings.TrimSpace(string(propBytes)) != "launch.mainClass="+fabricKnotMainClass {
 		return errors.New("fabric-server-launch.jar properties does not match KnotServer mainClass")
+	}
+	return nil
+}
+
+// verifyQuiltLauncher checks the generated Quilt launcher JAR and its
+// properties, including the launcher manifest, the embedded KnotServer main
+// class, and the vanilla server JAR selector.
+func verifyQuiltLauncher(serverDir string, locked document.LockedServer) error {
+	for _, f := range []string{"quilt-server-launcher.properties", "quilt-server-launch.jar"} {
+		if err := checkPathSafety(serverDir, f, true); err != nil {
+			return err
+		}
+	}
+
+	propsPath := filepath.Join(serverDir, "quilt-server-launcher.properties")
+	propsData, err := readBoundedFile(propsPath, 1<<20)
+	if err != nil {
+		return fmt.Errorf("reading quilt-server-launcher.properties: %w", err)
+	}
+	if strings.TrimSpace(string(propsData)) != "serverJar=server.jar" {
+		return errors.New("quilt-server-launcher.properties does not match expected serverJar=server.jar")
+	}
+
+	loaderPath, err := quiltLoaderPath(locked.CoreVersion.String())
+	if err != nil {
+		return fmt.Errorf("resolving Quilt loader path: %w", err)
+	}
+	classpath := loaderClasspath(loaderPath, locked.Inputs)
+
+	shimPath := filepath.Join(serverDir, "quilt-server-launch.jar")
+	zr, err := zip.OpenReader(shimPath)
+	if err != nil {
+		return fmt.Errorf("invalid quilt-server-launch.jar: %w", err)
+	}
+	defer zr.Close()
+
+	if err := verifyLauncherJarEntries(
+		&zr.Reader,
+		"META-INF/MANIFEST.MF",
+		"quilt-server-launch.properties",
+	); err != nil {
+		return fmt.Errorf("invalid quilt-server-launch.jar: %w", err)
+	}
+
+	manifestBytes, err := readZipEntry(&zr.Reader, "META-INF/MANIFEST.MF")
+	if err != nil {
+		return errors.New("missing META-INF/MANIFEST.MF in quilt-server-launch.jar")
+	}
+	expectedManifest := "Manifest-Version: 1.0\nMain-Class: " + quiltLauncherMainClass + "\n" +
+		wrapLongLine("Class-Path: "+strings.Join(classpath, " "), 70) + "\n"
+	if normalizeNewlines(string(manifestBytes)) != normalizeNewlines(expectedManifest) {
+		return errors.New("quilt-server-launch.jar manifest does not match expected QuiltServerLauncher manifest")
+	}
+
+	propBytes, err := readZipEntry(&zr.Reader, "quilt-server-launch.properties")
+	if err != nil {
+		return errors.New("missing quilt-server-launch.properties in quilt-server-launch.jar")
+	}
+	if strings.TrimSpace(string(propBytes)) != "launch.mainClass="+quiltKnotMainClass {
+		return errors.New("quilt-server-launch.jar properties does not match KnotServer mainClass")
 	}
 	return nil
 }
@@ -312,14 +390,37 @@ func regularFileSHA256(serverDir, rel string) (string, error) {
 // fabricLoaderPath returns the library path the Fabric adapter installs the
 // locked loader to.
 func fabricLoaderPath(version string) (string, error) {
+	return loaderLibraryPath("net.fabricmc:fabric-loader", "Fabric", version)
+}
+
+// quiltLoaderPath returns the library path the Quilt adapter installs the
+// locked loader to.
+func quiltLoaderPath(version string) (string, error) {
+	return loaderLibraryPath("org.quiltmc:quilt-loader", "Quilt", version)
+}
+
+// loaderLibraryPath returns the Maven-layout library path of a pinned loader.
+func loaderLibraryPath(coordinate, loader, version string) (string, error) {
 	if version == "" || version == "." || version == ".." || strings.ContainsAny(version, "/\\") {
-		return "", fmt.Errorf("invalid Fabric loader version %q", version)
+		return "", fmt.Errorf("invalid %s loader version %q", loader, version)
 	}
-	p, err := maven.Path("net.fabricmc:fabric-loader:" + version)
+	p, err := maven.Path(coordinate + ":" + version)
 	if err != nil {
 		return "", err
 	}
 	return filepath.ToSlash(filepath.Join("libraries", p)), nil
+}
+
+// loaderClasspath returns the launcher classpath: the loader library followed
+// by every pinned library input in lock order.
+func loaderClasspath(loaderPath string, inputs []serverpkg.BootstrapInput) []string {
+	classpath := []string{loaderPath}
+	for _, input := range inputs {
+		if strings.HasPrefix(input.Path, "libraries/") {
+			classpath = append(classpath, input.Path)
+		}
+	}
+	return classpath
 }
 
 // forgeArgsPath returns the UniX launch arguments file generated for the

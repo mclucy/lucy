@@ -301,6 +301,8 @@ func statusLockComponents(lock *documentpkg.Lock) []statusComponent {
 	switch lock.Server.Product {
 	case serverpkg.ProductFabric:
 		name, ecosystem = "fabric-loader", catalog.EcosystemFabric
+	case serverpkg.ProductQuilt:
+		name, ecosystem = "quilt-loader", catalog.EcosystemQuilt
 	case serverpkg.ProductForge:
 		name, ecosystem = "forge", catalog.EcosystemForge
 	case serverpkg.ProductNeoForge:
@@ -424,7 +426,8 @@ func statusLockPackageDirectories(
 	}
 	ecosystem := statusLockProductEcosystem(lock)
 	switch ecosystem {
-	case catalog.EcosystemFabric, catalog.EcosystemForge, catalog.EcosystemNeoForge,
+	case catalog.EcosystemFabric, catalog.EcosystemQuilt,
+		catalog.EcosystemForge, catalog.EcosystemNeoForge,
 		catalog.EcosystemBukkit, catalog.EcosystemPaper:
 		directory, err := lock.PackageDirectory(&documentpkg.Package{
 			Environment: serverpkg.EnvironmentServer,
@@ -499,13 +502,14 @@ func statusLockNativeEcosystems(lock *documentpkg.Lock) []workspace.ServedEcosys
 			})
 		}
 	}
-	return workspace.ProductServedEcosystems(
-		catalog.VersionedRef{
-			Name:    catalog.Name(lock.Server.Product.String()),
-			Version: lock.Server.CoreVersion,
-		},
-		components,
-	)
+	product := catalog.VersionedRef{
+		Name:    catalog.Name(lock.Server.Product.String()),
+		Version: lock.Server.CoreVersion,
+	}
+	if match, ok := serverpkg.NormalizeProduct(product); ok {
+		product.Ecosystem = match.Ecosystem
+	}
+	return workspace.ProductServedEcosystems(product, components)
 }
 
 func statusLockProductEcosystem(lock *documentpkg.Lock) catalog.Ecosystem {
