@@ -8,6 +8,7 @@ description: "Create a workspace from a server archive or modpack"
 ```bash
 lucy import ~/Downloads/server-pack.zip
 lucy import https://example.com/packs/all-the-mods.mrpack --directory mods
+lucy import modrinth:all-the-mods@1.2.0
 ```
 
 ## Supported sources
@@ -17,13 +18,29 @@ Import accepts two kinds of source:
 - A Modrinth modpack in `.mrpack` format. Import reads the declared Minecraft version and loader, installs that loader into the workspace, and records the modpack's server-side files.
 - A server directory packed as a `.zip` or `.tar.gz` archive. Import detects the server software the same way `lucy init` does.
 
-Sources are either a local path or a direct link to the archive. Relative local paths resolve against the current directory.
+Sources are a local path, a direct link to the archive, or a remote modpack reference described below. Relative local paths resolve against the current directory.
 
-Client packs, launcher instances, and remote identifiers such as project slugs are not supported yet.
+Client packs and launcher instances are not supported yet.
+
+## Remote modpacks
+
+Instead of a file, pass a modpack identifier or a modpack page URL. Lucy asks the provider which pack file the modpack publishes, downloads that file, and imports it the same way:
+
+- `modrinth:<slug>` or `https://modrinth.com/modpack/<slug>` imports a Modrinth modpack.
+- `curseforge:<slug-or-id>` or `https://www.curseforge.com/minecraft/modpacks/<slug>` imports a CurseForge modpack.
+
+Without a pin, import uses the newest pack the provider lists. Pin a version or file with `@` or with a version or file page:
+
+- `modrinth:all-the-mods@1.2.0` or `https://modrinth.com/modpack/all-the-mods/version/1.2.0` pins a Modrinth version, given by its version number or version ID.
+- `curseforge:all-the-mods@4567890` or `https://www.curseforge.com/minecraft/modpacks/all-the-mods/files/4567890` pins a CurseForge file, given by its numeric file ID.
+
+CurseForge requires an API key. Set `curseforge.api_key` in your lucy configuration (see [`lucy config`](/commands/config)). Without it, a CurseForge source fails before any file is written.
+
+Import checks the hashes the provider publishes for the pack, preferring SHA-512 over SHA-1. `--sha256` checks the same downloaded file. Other `http` and `https` links are downloaded directly, as described above.
 
 ## Choose the target directory
 
-By default, import uses the current directory when it is empty or does not exist. When the current directory has files in it, import creates a new directory named after the archive. For example, `All The Mods.mrpack` becomes `all-the-mods`.
+By default, import uses the current directory when it is empty or does not exist. When the current directory has files in it, import creates a new directory named after the archive. For example, `All The Mods.mrpack` becomes `all-the-mods`. For a remote modpack, the new directory is named after the project, so `modrinth:all-the-mods` becomes `all-the-mods`.
 
 Pass `--directory` to choose the target yourself. A relative path resolves against the current directory. Import never writes into a non-empty directory you name, and it fails rather than overwriting an existing workspace.
 

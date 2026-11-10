@@ -6,6 +6,7 @@ import (
 	"compress/gzip"
 	"context"
 	"errors"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -251,4 +252,96 @@ func asFormatError(err error, target **FormatError) bool {
 		err = unwrapper.Unwrap()
 	}
 	return false
+}
+
+// openTarTest opens path as a tar.gz archive with the given aggregate budget,
+// bypassing openArchive so a test can set a budget below the production limit.
+func openTarTest(t *testing.T, path string, budget int64) *archive {
+	t.Helper()
+	file, err := os.Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = file.Close() })
+	return &archive{path: path, container: containerTarGzip, file: file, budget: budget}
+}
+
+// writeRawTarGzip writes a tar.gz stream built by fn and leaves the tar stream
+// unterminated, so a header can declare a body the stream never carries.
+func writeRawTarGzip(t *testing.T, fn func(tw *tar.Writer)) string {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "source.tar.gz")
+	file, err := os.Create(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	gz := gzip.NewWriter(file)
+	fn(tar.NewWriter(gz))
+	if err := gz.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := file.Close(); err != nil {
+		t.Fatal(err)
+	}
+	return path
+}
+
+func TestTarScanStopsAtAggregateBudget(t *testing.T) {
+	const budget = 1 << 20
+	const bodySize = 600 << 10
+	path := writeRawTarGzip(t, func(tw *tar.Writer) {
+		if err := tw.WriteHeader(&tar.Header{Name: "a.jar", Mode: 0o644, Size: bodySize}); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := tw.Write([]byte(strings.Repeat("a", bodySize))); err != nil {
+			t.Fatal(err)
+		}
+		// b.jar declares a body the stream never carries. The budget must reject
+		// its header before the scan reads or drains that body.
+		if err := tw.WriteHeader(&tar.Header{Name: "b.jar", Mode: 0o644, Size: bodySize}); err != nil {
+			t.Fatal(err)
+		}
+	})
+	a := openTarTest(t, path, budget)
+	if err := a.scan(t.Context()); !errors.Is(err, ErrLimitExceeded) {
+		t.Fatalf("scan error = %v, want ErrLimitExceeded", err)
+	}
+}
+
+func TestTarScanRejectsOversizedDeclaredEntry(t *testing.T) {
+	path := writeRawTarGzip(t, func(tw *tar.Writer) {
+		if err := tw.WriteHeader(&tar.Header{Name: "huge.jar", Mode: 0o644, Size: maxFileBytes + 1}); err != nil {
+			t.Fatal(err)
+		}
+	})
+	a := openTarTest(t, path, maxExtractedBytes)
+	if err := a.scan(t.Context()); !errors.Is(err, ErrLimitExceeded) {
+		t.Fatalf("scan error = %v, want ErrLimitExceeded", err)
+	}
+}
+
+func TestTarScanHonorsContextCancellation(t *testing.T) {
+	path := writeTarball(t, map[string]string{"a.txt": "a", "b.txt": "b"})
+
+	cancelled, cancelNow := context.WithCancel(t.Context())
+	cancelNow()
+	if _, err := openArchive(cancelled, path); !errors.Is(err, context.Canceled) {
+		t.Fatalf("openArchive error = %v, want context.Canceled", err)
+	}
+
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	a := openTarTest(t, path, maxExtractedBytes)
+	calls := 0
+	err := a.visit(ctx, false, func(_ int, _ visited, _ io.Reader) error {
+		calls++
+		cancel()
+		return nil
+	})
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("visit error = %v, want context.Canceled", err)
+	}
+	if calls != 1 {
+		t.Fatalf("visit callbacks = %d, want 1 after cancellation", calls)
+	}
 }

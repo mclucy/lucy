@@ -62,7 +62,7 @@ func (s *Service) importSource(
 		resultErr = errors.Join(resultErr, closeErr)
 	}()
 
-	sourcePath, source, releaseSource, err := acquireImportSource(
+	sourcePath, source, releaseSource, err := s.resolveImportSource(
 		ctx,
 		opts.Source,
 		opts.SHA256,
@@ -436,64 +436,82 @@ func createImportParents(parent string) (func(), error) {
 	return rollback, nil
 }
 
-// importPublication records the staged tree renamed into the target. The
-// caller holds the stage's writer lock, which the rename moves into the
-// target, so a published workspace stays exclusively owned until registration
-// finishes.
+// importPublication records how publishImportStage moved the staged tree into
+// the target, so rollback can put it back. The caller holds the stage's writer
+// lock, which travels with the moved entries, so a published workspace stays
+// exclusively owned until registration finishes.
 type importPublication struct {
 	stage  string
 	target string
-	// existed records a pre-existing empty target directory that publication
-	// removed and rollback recreates.
-	existed bool
-	mode    os.FileMode
+	// inPlace records that target was an existing empty directory. Publication
+	// moved the stage's top-level entries into it, so rollback moves them back
+	// and leaves the directory itself, and its inode, in place.
+	inPlace bool
+	// moved lists the top-level entry names moved into target, in move order.
+	moved []string
 }
 
 func (p *importPublication) rollback() error {
 	if p == nil {
 		return nil
 	}
-	if err := os.Rename(p.target, p.stage); err != nil {
-		return err
+	if !p.inPlace {
+		return os.Rename(p.target, p.stage)
 	}
-	if !p.existed {
-		return nil
+	var errs []error
+	for i := len(p.moved) - 1; i >= 0; i-- {
+		name := p.moved[i]
+		if err := os.Rename(filepath.Join(p.target, name), filepath.Join(p.stage, name)); err != nil {
+			errs = append(errs, err)
+		}
 	}
-	return os.Mkdir(p.target, p.mode)
+	return errors.Join(errs...)
 }
 
-// publishImportStage publishes a staged tree into target by renaming it. The
-// target must be absent or an empty directory, rechecked after staging. The
-// caller must hold the stage's writer lock, because the rename carries that
-// lock into the target.
+// publishImportStage publishes a staged tree into target. An absent target is
+// created by renaming the stage into place. An existing empty directory is kept
+// and receives the stage's top-level entries, so its inode and the invoking
+// shell's working directory remain valid. The target must be absent or an empty
+// directory, rechecked after staging. The caller must hold the stage's writer
+// lock.
 func publishImportStage(stage, target string) (*importPublication, error) {
 	publication := &importPublication{stage: stage, target: target}
 	info, err := os.Lstat(target)
 	switch {
 	case errors.Is(err, os.ErrNotExist):
+		if err := os.Rename(stage, target); err != nil {
+			return nil, fmt.Errorf("publish import stage: %w", err)
+		}
+		return publication, nil
 	case err != nil:
 		return nil, fmt.Errorf("inspect import target: %w", err)
 	case !info.IsDir():
 		return nil, fmt.Errorf("import target is not a directory: %s", target)
-	default:
-		entries, err := os.ReadDir(target)
-		if err != nil {
-			return nil, fmt.Errorf("inspect import target: %w", err)
-		}
-		if len(entries) > 0 {
-			return nil, fmt.Errorf("import target is not empty: %s", target)
-		}
-		publication.existed = true
-		publication.mode = info.Mode().Perm()
-		if err := os.Remove(target); err != nil {
-			return nil, fmt.Errorf("remove empty import target: %w", err)
-		}
 	}
-	if err := os.Rename(stage, target); err != nil {
-		if publication.existed {
-			_ = os.Mkdir(target, publication.mode)
+	entries, err := os.ReadDir(target)
+	if err != nil {
+		return nil, fmt.Errorf("inspect import target: %w", err)
+	}
+	if len(entries) > 0 {
+		return nil, fmt.Errorf("import target is not empty: %s", target)
+	}
+	staged, err := os.ReadDir(stage)
+	if err != nil {
+		return nil, fmt.Errorf("read import stage: %w", err)
+	}
+	publication.inPlace = true
+	for _, entry := range staged {
+		name := entry.Name()
+		dst := filepath.Join(target, name)
+		if _, err := os.Lstat(dst); err == nil {
+			return nil, errors.Join(fmt.Errorf("import target gained entry: %s", dst), publication.rollback())
+		} else if !errors.Is(err, os.ErrNotExist) {
+			return nil, errors.Join(fmt.Errorf("inspect import target: %w", err), publication.rollback())
 		}
-		return nil, fmt.Errorf("publish import stage: %w", err)
+		if err := os.Rename(filepath.Join(stage, name), dst); err != nil {
+			return nil, errors.Join(fmt.Errorf("publish import stage: %w", err), publication.rollback())
+		}
+		publication.moved = append(publication.moved, name)
 	}
 	return publication, nil
 }

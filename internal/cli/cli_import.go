@@ -42,6 +42,18 @@ func NewImportCommand(
 		Use:   "import <source>",
 		Short: help.ImportShort,
 		Args:  cobra.ExactArgs(1),
+		Long: "Create a workspace from a server archive, a direct archive URL, or a " +
+			"modpack on Modrinth or CurseForge. Modpacks are named by identifier " +
+			"(modrinth:<slug>[@<version>], curseforge:<slug-or-id>[@<file-id>]) or by " +
+			"project page URL. CurseForge sources need a CurseForge API key in the " +
+			"curseforge.api_key setting.",
+		Example: "  lucy import ./server-pack.zip\n" +
+			"  lucy import https://example.com/packs/server.mrpack\n" +
+			"  lucy import modrinth:all-the-mods\n" +
+			"  lucy import modrinth:all-the-mods@1.2.0\n" +
+			"  lucy import https://modrinth.com/modpack/all-the-mods/version/1.2.0\n" +
+			"  lucy import curseforge:all-the-mods@4567890\n" +
+			"  lucy import https://www.curseforge.com/minecraft/modpacks/all-the-mods/files/4567890\n",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return actionImport(cmd, inv, deps, args[0])
 		},
@@ -107,7 +119,8 @@ func actionImport(
 }
 
 // importOptions turns the command line into operation options. Local sources
-// resolve against the invocation directory; URLs pass through unchanged.
+// resolve against the invocation directory; URLs and remote modpack references
+// (modrinth:, curseforge:, or project page URLs) pass through unchanged.
 func importOptions(
 	cmd *cobra.Command,
 	inv *Invocation,
@@ -117,7 +130,11 @@ func importOptions(
 	if source == "" {
 		return operation.ImportOptions{}, errors.New("source must not be empty")
 	}
-	if _, ok := importURL(source); !ok {
+	_, isRemote, err := operation.ParseRemoteImportSource(source)
+	if err != nil {
+		return operation.ImportOptions{}, err
+	}
+	if _, ok := importURL(source); !ok && !isRemote {
 		source = resolveInvocationPath(inv.Directory, source)
 	}
 	target, err := importTarget(
@@ -219,6 +236,9 @@ func importSlug(source string) (string, error) {
 }
 
 func importSourceBase(source string) string {
+	if remote, ok, err := operation.ParseRemoteImportSource(source); ok && err == nil {
+		return remote.Project
+	}
 	if parsed, ok := importURL(source); ok {
 		base := path.Base(parsed.Path)
 		if base == "/" || base == "." {

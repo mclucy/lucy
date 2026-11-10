@@ -102,3 +102,18 @@ func TestValidImportSHA256(t *testing.T) {
 		t.Fatal("non-hexadecimal characters accepted")
 	}
 }
+
+func TestImportSlugNamesRemoteModpackByProject(t *testing.T) {
+	tests := map[string]string{
+		"modrinth:all-the-mods@1.2.0":                                              "all-the-mods",
+		"curseforge:123456@4567890":                                                "123456",
+		"https://modrinth.com/modpack/all-the-mods/version/1.2.0":                  "all-the-mods",
+		"https://www.curseforge.com/minecraft/modpacks/all-the-mods/files/4567890": "all-the-mods",
+	}
+	for source, want := range tests {
+		got, err := importSlug(source)
+		if err != nil || got != want {
+			t.Fatalf("importSlug(%q) = %q, %v; want %q", source, got, err, want)
+		}
+	}
+}
