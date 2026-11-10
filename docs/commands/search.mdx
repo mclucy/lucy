@@ -16,7 +16,7 @@ lucy search worldedit --ecosystem fabric --sort downloads
 lucy search luckperms --ecosystem paper --registry hangar --long
 ```
 
-`--ecosystem` accepts `fabric`, `forge`, `neoforge`, `bukkit`, or `paper`; `--registry` accepts `modrinth`, `curseforge`, `hangar`, `spiget`, or `mcdr`. Sort by `relevance`, `downloads`, or `newest`. Add `--include-client` to include client-only mods.
+`--ecosystem` accepts `fabric`, `quilt`, `forge`, `neoforge`, `bukkit`, or `paper`; `--registry` accepts `modrinth`, `curseforge`, `hangar`, `spiget`, or `mcdr`. Sort by `relevance`, `downloads`, or `newest`. Add `--include-client` to include client-only mods.
 
 Use [`lucy info`](/commands/info) to inspect a result before adding it.
 
@@ -26,7 +26,7 @@ Each source has its own catalogue and reports different metadata. Lucy does not 
 
 | Source | Packages | Search filtering |
 |---|---|---|
-| `modrinth` | Fabric, Forge, NeoForge, Bukkit, and Paper mods and plugins | Loader and server-side facets applied upstream; `paper` has no Modrinth facet, so it searches every server-side loader |
+| `modrinth` | Fabric, Quilt, Forge, NeoForge, Bukkit, and Paper mods and plugins | Loader and server-side facets applied upstream; `paper` has no Modrinth facet, so it searches every server-side loader |
 | `curseforge` | Fabric, Forge, and NeoForge mods | Loader applied upstream; requires a configured API key |
 | `hangar` | Bukkit and Paper plugins | Paper filter applied upstream when one is requested |
 | `spiget` | Bukkit and Paper plugins | None; keyword search only |
@@ -51,7 +51,7 @@ Spiget is the SpigotMC resource API. Its identity is the numeric resource ID, fo
 </ParamField>
 
 <ParamField query="--ecosystem" type="string">
-  Filter results to a mod or plugin type. Accepted values: `fabric`, `forge`, `neoforge`, `bukkit`, `paper`. The filter also restricts which sources are queried: mod ecosystems select Modrinth and CurseForge when configured, while `bukkit` and `paper` select Modrinth, Hangar, and Spiget. Modrinth has no Paper facet, so `paper` leaves its results unfiltered beyond server-side packages.
+  Filter results to a mod or plugin type. Accepted values: `fabric`, `quilt`, `forge`, `neoforge`, `bukkit`, `paper`. The filter also restricts which sources are queried: mod ecosystems select Modrinth and CurseForge when configured, while `bukkit` and `paper` select Modrinth, Hangar, and Spiget. Modrinth has no Paper facet, so `paper` leaves its results unfiltered beyond server-side packages.
 </ParamField>
 
 <ParamField query="--registry, -s" type="string">

@@ -20,6 +20,7 @@ Lucy 为 Minecraft 服务器带来现代化的包管理体验。通过简单直�
 我们（正在努力）支持多种生态及其组合：
 
 - Fabric
+- Quilt
 - Forge
 - NeoForge
 - MCDReforged

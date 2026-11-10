@@ -21,9 +21,11 @@ Registration warns when another registered server already uses the name. Both se
 
 ## Choose versions
 
-`--core` takes the server software and optionally a version, for example `paper`, `paper@232`, `fabric@0.16.9`, or `purpur@latest`. Use `--core-version` instead of the `@version` suffix.
+`--core` takes the server software and optionally a version, for example `paper`, `paper@232`, `fabric@0.16.9`, `quilt@0.20.0`, or `purpur@latest`. Use `--core-version` instead of the `@version` suffix.
 
 `--minecraft` takes an exact release or snapshot ID, such as `1.21.4`. `latest` selects the newest version the chosen software supports. Minecraft and Fabric also accept `release` and `snapshot` for Mojang's newest channels. The manifest records the resolved ID.
+
+Quilt servers load both Quilt and Fabric mods. Fabric servers do not load Quilt mods.
 
 ## Prepare without installing
 
@@ -48,7 +50,7 @@ An existing `lucy.yaml` is never replaced silently: the interactive form asks fi
 </ParamField>
 
 <ParamField query="--core, -c" type="string">
-  Server software, optionally with a version, for example `paper@232` or `fabric@0.16.9`. Paper and Purpur are available here even though the interactive form does not list them.
+  Server software, optionally with a version, for example `paper@232`, `fabric@0.16.9`, or `quilt@0.20.0`. Paper and Purpur are available here even though the interactive form does not list them.
 </ParamField>
 
 <ParamField query="--core-version" type="string">
