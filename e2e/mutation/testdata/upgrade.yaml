@@ -1521,3 +1521,178 @@
     - "--policy"
     - "more"
     - "--dry-run"
+
+- id: smoke-upgrade-all-quilt-fabric-compat-1201
+  smoke: true
+  setup:
+    - install
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.20.1"
+      directory: server
+      core:
+        product: quilt
+        product_version: "0.23.1"
+      packages:
+        fabric:
+          modrinth:fabric-api: "0.91.0+1.20.1"
+          modrinth:lithium: "mc1.20.1-0.11.4-fabric"
+          modrinth:ferrite-core: "6.0.1"
+          modrinth:krypton: "0.2.3"
+          modrinth:servercore: "1.3.9+1.20.1"
+          modrinth:modernfix: "5.20.0+mc1.20.1"
+          modrinth:chunky: "1.3.146"
+          modrinth:spark: "1.10.53-fabric"
+          modrinth:carpet: "1.4.112"
+          modrinth:simple-voice-chat: "fabric-1.20.1-2.6.27"
+  args:
+    - "--policy"
+    - "more"
+    - "--dry-run"
+
+- id: upgrade-all-quilt-native-libraries-1201
+  setup:
+    - install
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.20.1"
+      directory: server
+      core:
+        product: quilt
+        product_version: "0.23.1"
+      packages:
+        quilt:
+          modrinth:qsl: "7.1.2+0.87.0-1.20.1"
+          modrinth:lithium: "mc1.20.1-0.11.4-fabric"
+          modrinth:ferrite-core: "6.0.1"
+          modrinth:architectury-api: "9.2.14+fabric"
+          modrinth:geckolib: "4.2.3"
+          modrinth:terrablender: "3.0.1.11"
+          modrinth:patchouli: "1.20.1-85-fabric"
+          modrinth:universal-graves: "3.0.3+1.20.1"
+          modrinth:friends-and-foes: "fabric-mc1.20.1-3.0.9"
+          modrinth:the-bumblezone-fabric: "7.5.3+1.20.1-quilt"
+        fabric:
+          modrinth:simple-voice-chat: "fabric-1.20.1-2.6.27"
+  args:
+    - "--policy"
+    - "later"
+    - "--dry-run"
+
+- id: upgrade-all-quilt-alpha-libraries-1204
+  setup:
+    - install
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.20.4"
+      directory: server
+      core:
+        product: quilt
+        product_version: "0.29.1"
+      packages:
+        quilt:
+          modrinth:qsl: "9.0.0-alpha.7+0.96.11-1.20.4"
+          modrinth:qkl: "4.0.0+kt.1.9.23+flk.1.10.19"
+        fabric:
+          modrinth:lithium: "mc1.20.4-0.12.1"
+          modrinth:ferrite-core: "6.0.3-fabric"
+          modrinth:krypton: "0.2.5"
+          modrinth:modernfix: "5.17.0+mc1.20.4"
+          modrinth:chunky: "1.3.146"
+          modrinth:carpet: "1.4.128"
+          modrinth:simple-voice-chat: "fabric-1.20.4-2.5.22"
+          modrinth:c2me-fabric: "0.2.0+alpha.11.72+1.20.4"
+          modrinth:vmp-fabric: "0.2.0+beta.7.139+1.20.4"
+          modrinth:packet-fixer: "3.3.2"
+          modrinth:chunkyborder: "1.1.63"
+  args:
+    - "--policy"
+    - "options"
+    - "--dry-run"
+
+- id: upgrade-all-quilt-fabric-compat-json-1211
+  setup:
+    - install
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.21.1"
+      directory: server
+      core:
+        product: quilt
+        product_version: "0.29.1"
+      packages:
+        fabric:
+          modrinth:fabric-api: "0.116.17+1.21.1"
+          modrinth:lithium: "mc1.21.1-0.15.4-fabric"
+          modrinth:ferrite-core: "7.0.3-fabric"
+          modrinth:krypton: "0.2.8"
+          modrinth:servercore: "1.5.19+1.21.1"
+          modrinth:modernfix: "5.25.1+mc1.21.1"
+          modrinth:chunky: "1.4.23"
+          modrinth:spark: "1.10.109-fabric"
+          modrinth:carpet: "1.4.147"
+          modrinth:ledger: "1.3.5"
+  args:
+    - "--json"
+    - "--dry-run"
+
+- id: upgrade-all-quilt-options-frontier-1214
+  setup:
+    - install
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.21.4"
+      directory: server
+      core:
+        product: quilt
+        product_version: "0.29.1"
+      packages:
+        fabric:
+          modrinth:fabric-api: "0.119.4+1.21.4"
+          modrinth:lithium: "mc1.21.4-0.15.3-fabric"
+          modrinth:ferrite-core: "7.1.3-fabric"
+          modrinth:krypton: "0.2.8"
+          modrinth:servercore: "1.5.8+1.21.4"
+          modrinth:modernfix: "5.20.3+mc1.21.4"
+          modrinth:chunky: "1.4.27"
+          modrinth:spark: "1.10.121-fabric"
+          modrinth:carpet: "1.4.161"
+          modrinth:simple-voice-chat: "fabric-1.21.4-2.6.27"
+  args:
+    - "--json-compact"
+    - "--policy"
+    - "options"
+    - "--dry-run"
+
+- id: upgrade-all-quilt-apply-policy-later-1201
+  setup:
+    - install
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.20.1"
+      directory: server
+      core:
+        product: quilt
+        product_version: "0.23.1"
+      packages:
+        fabric:
+          modrinth:fabric-api: "0.90.7+1.20.1"
+          modrinth:lithium: "mc1.20.1-0.11.3-fabric"
+          modrinth:ferrite-core: "6.0.0-fabric"
+          modrinth:krypton: "0.2.3"
+          modrinth:servercore: "1.3.7+1.20.1"
+          modrinth:modernfix: "5.19.7+mc1.20.1"
+          modrinth:chunky: "1.3.138"
+          modrinth:spark: "1.10.42-fabric"
+          modrinth:carpet: "1.4.112"
+          modrinth:simple-voice-chat: "fabric-1.20.1-2.6.26"
+  args:
+    - "--policy"
+    - "later"
+    - "--no-interactive"
