@@ -13,17 +13,26 @@ import (
 
 // clientOnlyIdentities collects module identities that only client-only
 // declarations answer. A loader filters those candidates out of a dedicated
-// server, so requirements they alone would answer are not failures.
+// server, so requirements they alone would answer are not failures. Each
+// identity is scoped like module resolution, by the environment and ecosystem
+// of the declaring package, so it exempts only requirements in that namespace.
 func clientOnlyIdentities(
 	packages []document.Package,
 	target Target,
-) map[string]struct{} {
-	identities := map[string]struct{}{}
-	add := func(ecosystem catalog.Ecosystem, names []string) {
-		for _, name := range names {
-			key := normalizeModuleID(ecosystem, name)
-			if key != "" {
-				identities[key] = struct{}{}
+) map[moduleKey]struct{} {
+	identities := map[moduleKey]struct{}{}
+	add := func(
+		environment serverpkg.Environment,
+		module catalog.DescriptorModule,
+	) {
+		for _, name := range module.ClientOnly {
+			id := normalizeModuleID(module.Ecosystem, name)
+			if id != "" {
+				identities[moduleKey{
+					environment,
+					moduleEcosystem(target, module.Ecosystem),
+					id,
+				}] = struct{}{}
 			}
 		}
 	}
@@ -33,11 +42,11 @@ func clientOnlyIdentities(
 			continue
 		}
 		for _, module := range p.Modules {
-			add(module.Ecosystem, module.ClientOnly)
+			add(p.Environment, module)
 		}
 	}
 	for _, module := range target.CoreModules {
-		add(module.Ecosystem, module.ClientOnly)
+		add(serverpkg.EnvironmentServer, module)
 	}
 	return identities
 }
@@ -516,7 +525,7 @@ func checkModuleDependencies(
 	target Target,
 	index map[moduleKey]moduleProvider,
 	runtime map[string]catalog.DescriptorModule,
-	clientOnly map[string]struct{},
+	clientOnly map[moduleKey]struct{},
 ) []ModuleProblem {
 	var problems []ModuleProblem
 	for di := range m.Dependencies {
@@ -775,7 +784,7 @@ func matchModuleDependency(
 	dialect versionpkg.Dialect,
 	index map[moduleKey]moduleProvider,
 	runtime map[string]catalog.DescriptorModule,
-	clientOnly map[string]struct{},
+	clientOnly map[moduleKey]struct{},
 ) (moduleRequirement, error) {
 	alternatives := make(
 		[]*catalog.DescriptorDependency,
@@ -854,10 +863,11 @@ func matchModuleDependency(
 		}
 		if owner == nil && value == "" &&
 			dep.Kind != catalog.DependencyKindIncompatible {
-			if _, ok := clientOnly[normalizeModuleID(
-				ecosystem,
-				alternative.ID,
-			)]; ok {
+			if _, ok := clientOnly[moduleKey{
+				environment,
+				moduleEcosystem(target, ecosystem),
+				normalizeModuleID(ecosystem, alternative.ID),
+			}]; ok {
 				// The only candidate is client-only, so the loader filters it
 				// out of a dedicated server instead of failing the dependency.
 				outcome.matched = true
