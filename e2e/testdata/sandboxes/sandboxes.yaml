@@ -452,6 +452,18 @@ sandboxes:
         fabric_meta: { game: "1.21.1", loader: "0.19.5", installer: "1.1.2" }
         sha256: 809d99b16dd4d4b57384d128724ab0d6560f859aaba989dc6750d8437a447ed0
 
+  - id: quilt-modpack-1201
+    family: quilt
+    game_version: "1.20.1"
+    description: Quilt Minims 1.0.0 server files; the pack declares quilt-loader 0.20.0
+    docs: [docs/quilt.md, docs/modpacks.md]
+    dirs: [mods]
+    artifacts:
+      - dest: pack.mrpack
+        url: https://cdn.modrinth.com/data/rAxX6GHY/versions/61CSDwBE/Quilt%20Minims.mrpack
+        sha256: 888f7207d5df3e3bb2fece7f1fe3f82aa93f2b6284fb7f4f35d051e936826c1d
+        modpack: true
+
   - id: create-plus-1211
     family: modpack
     game_version: "1.21.1"

@@ -6,11 +6,15 @@ const (
 	cobblemon1211        = "cobblemon-1211"
 	fabricExecutable262  = "fabric-executable-262"
 	fabricExecutable1214 = "fabric-executable-1214"
+	quiltModpack1201     = "quilt-modpack-1201"
 	vanilla1201          = "vanilla-1201"
 
 	cobblemon1211Launcher = "fabric-server-mc.1.21.1-loader.0.19.5-launcher.1.1.2.jar"
 	fabric262Launcher     = "fabric-server-mc.26.2-loader.0.19.3-launcher.1.1.2.jar"
 	fabric1214Launcher    = "fabric-server-mc.1.21.4-loader.0.16.9-launcher.1.0.1.jar"
+	fabricShim            = "fabric-server-launch.jar"
+	quiltLauncher         = "quilt-server-launch.jar"
+	quiltLauncherProps    = "quilt-server-launcher.properties"
 	paperJar              = "paper-1.21.11-130.jar"
 )
 
@@ -121,6 +125,22 @@ var installationOutputPaths = []string{
 	".fabric",
 }
 
+// quiltInstallationOutputPaths are the files the Quilt adapter owns. They are
+// removed before a composition case prepares its own runtime, so a reused
+// sandbox never supplies runtime identity that the case did not generate.
+var quiltInstallationOutputPaths = []string{
+	".lucy/install.yaml",
+	".lucy/writer.lock",
+	"lucy.yaml",
+	"lucy-lock.yaml",
+	quiltLauncher,
+	quiltLauncherProps,
+	"libraries",
+	"server.jar",
+	"versions",
+	"cache",
+}
+
 // runtimeInstallPreparation declares a core-only runtime and installs it, so
 // the case exercises the launcher seam without adopting the fixture's mods.
 func runtimeInstallPreparation(minecraft, core string) []initializeCommand {
@@ -212,6 +232,70 @@ var initializeScenarios = map[string]initializeScenario{
 			components: map[string]string{
 				"minecraft:minecraft":  "1.21.1",
 				"fabric:fabric-loader": "0.19.5",
+			},
+		},
+	},
+
+	// A real Quilt modpack whose index declares quilt-loader 0.20.0. The case
+	// installs that exact loader into the materialized pack, deletes the
+	// declaration and receipt, then proves init recovers the Quilt identity and
+	// translates the pack's server-side mods without disturbing the pack files.
+	// The pinned pack has 26 mods; 12 declare server_side unsupported in the
+	// Modrinth catalogue and the artifact readers omit their client-only
+	// descriptors, so exactly 14 server-deployable packages remain.
+	"quilt-modpack-1201": {
+		sandbox:      quiltModpack1201,
+		prune:        quiltInstallationOutputPaths,
+		prepare:      runtimeInstallPreparation("1.20.1", "quilt@0.20.0"),
+		removeBefore: []string{"lucy.yaml", "lucy-lock.yaml", ".lucy"},
+		minecraft:    "1.20.1", product: "quilt", coreVersion: "0.20.0",
+		minPackages: 14,
+		packages: map[string]map[string]string{
+			"fabric": {
+				"modrinth:lithium":   "mc1.20.1-0.11.2",
+				"modrinth:modernfix": "5.7.1+mc1.20.1",
+			},
+			"quilt": {
+				"modrinth:qsl": "7.1.2+0.87.0-1.20.1",
+			},
+		},
+		absent: map[string][]string{
+			"fabric": {
+				"modrinth:betterf3",
+				"modrinth:dashloader",
+				"modrinth:dynamic-fps",
+				"modrinth:entityculling",
+				"modrinth:hold-that-chunk",
+				"modrinth:indium",
+				"modrinth:language-reload",
+				"modrinth:ok-zoomer",
+				"modrinth:reeses-sodium-options",
+				"modrinth:rrls",
+				"modrinth:sodium",
+				"modrinth:sodium-extra",
+			},
+			"quilt": {
+				"modrinth:betterf3",
+				"modrinth:dashloader",
+				"modrinth:dynamic-fps",
+				"modrinth:entityculling",
+				"modrinth:hold-that-chunk",
+				"modrinth:indium",
+				"modrinth:language-reload",
+				"modrinth:ok-zoomer",
+				"modrinth:reeses-sodium-options",
+				"modrinth:rrls",
+				"modrinth:sodium",
+				"modrinth:sodium-extra",
+			},
+		},
+		wantReceipt: true,
+		unchanged:   []string{"mods/lithium-fabric-mc1.20.1-0.11.2.jar"},
+		status: &statusExpectation{
+			ecosystem: "quilt", name: "quilt", version: "0.20.0",
+			path: quiltLauncher,
+			components: map[string]string{
+				"minecraft:minecraft": "1.20.1",
 			},
 		},
 	},
