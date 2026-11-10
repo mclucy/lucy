@@ -12,6 +12,7 @@ import (
 const (
 	minecraftGameId = 432
 	modsClassId     = 6
+	modpacksClassId = 4471
 )
 
 // curseForgeLoaderTypes maps a lucy ecosystem to the CurseForge ModLoaderType
@@ -78,11 +79,17 @@ func searchUrlForLoader(query catalog.Name, loader int) string {
 	return baseUrl + "/v1/mods/search?" + params.Encode()
 }
 
-// slugSearchUrl builds a slug lookup: https://docs.curseforge.com/rest-api/#search-mods.
+// slugSearchUrl builds a mod slug lookup: https://docs.curseforge.com/rest-api/#search-mods.
 func slugSearchUrl(slug catalog.Name) string {
+	return slugSearchUrlForClass(slug, modsClassId)
+}
+
+// slugSearchUrlForClass builds a slug lookup constrained to one CurseForge
+// class: https://docs.curseforge.com/rest-api/#search-mods.
+func slugSearchUrlForClass(slug catalog.Name, classId int) string {
 	params := url.Values{}
 	params.Set("gameId", fmt.Sprintf("%d", minecraftGameId))
-	params.Set("classId", fmt.Sprintf("%d", modsClassId))
+	params.Set("classId", fmt.Sprintf("%d", classId))
 	params.Set("slug", string(slug))
 	params.Set("pageSize", "50")
 	return baseUrl + "/v1/mods/search?" + params.Encode()
