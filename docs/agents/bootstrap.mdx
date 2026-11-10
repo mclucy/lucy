@@ -16,9 +16,10 @@ Server preparation operates in an installation staging tree. It copies or extrac
 | Empty | Copy the core artifact as `server.jar`. |
 | `paperclip` | Copy the core as `server.jar` and run Paperclip in patch-only mode. |
 | `fabric` | Place the loader in the library layout and generate launch scripts, a launcher shim, and launcher properties from the locked classpath. |
+| `quilt` | Place the loader in the library layout and generate the Quilt launcher JAR and launcher properties from the locked classpath. |
 | `forge-installer` | Read the installer's server profile and execute its processors using the locked inputs. |
 
-Paperclip and installer processors execute Java during staging. A missing Java runtime is therefore a bootstrap error even though a Java version mismatch alone is a warning. Processor outputs with expected hashes are checked. The Fabric adapter generates launcher files; it does not simply rename the downloaded loader JAR.
+Paperclip and installer processors execute Java during staging. A missing Java runtime is therefore a bootstrap error even though a Java version mismatch alone is a warning. Processor outputs with expected hashes are checked. The Fabric and Quilt adapters generate launcher files; they do not simply rename the downloaded loader JAR.
 
 Shim-era Forge installers write a version-named shim at the server root, and the generated `run.sh` runs it for its Java check. Installation admits that file only when `run.sh`, after blank and comment lines are removed, consists of exactly the shim's Java check followed by the Forge launch command, and when the root copy byte-matches the canonical version-qualified shim under `libraries/`, which must open as a JAR whose manifest names the Forge shim main class. The canonical copy is unpinned, so this is adoption evidence like generated outputs rather than cryptographic proof. A named root shim that fails these checks is an error, never silently left unclaimed.
 
