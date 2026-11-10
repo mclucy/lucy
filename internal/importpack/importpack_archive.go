@@ -45,6 +45,8 @@ type archive struct {
 	file      *os.File
 	zip       *zip.Reader
 	entries   []entry
+	// budget bounds the body bytes a tar scan may drain before it rejects.
+	budget int64
 }
 
 // entry is one file or directory of a source. name keeps any wrapper
@@ -96,7 +98,7 @@ func inspect(ctx context.Context, path string) (*Plan, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	a, err := openArchive(path)
+	a, err := openArchive(ctx, path)
 	if err != nil {
 		return nil, err
 	}
@@ -117,7 +119,7 @@ func materialize(
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	a, err := openArchive(path)
+	a, err := openArchive(ctx, path)
 	if err != nil {
 		return nil, err
 	}
@@ -148,10 +150,10 @@ func materialize(
 
 // openArchive checks the extension, the content signature, and the source size
 // before scanning entries. The caller must close the returned archive's file.
-func openArchive(path string) (*archive, error) {
+func openArchive(ctx context.Context, path string) (*archive, error) {
 	base := filepath.Base(path)
 	lower := strings.ToLower(base)
-	a := &archive{path: path}
+	a := &archive{path: path, budget: maxExtractedBytes}
 	var suffix string
 	switch {
 	case strings.HasSuffix(lower, ".tar.gz"):
@@ -174,13 +176,13 @@ func openArchive(path string) (*archive, error) {
 		return nil, err
 	}
 	a.file = file
-	if err := a.open(); err != nil {
+	if err := a.open(ctx); err != nil {
 		return nil, errors.Join(err, file.Close())
 	}
 	return a, nil
 }
 
-func (a *archive) open() error {
+func (a *archive) open(ctx context.Context) error {
 	info, err := a.file.Stat()
 	if err != nil {
 		return err
@@ -217,7 +219,7 @@ func (a *archive) open() error {
 		}
 		a.zip = reader
 	}
-	return a.scan()
+	return a.scan(ctx)
 }
 
 func (a *archive) matchesMagic(magic []byte) bool {
@@ -232,9 +234,9 @@ func (a *archive) matchesMagic(magic []byte) bool {
 }
 
 // scan validates every entry name and removes a single wrapper directory.
-func (a *archive) scan() error {
+func (a *archive) scan(ctx context.Context) error {
 	var raw []entry
-	err := a.visit(false, func(ordinal int, v visited, _ io.Reader) error {
+	err := a.visit(ctx, false, func(ordinal int, v visited, _ io.Reader) error {
 		name, err := normalizeEntryName(v.name)
 		if err != nil {
 			return fmt.Errorf("entry %q: %w", v.name, err)
@@ -342,15 +344,18 @@ func stripWrapper(name, wrapper string) string {
 
 // visit calls fn for every entry in container order. Bodies are readable only
 // while fn runs, and only when read is true.
-func (a *archive) visit(read bool, fn visitFunc) error {
+func (a *archive) visit(ctx context.Context, read bool, fn visitFunc) error {
 	if a.zip != nil {
-		return a.visitZip(read, fn)
+		return a.visitZip(ctx, read, fn)
 	}
-	return a.visitTar(read, fn)
+	return a.visitTar(ctx, read, fn)
 }
 
-func (a *archive) visitZip(read bool, fn visitFunc) error {
+func (a *archive) visitZip(ctx context.Context, read bool, fn visitFunc) error {
 	for i, f := range a.zip.File {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		if i >= maxEntries {
 			return limitError("archive has more than %d entries", maxEntries)
 		}
@@ -398,18 +403,25 @@ func visitZipBody(f *zip.File, ordinal int, v visited, fn visitFunc) error {
 	return errors.Join(fnErr, r.Close())
 }
 
-func (a *archive) visitTar(read bool, fn visitFunc) error {
+func (a *archive) visitTar(ctx context.Context, read bool, fn visitFunc) error {
 	if _, err := a.file.Seek(0, io.SeekStart); err != nil {
 		return err
 	}
-	gz, err := gzip.NewReader(a.file)
+	gz, err := gzip.NewReader(ctxReader{ctx: ctx, r: a.file})
 	if err != nil {
 		return fmt.Errorf("read gzip stream: %w", err)
 	}
 	defer gz.Close()
 	tr := tar.NewReader(gz)
 	ordinal := 0
+	// declared sums regular-file header sizes. It is checked after each header
+	// and before tr.Next drains that entry's body, so the scan drains at most
+	// budget bytes of bodies.
+	var declared int64
 	for {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		hdr, err := tr.Next()
 		if errors.Is(err, io.EOF) {
 			return nil
@@ -430,6 +442,14 @@ func (a *archive) visitTar(read bool, fn visitFunc) error {
 					hdr.Name,
 					hdr.Size,
 					maxFileBytes,
+				)
+			}
+			declared += hdr.Size
+			if declared > a.budget {
+				return limitError(
+					"%s declares more than %d extracted bytes",
+					a.path,
+					a.budget,
 				)
 			}
 			v.size = hdr.Size
@@ -457,6 +477,20 @@ func (a *archive) visitTar(read bool, fn visitFunc) error {
 	}
 }
 
+// ctxReader fails each read once ctx is done, so decompression stops at the
+// next read after cancellation.
+type ctxReader struct {
+	ctx context.Context
+	r   io.Reader
+}
+
+func (c ctxReader) Read(p []byte) (int, error) {
+	if err := c.ctx.Err(); err != nil {
+		return 0, err
+	}
+	return c.r.Read(p)
+}
+
 // readEntry returns the body of a zip entry no larger than limit.
 func (a *archive) readEntry(e entry, limit int64) ([]byte, error) {
 	if a.zip == nil {
@@ -475,9 +509,9 @@ func (a *archive) readEntry(e entry, limit int64) ([]byte, error) {
 }
 
 // extract streams the bodies of the wanted entries to write, in container order.
-func (a *archive) extract(wanted map[int]*item, write func(*item, io.Reader) error) error {
+func (a *archive) extract(ctx context.Context, wanted map[int]*item, write func(*item, io.Reader) error) error {
 	found := 0
-	err := a.visit(true, func(ordinal int, _ visited, body io.Reader) error {
+	err := a.visit(ctx, true, func(ordinal int, _ visited, body io.Reader) error {
 		it, ok := wanted[ordinal]
 		if !ok {
 			return nil
@@ -786,7 +820,7 @@ func (m *materializer) run(a *archive, lay *layout) error {
 			return err
 		}
 	}
-	return a.extract(wanted, m.writeFile)
+	return a.extract(m.ctx, wanted, m.writeFile)
 }
 
 func (m *materializer) ensureDir(rel string) error {
