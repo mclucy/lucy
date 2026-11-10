@@ -48,15 +48,28 @@ func (p *Provider) Search(
 	q upstream.Query,
 ) (upstream.SearchResponse, error) {
 	// CurseForge exposes no client/server search facet; IncludeClient cannot
-	// be applied upstream and is left to post-filtering.
-	u := searchUrl(catalog.Name(q.Keyword), q.FilterEcosystem)
-	p.logger.Debug("searching via curseforge api: " + u)
+	// be applied upstream and is left to post-filtering. An ecosystem that
+	// accepts more than one loader (Quilt accepts Fabric) needs one request
+	// per loader filter, merged by project identity.
+	search := searchResponse{}
+	seen := make(map[int32]bool)
+	for _, loaderType := range modLoaderTypes(q.FilterEcosystem) {
+		u := searchUrlForLoader(catalog.Name(q.Keyword), loaderType)
+		p.logger.Debug("searching via curseforge api: " + u)
 
-	resp := &searchResponse{}
-	if err := p.get(ctx, u, resp); err != nil {
-		return upstream.SearchResponse{}, err
+		var resp searchResponse
+		if err := p.get(ctx, u, &resp); err != nil {
+			return upstream.SearchResponse{}, err
+		}
+		for _, mod := range resp.Data {
+			if seen[mod.ID] {
+				continue
+			}
+			seen[mod.ID] = true
+			search.Data = append(search.Data, mod)
+		}
 	}
-	return resp.ToSearchResults(p.Provider()), nil
+	return search.ToSearchResults(p.Provider()), nil
 }
 
 func (p *Provider) Info(

@@ -238,6 +238,11 @@ func (i Identity) Ecosystem() catalog.Ecosystem {
 			i.Primary.Ecosystem == catalog.EcosystemUnspecified {
 			return catalog.EcosystemNeoForge
 		}
+	case name == "quilt" || name == "quilt-loader":
+		if i.Primary.Ecosystem == catalog.EcosystemQuilt ||
+			i.Primary.Ecosystem == catalog.EcosystemUnspecified {
+			return catalog.EcosystemQuilt
+		}
 	}
 	for _, component := range i.Components {
 		name := strings.ToLower(component.Name.String())
@@ -245,6 +250,9 @@ func (i Identity) Ecosystem() catalog.Ecosystem {
 		case component.Ecosystem == catalog.EcosystemFabric &&
 			(name == "fabric-loader" || name == "fabricloader"):
 			return catalog.EcosystemFabric
+		case component.Ecosystem == catalog.EcosystemQuilt &&
+			(name == "quilt-loader" || name == "quiltloader"):
+			return catalog.EcosystemQuilt
 		case component.Ecosystem == catalog.EcosystemForge && name == "forge":
 			return catalog.EcosystemForge
 		case component.Ecosystem == catalog.EcosystemNeoForge && name == "neoforge":
@@ -364,6 +372,13 @@ func canonicalComponent(ref catalog.VersionedRef) (catalog.VersionedRef, bool) {
 		}
 	case catalog.EcosystemNeoForge:
 		if name != "neoforge" {
+			return catalog.VersionedRef{}, false
+		}
+	case catalog.EcosystemQuilt:
+		switch name {
+		case "quilt", "quilt-loader", "quiltloader":
+			name = "quilt-loader"
+		default:
 			return catalog.VersionedRef{}, false
 		}
 	default:

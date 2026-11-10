@@ -338,6 +338,7 @@ func (a *packageAdopter) warn(format string, args ...any) {
 func supportsModrinthPackages(ecosystem catalog.Ecosystem) bool {
 	switch ecosystem {
 	case catalog.EcosystemFabric,
+		catalog.EcosystemQuilt,
 		catalog.EcosystemForge,
 		catalog.EcosystemNeoForge,
 		catalog.EcosystemBukkit,

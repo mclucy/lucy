@@ -40,12 +40,20 @@ func (p *Provider) getVersionById(
 	return
 }
 
+// versionSupportsLoader reports whether a server in loader can load the
+// version. The requested server ecosystem is the capability, so a superset
+// accepts its base loader: Quilt accepts Fabric builds and Paper accepts
+// Bukkit plugins, never the reverse. An unspecified request accepts any
+// loader tag.
 func versionSupportsLoader(
 	version *versionResponse,
 	loader catalog.Ecosystem,
 ) bool {
+	if loader == catalog.EcosystemUnspecified {
+		return true
+	}
 	for _, l := range version.Loaders {
-		if catalog.Ecosystem(l).Satisfy(loader) {
+		if loader.Satisfy(catalog.Ecosystem(l)) {
 			return true
 		}
 	}

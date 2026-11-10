@@ -73,7 +73,7 @@ func NewCommand(
 	searchCmd.Flags().String(
 		flagEcosystemName,
 		"",
-		"Filter results by ecosystem (fabric, forge, neoforge, bukkit, paper)",
+		"Filter results by ecosystem (fabric, quilt, forge, neoforge, bukkit, paper)",
 	)
 	searchCmd.Flags().StringP(
 		flagRegistryName,

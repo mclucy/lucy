@@ -155,6 +155,8 @@ func platformFromCurseForgeModLoader(loader int32) catalog.Ecosystem {
 		return catalog.EcosystemForge
 	case 4:
 		return catalog.EcosystemFabric
+	case 5:
+		return catalog.EcosystemQuilt
 	case 6:
 		return catalog.EcosystemNeoForge
 	default:

@@ -189,6 +189,7 @@ func (m *Manifest) Normalize() error {
 	for ecosystem, packages := range m.Server.Packages {
 		switch ecosystem {
 		case catalog.EcosystemFabric,
+			catalog.EcosystemQuilt,
 			catalog.EcosystemForge,
 			catalog.EcosystemNeoForge,
 			catalog.EcosystemBukkit,

@@ -84,7 +84,7 @@ func ReadInfo(filePath string) ([]PackageInfo, error) {
 //
 //	proxyFamily  – velocity, bungeecord
 //	serverFamily – bukkit, paper
-//	modFamily    – fabric, forge, neoforge
+//	modFamily    – fabric, quilt, forge, neoforge
 //
 // Artifacts whose ecosystem is catalog.EcosystemUnspecified are excluded from
 // the conflict check.
@@ -96,7 +96,10 @@ func jarEcosystemsConflict(infos []PackageInfo) bool {
 			hasProxy = true
 		case catalog.EcosystemBukkit, catalog.EcosystemPaper:
 			hasServer = true
-		case catalog.EcosystemFabric, catalog.EcosystemForge, catalog.EcosystemNeoForge:
+		case catalog.EcosystemFabric,
+			catalog.EcosystemQuilt,
+			catalog.EcosystemForge,
+			catalog.EcosystemNeoForge:
 			hasMod = true
 		}
 	}

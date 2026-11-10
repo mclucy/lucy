@@ -255,6 +255,12 @@ func RuntimeComponents(
 			Name:      "fabric-loader",
 			Version:   primary.Version,
 		})
+	case "quilt", "quilt-loader":
+		components = ensureRuntimeComponent(components, catalog.VersionedRef{
+			Ecosystem: catalog.EcosystemQuilt,
+			Name:      "quilt-loader",
+			Version:   primary.Version,
+		})
 	case "forge":
 		components = ensureRuntimeComponent(components, catalog.VersionedRef{
 			Ecosystem: catalog.EcosystemForge,

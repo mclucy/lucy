@@ -15,6 +15,7 @@ const (
 
 	ProductMinecraft        Product = "minecraft"
 	ProductFabric           Product = "fabric"
+	ProductQuilt            Product = "quilt"
 	ProductForge            Product = "forge"
 	ProductNeoForge         Product = "neoforge"
 	ProductMCDReforged      Product = "mcdreforged"
@@ -48,6 +49,8 @@ func (p Product) Title() string {
 		return "Minecraft"
 	case ProductFabric:
 		return "Fabric"
+	case ProductQuilt:
+		return "Quilt"
 	case ProductForge:
 		return "Forge"
 	case ProductNeoForge:
@@ -135,6 +138,16 @@ var productDefinitions = []productDefinition{
 			{"fabric-loader", catalog.EcosystemUnspecified},
 			{"fabric", catalog.EcosystemFabric},
 			{"fabric-loader", catalog.EcosystemFabric},
+		},
+	},
+	{
+		Product:   ProductQuilt,
+		Ecosystem: catalog.EcosystemQuilt,
+		Aliases: []productAlias{
+			{"quilt", catalog.EcosystemUnspecified},
+			{"quilt-loader", catalog.EcosystemUnspecified},
+			{"quilt", catalog.EcosystemQuilt},
+			{"quilt-loader", catalog.EcosystemQuilt},
 		},
 	},
 	{

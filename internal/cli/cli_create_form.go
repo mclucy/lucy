@@ -225,6 +225,7 @@ func createProductOptions(selected string) []huh.Option[string] {
 	options := []huh.Option[string]{
 		huh.NewOption("Minecraft (vanilla)", createProductMinecraft),
 		huh.NewOption("Fabric", string(serverpkg.ProductFabric)),
+		huh.NewOption("Quilt", string(serverpkg.ProductQuilt)),
 		huh.NewOption("Forge", string(serverpkg.ProductForge)),
 		huh.NewOption("NeoForge", string(serverpkg.ProductNeoForge)),
 	}
@@ -259,6 +260,8 @@ func createCoreVersionDescription(product string) string {
 		return "Purpur build number, latest, or any."
 	case string(serverpkg.ProductFabric):
 		return "Fabric loader version such as 0.16.9, or any for the latest."
+	case string(serverpkg.ProductQuilt):
+		return "Quilt loader version such as 0.27.1, or any for the latest."
 	case string(serverpkg.ProductForge):
 		return "Forge version such as 47.3.0, or any for the latest."
 	case string(serverpkg.ProductNeoForge):
@@ -276,6 +279,8 @@ func createCoreVersionPlaceholder(product string) string {
 		return "latest"
 	case string(serverpkg.ProductFabric):
 		return "0.16.9"
+	case string(serverpkg.ProductQuilt):
+		return "0.27.1"
 	case string(serverpkg.ProductForge):
 		return "47.3.0"
 	case string(serverpkg.ProductNeoForge):

@@ -21,6 +21,8 @@ func modLoaderType(p catalog.Ecosystem) int {
 		return 1
 	case catalog.EcosystemFabric:
 		return 4
+	case catalog.EcosystemQuilt:
+		return 5
 	case catalog.EcosystemNeoForge:
 		return 6
 	default:
@@ -28,11 +30,28 @@ func modLoaderType(p catalog.Ecosystem) int {
 	}
 }
 
+// modLoaderTypes lists the server-side loader filters that serve an
+// ecosystem. Quilt Loader runs Fabric mods, so a Quilt request accepts both
+// the Quilt and Fabric loader types; the REST filter takes one value per
+// request, so callers union the results. Any always yields exactly one filter.
+func modLoaderTypes(p catalog.Ecosystem) []int {
+	if p == catalog.EcosystemQuilt {
+		return []int{5, 4}
+	}
+	return []int{modLoaderType(p)}
+}
+
 // searchUrl builds a project search: https://docs.curseforge.com/rest-api/#search-mods.
 func searchUrl(
 	query catalog.Name,
 	ecosystem catalog.Ecosystem,
 ) string {
+	return searchUrlForLoader(query, modLoaderType(ecosystem))
+}
+
+// searchUrlForLoader builds a project search constrained to one CurseForge
+// loader type. A zero loader type searches every loader.
+func searchUrlForLoader(query catalog.Name, loader int) string {
 	params := url.Values{}
 	params.Set("gameId", fmt.Sprintf("%d", minecraftGameId))
 	params.Set("classId", fmt.Sprintf("%d", modsClassId))
@@ -43,7 +62,7 @@ func searchUrl(
 	params.Set("sortOrder", "desc")
 	params.Set("pageSize", "50")
 
-	if loader := modLoaderType(ecosystem); loader != 0 {
+	if loader != 0 {
 		params.Set("modLoaderType", fmt.Sprintf("%d", loader))
 	}
 

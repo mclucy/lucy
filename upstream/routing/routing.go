@@ -30,6 +30,7 @@ import (
 	"github.com/mclucy/lucy/upstream/internal/providers/modrinth"
 	"github.com/mclucy/lucy/upstream/internal/providers/mojang"
 	"github.com/mclucy/lucy/upstream/internal/providers/neoforge"
+	"github.com/mclucy/lucy/upstream/internal/providers/quilt"
 	"github.com/mclucy/lucy/upstream/internal/providers/spiget"
 )
 
@@ -58,6 +59,7 @@ type Router struct {
 
 	mojang   *mojang.Provider
 	fabric   *fabric.Provider
+	quilt    *quilt.Provider
 	forge    *forge.Provider
 	neoforge *neoforge.Provider
 }
@@ -81,6 +83,7 @@ func New(
 		network:  network,
 		mojang:   mojang.New(network),
 		fabric:   fabric.New(network),
+		quilt:    quilt.New(network),
 		forge:    forge.New(network),
 		neoforge: neoforge.New(network),
 	}

@@ -16,6 +16,7 @@ const (
 	EcosystemVanilla             = EcosystemMinecraft
 
 	EcosystemFabric   Ecosystem = "fabric"
+	EcosystemQuilt    Ecosystem = "quilt"
 	EcosystemForge    Ecosystem = "forge"
 	EcosystemNeoForge Ecosystem = "neoforge"
 
@@ -35,6 +36,8 @@ func (e Ecosystem) Title() string {
 		return "Minecraft"
 	case EcosystemFabric:
 		return "Fabric"
+	case EcosystemQuilt:
+		return "Quilt"
 	case EcosystemForge:
 		return "Forge"
 	case EcosystemNeoForge:
@@ -69,6 +72,7 @@ func (e Ecosystem) Valid() bool {
 	case EcosystemUnspecified,
 		EcosystemMinecraft,
 		EcosystemFabric,
+		EcosystemQuilt,
 		EcosystemForge,
 		EcosystemNeoForge,
 		EcosystemBukkit,
@@ -85,7 +89,7 @@ func (e Ecosystem) Valid() bool {
 
 func (e Ecosystem) IsSearchable() bool {
 	switch e {
-	case EcosystemFabric, EcosystemForge, EcosystemNeoForge,
+	case EcosystemFabric, EcosystemQuilt, EcosystemForge, EcosystemNeoForge,
 		EcosystemBukkit, EcosystemPaper:
 		return true
 	default:
@@ -94,8 +98,9 @@ func (e Ecosystem) IsSearchable() bool {
 }
 
 // Satisfy reports whether e satisfies the required ecosystem. An unspecified
-// requirement accepts any ecosystem. Paper satisfies Bukkit because Paper is
-// a Bukkit superset; the reverse is not true.
+// requirement accepts any ecosystem. Supersets satisfy their base ecosystem:
+// Paper satisfies Bukkit, and Quilt satisfies Fabric because Quilt Loader loads
+// Fabric mods. Neither is reversible.
 func (e Ecosystem) Satisfy(required Ecosystem) bool {
 	if required == EcosystemUnspecified {
 		return true
@@ -106,11 +111,15 @@ func (e Ecosystem) Satisfy(required Ecosystem) bool {
 	if required == EcosystemBukkit && e == EcosystemPaper {
 		return true
 	}
+	if required == EcosystemFabric && e == EcosystemQuilt {
+		return true
+	}
 	return e == required
 }
 
 func (e Ecosystem) IsModding() bool {
-	return e == EcosystemFabric || e == EcosystemForge || e == EcosystemNeoForge
+	return e == EcosystemFabric || e == EcosystemQuilt ||
+		e == EcosystemForge || e == EcosystemNeoForge
 }
 
 // IsUnspecified reports whether the ecosystem is waiting for workspace

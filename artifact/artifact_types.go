@@ -15,6 +15,15 @@ type Dependency struct {
 	Mandatory  bool
 	Kind       catalog.DependencyKind
 	Origin     catalog.DependencyOrigin
+	// AnyOf lists alternative identities that satisfy this dependency in
+	// place of Ref. Ref and Constraint describe the first alternative.
+	AnyOf []Dependency
+	// AllOf lists further conditions that must all match for this dependency
+	// to apply. Quilt breaks arrays are conjunctive.
+	AllOf []Dependency
+	// Unless lists conditions that exempt this dependency. Any matching
+	// condition suppresses it.
+	Unless []Dependency
 }
 
 type Compatibility struct {

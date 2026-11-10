@@ -58,7 +58,7 @@ func NewCommand(inv *cli.Invocation) *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVarP(&opts.output, "output", "o", "", "Write the compiled mod JAR to PATH, or to a directory under the project's artifact name")
-	cmd.Flags().StringVar(&opts.ecosystem, cli.FlagEcosystem, "", "Select fabric, forge, or neoforge")
+	cmd.Flags().StringVar(&opts.ecosystem, cli.FlagEcosystem, "", "Select fabric, quilt, forge, or neoforge")
 	cmd.Flags().StringVar(&opts.project, "project", "", "Select a Gradle project path, such as :fabric")
 	cmd.Flags().StringVar(&opts.buildDir, "build-dir", "", "Select a Gradle build directory relative to the checkout")
 	cmd.Flags().StringVar(&opts.branch, "branch", "", "Checkout Git branch BRANCH before compiling")
@@ -261,7 +261,8 @@ func reportFindings(
 
 func supportedEcosystem(ecosystem catalog.Ecosystem) bool {
 	switch ecosystem {
-	case catalog.EcosystemFabric, catalog.EcosystemForge, catalog.EcosystemNeoForge:
+	case catalog.EcosystemFabric, catalog.EcosystemQuilt,
+		catalog.EcosystemForge, catalog.EcosystemNeoForge:
 		return true
 	default:
 		return false

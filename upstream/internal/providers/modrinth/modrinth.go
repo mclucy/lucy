@@ -45,6 +45,8 @@ func (p *Provider) Search(ctx context.Context, q upstream.Query) (
 		facets = append(facets, facetForgeOnly)
 	case catalog.EcosystemFabric:
 		facets = append(facets, facetFabricOnly)
+	case catalog.EcosystemQuilt:
+		facets = append(facets, facetQuiltSupported)
 	case catalog.EcosystemNeoForge:
 		facets = append(facets, facetNeoforgeOnly)
 	case catalog.EcosystemBukkit:

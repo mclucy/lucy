@@ -23,6 +23,7 @@ var productPreferences = [...]productPreferenceGroup{
 	{names: []string{"neoforge"}, tier: 1, order: 0},
 	{names: []string{"forge"}, tier: 1, order: 1},
 	{names: []string{"fabric"}, tier: 1, order: 2},
+	{names: []string{"quilt"}, tier: 1, order: 3},
 
 	// Tier 2: Paper-family forks.
 	{names: []string{"reaper"}, tier: 2, order: 0},

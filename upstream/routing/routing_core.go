@@ -17,14 +17,20 @@ import (
 
 // CoreModules reports the descriptor modules the server core artifact ships.
 // A lock may predate module recording, so the artifact is read when the lock
-// carries none. Only Fabric bundles mods inside its loader.
+// carries none. Fabric and Quilt loaders ship their own mod descriptors.
 func CoreModules(
 	ctx context.Context,
 	product server.Product,
 	core catalog.Artifact,
 	acquire func(*catalog.Artifact) (artifact.MaterializedFile, error),
 ) ([]catalog.DescriptorModule, error) {
-	if product != server.ProductFabric {
+	var ecosystem catalog.Ecosystem
+	switch product {
+	case server.ProductFabric:
+		ecosystem = catalog.EcosystemFabric
+	case server.ProductQuilt:
+		ecosystem = catalog.EcosystemQuilt
+	default:
 		return nil, nil
 	}
 	if len(core.Modules) > 0 {
@@ -34,7 +40,7 @@ func CoreModules(
 	if err != nil {
 		return nil, err
 	}
-	return artifact.ReadModules(ctx, materialized.Path, catalog.EcosystemFabric)
+	return artifact.ReadModules(ctx, materialized.Path, ecosystem)
 }
 
 // Metadata fetches JSON metadata through the router's configured network.
@@ -235,6 +241,10 @@ func (r *Router) ResolveServerProduct(
 					continue
 				}
 				out.Inputs = append(out.Inputs, input)
+			}
+		case server.ProductQuilt:
+			if err := r.resolveQuilt(ctx, req, &out); err != nil {
+				return out, err
 			}
 		case server.ProductForge, server.ProductNeoForge:
 			var (

@@ -104,6 +104,8 @@ func selectedEcosystem(d *documentpkg.Manifest, requested catalog.Ecosystem) cat
 	switch d.Server.Core.Product {
 	case serverpkg.ProductFabric:
 		return catalog.EcosystemFabric
+	case serverpkg.ProductQuilt:
+		return catalog.EcosystemQuilt
 	case serverpkg.ProductForge:
 		return catalog.EcosystemForge
 	case serverpkg.ProductNeoForge:

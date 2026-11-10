@@ -165,6 +165,22 @@ var facetFabricOnly = facetItems{
 	},
 }
 
+// facetQuiltSupported selects projects a Quilt server loads: Quilt Loader runs
+// Fabric mods, so both loader categories qualify. Fabric search remains
+// fabric-only because Fabric does not load Quilt mods.
+var facetQuiltSupported = facetItems{
+	{
+		Type:      "categories",
+		Operation: operationEq,
+		Match:     "quilt",
+	},
+	{
+		Type:      "categories",
+		Operation: operationEq,
+		Match:     "fabric",
+	},
+}
+
 var facetNeoforgeOnly = facetItems{
 	{
 		Type:      "categories",

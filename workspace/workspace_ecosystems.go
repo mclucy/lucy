@@ -91,6 +91,21 @@ func productServedEcosystems(
 				CompatFull,
 			)
 		}
+	case "quilt":
+		if primary.Ecosystem == catalog.EcosystemQuilt {
+			offers = appendServedEcosystem(
+				offers,
+				catalog.EcosystemQuilt,
+				CompatFull,
+			)
+			// Quilt Loader loads Fabric mods, so a Quilt runtime serves the
+			// Fabric ecosystem fully.
+			offers = appendServedEcosystem(
+				offers,
+				catalog.EcosystemFabric,
+				CompatFull,
+			)
+		}
 	case "forge":
 		if primary.Ecosystem == catalog.EcosystemForge {
 			offers = appendServedEcosystem(
@@ -243,6 +258,12 @@ func selectedLoaderEcosystems(
 			ecosystems = appendUniqueEcosystem(
 				ecosystems,
 				catalog.EcosystemFabric,
+			)
+		case component.Ecosystem == catalog.EcosystemQuilt &&
+			(name == "quilt-loader" || name == "quiltloader" || name == "quilt"):
+			ecosystems = appendUniqueEcosystem(
+				ecosystems,
+				catalog.EcosystemQuilt,
 			)
 		case component.Ecosystem == catalog.EcosystemForge && name == "forge":
 			ecosystems = appendUniqueEcosystem(

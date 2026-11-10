@@ -549,7 +549,7 @@ func packageVersionDialect(p *document.Package) versionpkg.Dialect {
 		}
 	}
 	switch p.Ecosystem {
-	case catalog.EcosystemFabric:
+	case catalog.EcosystemFabric, catalog.EcosystemQuilt:
 		return versionpkg.DialectFabric
 	case catalog.EcosystemForge, catalog.EcosystemNeoForge:
 		return versionpkg.DialectMaven

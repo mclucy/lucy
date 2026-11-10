@@ -229,6 +229,7 @@ var modMetadata = []struct {
 	eco  catalog.Ecosystem
 }{
 	{file: filepath.Join("src", "main", "resources", "fabric.mod.json"), eco: catalog.EcosystemFabric},
+	{file: filepath.Join("src", "main", "resources", "quilt.mod.json"), eco: catalog.EcosystemQuilt},
 
 	{file: filepath.Join("src", "main", "resources", "META-INF", "mods.toml"), eco: catalog.EcosystemForge},
 	{file: filepath.Join("src", "main", "resources", "META-INF", "neoforge.mods.toml"), eco: catalog.EcosystemNeoForge},

@@ -53,17 +53,73 @@ func ReadModules(ctx context.Context, filename string, loader catalog.Ecosystem)
 // normalizeModules makes descriptor order independent of map iteration. The
 // lock and plan hashes depend on this order.
 func normalizeModules(modules []catalog.DescriptorModule) []catalog.DescriptorModule {
+	modules = applyClientOnlyIdentities(modules)
 	for i := range modules {
 		slices.Sort(modules[i].Provides)
-		deps := modules[i].Dependencies
-		sort.Slice(deps, func(a, b int) bool {
-			return compareDescriptorDependency(deps[a], deps[b]) < 0
-		})
+		slices.Sort(modules[i].ClientOnly)
+		normalizeDescriptorDependencies(modules[i].Dependencies)
 	}
 	sort.Slice(modules, func(i, j int) bool {
 		return compareDescriptorModule(modules[i], modules[j]) < 0
 	})
 	return modules
+}
+
+// applyClientOnlyIdentities drops client-only declarations from the server
+// inventory and records their identities on the modules that remain. A loader
+// excludes those candidates from a dedicated server, so a requirement whose
+// only candidate is client-only is filtered rather than reported missing.
+func applyClientOnlyIdentities(
+	modules []catalog.DescriptorModule,
+) []catalog.DescriptorModule {
+	var kept []catalog.DescriptorModule
+	var clientOnly []string
+	for _, module := range modules {
+		if module.Side != catalog.SideClient {
+			kept = append(kept, module)
+			continue
+		}
+		clientOnly = append(clientOnly, descriptorModuleNames(module)...)
+	}
+	if len(clientOnly) == 0 {
+		return modules
+	}
+	if len(kept) == 0 {
+		return nil
+	}
+	for i := range kept {
+		kept[i].ClientOnly = mergeModuleNames(kept[i].ClientOnly, clientOnly)
+	}
+	return kept
+}
+
+func descriptorModuleNames(module catalog.DescriptorModule) []string {
+	names := make([]string, 0, len(module.Provides)+2)
+	if module.ID != "" {
+		names = append(names, module.ID)
+	}
+	names = append(names, module.Provides...)
+	if module.Group != "" && module.ID != "" {
+		names = append(names, module.Group+":"+module.ID)
+	}
+	return names
+}
+
+func mergeModuleNames(existing, added []string) []string {
+	merged := append(append([]string(nil), existing...), added...)
+	slices.Sort(merged)
+	return slices.Compact(merged)
+}
+
+func normalizeDescriptorDependencies(deps []catalog.DescriptorDependency) {
+	sort.Slice(deps, func(a, b int) bool {
+		return compareDescriptorDependency(deps[a], deps[b]) < 0
+	})
+	for i := range deps {
+		normalizeDescriptorDependencies(deps[i].AnyOf)
+		normalizeDescriptorDependencies(deps[i].AllOf)
+		normalizeDescriptorDependencies(deps[i].Unless)
+	}
 }
 
 func compareDescriptorModule(a, b catalog.DescriptorModule) int {
@@ -126,10 +182,76 @@ func nativeEntry(z *zip.Reader, name string) ([]byte, error) {
 }
 
 func inspectArchive(z *zip.Reader, loader catalog.Ecosystem, member string, depth int) ([]catalog.DescriptorModule, error) {
+	return inspectArchiveAs(z, loader, loader, member, depth)
+}
+
+// inspectArchiveAs reads one archive as loader while nested archives keep the
+// active loader. A Quilt environment reads a Fabric-only archive through its
+// Fabric descriptor, but the loader selecting nested descriptors stays Quilt.
+func inspectArchiveAs(z *zip.Reader, loader, active catalog.Ecosystem, member string, depth int) ([]catalog.DescriptorModule, error) {
 	if depth > 16 {
 		return nil, fmt.Errorf("nested archive depth exceeds 16")
 	}
 	switch loader {
+	case catalog.EcosystemQuilt:
+		raw, err := nativeEntry(z, quiltModPath)
+		if err != nil {
+			return nil, err
+		}
+		if raw == nil {
+			// A Quilt environment also accepts Fabric descriptors, so a loader
+			// core or an older package may only ship fabric.mod.json.
+			return inspectArchiveAs(z, catalog.EcosystemFabric, active, member, depth)
+		}
+		descriptor := &quiltModFile{}
+		if err := json.Unmarshal(raw, descriptor); err != nil {
+			return nil, err
+		}
+		if err := validateQuiltDescriptor(descriptor); err != nil {
+			return nil, err
+		}
+		module, err := quiltArchiveModule(descriptor, member)
+		if err != nil {
+			return nil, err
+		}
+		if module == nil {
+			return nil, nil
+		}
+		if module.Side == catalog.SideClient {
+			// The module is excluded from the server, but its identity lets a
+			// dependency only it answers resolve as environment-filtered.
+			return []catalog.DescriptorModule{*module}, nil
+		}
+		out := []catalog.DescriptorModule{*module}
+		for _, jar := range descriptor.Loader.Jars {
+			raw, err := nativeEntry(z, jar)
+			if err != nil {
+				return nil, err
+			}
+			if raw == nil {
+				return nil, fmt.Errorf("missing nested Quilt JAR %s", jar)
+			}
+			nested, err := zip.NewReader(bytes.NewReader(raw), int64(len(raw)))
+			if err != nil {
+				return nil, err
+			}
+			p := jar
+			if member != "" {
+				p = member + "/" + p
+			}
+			mods, err := inspectArchiveAs(
+				nested,
+				active,
+				active,
+				p,
+				depth+1,
+			)
+			if err != nil {
+				return nil, err
+			}
+			out = append(out, mods...)
+		}
+		return out, nil
 	case catalog.EcosystemFabric:
 		raw, err := nativeEntry(z, "fabric.mod.json")
 		if err != nil {
@@ -156,9 +278,6 @@ func inspectArchive(z *zip.Reader, loader catalog.Ecosystem, member string, dept
 			return nil, err
 		}
 		side := catalog.ParseSide(d.Environment)
-		if side == catalog.SideClient {
-			return nil, nil
-		}
 		m := catalog.DescriptorModule{
 			ID:             d.ID,
 			Version:        version.Version(d.Version),
@@ -169,6 +288,11 @@ func inspectArchive(z *zip.Reader, loader catalog.Ecosystem, member string, dept
 			Provides:       d.Provides,
 			Side:           side,
 			Dependencies:   []catalog.DescriptorDependency{},
+		}
+		if side == catalog.SideClient {
+			// The module is excluded from the server, but ReadModules keeps its
+			// identity so a dependency only it answers is not reported missing.
+			return []catalog.DescriptorModule{m}, nil
 		}
 		for kind, deps := range map[catalog.DependencyKind]map[string]jsontext.Value{
 			catalog.DependencyKindRequired:     d.Depends,
@@ -209,7 +333,7 @@ func inspectArchive(z *zip.Reader, loader catalog.Ecosystem, member string, dept
 			if member != "" {
 				p = member + "/" + p
 			}
-			mods, err := inspectArchive(nested, loader, p, depth+1)
+			mods, err := inspectArchiveAs(nested, active, active, p, depth+1)
 			if err != nil {
 				return nil, err
 			}

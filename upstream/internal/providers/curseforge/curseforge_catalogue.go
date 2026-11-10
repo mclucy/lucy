@@ -19,9 +19,22 @@ func (p *Provider) Candidates(ctx context.Context, project, minecraft string, lo
 		return nil, err
 	}
 	// Pagination is required: exact older files are not necessarily on page one.
-	files, err := p.listAllFiles(ctx, id, minecraft, modLoaderType(loader))
-	if err != nil {
-		return nil, err
+	// A Quilt request accepts both Quilt and Fabric files, so each loader
+	// filter is listed and the union is deduplicated by file identity.
+	var files []fileResponse
+	seen := make(map[int32]bool)
+	for _, loaderType := range modLoaderTypes(loader) {
+		page, err := p.listAllFiles(ctx, id, minecraft, loaderType)
+		if err != nil {
+			return nil, err
+		}
+		for _, f := range page {
+			if seen[f.ID] {
+				continue
+			}
+			seen[f.ID] = true
+			files = append(files, f)
+		}
 	}
 	var out []upstream.Candidate
 	for _, f := range files {

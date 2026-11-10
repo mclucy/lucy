@@ -38,7 +38,8 @@ func packageSearchPaths(
 
 		var path string
 		switch offer.Ecosystem {
-		case catalog.EcosystemFabric, catalog.EcosystemForge, catalog.EcosystemNeoForge:
+		case catalog.EcosystemFabric, catalog.EcosystemQuilt,
+			catalog.EcosystemForge, catalog.EcosystemNeoForge:
 			path = filepath.Join(root, "mods")
 		case catalog.EcosystemBukkit, catalog.EcosystemPaper:
 			path = filepath.Join(root, "plugins")

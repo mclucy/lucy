@@ -10,6 +10,7 @@ type Reader interface {
 // readers is the explicit-ordered list of all platform readers.
 // Order matters: earlier readers take priority when multiple match.
 var readers = []Reader{
+	newQuiltReader(),
 	newFabricReader(),
 	newForgeReader(),
 	newForgeLegacyReader(),

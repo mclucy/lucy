@@ -59,6 +59,7 @@ func StaticStatusLogoCandidates() []CompletionCandidate {
 func StaticSearchEcosystemCandidates() []CompletionCandidate {
 	return []CompletionCandidate{
 		{Value: catalog.EcosystemFabric.String(), Description: "Fabric mods"},
+		{Value: catalog.EcosystemQuilt.String(), Description: "Quilt mods"},
 		{Value: catalog.EcosystemForge.String(), Description: "Forge mods"},
 		{Value: catalog.EcosystemNeoForge.String(), Description: "NeoForge mods"},
 		{Value: catalog.EcosystemBukkit.String(), Description: "Bukkit/Spigot plugins"},
