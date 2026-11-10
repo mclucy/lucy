@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/mclucy/lucy/catalog"
@@ -28,6 +29,20 @@ func supportedExt(ext string) bool {
 // ReadInfo extracts package metadata from an artifact file. For .jar/.zip
 // files all readers are tried; for .pyz/.mcdr only the MCDR reader runs.
 func ReadInfo(filePath string) ([]PackageInfo, error) {
+	return readInfo(filePath, catalog.EcosystemUnspecified)
+}
+
+// ReadInfoForLoader extracts package metadata for one loader. A JAR that also
+// carries a Quilt descriptor still reports its Fabric identity when loader is
+// Fabric, so a loader-specific caller can verify its own build.
+func ReadInfoForLoader(
+	filePath string,
+	loader catalog.Ecosystem,
+) ([]PackageInfo, error) {
+	return readInfo(filePath, loader)
+}
+
+func readInfo(filePath string, loader catalog.Ecosystem) ([]PackageInfo, error) {
 	ext := strings.ToLower(filepath.Ext(filePath))
 	if !supportedExt(ext) {
 		return nil, fmt.Errorf("unsupported artifact format: %s", ext)
@@ -67,6 +82,10 @@ func ReadInfo(filePath string) ([]PackageInfo, error) {
 		}
 		results = append(results, infos...)
 	}
+	// A Fabric caller asks for its own build, so both identities stay.
+	if loader != catalog.EcosystemFabric {
+		results = preferQuiltDescriptor(results)
+	}
 	if jarEcosystemsConflict(results) {
 		return nil, fmt.Errorf(
 			"ambiguous artifact %q: packages span incompatible ecosystems",
@@ -75,6 +94,21 @@ func ReadInfo(filePath string) ([]PackageInfo, error) {
 	}
 
 	return results, nil
+}
+
+// preferQuiltDescriptor drops the Fabric identity of an artifact that also
+// carries a Quilt descriptor. Both descriptors describe the one JAR, and the
+// Quilt identity is the one its loader reads.
+func preferQuiltDescriptor(results []PackageInfo) []PackageInfo {
+	quilt := slices.ContainsFunc(results, func(info PackageInfo) bool {
+		return info.Ref.Ecosystem == catalog.EcosystemQuilt
+	})
+	if !quilt {
+		return results
+	}
+	return slices.DeleteFunc(results, func(info PackageInfo) bool {
+		return info.Ref.Ecosystem == catalog.EcosystemFabric
+	})
 }
 
 // jarEcosystemsConflict returns true when the detected artifacts span two or more

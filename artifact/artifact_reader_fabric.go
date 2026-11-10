@@ -23,11 +23,6 @@ func (r *fabricReader) Read(
 	zipRdr *zip.Reader,
 	filePath string,
 ) ([]PackageInfo, error) {
-	// A Quilt descriptor takes precedence over the Fabric compatibility
-	// descriptor the same JAR may carry, and the Quilt reader owns it.
-	if archiveHasEntry(zipRdr, quiltModPath) {
-		return nil, nil
-	}
 	for _, f := range zipRdr.File {
 		if f.Name != "fabric.mod.json" {
 			continue

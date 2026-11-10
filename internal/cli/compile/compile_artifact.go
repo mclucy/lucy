@@ -83,7 +83,7 @@ func selectArtifact(project gradleProject, ecosystem catalog.Ecosystem) (string,
 		if !info.Mode().IsRegular() {
 			continue
 		}
-		packages, err := artifact.ReadInfo(output.File)
+		packages, err := artifact.ReadInfoForLoader(output.File, ecosystem)
 		if err != nil {
 			return "", fmt.Errorf("verify built archive %q: %w", output.File, err)
 		}

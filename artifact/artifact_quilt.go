@@ -1,7 +1,6 @@
 package artifact
 
 import (
-	"archive/zip"
 	"encoding/json/v2"
 	"fmt"
 	"strings"
@@ -10,15 +9,6 @@ import (
 )
 
 const quiltModPath = "quilt.mod.json"
-
-func archiveHasEntry(zipRdr *zip.Reader, name string) bool {
-	for _, file := range zipRdr.File {
-		if file.Name == name {
-			return true
-		}
-	}
-	return false
-}
 
 // validateQuiltDescriptor rejects schema versions this reader cannot
 // interpret instead of guessing at a newer layout.
