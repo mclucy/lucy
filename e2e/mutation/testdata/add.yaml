@@ -2251,3 +2251,170 @@
   args:
     - "--downgrade"
     - "spiget:34315"
+
+- id: smoke-quilt-add-qsl-native
+  smoke: true
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.20.1"
+      directory: server
+      core:
+        product: quilt
+        product_version: "0.23.1"
+      packages:
+        quilt:
+          modrinth:lithium: "mc1.20.1-0.11.4-fabric"
+          modrinth:ferrite-core: "6.0.1"
+          modrinth:architectury-api: "9.2.14+fabric"
+          modrinth:geckolib: "4.2.3"
+          modrinth:terrablender: "3.0.1.11"
+          modrinth:patchouli: "1.20.1-85-fabric"
+          modrinth:universal-graves: "3.0.3+1.20.1"
+          modrinth:friends-and-foes: "fabric-mc1.20.1-3.0.9"
+          modrinth:the-bumblezone-fabric: "7.5.3+1.20.1-quilt"
+  files:
+    server/server.properties: |
+      server-port=25565
+      motd=Quilt SMP
+  args:
+    - "modrinth:qsl@7.1.2+0.87.0-1.20.1"
+
+- id: smoke-unverified-quilt-add-fabric-only-explicit
+  smoke: true
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.21.4"
+      directory: server
+      core:
+        product: quilt
+        product_version: "0.30.2"
+      packages:
+        fabric:
+          modrinth:fabric-api: "0.119.4+1.21.4"
+          modrinth:ferrite-core: "7.1.3-fabric"
+          modrinth:c2me-fabric: "0.3.1.3.0+1.21.4"
+          modrinth:open-parties-and-claims: "fabric-1.21.4-0.31.6"
+          modrinth:friends-and-foes: "fabric-5.0.4+mc1.21.4"
+          modrinth:universal-graves: "3.6.0+1.21.4"
+          modrinth:yacl: "3.8.2+1.21.4-fabric"
+          modrinth:modernfix: "5.20.3+mc1.21.4"
+          modrinth:spark: "1.10.121-fabric"
+          modrinth:chunky: "1.4.27"
+        quilt:
+          modrinth:lithium: "mc1.21.4-0.15.3-fabric"
+          modrinth:simple-voice-chat: "quilt-1.21.4-2.6.27"
+  args:
+    - "--ecosystem"
+    - "fabric"
+    - "modrinth:servercore@1.5.8+1.21.4"
+
+- id: smoke-quilt-add-forge-ecosystem-rejected
+  smoke: true
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.20.1"
+      directory: server
+      core:
+        product: quilt
+        product_version: "0.23.1"
+      packages:
+        fabric:
+          modrinth:fabric-api: "0.91.0+1.20.1"
+          modrinth:ferrite-core: "6.0.1"
+          modrinth:architectury-api: "9.2.14+fabric"
+          modrinth:open-parties-and-claims: "fabric-1.20.1-0.33.0"
+          modrinth:friends-and-foes: "fabric-mc1.20.1-3.0.9"
+          modrinth:patchouli: "1.20.1-85-fabric"
+          modrinth:yacl: "3.2.2+1.20-fabric"
+          modrinth:universal-graves: "3.0.3+1.20.1"
+          modrinth:spark: "1.10.53-fabric"
+          modrinth:chunky: "1.3.146"
+        quilt:
+          modrinth:lithium: "mc1.20.1-0.11.4-fabric"
+  args:
+    - "--ecosystem"
+    - "forge"
+    - "modrinth:mekanism@10.4.16.80"
+
+- id: quilt-add-forge-mod-no-quilt-build
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.20.1"
+      directory: server
+      core:
+        product: quilt
+        product_version: "0.23.1"
+      packages:
+        fabric:
+          modrinth:fabric-api: "0.91.0+1.20.1"
+          modrinth:ferrite-core: "6.0.1"
+          modrinth:architectury-api: "9.2.14+fabric"
+          modrinth:open-parties-and-claims: "fabric-1.20.1-0.33.0"
+          modrinth:friends-and-foes: "fabric-mc1.20.1-3.0.9"
+          modrinth:patchouli: "1.20.1-85-fabric"
+          modrinth:yacl: "3.2.2+1.20-fabric"
+          modrinth:universal-graves: "3.0.3+1.20.1"
+          modrinth:spark: "1.10.53-fabric"
+          modrinth:chunky: "1.3.146"
+        quilt:
+          modrinth:lithium: "mc1.20.1-0.11.4-fabric"
+  args:
+    - "modrinth:mekanism@10.4.16.80"
+
+- id: unverified-quilt-add-fabric-only-default
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.21.4"
+      directory: server
+      core:
+        product: quilt
+        product_version: "0.30.2"
+      packages:
+        fabric:
+          modrinth:fabric-api: "0.119.4+1.21.4"
+          modrinth:ferrite-core: "7.1.3-fabric"
+          modrinth:c2me-fabric: "0.3.1.3.0+1.21.4"
+          modrinth:open-parties-and-claims: "fabric-1.21.4-0.31.6"
+          modrinth:friends-and-foes: "fabric-5.0.4+mc1.21.4"
+          modrinth:universal-graves: "3.6.0+1.21.4"
+          modrinth:yacl: "3.8.2+1.21.4-fabric"
+          modrinth:modernfix: "5.20.3+mc1.21.4"
+          modrinth:spark: "1.10.121-fabric"
+          modrinth:chunky: "1.4.27"
+        quilt:
+          modrinth:lithium: "mc1.21.4-0.15.3-fabric"
+          modrinth:simple-voice-chat: "quilt-1.21.4-2.6.27"
+  files:
+    server/server.properties: |
+      server-port=25566
+      motd=Quilt community server
+  args:
+    - "modrinth:servercore@1.5.8+1.21.4"
+
+- id: quilt-add-polymer-quilt-build
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.21.1"
+      directory: server
+      core:
+        product: quilt
+        product_version: "0.27.1"
+      packages:
+        fabric:
+          modrinth:fabric-api: "0.116.18+1.21.1"
+          modrinth:lithium: "mc1.21.1-0.15.4-fabric"
+          modrinth:ferrite-core: "7.0.3-fabric"
+          modrinth:spark: "1.10.109-fabric"
+          modrinth:chunky: "1.4.23"
+          modrinth:modernfix: "5.20.0+mc1.21.1"
+          modrinth:servercore: "1.5.19+1.21.1"
+          modrinth:open-parties-and-claims: "fabric-1.21.1-0.33.0"
+          modrinth:patchouli: "1.21.1-93-fabric"
+  args:
+    - "modrinth:polymer@0.9.19+1.21.1"
