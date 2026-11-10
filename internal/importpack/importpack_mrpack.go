@@ -351,6 +351,12 @@ func (m *materializer) fetch(it *item) error {
 // only when it stores an entry.
 func (m *materializer) downloadFrom(url string, it *item) (string, error) {
 	digest := it.download
+	// A cache hit bypasses WrapReader, so the transfer limit must also bound
+	// the cache copy: the per-file limit and the remaining extraction budget.
+	limit := min(maxFileBytes, m.budget.left)
+	if limit <= 0 {
+		return "", limitError("extraction exceeds the %d byte limit", maxExtractedBytes)
+	}
 	var attempt *chargedReader
 	res, err := m.network.CachedDownload(m.ctx, url, m.stage, cache.DownloadOptions{
 		Kind:          cache.KindArtifact,
@@ -358,6 +364,7 @@ func (m *materializer) downloadFrom(url string, it *item) (string, error) {
 		HashAlgorithm: digest.algorithm,
 		Filename:      path.Base(it.rel),
 		FileMode:      0o644,
+		MaxBytes:      limit,
 		WrapReader: func(r io.Reader, _ int64) io.Reader {
 			attempt = newChargedReader(m.ctx, r, m.budget)
 			return attempt
