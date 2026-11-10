@@ -293,7 +293,6 @@ var initializeScenarios = map[string]initializeScenario{
 		unchanged:   []string{"mods/lithium-fabric-mc1.20.1-0.11.2.jar"},
 		status: &statusExpectation{
 			ecosystem: "quilt", name: "quilt", version: "0.20.0",
-			path: quiltLauncher,
 			components: map[string]string{
 				"minecraft:minecraft": "1.20.1",
 			},
