@@ -508,9 +508,18 @@ func Packages(request PackagesRequest) ([]document.Package, []error, error) {
 				Dependency:   dependencyDemand,
 				DependencyOf: dependencyOf,
 			}
+			// A release pin belongs to the candidate that declared it. Record
+			// the keys this branch adds so abandoning the candidate removes
+			// them with the rest of the branch.
+			var branchPins []projectKey
 			if len(r.releaseHints) > 0 {
-				releasePinned[r.key] = struct{}{}
-				releasePinned[selectedPackageKey(pkg)] = struct{}{}
+				for _, key := range [...]projectKey{r.key, selectedPackageKey(pkg)} {
+					if _, pinned := releasePinned[key]; pinned {
+						continue
+					}
+					releasePinned[key] = struct{}{}
+					branchPins = append(branchPins, key)
+				}
 			}
 			branch := state.install(r.key, pkg, conflictDependencies(candidate))
 			logger.Debug(
@@ -563,6 +572,9 @@ func Packages(request PackagesRequest) ([]document.Package, []error, error) {
 				return true
 			}
 			state.restore(branch)
+			for _, key := range branchPins {
+				delete(releasePinned, key)
+			}
 			logger.Debug(
 				"resolve: backtracking candidate",
 				"provider", r.key.provider,
