@@ -3,9 +3,11 @@ package cli
 import (
 	"errors"
 	"fmt"
-	"slices"
 	"strings"
 
+	"github.com/mclucy/lucy/internal/shell"
+	serverpkg "github.com/mclucy/lucy/server"
+	versionpkg "github.com/mclucy/lucy/version"
 	"github.com/mclucy/lucy/workspace"
 	"github.com/mclucy/lucy/workspace/discovery"
 )
@@ -36,7 +38,7 @@ func reportDiscoveryFindings(observed *discovery.Result, output *Output) {
 	for finding := range observed.Findings() {
 		switch finding.Kind {
 		case discovery.FindingAutomaticSelection:
-			output.Warn(automaticSelectionMessage(observed, finding))
+			output.Warn(automaticSelectionMessage(finding))
 		case discovery.FindingUnreadableFile:
 			key := unreadableFindingKey(finding)
 			if unreadableReported[key] {
@@ -44,9 +46,8 @@ func reportDiscoveryFindings(observed *discovery.Result, output *Output) {
 			}
 			unreadableReported[key] = true
 			output.Warn(unreadableFindingError(finding))
-		case discovery.FindingAlternativeEntryPoint,
-			discovery.FindingUnmanagedInstallation:
-			message := entryPointFindingMessage(observed, finding)
+		case discovery.FindingUnmanagedInstallation:
+			message := installationFindingMessage(finding)
 			if output.JSON() {
 				output.Warn(errors.New(message))
 			} else {
@@ -87,7 +88,7 @@ func reportDiscoveryFindings(observed *discovery.Result, output *Output) {
 			if resolved || automatic || unresolvedReported {
 				continue
 			}
-			message := unresolvedRuntimeMessage(observed, finding)
+			message := unresolvedRuntimeMessage(finding)
 			if output.JSON() {
 				output.Warn(message)
 			} else {
@@ -144,83 +145,63 @@ func unreadableFindingLines(result *discovery.Result) []string {
 	return lines
 }
 
-func entryPointFindingMessage(observed *discovery.Result, finding discovery.Finding) string {
-	ownership := fileOwnershipAt(observed, finding.Path)
-	label := "unmanaged entry point"
-	if finding.Kind == discovery.FindingUnmanagedInstallation {
-		label = "unmanaged server entry point"
-	}
-	switch ownership {
+func installationFindingMessage(finding discovery.Finding) string {
+	label := "unmanaged server"
+	switch finding.Ownership {
 	case discovery.OwnershipModified:
-		label = "modified entry point"
-		if finding.Kind == discovery.FindingUnmanagedInstallation {
-			label = "modified server entry point"
-		}
+		label = "modified server"
 	case discovery.OwnershipUnreadable, discovery.OwnershipUnknown:
-		label = "unreadable entry point"
-		if finding.Kind == discovery.FindingUnmanagedInstallation {
-			label = "unreadable server entry point"
-		}
+		label = "unreadable server"
 	}
-	return fmt.Sprintf("%s %s; left unchanged", label, finding.Path)
+	return fmt.Sprintf(
+		"%s %s; left unchanged",
+		label,
+		installationIdentityLabel(finding.Identity),
+	)
 }
 
-func fileOwnershipAt(observed *discovery.Result, path string) discovery.Ownership {
-	if observed == nil || path == "" {
-		return discovery.OwnershipUnknown
-	}
-	for i := range observed.Installations {
-		for _, file := range observed.Installations[i].Files {
-			if file.Path == path {
-				return file.Ownership
-			}
-		}
-	}
-	return discovery.OwnershipUnmanaged
-}
-
-// automaticSelectionMessage names the chosen entry point and every competing
-// entry point. The choice is read-only; the message suggests selecting an explicit server.
-func automaticSelectionMessage(
-	observed *discovery.Result,
-	finding discovery.Finding,
-) error {
-	selected := finding.Path
-	if selected == "" && observed.Selection.EntryPoint != nil {
-		selected = observed.Selection.EntryPoint.Path
-	}
-	competitors := finding.Paths
-	if len(competitors) == 0 {
-		competitors = competingEntryPoints(observed, selected)
-	}
+// automaticSelectionMessage names the chosen installation and every competing
+// installation. The choice is read-only; the message suggests an explicit
+// selection command.
+func automaticSelectionMessage(finding discovery.Finding) error {
+	selected := installationIdentityLabel(finding.Identity)
 	message := fmt.Sprintf(
 		"multiple server runtimes found; using %s automatically",
 		selected,
 	)
-	if len(competitors) > 0 {
-		message += "; competing entry points: " + strings.Join(competitors, ", ")
+	if len(finding.Identities) > 0 {
+		competitors := make([]string, 0, len(finding.Identities))
+		for _, identity := range finding.Identities {
+			competitors = append(competitors, installationIdentityLabel(identity))
+		}
+		message += "; also present: " + strings.Join(competitors, ", ")
 	}
-	message += "; run lucy init --entry-point '<path>' to select one"
+	if command := identitySelectionCommand(finding.Identity); command != "" {
+		message += "; run " + command + " to select one"
+	}
 	return errors.New(message)
 }
 
-func unresolvedRuntimeMessage(
-	observed *discovery.Result,
-	finding discovery.Finding,
-) error {
-	paths := finding.Paths
-	if len(paths) == 0 {
-		paths = competingEntryPoints(observed, "")
+func unresolvedRuntimeMessage(finding discovery.Finding) error {
+	identities := finding.Identities
+	if len(identities) == 0 && finding.Identity.IsValid() {
+		identities = []discovery.Identity{finding.Identity}
 	}
-	if len(paths) == 0 {
+	if len(identities) == 0 {
 		return errors.New("no unambiguous server runtime was found")
 	}
-	commands := make([]string, 0, len(paths))
-	for _, path := range paths {
-		commands = append(
-			commands,
-			"lucy init --entry-point '"+strings.ReplaceAll(path, "'", "'\\''")+"'",
-		)
+	commands := make([]string, 0, len(identities))
+	seen := map[string]bool{}
+	for _, identity := range identities {
+		command := identitySelectionCommand(identity)
+		if command == "" || seen[command] {
+			continue
+		}
+		seen[command] = true
+		commands = append(commands, command)
+	}
+	if len(commands) == 0 {
+		return errors.New("no unambiguous server runtime was found")
 	}
 	return fmt.Errorf(
 		"cannot choose between server runtimes; select one with %s",
@@ -228,23 +209,52 @@ func unresolvedRuntimeMessage(
 	)
 }
 
-// competingEntryPoints is a fallback for findings that carry no paths. It
-// lists every entry point except the selected one in a stable order.
-func competingEntryPoints(
-	result *discovery.Result,
-	selected string,
-) []string {
-	var paths []string
-	seen := map[string]bool{}
-	for i := range result.Installations {
-		for file := range result.Installations[i].EntryPoints() {
-			if file.Path == "" || file.Path == selected || seen[file.Path] {
-				continue
-			}
-			seen[file.Path] = true
-			paths = append(paths, file.Path)
-		}
+// installationIdentityLabel renders one installation identity for prompts and
+// diagnostics.
+func installationIdentityLabel(identity discovery.Identity) string {
+	name := identity.Primary.Name.String()
+	if product := identity.Product(); product != serverpkg.ProductUnknown {
+		name = product.Title()
 	}
-	slices.Sort(paths)
-	return paths
+	parts := make([]string, 0, 2)
+	if name = strings.TrimSpace(name); name != "" {
+		parts = append(parts, name)
+	}
+	if version := identity.Primary.Version.String(); strings.TrimSpace(version) != "" {
+		parts = append(parts, version)
+	}
+	label := strings.Join(parts, " ")
+	if minecraft := identity.MinecraftVersion(); concreteIdentityVersion(minecraft) &&
+		identity.Product() != serverpkg.ProductMinecraft {
+		label += " / Minecraft " + minecraft.String()
+	}
+	if label == "" {
+		return "unknown server"
+	}
+	return label
+}
+
+// identitySelectionCommand renders a non-interactive selection for one
+// installation identity.
+func identitySelectionCommand(identity discovery.Identity) string {
+	parts := []string{"lucy", "init"}
+	switch product := identity.Product(); {
+	case product != serverpkg.ProductUnknown:
+		parts = append(parts, "--core", shell.Quote(product.String()))
+	case identity.Primary.Name.String() != "":
+		parts = append(parts, "--core", shell.Quote(identity.Primary.Name.String()))
+	default:
+		return ""
+	}
+	if version := identity.Primary.Version; concreteIdentityVersion(version) {
+		parts = append(parts, "--core-version", shell.Quote(version.String()))
+	}
+	if minecraft := identity.MinecraftVersion(); concreteIdentityVersion(minecraft) {
+		parts = append(parts, "--minecraft", shell.Quote(minecraft.String()))
+	}
+	return strings.Join(parts, " ")
+}
+
+func concreteIdentityVersion(value versionpkg.Version) bool {
+	return value != "" && !value.IsInvalid() && !value.CanInfer()
 }

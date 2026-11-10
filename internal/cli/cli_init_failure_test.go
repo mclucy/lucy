@@ -65,6 +65,7 @@ func TestInitializationFailureNamesSelectionCommands(t *testing.T) {
 		name  string
 		err   *discovery.SelectionError
 		title string
+		want  []string
 	}{
 		{
 			name: "ambiguous runtimes",
@@ -73,6 +74,10 @@ func TestInitializationFailureNamesSelectionCommands(t *testing.T) {
 				Installations: candidates,
 			},
 			title: "several server runtimes share this directory",
+			want: []string{
+				"lucy init --core fabric --core-version 0.19.5 --minecraft 1.21.1",
+				"lucy init --core minecraft --core-version 1.21.1 --minecraft 1.21.1",
+			},
 		},
 		{
 			name: "missing declared installation",
@@ -83,13 +88,12 @@ func TestInitializationFailureNamesSelectionCommands(t *testing.T) {
 			title: "the declared server installation is missing",
 		},
 		{
-			name: "unrecognized explicit selection",
+			name: "no launchable installation",
 			err: &discovery.SelectionError{
 				State:         discovery.SelectionInvalid,
-				Path:          "/srv/notes.txt",
 				Installations: candidates,
 			},
-			title: "the requested entry point is not a recognized server",
+			title: "no launchable server installation was found",
 		},
 	}
 
@@ -105,14 +109,10 @@ func TestInitializationFailureNamesSelectionCommands(t *testing.T) {
 			if detail.Title != tt.title {
 				t.Fatalf("detail title = %q, want %q", detail.Title, tt.title)
 			}
-			want := []string{
-				"lucy init --entry-point '" + fabricPath + "'",
-				"lucy init --entry-point '" + vanillaPath + "'",
+			if !slices.Equal(detail.Lines, tt.want) {
+				t.Fatalf("detail lines = %q, want %q", detail.Lines, tt.want)
 			}
-			if !slices.Equal(detail.Lines, want) {
-				t.Fatalf("detail lines = %q, want %q", detail.Lines, want)
-			}
-			if detail.Hint == "" {
+			if len(tt.want) > 0 && detail.Hint == "" {
 				t.Fatalf("detail hint is empty")
 			}
 			if !errors.Is(detail, tt.err) {
@@ -122,19 +122,16 @@ func TestInitializationFailureNamesSelectionCommands(t *testing.T) {
 	}
 }
 
-// Selection commands quote entry points so an operator can paste them.
-func TestEntryPointCommandsQuotePaths(t *testing.T) {
+// Selection commands quote identity words so an operator can paste them.
+func TestIdentitySelectionCommandQuotesShellWords(t *testing.T) {
 	t.Parallel()
 
-	path := filepath.FromSlash("/srv/it's server.jar")
-	installation := cliTestInstallation(
-		cliTestFabricIdentity("0.19.5", "1.21.1"),
-		path,
-	)
-	commands := entryPointCommands([]discovery.Installation{installation})
-	want := []string{"lucy init --entry-point '" + filepath.FromSlash("/srv/it") + "'\\''s server.jar'"}
-	if len(commands) != 1 || commands[0] != want[0] {
-		t.Fatalf("commands = %q, want %q", commands, want)
+	command := identitySelectionCommand(discovery.Identity{
+		Primary: catalog.VersionedRef{Name: catalog.Name("it's server")},
+	})
+	want := "lucy init --core 'it'\\''s server'"
+	if command != want {
+		t.Fatalf("command = %q, want %q", command, want)
 	}
 }
 
@@ -202,10 +199,10 @@ func TestReportDiscoveryFindingsPresentsSelectionOutcomes(t *testing.T) {
 			t.Fatalf("warnings = %q, want the automatic selection", warnings)
 		}
 		for _, fragment := range []string{
-			fabricPath,
-			vanillaPath,
+			installationIdentityLabel(cliTestFabricIdentity("0.19.5", "1.21.1")),
+			installationIdentityLabel(cliTestVanillaIdentity("1.21.1")),
 			"automatically",
-			"lucy init --entry-point",
+			"lucy init --core",
 		} {
 			if !strings.Contains(warnings[0], fragment) {
 				t.Fatalf("warning %q does not name %q", warnings[0], fragment)
@@ -216,7 +213,7 @@ func TestReportDiscoveryFindingsPresentsSelectionOutcomes(t *testing.T) {
 		}
 	})
 
-	t.Run("preserved entry point reports at info", func(t *testing.T) {
+	t.Run("one installation reports no alternative member", func(t *testing.T) {
 		t.Parallel()
 
 		fabric := cliTestInstallation(
@@ -232,12 +229,8 @@ func TestReportDiscoveryFindingsPresentsSelectionOutcomes(t *testing.T) {
 		output := NewOperationOutput(cmd, newTestInvocation())
 		reportDiscoveryFindings(&result, output)
 
-		if len(output.Warnings()) != 0 {
-			t.Fatalf("resolved layout warned: %q", output.Warnings())
-		}
-		if !strings.Contains(stderr.String(), "INFO") ||
-			!strings.Contains(stderr.String(), shimPath) {
-			t.Fatalf("info finding missing from stderr:\n%s", stderr.String())
+		if len(output.Warnings()) != 0 || stderr.Len() != 0 {
+			t.Fatalf("resolved layout reported findings: %q / %q", output.Warnings(), stderr.String())
 		}
 	})
 
@@ -285,8 +278,8 @@ func TestReportDiscoveryFindingsPresentsSelectionOutcomes(t *testing.T) {
 
 		for _, fragment := range []string{
 			"cannot choose between server runtimes",
-			"lucy init --entry-point '" + fabricPath + "'",
-			"lucy init --entry-point '" + vanillaPath + "'",
+			"lucy init --core fabric --core-version 0.19.5 --minecraft 1.21.1",
+			"lucy init --core minecraft --core-version 1.21.1 --minecraft 1.21.1",
 		} {
 			if !strings.Contains(stderr.String(), fragment) {
 				t.Fatalf("stderr does not name %q:\n%s", fragment, stderr.String())

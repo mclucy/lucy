@@ -1,8 +1,6 @@
 package discovery
 
 import (
-	"os"
-	"path/filepath"
 	"slices"
 	"strings"
 
@@ -20,6 +18,7 @@ const (
 	SelectionSelected        SelectionState = "selected"
 	SelectionAmbiguous       SelectionState = "ambiguous"
 	SelectionMissingDeclared SelectionState = "missing_declared"
+	SelectionUnmatched       SelectionState = "unmatched"
 	SelectionInvalid         SelectionState = "invalid"
 )
 
@@ -51,33 +50,39 @@ type Declaration struct {
 	CoreVersion versionpkg.Version
 }
 
-// Request is one selection attempt. A nonempty explicit EntryPoint overrides
-// the declaration. PolicyPreferModified is opted into only by live status.
+// Expectation narrows candidate installations by identity. Empty fields match
+// any value; a concrete version must equal an observed concrete version.
+// Expectation is an invocation filter, not a persisted declaration.
+type Expectation struct {
+	Product     server.Product
+	Minecraft   versionpkg.Version
+	CoreVersion versionpkg.Version
+}
+
+// Request is one selection attempt. Installation selects a result member
+// directly. Expectation narrows the candidates and takes precedence over the
+// persisted declaration because it describes this invocation. Policy
+// PreferModified is opted into only by live status.
 type Request struct {
-	EntryPoint string
-	Declared   *Declaration
-	Policy     SelectionPolicy
+	Installation *Installation
+	Expectation  *Expectation
+	Declared     *Declaration
+	Policy       SelectionPolicy
 }
 
 // Selection is the read-only result of a selection attempt. It references the
-// chosen installation and one actual entry-point member.
+// chosen installation; member roles remain discovery evidence.
 type Selection struct {
-	State         SelectionState
-	Source        SelectionSource
-	Installation  *Installation
-	EntryPoint    *File
-	RequestedPath string
+	State        SelectionState
+	Source       SelectionSource
+	Installation *Installation
 }
 
-// IsValid reports whether the selection names a chosen installation and a
-// real entry-point member with a usable identity.
+// IsValid reports whether the selection names a launchable installation with a
+// usable identity.
 func (s Selection) IsValid() bool {
 	return s.State == SelectionSelected &&
-		s.Installation != nil &&
-		s.Installation.Identity.IsValid() &&
-		s.EntryPoint != nil &&
-		s.EntryPoint.Role == RoleEntryPoint &&
-		s.EntryPoint.Path != ""
+		launchableInstallation(s.Installation)
 }
 
 // Product returns the selected installation product.
@@ -110,45 +115,63 @@ func (r *Result) Select(request Request) error {
 	if r == nil {
 		return &SelectionError{State: SelectionNone}
 	}
-	r.Selection = Selection{
-		State:         SelectionNone,
-		RequestedPath: request.EntryPoint,
-	}
+	r.Selection = Selection{State: SelectionNone}
 	selectable := r.selectableInstallations()
 
-	if request.EntryPoint != "" {
-		return r.selectExplicit(request.EntryPoint, selectable)
-	}
-	if request.Declared != nil {
+	switch {
+	case request.Installation != nil:
+		return r.selectDirect(request.Installation, selectable)
+	case request.Expectation != nil:
+		return r.selectExpectation(request.Expectation, selectable)
+	case request.Declared != nil:
 		return r.selectDeclared(request.Declared, selectable)
+	default:
+		return r.selectInferred(request.Policy, selectable)
 	}
-	return r.selectInferred(request.Policy, selectable)
 }
 
-func (r *Result) selectExplicit(path string, selectable []*Installation) error {
-	matches := installationsWithEntryPoint(selectable, path)
-	switch len(matches) {
-	case 1:
-		file := entryPointAt(matches[0], path)
-		if file == nil {
-			break
-		}
-		r.selectInstallation(matches[0], file, SourceExplicit)
-		return nil
-	case 0:
-	default:
-		r.Selection.State = SelectionInvalid
-		return &SelectionError{
-			State:         SelectionInvalid,
-			Path:          path,
-			Installations: cloneInstallations(matches),
+// selectDirect applies a caller's direct installation choice. The installation
+// must belong to this result and satisfy the launchability evidence.
+func (r *Result) selectDirect(
+	installation *Installation,
+	selectable []*Installation,
+) error {
+	for _, candidate := range selectable {
+		if candidate == installation {
+			r.selectCandidate(candidate, SourceExplicit)
+			return nil
 		}
 	}
 	r.Selection.State = SelectionInvalid
 	return &SelectionError{
 		State:         SelectionInvalid,
-		Path:          path,
-		Installations: cloneInstallations(selectable),
+		Installations: copyInstallations(r.Installations),
+	}
+}
+
+// selectExpectation filters the launchable installations by identity. It never
+// supplies a fact that discovery did not observe.
+func (r *Result) selectExpectation(
+	expectation *Expectation,
+	selectable []*Installation,
+) error {
+	matches := installationsMatchingExpectation(selectable, expectation)
+	switch len(matches) {
+	case 1:
+		r.selectCandidate(matches[0], SourceExplicit)
+		return nil
+	case 0:
+		r.Selection.State = SelectionUnmatched
+		return &SelectionError{
+			State:         SelectionUnmatched,
+			Installations: copyInstallations(r.Installations),
+		}
+	default:
+		r.Selection.State = SelectionAmbiguous
+		return &SelectionError{
+			State:         SelectionAmbiguous,
+			Installations: cloneInstallations(matches),
+		}
 	}
 }
 
@@ -159,10 +182,8 @@ func (r *Result) selectDeclared(
 	matches := installationsMatchingDeclaration(selectable, declaration)
 	switch len(matches) {
 	case 1:
-		if file := chooseEntryPoint(matches[0]); file != nil {
-			r.selectInstallation(matches[0], file, SourceDeclared)
-			return nil
-		}
+		r.selectCandidate(matches[0], SourceDeclared)
+		return nil
 	case 0:
 	default:
 		r.Selection.State = SelectionAmbiguous
@@ -194,17 +215,13 @@ func (r *Result) selectInferred(
 		r.Selection.State = SelectionNone
 		return &SelectionError{State: SelectionNone}
 	case 1:
-		if file := chooseEntryPoint(selectable[0]); file != nil {
-			r.selectInstallation(selectable[0], file, SourceInferred)
-			return nil
-		}
+		r.selectCandidate(selectable[0], SourceInferred)
+		return nil
 	default:
 		if policy == PolicyPreferModified {
 			if preferred := preferredInstallation(selectable); preferred != nil {
-				if file := chooseEntryPoint(preferred); file != nil {
-					r.selectInstallation(preferred, file, SourcePreferred)
-					return nil
-				}
+				r.selectCandidate(preferred, SourcePreferred)
+				return nil
 			}
 		}
 	}
@@ -215,30 +232,37 @@ func (r *Result) selectInferred(
 	}
 }
 
-func (r *Result) selectInstallation(
+func (r *Result) selectCandidate(
 	installation *Installation,
-	entryPoint *File,
 	source SelectionSource,
 ) {
 	r.Selection.State = SelectionSelected
 	r.Selection.Source = source
 	r.Selection.Installation = installation
-	r.Selection.EntryPoint = entryPoint
 }
 
 func (r *Result) selectableInstallations() []*Installation {
 	selectable := make([]*Installation, 0, len(r.Installations))
 	for index := range r.Installations {
 		installation := &r.Installations[index]
-		if !selectableInstallation(installation) {
-			continue
-		}
-		if entry := chooseEntryPoint(installation); entry == nil || entry.Ownership == OwnershipUnreadable {
+		if !launchableInstallation(installation) {
 			continue
 		}
 		selectable = append(selectable, installation)
 	}
 	return selectable
+}
+
+// launchableInstallation reports whether discovery has layout evidence that the
+// installation can start. Entry-point members prove launchability; they never
+// enter Selection.
+func launchableInstallation(installation *Installation) bool {
+	if installation == nil || !installation.Identity.IsValid() ||
+		firstEntryPoint(installation) == nil {
+		return false
+	}
+	entry := chooseEntryPoint(installation)
+	return entry != nil && entry.Ownership != OwnershipUnreadable
 }
 
 // A known version conflict excludes an installation. Missing metadata does not
@@ -295,30 +319,40 @@ func installationMatchesProduct(
 	)
 }
 
-func installationsWithEntryPoint(
+// installationsMatchingExpectation applies an invocation filter. Empty fields
+// match any observed value; concrete expectation versions must equal an
+// observed concrete version. Unknown observed metadata never proves a conflict.
+func installationsMatchingExpectation(
 	installations []*Installation,
-	path string,
+	expectation *Expectation,
 ) []*Installation {
-	matches := make([]*Installation, 0, 1)
+	if expectation == nil {
+		return nil
+	}
+	matches := make([]*Installation, 0, len(installations))
 	for _, installation := range installations {
-		if entryPointAt(installation, path) == nil {
+		if !installation.Identity.IsValid() {
 			continue
+		}
+		if expectation.Product != server.ProductUnknown &&
+			!installationMatchesProduct(installation, expectation.Product) {
+			continue
+		}
+		if concreteVersion(expectation.Minecraft) {
+			observed := installation.Identity.MinecraftVersion()
+			if concreteVersion(observed) && observed != expectation.Minecraft {
+				continue
+			}
+		}
+		if concreteVersion(expectation.CoreVersion) {
+			observed := installation.Identity.Primary.Version
+			if concreteVersion(observed) && observed != expectation.CoreVersion {
+				continue
+			}
 		}
 		matches = append(matches, installation)
 	}
 	return matches
-}
-
-func entryPointAt(installation *Installation, path string) *File {
-	if installation == nil {
-		return nil
-	}
-	for file := range installation.EntryPoints() {
-		if samePath(file.Path, path) {
-			return file
-		}
-	}
-	return nil
 }
 
 func firstEntryPoint(installation *Installation) *File {
@@ -452,24 +486,4 @@ func cloneInstallations(installations []*Installation) []Installation {
 
 func copyInstallations(installations []Installation) []Installation {
 	return slices.Clone(installations)
-}
-
-// samePath compares canonical paths, resolving symlinks and identity when the
-// filesystem can prove they name the same object.
-func samePath(left, right string) bool {
-	if left == "" || right == "" {
-		return false
-	}
-	if filepath.Clean(left) == filepath.Clean(right) {
-		return true
-	}
-	leftInfo, leftErr := os.Stat(left)
-	rightInfo, rightErr := os.Stat(right)
-	if leftErr == nil && rightErr == nil {
-		return os.SameFile(leftInfo, rightInfo)
-	}
-	leftResolved, leftErr := filepath.EvalSymlinks(left)
-	rightResolved, rightErr := filepath.EvalSymlinks(right)
-	return leftErr == nil && rightErr == nil &&
-		filepath.Clean(leftResolved) == filepath.Clean(rightResolved)
 }

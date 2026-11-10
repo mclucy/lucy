@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 
 	"github.com/mclucy/lucy/artifact"
@@ -345,7 +346,7 @@ func TestInitializePreservesReceiptAndObservedFiles(t *testing.T) {
 // identity the initialization wrote.
 func TestInitializeRequiresSelectionForCompetingRuntimes(t *testing.T) {
 	root := t.TempDir()
-	launcherPath := writeFabricTestLauncher(t, root, "0.19.5", "1.21.1")
+	writeFabricTestLauncher(t, root, "0.19.5", "1.21.1")
 	writeVanillaTestJar(t, root, "server.jar", "1.21.1")
 	service := newInitializeTestService(t)
 
@@ -373,9 +374,11 @@ func TestInitializeRequiresSelectionForCompetingRuntimes(t *testing.T) {
 	if _, err := service.Initialize(
 		t.Context(),
 		root,
-		InitOptions{EntryPoint: launcherPath},
+		InitOptions{Expectation: &discovery.Expectation{
+			Product: serverpkg.ProductFabric,
+		}},
 	); err != nil {
-		t.Fatalf("Initialize with selected entry point: %v", err)
+		t.Fatalf("Initialize with selected core: %v", err)
 	}
 	manifest := readManifest(t, root)
 	if got := manifest.Server.Core.Product; got != serverpkg.ProductFabric {
@@ -401,11 +404,12 @@ func TestInitializeRequiresSelectionForCompetingRuntimes(t *testing.T) {
 	if got := selection.Product(); got != serverpkg.ProductFabric {
 		t.Fatalf("observed product = %q, want the declared fabric runtime", got)
 	}
-	if selection.EntryPoint == nil || selection.EntryPoint.Path != launcherPath {
+	if selection.Installation == nil ||
+		selection.Product() != serverpkg.ProductFabric ||
+		selection.MinecraftVersion().String() != "1.21.1" {
 		t.Fatalf(
-			"observed entry point = %+v, want the declared launcher %s",
-			selection.EntryPoint,
-			launcherPath,
+			"observed installation = %+v, want the declared fabric runtime",
+			selection.Installation,
 		)
 	}
 }
@@ -504,36 +508,37 @@ func TestInitializeKeepsDeclarationForUnmanagedSurvivor(t *testing.T) {
 	if selection == nil {
 		t.Fatalf("observation lost the surviving runtime: %v", observed.SelectionError())
 	}
-	if selection.EntryPoint == nil || selection.EntryPoint.Path != survivorPath {
+	if selection.Installation == nil ||
+		!slices.ContainsFunc(selection.Installation.Files, func(file discovery.File) bool {
+			return file.Path == survivorPath
+		}) {
 		t.Fatalf(
-			"observed entry point = %+v, want the surviving copy %s",
-			selection.EntryPoint,
+			"observed installation = %+v, want the surviving copy %s",
+			selection.Installation,
 			survivorPath,
 		)
 	}
 }
 
-// An explicit entry point that names no server fails closed before any
-// document is written.
-func TestInitializeRejectsUnrecognizedExplicitEntryPoint(t *testing.T) {
+// An expectation that matches no observed installation fails closed before
+// any document is written.
+func TestInitializeRejectsUnmatchedExpectation(t *testing.T) {
 	root := t.TempDir()
 	writeVanillaTestJar(t, root, "server.jar", "1.20.1")
-	notesPath := filepath.Join(root, "notes.txt")
-	if err := os.WriteFile(notesPath, []byte("not a server"), 0o644); err != nil {
-		t.Fatalf("write notes: %v", err)
-	}
 
 	_, err := newInitializeTestService(t).Initialize(
 		t.Context(),
 		root,
-		InitOptions{EntryPoint: notesPath},
+		InitOptions{Expectation: &discovery.Expectation{
+			Product: serverpkg.ProductPaper,
+		}},
 	)
 	var selectionErr *discovery.SelectionError
 	if !errors.As(err, &selectionErr) {
 		t.Fatalf("Initialize error = %v, want *discovery.SelectionError", err)
 	}
-	if selectionErr.State != discovery.SelectionInvalid {
-		t.Fatalf("selection state = %q, want invalid", selectionErr.State)
+	if selectionErr.State != discovery.SelectionUnmatched {
+		t.Fatalf("selection state = %q, want unmatched", selectionErr.State)
 	}
 	if _, err := os.Stat(filepath.Join(root, documentpkg.ManifestFilename)); !errors.Is(err, os.ErrNotExist) {
 		t.Fatalf("refused initialization wrote a manifest: %v", err)

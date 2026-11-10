@@ -20,22 +20,24 @@ const (
 	FindingReceiptError                FindingKind = "receipt_error"
 	FindingOwnershipError              FindingKind = "ownership_error"
 	FindingModifiedFile                FindingKind = "modified_file"
-	FindingAlternativeEntryPoint       FindingKind = "alternative_entry_point"
 	FindingUnmanagedInstallation       FindingKind = "unmanaged_installation"
 	FindingMissingDeclaredInstallation FindingKind = "missing_declared_installation"
+	FindingUnmatchedInstallations      FindingKind = "unmatched_installations"
 	FindingAmbiguousInstallations      FindingKind = "ambiguous_installations"
 	FindingAutomaticSelection          FindingKind = "automatic_selection"
 )
 
 // Finding is one typed observation condition. Path is the primary affected
-// path; Paths carries every competing or related path when the condition spans
-// several entry points.
+// path; Paths carries related evidence when a condition spans several files.
+// Installation conditions carry Identity or Identities instead of entry-point
+// paths.
 type Finding struct {
 	Kind       FindingKind
 	Path       string
 	Paths      []string
 	Identity   Identity
 	Identities []Identity
+	Ownership  Ownership
 	Cause      error
 }
 
@@ -48,13 +50,45 @@ type Result struct {
 	Selection     Selection
 }
 
-// Selected returns the current selection only when it names a selected
-// installation and entry point.
+// Selected returns the current selection only when it names a launchable
+// installation.
 func (r *Result) Selected() *Selection {
 	if r == nil || !r.Selection.IsValid() {
 		return nil
 	}
 	return &r.Selection
+}
+
+// FindInstallation returns the installation whose member paths and roles
+// exactly match the given evidence. It returns nil when no installation
+// matches.
+func (r *Result) FindInstallation(members map[string]FileRole) *Installation {
+	if r == nil || len(members) == 0 {
+		return nil
+	}
+	for index := range r.Installations {
+		installation := &r.Installations[index]
+		if installationMatchesMembers(installation, members) {
+			return installation
+		}
+	}
+	return nil
+}
+
+func installationMatchesMembers(
+	installation *Installation,
+	members map[string]FileRole,
+) bool {
+	if installation == nil || len(installation.Files) != len(members) {
+		return false
+	}
+	for _, file := range installation.Files {
+		role, ok := members[file.Path]
+		if !ok || role != file.Role {
+			return false
+		}
+	}
+	return true
 }
 
 // Findings yields the immutable diagnostics followed by selection conditions
@@ -81,9 +115,12 @@ func (r *Result) yieldSelectionFindings(yield func(Finding) bool) bool {
 	case SelectionAmbiguous:
 		return yield(Finding{
 			Kind:       FindingAmbiguousInstallations,
-			Path:       r.Selection.RequestedPath,
-			Paths:      r.candidateEntryPoints(),
 			Identities: r.candidateIdentities(),
+		})
+	case SelectionUnmatched:
+		return yield(Finding{
+			Kind:       FindingUnmatchedInstallations,
+			Identities: r.observedIdentities(),
 		})
 	case SelectionMissingDeclared:
 		return yield(Finding{
@@ -102,23 +139,8 @@ func (r *Result) yieldSelectedFindings(yield func(Finding) bool) bool {
 	if selected.Source == SourcePreferred {
 		if !yield(Finding{
 			Kind:       FindingAutomaticSelection,
-			Path:       selected.EntryPoint.Path,
-			Paths:      r.competingEntryPoints(),
 			Identity:   selected.Installation.Identity,
 			Identities: r.competingIdentities(),
-		}) {
-			return false
-		}
-	}
-	for file := range selected.Installation.EntryPoints() {
-		if file.Path == selected.EntryPoint.Path ||
-			file.Ownership == OwnershipManaged {
-			continue
-		}
-		if !yield(Finding{
-			Kind:     FindingAlternativeEntryPoint,
-			Path:     file.Path,
-			Identity: selected.Installation.Identity,
 		}) {
 			return false
 		}
@@ -126,44 +148,30 @@ func (r *Result) yieldSelectedFindings(yield func(Finding) bool) bool {
 	for index := range r.Installations {
 		installation := &r.Installations[index]
 		if installation == selected.Installation ||
-			!selectableInstallation(installation) {
+			!launchableInstallation(installation) {
 			continue
 		}
-		for file := range installation.EntryPoints() {
-			if file.Ownership == OwnershipManaged {
-				continue
-			}
-			if !yield(Finding{
-				Kind:     FindingUnmanagedInstallation,
-				Path:     file.Path,
-				Identity: installation.Identity,
-			}) {
-				return false
-			}
+		entry := chooseEntryPoint(installation)
+		if entry == nil || entry.Ownership == OwnershipManaged {
+			continue
+		}
+		if !yield(Finding{
+			Kind:      FindingUnmanagedInstallation,
+			Identity:  installation.Identity,
+			Ownership: entry.Ownership,
+		}) {
+			return false
 		}
 	}
 	return true
 }
 
-func (r *Result) candidateEntryPoints() []string {
-	paths := make([]string, 0, len(r.Installations))
-	for index := range r.Installations {
-		installation := &r.Installations[index]
-		if !selectableInstallation(installation) {
-			continue
-		}
-		for file := range installation.EntryPoints() {
-			paths = append(paths, file.Path)
-		}
-	}
-	return sortedUnique(paths)
-}
-
-func (r *Result) candidateIdentities() []Identity {
+// observedIdentities lists every valid identity a filter could have matched.
+func (r *Result) observedIdentities() []Identity {
 	identities := make([]Identity, 0, len(r.Installations))
 	for index := range r.Installations {
 		installation := &r.Installations[index]
-		if !selectableInstallation(installation) {
+		if !installation.Identity.IsValid() {
 			continue
 		}
 		identities = append(identities, installation.Identity)
@@ -171,29 +179,16 @@ func (r *Result) candidateIdentities() []Identity {
 	return uniqueIdentities(identities)
 }
 
-func (r *Result) competingEntryPoints() []string {
-	if r == nil || r.Selection.Installation == nil {
-		return nil
-	}
-	selectedPath := ""
-	if r.Selection.EntryPoint != nil {
-		selectedPath = r.Selection.EntryPoint.Path
-	}
-	paths := make([]string, 0, len(r.Installations))
+func (r *Result) candidateIdentities() []Identity {
+	identities := make([]Identity, 0, len(r.Installations))
 	for index := range r.Installations {
 		installation := &r.Installations[index]
-		if installation == r.Selection.Installation ||
-			!selectableInstallation(installation) {
+		if !launchableInstallation(installation) {
 			continue
 		}
-		for file := range installation.EntryPoints() {
-			if file.Path == selectedPath {
-				continue
-			}
-			paths = append(paths, file.Path)
-		}
+		identities = append(identities, installation.Identity)
 	}
-	return sortedUnique(paths)
+	return uniqueIdentities(identities)
 }
 
 func (r *Result) competingIdentities() []Identity {
@@ -204,18 +199,12 @@ func (r *Result) competingIdentities() []Identity {
 	for index := range r.Installations {
 		installation := &r.Installations[index]
 		if installation == r.Selection.Installation ||
-			!selectableInstallation(installation) {
+			!launchableInstallation(installation) {
 			continue
 		}
 		identities = append(identities, installation.Identity)
 	}
 	return uniqueIdentities(identities)
-}
-
-func selectableInstallation(installation *Installation) bool {
-	return installation != nil &&
-		installation.Identity.IsValid() &&
-		firstEntryPoint(installation) != nil
 }
 
 // uniqueIdentities sorts the caller-owned slice and compacts equal canonical

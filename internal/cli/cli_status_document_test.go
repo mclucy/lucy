@@ -12,7 +12,7 @@ import (
 )
 
 // selectedWorkspace builds one observation whose discovery result already
-// selects the first installation and entry point.
+// selects the first installation.
 func selectedWorkspace(
 	root string,
 	identity discovery.Identity,
@@ -26,7 +26,6 @@ func selectedWorkspace(
 		State:        discovery.SelectionSelected,
 		Source:       discovery.SourceDeclared,
 		Installation: &observed.Discovery.Installations[0],
-		EntryPoint:   &observed.Discovery.Installations[0].Files[0],
 	}
 	return observed
 }
@@ -87,9 +86,6 @@ func TestNewLiveStatusDocumentProjectsObservation(t *testing.T) {
 	}
 	if server.Minecraft != "1.21.1" {
 		t.Fatalf("server Minecraft = %q, want 1.21.1", server.Minecraft)
-	}
-	if server.EntryPoint != "fabric-server-launch.jar" {
-		t.Fatalf("entry point = %q, want the workspace-relative launcher", server.EntryPoint)
 	}
 	if server.Activity != statusActivityStopped {
 		t.Fatalf("activity = %q, want stopped", server.Activity)
@@ -159,8 +155,10 @@ func TestNewLiveStatusDocumentWithoutSelectedRuntime(t *testing.T) {
 		t.Fatalf("ambiguous layout failed the command: %v", failure)
 	}
 
-	if err := observed.Select(discovery.Request{EntryPoint: filepath.Join(root, "notes.txt")}); err == nil {
-		t.Fatalf("invalid entry point selected a runtime")
+	if err := observed.Select(discovery.Request{Expectation: &discovery.Expectation{
+		Product: "paper",
+	}}); err == nil {
+		t.Fatalf("unmatched expectation selected a runtime")
 	}
 	failure := statusSelectionFailure(observed)
 	var detail *report.Detail

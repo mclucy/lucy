@@ -16,7 +16,7 @@ Init detects the installed server software, Minecraft version, and supported mod
 
 ## Choose a server
 
-If the directory holds more than one server, lucy asks which one to adopt. Select one directly with `--entry-point <jar-or-script>`; without a terminal, lucy fails and prints the command to use. In a workspace that already has a manifest, `--force --entry-point` switches to a different installed server.
+If the directory holds more than one server, lucy asks which one to adopt. Narrow the choice without a prompt with `--core <product>`, `--core-version <version>`, and `--minecraft <version>`; without a terminal, lucy fails and prints the command to use. In a workspace that already has a manifest, `--force` together with these filters switches to a different installed server.
 
 If no server is detected, init fails.
 
@@ -50,8 +50,16 @@ The Minecraft version and the server version are validated together. A combinati
   Record MCDReforged at this version as the server wrapper.
 </ParamField>
 
-<ParamField query="--entry-point" type="path">
-  Select an installed launcher or jar when several servers share the directory. The path may be relative to the current directory or absolute.
+<ParamField query="--core" type="string">
+  Expect this server product. Matching happens after full discovery; no match fails and lists the installed products.
+</ParamField>
+
+<ParamField query="--core-version" type="string">
+  Expect this exact server product version. Requires `--core`.
+</ParamField>
+
+<ParamField query="--minecraft" type="string">
+  Expect this exact Minecraft version.
 </ParamField>
 
 <ParamField query="--force, -f" type="boolean" default="false">

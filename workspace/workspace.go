@@ -99,9 +99,6 @@ func observe(root string, request discovery.Request, withPackages bool) *Workspa
 	ws.Discovery.ObserveOwnership(anchor)
 
 	request.Declared = declaration
-	if request.EntryPoint != "" && !filepath.IsAbs(request.EntryPoint) {
-		request.EntryPoint = filepath.Join(anchor, request.EntryPoint)
-	}
 	ws.selectionErr = ws.Discovery.Select(request)
 
 	if withPackages {
