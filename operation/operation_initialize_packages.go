@@ -249,11 +249,13 @@ func (a *packageAdopter) adoptMapped(
 			artifact.File{Path: p.Path},
 		)
 		if err != nil {
-			a.service.logger.Debug(
-				"package hash lookup failed",
-				"provider", mapper.provider,
-				"path", p.Path,
-				"error", err,
+			// A lookup error is an incomplete lookup, not an artifact miss, so
+			// the file's identification may be wrong or missing entirely.
+			a.warn(
+				"package %s: %s hash lookup failed; identification may be incomplete: %w",
+				p.Path,
+				mapper.provider,
+				err,
 			)
 			continue
 		}

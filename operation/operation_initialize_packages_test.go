@@ -4,10 +4,12 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/mclucy/lucy/cache"
@@ -81,11 +83,13 @@ func (s packageMapperInstallSource) Candidates(
 }
 
 // fakePackageMapper answers a hash lookup the way an upstream does when it
-// recognizes the file: as one project at one version.
+// recognizes the file: as one project at one version. err makes the lookup
+// fail the way an unreachable upstream does.
 type fakePackageMapper struct {
 	provider catalog.Provider
 	name     catalog.Name
 	version  versionpkg.Version
+	err      error
 }
 
 func (m fakePackageMapper) Provider() catalog.Provider { return m.provider }
@@ -94,6 +98,9 @@ func (m fakePackageMapper) PackageByHash(
 	context.Context,
 	upstream.ArtifactFingerprint,
 ) (catalog.VersionedRef, string, bool, error) {
+	if m.err != nil {
+		return catalog.VersionedRef{}, "", false, m.err
+	}
 	return catalog.VersionedRef{
 		Name:      m.name,
 		Provider:  m.provider,
@@ -129,6 +136,17 @@ func initializePackageMapperLayout(
 	source packageMapperTestSource,
 ) (string, *documentpkg.Manifest, *documentpkg.Lock) {
 	t.Helper()
+	root, _ := initializePackageMapperResult(t, source)
+	return root, readManifest(t, root), readLock(t, root)
+}
+
+// initializePackageMapperResult initializes the same layout and returns the
+// whole result, so a test can inspect the warnings it records.
+func initializePackageMapperResult(
+	t *testing.T,
+	source packageMapperTestSource,
+) (string, *InitResult) {
+	t.Helper()
 	root := t.TempDir()
 	writeFabricTestLauncher(t, root, "0.19.5", "1.21.1")
 	modPath := filepath.Join(root, "mods", "example.jar")
@@ -154,14 +172,15 @@ func initializePackageMapperLayout(
 		svc.logger,
 		"",
 	)
-	if _, err := svc.Initialize(
+	result, err := svc.Initialize(
 		t.Context(),
 		root,
 		InitOptions{},
-	); err != nil {
+	)
+	if err != nil {
 		t.Fatalf("Initialize: %v", err)
 	}
-	return root, readManifest(t, root), readLock(t, root)
+	return root, result
 }
 
 // A file only CurseForge recognizes becomes managed under its
@@ -266,4 +285,31 @@ func TestInitializeLeavesPackageUnmanagedWithoutMapper(t *testing.T) {
 		t.Fatalf("lock packages = %d, want none", got)
 	}
 	readFileBytes(t, filepath.Join(root, "mods", "example.jar"))
+}
+
+// A lookup error is not a miss: the file stays unmanaged, and the warning
+// names the package, the provider, and the failure.
+func TestInitializeWarnsWhenHashLookupFails(t *testing.T) {
+	_, result := initializePackageMapperResult(t, packageMapperTestSource{
+		mappers: map[catalog.Provider]fakePackageMapper{
+			catalog.ProviderModrinth: {
+				provider: catalog.ProviderModrinth,
+				name:     "example",
+				version:  "1.0.0",
+				err:      errors.New("modrinth unavailable"),
+			},
+		},
+	})
+	if got := len(result.Warnings); got != 1 {
+		t.Fatalf("warnings = %v, want one", result.Warnings)
+	}
+	message := result.Warnings[0].Error()
+	for _, want := range []string{"example.jar", "modrinth", "modrinth unavailable"} {
+		if !strings.Contains(message, want) {
+			t.Errorf("warning %q does not name %q", message, want)
+		}
+	}
+	if got := len(result.Document.Server.Packages[catalog.EcosystemFabric]); got != 0 {
+		t.Fatalf("manifest packages = %d, want none", got)
+	}
 }
