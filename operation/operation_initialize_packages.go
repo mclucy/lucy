@@ -211,7 +211,7 @@ func (a *packageAdopter) probe(
 	}
 	if len(modules) == 0 {
 		proposal.warnings = append(proposal.warnings, fmt.Errorf(
-			"package %s left unmanaged: no server-side module descriptor",
+			"package %s left unmanaged: its descriptor declares no server-side module",
 			p.Path,
 		))
 		return proposal
@@ -343,6 +343,16 @@ func (a *packageAdopter) probeMapped(
 		if release.Candidate.ProjectID == "" {
 			proposal.warnings = append(proposal.warnings, fmt.Errorf(
 				"package %s matched %s but its release has no project ID",
+				p.Path,
+				mapper.provider,
+			))
+			continue
+		}
+		if release.Candidate.URL == "" {
+			// Resolution materializes the adopted release, so a release the
+			// provider cannot serve would abort the whole installation.
+			proposal.warnings = append(proposal.warnings, fmt.Errorf(
+				"package %s matched %s but its release has no download URL",
 				p.Path,
 				mapper.provider,
 			))
