@@ -124,6 +124,35 @@ func TestInspectRejectsClientPackAndLauncher(t *testing.T) {
 	})
 }
 
+func TestCheckDestPathRejectsWorkspaceDocuments(t *testing.T) {
+	for _, rel := range []string{"lucy.yaml", "LUCY-LOCK.YAML", "Lucy.Yaml"} {
+		err := checkDestPath(rel)
+		if !errors.Is(err, ErrUnsafeEntry) {
+			t.Errorf("checkDestPath(%q) = %v, want ErrUnsafeEntry", rel, err)
+		}
+	}
+	for _, rel := range []string{
+		"backup/lucy.yaml",
+		"mods/lucy-lock.yaml",
+		"lucy.yaml.txt",
+	} {
+		if err := checkDestPath(rel); err != nil {
+			t.Errorf("checkDestPath(%q) = %v, want nil", rel, err)
+		}
+	}
+}
+
+func TestInspectRejectsWorkspaceDocumentAtRoot(t *testing.T) {
+	path := writeZip(t, map[string]string{
+		"lucy.yaml":         "name: server\n",
+		"server.properties": "level-name=world\n",
+	})
+	_, err := Inspect(t.Context(), path)
+	if !errors.Is(err, ErrUnsafeEntry) {
+		t.Fatalf("Inspect error = %v, want ErrUnsafeEntry", err)
+	}
+}
+
 func TestMaterializeTreeRejectsTraversalAndCaseCollision(t *testing.T) {
 	tests := []struct {
 		name  string
