@@ -14,7 +14,6 @@ import (
 	"github.com/mclucy/lucy/upstream"
 
 	"github.com/mclucy/lucy/artifact"
-	"github.com/mclucy/lucy/input"
 	serverpkg "github.com/mclucy/lucy/server"
 
 	versionpkg "github.com/mclucy/lucy/version"
@@ -35,33 +34,40 @@ func catalogueRegistry(provider catalog.Provider) catalog.Registry {
 }
 
 // selectionState owns the branch-local graph of the package search: the
-// chosen packages and the incompatibilities their metadata declares. An
-// artifact and its declarations form one selection, so the maps change
-// together. Canonical identities, candidate lists, and artifact analysis are
-// session-scoped caches and deliberately live outside this state.
+// chosen packages, the incompatibilities their metadata declares, and the
+// packages an exact release demand pins. An artifact and its declarations
+// form one selection, so the maps change together. Canonical identities,
+// candidate lists, and artifact analysis are session-scoped caches and
+// deliberately live outside this state.
 type selectionState struct {
 	chosen    map[projectKey]document.Package
 	conflicts map[projectKey][]upstream.ProjectDependency
+	pinned    map[projectKey]bool
 }
 
+// selectionBranch records the entry one change replaced, so restore can put
+// it back.
 type selectionBranch struct {
 	key          projectKey
 	previous     document.Package
 	hadPrevious  bool
 	conflicts    []upstream.ProjectDependency
 	hadConflicts bool
+	pinned       bool
 }
 
 func newSelectionState() selectionState {
 	return selectionState{
 		chosen:    map[projectKey]document.Package{},
 		conflicts: map[projectKey][]upstream.ProjectDependency{},
+		pinned:    map[projectKey]bool{},
 	}
 }
 
 func (s *selectionState) reset() {
 	clear(s.chosen)
 	clear(s.conflicts)
+	clear(s.pinned)
 }
 
 func (s *selectionState) selection(key projectKey) (document.Package, bool) {
@@ -70,28 +76,48 @@ func (s *selectionState) selection(key projectKey) (document.Package, bool) {
 }
 
 func (s *selectionState) extend(key projectKey, p document.Package) selectionBranch {
-	return s.install(key, p, s.conflicts[key])
+	return s.install(key, p, s.conflicts[key], s.pinned[key])
 }
 
 func (s *selectionState) install(
 	key projectKey,
 	p document.Package,
 	declared []upstream.ProjectDependency,
+	pinned bool,
 ) selectionBranch {
-	previous, hadPrevious := s.chosen[key]
-	conflicts, hadConflicts := s.conflicts[key]
+	branch := s.snapshot(key)
 	s.chosen[key] = p
 	if len(declared) > 0 {
 		s.conflicts[key] = declared
 	} else {
 		delete(s.conflicts, key)
 	}
+	if pinned {
+		s.pinned[key] = true
+	} else {
+		delete(s.pinned, key)
+	}
+	return branch
+}
+
+func (s *selectionState) remove(key projectKey) selectionBranch {
+	branch := s.snapshot(key)
+	delete(s.chosen, key)
+	delete(s.conflicts, key)
+	delete(s.pinned, key)
+	return branch
+}
+
+func (s *selectionState) snapshot(key projectKey) selectionBranch {
+	previous, hadPrevious := s.chosen[key]
+	conflicts, hadConflicts := s.conflicts[key]
 	return selectionBranch{
 		key:          key,
 		previous:     previous,
 		hadPrevious:  hadPrevious,
 		conflicts:    conflicts,
 		hadConflicts: hadConflicts,
+		pinned:       s.pinned[key],
 	}
 }
 
@@ -105,6 +131,18 @@ func (s *selectionState) restore(branch selectionBranch) {
 		s.conflicts[branch.key] = branch.conflicts
 	} else {
 		delete(s.conflicts, branch.key)
+	}
+	if branch.pinned {
+		s.pinned[branch.key] = true
+	} else {
+		delete(s.pinned, branch.key)
+	}
+}
+
+// restoreAll undoes branches in reverse order of their changes.
+func (s *selectionState) restoreAll(branches []selectionBranch) {
+	for i := len(branches) - 1; i >= 0; i-- {
+		s.restore(branches[i])
 	}
 }
 
@@ -125,9 +163,6 @@ func Packages(request PackagesRequest) ([]document.Package, []error, error) {
 	expandDependencies := request.ExpandDependencies
 	trace := request.Trace
 	var requests []projectRequest
-	// releasePinned records projects a dependency named by an exact release.
-	// Such a demand is not satisfied by a differently versioned module alias.
-	releasePinned := map[projectKey]struct{}{}
 	appendRequest := func(environment serverpkg.Environment, ecosystem catalog.Ecosystem, ref string, r document.Requirement) error {
 		provider, project, err := document.ParseReference(ref)
 		if err != nil {
@@ -242,7 +277,6 @@ func Packages(request PackagesRequest) ([]document.Package, []error, error) {
 				all = append(all, p)
 			}
 			all = mergeArtifactSelections(all)
-			all = pruneProvidedDependencyPackages(all, target, releasePinned)
 			sortPackages(all)
 			problems, err := finalizeModules(all, target)
 			if err != nil {
@@ -337,7 +371,7 @@ func Packages(request PackagesRequest) ([]document.Package, []error, error) {
 				ProjectID:    r.key.project,
 				Requirements: r.requirements,
 			}
-			branch := state.install(r.key, p, nil)
+			branch := state.install(r.key, p, nil, false)
 			if backtrack(rest) {
 				return true
 			}
@@ -508,20 +542,37 @@ func Packages(request PackagesRequest) ([]document.Package, []error, error) {
 				Dependency:   dependencyDemand,
 				DependencyOf: dependencyOf,
 			}
-			// A release pin belongs to the candidate that declared it. Record
-			// the keys this branch adds so abandoning the candidate removes
-			// them with the rest of the branch.
-			var branchPins []projectKey
-			if len(r.releaseHints) > 0 {
-				for _, key := range [...]projectKey{r.key, selectedPackageKey(pkg)} {
-					if _, pinned := releasePinned[key]; pinned {
-						continue
+			// A pure dependency demand binds to a selected package that
+			// answers every module identity of the candidate. The candidate
+			// installs only when that substitution leaves no settled graph.
+			if dependencyDemand && len(requirements) == 0 && len(r.releaseHints) == 0 {
+				if providerKey, ok := state.substitute(target, pkg); ok {
+					provider, _ := state.selection(providerKey)
+					branch := state.extend(
+						providerKey,
+						withDependents(provider, dependencyOf),
+					)
+					logger.Debug(
+						"resolve: dependency answered by provider",
+						"provider", r.key.provider,
+						"project", r.key.project,
+						"answered-by", providerKey.project,
+					)
+					if backtrack(rest) {
+						return true
 					}
-					releasePinned[key] = struct{}{}
-					branchPins = append(branchPins, key)
+					state.restore(branch)
 				}
 			}
-			branch := state.install(r.key, pkg, conflictDependencies(candidate))
+			branches := []selectionBranch{
+				state.install(
+					r.key,
+					pkg,
+					conflictDependencies(candidate),
+					len(r.releaseHints) > 0,
+				),
+			}
+			branches = append(branches, state.supersede(target, r.key)...)
 			logger.Debug(
 				"resolve: candidate selected",
 				"provider", r.key.provider,
@@ -571,10 +622,7 @@ func Packages(request PackagesRequest) ([]document.Package, []error, error) {
 			if backtrack(next) {
 				return true
 			}
-			state.restore(branch)
-			for _, key := range branchPins {
-				delete(releasePinned, key)
-			}
+			state.restoreAll(branches)
 			logger.Debug(
 				"resolve: backtracking candidate",
 				"provider", r.key.provider,
@@ -649,7 +697,6 @@ func Packages(request PackagesRequest) ([]document.Package, []error, error) {
 		out = append(out, p)
 	}
 	out = mergeArtifactSelections(out)
-	out = pruneProvidedDependencyPackages(out, target, releasePinned)
 	sortPackages(out)
 	for i := range out {
 		slices.SortFunc(out[i].DependencyOf, func(a, b catalog.Ref) int {
@@ -685,394 +732,6 @@ func Packages(request PackagesRequest) ([]document.Package, []error, error) {
 		"packages", len(out),
 	)
 	return out, warnings, nil
-}
-
-// selectedPackageServesRequest checks that a selected package serves the same
-// environment, target, and module ecosystem as a dependency package.
-func selectedPackageServesRequest(
-	target Target,
-	selected document.Package,
-	key projectKey,
-) bool {
-	if selected.Environment != key.environment {
-		return false
-	}
-	if key.environment == serverpkg.EnvironmentServer &&
-		!SupportsPackages(target, selected.Ecosystem) {
-		return false
-	}
-	return dependencyEcosystemCompatible(
-		target,
-		selected.Ecosystem,
-		key.ecosystem,
-	)
-}
-
-// dependencyEcosystemCompatible reports whether a package of the provided
-// ecosystem can answer a request of the requested ecosystem on target: both
-// share one module namespace there.
-func dependencyEcosystemCompatible(
-	target Target,
-	provided catalog.Ecosystem,
-	requested catalog.Ecosystem,
-) bool {
-	return target.moduleNamespace(provided) == target.moduleNamespace(requested)
-}
-
-// pruneProvidedDependencyPackages drops packages selected only because another
-// package's upstream metadata named their project, when a compatible selected
-// package already provides that module identity. Installing both artifacts
-// would make two native modules answer the same loader identity; the provider
-// is the one the loader would use (for example Quilted Fabric API providing
-// Fabric API). Exact release demands and direct bindings are preserved.
-func pruneProvidedDependencyPackages(
-	packages []document.Package,
-	target Target,
-	releasePinned map[projectKey]struct{},
-) []document.Package {
-	if target.Product != serverpkg.ProductQuilt || len(packages) < 2 {
-		return packages
-	}
-	dropped := make([]bool, len(packages))
-	replacement := make([]int, len(packages))
-	for i := range replacement {
-		replacement[i] = -1
-	}
-	for i := range packages {
-		candidate := packages[i]
-		if candidate.Environment != serverpkg.EnvironmentServer {
-			continue
-		}
-		// The only supported substitution is a Quilt provider replacing a
-		// Fabric family dependency on a Quilt server. The dependency's package
-		// ecosystem may be recorded as Quilt or Fabric depending on the
-		// requesting graph, so the provider/request compatibility check makes
-		// the one-way decision.
-		if !candidate.Dependency || len(candidate.Requirements) > 0 {
-			continue
-		}
-		if _, pinned := releasePinned[selectedPackageKey(candidate)]; pinned {
-			continue
-		}
-		provider, ok := dependencyProjectCoveredByProvider(
-			packages,
-			i,
-			target,
-		)
-		if !ok {
-			continue
-		}
-		dropped[i] = true
-		replacement[i] = provider
-	}
-	anyDropped := false
-	for _, isDropped := range dropped {
-		anyDropped = anyDropped || isDropped
-	}
-	if !anyDropped {
-		return packages
-	}
-
-	// A dropped package's dependents still justify whichever package answers
-	// the module identities. Resolve provider chains first so a chained
-	// substitution does not lose the edge.
-	transferred := make([][]catalog.Ref, len(packages))
-	for i := range packages {
-		if !dropped[i] {
-			continue
-		}
-		survivor := replacementSurvivor(i, replacement, dropped)
-		if survivor < 0 {
-			continue
-		}
-		transferred[survivor] = append(
-			transferred[survivor],
-			packages[i].DependencyOf...,
-		)
-	}
-
-	kept := make([]document.Package, 0, len(packages))
-	for i := range packages {
-		if dropped[i] {
-			continue
-		}
-		p := packages[i]
-		if len(transferred[i]) > 0 {
-			p.DependencyOf = mergeDependencyRefs(
-				p.DependencyOf,
-				transferred[i],
-			)
-		}
-		kept = append(kept, p)
-	}
-	return kept
-}
-
-func replacementSurvivor(
-	index int,
-	replacement []int,
-	dropped []bool,
-) int {
-	for steps := 0; steps <= len(replacement); steps++ {
-		if !dropped[index] {
-			return index
-		}
-		next := replacement[index]
-		if next < 0 || next == index {
-			return -1
-		}
-		index = next
-	}
-	// A replacement cycle cannot pick a survivor; preserve the existing
-	// package choice rather than inventing one.
-	return -1
-}
-
-func mergeDependencyRefs(
-	existing []catalog.Ref,
-	added []catalog.Ref,
-) []catalog.Ref {
-	merged := slices.Clone(existing)
-	for _, ref := range added {
-		if !slices.Contains(merged, ref) {
-			merged = append(merged, ref)
-		}
-	}
-	sort.Slice(merged, func(i, j int) bool {
-		return cmp.Or(
-			cmp.Compare(merged[i].Provider, merged[j].Provider),
-			cmp.Compare(merged[i].Name, merged[j].Name),
-		) < 0
-	})
-	return merged
-}
-
-func dependencyProjectCoveredByProvider(
-	packages []document.Package,
-	targetIndex int,
-	target Target,
-) (int, bool) {
-	targetPackage := packages[targetIndex]
-	targetIdentities := moduleIdentityVersions(targetPackage.Modules)
-	if len(targetIdentities) == 0 {
-		return -1, false
-	}
-	requestKey := selectedPackageKey(targetPackage)
-	best := -1
-	for i := range packages {
-		if i == targetIndex {
-			continue
-		}
-		provider := packages[i]
-		if provider.Ecosystem != catalog.EcosystemQuilt {
-			continue
-		}
-		if !selectedPackageServesRequest(target, provider, requestKey) {
-			continue
-		}
-		if !moduleIdentitiesCover(provider.Modules, targetIdentities) {
-			continue
-		}
-		if !providerSatisfiesRequiredConstraints(
-			packages,
-			targetIndex,
-			provider,
-			target,
-		) {
-			continue
-		}
-		if moduleIdentitiesCover(
-			targetPackage.Modules,
-			moduleIdentityVersions(provider.Modules),
-		) && canonicalDependencyProject(targetPackage.ProjectID) <=
-			canonicalDependencyProject(provider.ProjectID) {
-			// Both packages carry the same module identities. Keep the
-			// lexicographically smaller project so neither drop is arbitrary
-			// and at least one provider survives.
-			continue
-		}
-		if best < 0 || providerIdentityLess(provider, packages[best]) {
-			best = i
-		}
-	}
-	return best, best >= 0
-}
-
-func providerIdentityLess(left, right document.Package) bool {
-	return cmp.Or(
-		cmp.Compare(
-			canonicalDependencyProject(left.ProjectID),
-			canonicalDependencyProject(right.ProjectID),
-		),
-		cmp.Compare(left.Provider, right.Provider),
-		cmp.Compare(left.ProjectID, right.ProjectID),
-	) < 0
-}
-
-// providedModuleVersion is the version one module identity exposes.
-type providedModuleVersion struct {
-	version versionpkg.Version
-}
-
-// identityVersions maps every descriptor identity a module declares to the
-// version it exposes, keyed by the caller's scoping. Primary ids and provided
-// aliases are both evidence: a provider must cover all of them to replace a
-// dependency package. The first declaration of a key wins.
-func identityVersions[K comparable](
-	modules []catalog.DescriptorModule,
-	key func(module catalog.DescriptorModule, name string) K,
-) map[K]providedModuleVersion {
-	versions := map[K]providedModuleVersion{}
-	add := func(module catalog.DescriptorModule, name string) {
-		if name == "" {
-			return
-		}
-		k := key(module, name)
-		if _, exists := versions[k]; exists {
-			return
-		}
-		versions[k] = providedModuleVersion{
-			version: module.ProvidedVersion(name),
-		}
-	}
-	for _, module := range modules {
-		add(module, module.ID)
-		for _, provided := range module.Provides {
-			add(module, provided)
-		}
-	}
-	return versions
-}
-
-// moduleIdentityVersions maps every descriptor identity a module declares to
-// the version it exposes, keyed by bare name.
-func moduleIdentityVersions(
-	modules []catalog.DescriptorModule,
-) map[string]providedModuleVersion {
-	return identityVersions(
-		modules,
-		func(_ catalog.DescriptorModule, name string) string {
-			return name
-		},
-	)
-}
-
-// providedIdentityVersions maps the identities a provider package exposes to
-// the versions they expose, scoped the way module resolution scopes them: by
-// the provider's environment, the target-normalized ecosystem, and the
-// normalized ID.
-func providedIdentityVersions(
-	provider document.Package,
-	target Target,
-) map[moduleKey]providedModuleVersion {
-	return identityVersions(
-		provider.Modules,
-		func(module catalog.DescriptorModule, name string) moduleKey {
-			return moduleKey{
-				provider.Environment,
-				target.moduleNamespace(module.Ecosystem),
-				normalizeModuleID(module.Ecosystem, name),
-			}
-		},
-	)
-}
-
-// moduleIdentitiesCover reports whether the provider modules expose every
-// required identity. Version agreement is checked against the graph's actual
-// dependency constraints separately, because identity names and per-module
-// version schemes are independent (Quilted Fabric API aliases some Fabric
-// modules with the Fabric API release version).
-func moduleIdentitiesCover(
-	providerModules []catalog.DescriptorModule,
-	required map[string]providedModuleVersion,
-) bool {
-	if len(required) == 0 {
-		return false
-	}
-	provided := moduleIdentityVersions(providerModules)
-	for identity := range required {
-		if _, ok := provided[identity]; !ok {
-			return false
-		}
-	}
-	return true
-}
-
-// providerSatisfiesRequiredConstraints checks the provider's exposed alias
-// versions against the module requirements the selected graph actually states.
-// Only requirements in the provider's namespace are compared: the same
-// environment, target-normalized ecosystem, and normalized ID that module
-// resolution scopes by. A requirement in another namespace, such as an MCDR
-// plugin's requirement on a Quilt provider's identity, does not constrain the
-// provider. Required and present optional dependencies must match; an
-// incompatible declaration only blocks the provider when its range matches.
-// Advisory kinds impose no constraint.
-func providerSatisfiesRequiredConstraints(
-	packages []document.Package,
-	skipIndex int,
-	provider document.Package,
-	target Target,
-) bool {
-	provided := providedIdentityVersions(provider, target)
-	for i := range packages {
-		if i == skipIndex {
-			continue
-		}
-		pkg := packages[i]
-		for _, module := range pkg.Modules {
-			for _, dep := range module.Dependencies {
-				if dep.Kind == catalog.DependencyKindPython ||
-					dep.ID == "java" ||
-					dep.Constraint == "" ||
-					len(dep.AnyOf) > 0 ||
-					len(dep.Unless) > 0 {
-					continue
-				}
-				key := moduleKey{
-					pkg.Environment,
-					target.moduleNamespace(module.Ecosystem),
-					normalizeModuleID(module.Ecosystem, dep.ID),
-				}
-				got, ok := provided[key]
-				if !ok {
-					continue
-				}
-				matched, err := versionpkg.Match(
-					dep.Constraint,
-					got.version,
-					module.VersionDialect,
-				)
-				if err != nil {
-					return false
-				}
-				switch dep.Kind {
-				case catalog.DependencyKindRequired,
-					catalog.DependencyKindOptional:
-					if !matched {
-						return false
-					}
-				case catalog.DependencyKindIncompatible:
-					if matched {
-						return false
-					}
-				}
-			}
-		}
-	}
-	return true
-}
-
-func selectedPackageKey(p document.Package) projectKey {
-	return projectKey{
-		environment: p.Environment,
-		ecosystem:   p.Ecosystem,
-		provider:    p.Provider,
-		project:     p.ProjectID,
-	}
-}
-
-func canonicalDependencyProject(name string) string {
-	return string(input.ToProjectName(name))
 }
 
 // serverModuleProblems keeps the module problems the server runtime itself
