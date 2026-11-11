@@ -51,6 +51,7 @@ release-meta
 
 # Local testing environments
 test_*
+.lucy*
 
 # Installed skills
 .agents/skills
