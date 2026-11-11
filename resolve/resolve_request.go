@@ -31,6 +31,11 @@ type (
 		origin       requestOrigin
 		requirements []document.RequirementBinding
 		dependencyOf catalog.Ref
+		// previousFileID is the file the lock selected for this project. A
+		// release may publish several files of one version, and only the
+		// primary one answers an unconstrained requirement, so the locked
+		// variant stays eligible.
+		previousFileID string
 		// releaseHints come from remote dependency metadata. They order
 		// candidates but do not by themselves reject another build.
 		releaseHints []releaseHint
