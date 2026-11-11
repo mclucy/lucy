@@ -208,43 +208,55 @@ func quiltDependencyAppliesToServer(entry quiltDependencyEntry) bool {
 }
 
 // quiltVersionNode converts one versions value into a descriptor dependency
-// node. A plain string stays verbatim, because the module carries the Quilt
-// dialect. The deprecated array and the any form are alternatives, and the all
-// form is a conjunction.
+// node. Quilt states every version condition as a range: the deprecated array
+// and the any form are alternatives, and the all form is a conjunction. Both
+// lower to one constraint, because the module carries the Quilt dialect that
+// spells alternatives with || and a conjunction with spaces. The nesting keeps
+// each alternative's conjunction intact, which a dependency node cannot.
 func quiltVersionNode(
 	raw any,
 	id string,
 	kind catalog.DependencyKind,
 ) (catalog.DescriptorDependency, error) {
-	node := catalog.DescriptorDependency{ID: id, Kind: kind}
+	clauses, err := quiltVersionClauses(raw)
+	if err != nil {
+		return catalog.DescriptorDependency{}, err
+	}
+	return catalog.DescriptorDependency{
+		ID:         id,
+		Kind:       kind,
+		Constraint: quiltConstraint(clauses),
+	}, nil
+}
+
+// quiltVersionClauses returns the disjunctive normal form of a versions value:
+// alternatives, each a conjunction of range terms. An absent value accepts
+// every version.
+func quiltVersionClauses(raw any) ([][]string, error) {
 	switch value := raw.(type) {
 	case nil:
-		return node, nil
+		return [][]string{{}}, nil
 	case string:
-		node.Constraint = value
-		return node, nil
+		return quiltRangeClauses(value), nil
 	case []any:
-		return quiltAnyNode(value, id, kind)
+		return quiltAnyClauses(value)
 	case map[string]any:
 		if len(value) != 1 {
-			return catalog.DescriptorDependency{}, fmt.Errorf(
+			return nil, fmt.Errorf(
 				"Quilt versions object must hold exactly one of any or all",
 			)
 		}
 		if anyRaw, ok := value["any"]; ok {
-			return quiltAnyNode(quiltVersionItems(anyRaw), id, kind)
+			return quiltAnyClauses(quiltVersionItems(anyRaw))
 		}
 		if allRaw, ok := value["all"]; ok {
-			return quiltAllNode(quiltVersionItems(allRaw), id, kind)
+			return quiltAllClauses(quiltVersionItems(allRaw))
 		}
-		return catalog.DescriptorDependency{}, fmt.Errorf(
+		return nil, fmt.Errorf(
 			"Quilt versions object must hold exactly one of any or all",
 		)
 	default:
-		return catalog.DescriptorDependency{}, fmt.Errorf(
-			"invalid Quilt versions value %T",
-			raw,
-		)
+		return nil, fmt.Errorf("invalid Quilt versions value %T", raw)
 	}
 }
 
@@ -255,60 +267,80 @@ func quiltVersionItems(raw any) []any {
 	return []any{raw}
 }
 
-func quiltAnyNode(
-	items []any,
-	id string,
-	kind catalog.DependencyKind,
-) (catalog.DescriptorDependency, error) {
-	node := catalog.DescriptorDependency{ID: id, Kind: kind}
-	texts := make([]string, 0, len(items))
-	plain := true
-	for _, item := range items {
-		text, ok := item.(string)
-		if !ok {
-			plain = false
-			break
-		}
-		texts = append(texts, text)
-	}
-	if plain {
-		node.Constraint = strings.Join(texts, " || ")
-		return node, nil
-	}
+// quiltAnyClauses concatenates the alternatives of every item.
+func quiltAnyClauses(items []any) ([][]string, error) {
 	if len(items) == 0 {
-		return node, nil
+		return [][]string{{}}, nil
 	}
-
-	alternatives := make([]catalog.DescriptorDependency, 0, len(items))
+	clauses := make([][]string, 0, len(items))
 	for _, item := range items {
-		alternative, err := quiltVersionNode(item, id, kind)
+		itemClauses, err := quiltVersionClauses(item)
 		if err != nil {
-			return catalog.DescriptorDependency{}, err
+			return nil, err
 		}
-		alternatives = append(alternatives, alternative)
+		clauses = append(clauses, itemClauses...)
 	}
-	// The node's own leaf is the first alternative, so its constraint applies
-	// when the module is present.
-	node = alternatives[0]
-	node.AnyOf = append(node.AnyOf, alternatives[1:]...)
-	return node, nil
+	return clauses, nil
 }
 
-func quiltAllNode(
-	items []any,
-	id string,
-	kind catalog.DependencyKind,
-) (catalog.DescriptorDependency, error) {
-	node := catalog.DescriptorDependency{ID: id, Kind: kind}
-	node.AllOf = make([]catalog.DescriptorDependency, 0, len(items))
+// quiltAllClauses multiplies the alternatives of every item into conjunctions.
+func quiltAllClauses(items []any) ([][]string, error) {
+	clauses := [][]string{{}}
 	for _, item := range items {
-		condition, err := quiltVersionNode(item, id, kind)
+		itemClauses, err := quiltVersionClauses(item)
 		if err != nil {
-			return catalog.DescriptorDependency{}, err
+			return nil, err
 		}
-		node.AllOf = append(node.AllOf, condition)
+		clauses = quiltConjunction(clauses, itemClauses)
 	}
-	return node, nil
+	return clauses, nil
+}
+
+// quiltRangeClauses splits one range into its alternatives. Each alternative
+// stays a conjunction the Quilt grammar spells with spaces.
+func quiltRangeClauses(raw string) [][]string {
+	alternatives := strings.Split(raw, "||")
+	clauses := make([][]string, 0, len(alternatives))
+	for _, alternative := range alternatives {
+		alternative = strings.TrimSpace(alternative)
+		if alternative == "" {
+			continue
+		}
+		clauses = append(clauses, []string{alternative})
+	}
+	return clauses
+}
+
+func quiltConjunction(left, right [][]string) [][]string {
+	product := make([][]string, 0, len(left)*len(right))
+	for _, leftClause := range left {
+		for _, rightClause := range right {
+			clause := make([]string, 0, len(leftClause)+len(rightClause))
+			clause = append(clause, leftClause...)
+			clause = append(clause, rightClause...)
+			product = append(product, clause)
+		}
+	}
+	return product
+}
+
+// quiltConstraint joins the normal form back into a Quilt range. An empty
+// conjunction accepts every version, so it imposes no constraint.
+func quiltConstraint(clauses [][]string) string {
+	alternatives := make([]string, 0, len(clauses))
+	for _, clause := range clauses {
+		terms := make([]string, 0, len(clause))
+		for _, term := range clause {
+			if term = strings.TrimSpace(term); term != "" {
+				terms = append(terms, term)
+			}
+		}
+		if len(terms) == 0 {
+			return ""
+		}
+		alternatives = append(alternatives, strings.Join(terms, " "))
+	}
+	return strings.Join(alternatives, " || ")
 }
 
 func quiltRole(value any) string {
