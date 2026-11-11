@@ -16,6 +16,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/mclucy/lucy/artifact"
 	"github.com/mclucy/lucy/artifactstore"
 	"github.com/mclucy/lucy/cache"
 	"github.com/mclucy/lucy/catalog"
@@ -24,6 +25,7 @@ import (
 	"github.com/mclucy/lucy/internal/importpack"
 	"github.com/mclucy/lucy/internal/workspacewrite"
 	"github.com/mclucy/lucy/receipt"
+	serverpkg "github.com/mclucy/lucy/server"
 	"github.com/mclucy/lucy/version"
 	"github.com/mclucy/lucy/workspace"
 	"github.com/mclucy/lucy/workspace/discovery"
@@ -180,6 +182,21 @@ func (s *Service) importSource(
 		Elapsed: time.Since(filesStarted),
 		Count:   materialized.ServerFiles,
 	})
+	if plan.Format == importpack.FormatMrpack {
+		// A client modpack marks its client-only files server-required, so the
+		// env declaration alone cannot exclude them from a server.
+		removed, err := removeClientOnlyMods(
+			ctx,
+			stage,
+			materialized.Product,
+			materialized.Minecraft,
+		)
+		if err != nil {
+			return nil, err
+		}
+		materialized.SkippedClient += removed
+		materialized.ServerFiles -= removed
+	}
 
 	force := false
 	if plan.Format == importpack.FormatMrpack {
@@ -584,6 +601,47 @@ func publishImportStage(stage, target string) (*importPublication, error) {
 		publication.moved = append(publication.moved, name)
 	}
 	return publication, nil
+}
+
+// removeClientOnlyMods deletes mod jars the server loader excludes from a
+// dedicated server. Only the descriptor answers that question: a client modpack
+// marks such files server-required. A jar whose metadata cannot be read stays
+// in place and remains unmanaged.
+func removeClientOnlyMods(
+	ctx context.Context,
+	stage string,
+	product serverpkg.Product,
+) (int, error) {
+	modsDir := filepath.Join(stage, "mods")
+	entries, err := os.ReadDir(modsDir)
+	if errors.Is(err, os.ErrNotExist) {
+		return 0, nil
+	}
+	if err != nil {
+		return 0, fmt.Errorf("read imported mod directory: %w", err)
+	}
+	ecosystem := catalog.Ecosystem(product)
+	removed := 0
+	for _, entry := range entries {
+		if entry.IsDir() ||
+			!strings.EqualFold(filepath.Ext(entry.Name()), ".jar") {
+			continue
+		}
+		path := filepath.Join(modsDir, entry.Name())
+		info, err := artifact.ReadInfo(path)
+		if err != nil || len(info) == 0 {
+			continue
+		}
+		modules, err := artifact.ReadModules(ctx, path, ecosystem)
+		if err != nil || len(modules) > 0 {
+			continue
+		}
+		if err := os.Remove(path); err != nil {
+			return removed, fmt.Errorf("remove client-only mod %s: %w", path, err)
+		}
+		removed++
+	}
+	return removed, nil
 }
 
 // relativeImportPaths reports files relative to root, slash-separated, so no
