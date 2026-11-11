@@ -1,7 +1,6 @@
 package install
 
 import (
-	"bytes"
 	"errors"
 	"fmt"
 	"os"
@@ -9,7 +8,6 @@ import (
 	"strings"
 
 	"github.com/mclucy/lucy/document"
-	"github.com/mclucy/lucy/internal/fsutil"
 	"github.com/mclucy/lucy/internal/workspacewrite"
 )
 
@@ -82,44 +80,31 @@ func installFileMode(path string, defaultMode os.FileMode) (os.FileMode, error) 
 	}
 }
 
-func publishInstallBytes(
-	files *os.Root,
-	name string,
-	data []byte,
-	image *workspacewrite.InstallImage,
-	entry workspacewrite.InstallJournalEntry,
-) error {
-	return fsutil.WriteRoot(
-		files,
-		name,
-		bytes.NewReader(data),
-		fsutil.WriteOptions{
-			Mode:    os.FileMode(image.Mode),
-			Replace: true,
-			Check:   installBeforeCheck(files, entry),
-		},
-	)
-}
-
-// installBeforeCheck guards a publication against an edit that happened after
-// the journal captured the before image.
-func installBeforeCheck(
-	files *os.Root,
-	entry workspacewrite.InstallJournalEntry,
-) func() error {
-	return func() error {
-		current, err := workspacewrite.ObserveInstallImage(files, entry.Path)
-		if err != nil {
-			return err
+// rejectCommitPathAliases refuses names the target filesystem resolves to the
+// same entry, and names that are not canonical. Otherwise one journal entry
+// could overwrite and another could prune the same file. Distinct
+// case-sensitive paths stay valid.
+func rejectCommitPathAliases(root, label string, names []string) error {
+	aliases := make(map[string][]string, len(names))
+	for _, name := range names {
+		if !filepath.IsLocal(filepath.FromSlash(name)) ||
+			filepath.ToSlash(filepath.Clean(filepath.FromSlash(name))) != name {
+			return fmt.Errorf("%s path %q is not canonical", label, name)
 		}
-		if !workspacewrite.InstallImagesEqual(current, entry.Before) {
-			return fmt.Errorf(
-				"installation output %s changed before publication",
-				entry.Path,
-			)
+		key := strings.ToLower(name)
+		for _, prior := range aliases[key] {
+			if workspacewrite.InstallPathsAlias(root, prior, name) {
+				return fmt.Errorf(
+					"%s paths %q and %q alias the same filesystem entry",
+					label,
+					prior,
+					name,
+				)
+			}
 		}
-		return nil
+		aliases[key] = append(aliases[key], name)
 	}
+	return nil
 }
 
 func installPathReserved(root, name string) bool {
@@ -145,72 +130,4 @@ func installPathMatchesReserved(root, name, reserved string) bool {
 		return false
 	}
 	return workspacewrite.InstallPathsAlias(root, reserved, name)
-}
-
-// rejectInstallPathAliases refuses names that the target filesystem resolves
-// to the same entry. Otherwise one journal entry could overwrite and another
-// could prune the same file. Distinct case-sensitive paths stay valid.
-func rejectInstallPathAliases(root string, names []string) error {
-	aliases := make(map[string][]string, len(names))
-	for _, name := range names {
-		if !filepath.IsLocal(filepath.FromSlash(name)) ||
-			filepath.ToSlash(filepath.Clean(filepath.FromSlash(name))) != name {
-			return fmt.Errorf("installation path %q is not canonical", name)
-		}
-		key := strings.ToLower(name)
-		for _, prior := range aliases[key] {
-			if workspacewrite.InstallPathsAlias(root, prior, name) {
-				return fmt.Errorf(
-					"installation paths %q and %q alias the same filesystem entry",
-					prior, name,
-				)
-			}
-		}
-		aliases[key] = append(aliases[key], name)
-	}
-	return nil
-}
-
-// preserveInstallPreImage stores one complete content-addressed before image
-// through a synced root-confined publish and verifies the copy. A failure here
-// happens before the journal publishes, so the caller removes the unused
-// backup directory.
-func preserveInstallPreImage(
-	files *os.Root,
-	backupPath string,
-	backupRelative string,
-	image workspacewrite.InstallImage,
-	source string,
-) error {
-	relative := filepath.Join(filepath.FromSlash(backupRelative), image.SHA256)
-	if info, err := files.Lstat(relative); err == nil {
-		if !info.Mode().IsRegular() {
-			return fmt.Errorf("installation pre-image %s is not a regular file", image.SHA256)
-		}
-	} else if errors.Is(err, os.ErrNotExist) {
-		input, err := os.Open(source)
-		if err != nil {
-			return err
-		}
-		copyErr := fsutil.WriteRoot(
-			files,
-			relative,
-			input,
-			fsutil.WriteOptions{Mode: 0o600, Replace: true},
-		)
-		closeErr := input.Close()
-		if copyErr != nil || closeErr != nil {
-			return errors.Join(copyErr, closeErr)
-		}
-	} else {
-		return err
-	}
-	hashes, err := DigestFile(filepath.Join(backupPath, image.SHA256), nil)
-	if err != nil {
-		return err
-	}
-	if hashes["sha256"] != image.SHA256 {
-		return fmt.Errorf("installation pre-image %s is incomplete", image.SHA256)
-	}
-	return nil
 }

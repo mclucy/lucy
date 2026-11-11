@@ -394,7 +394,7 @@ func (l *adoptionLedger) build(root string, lock *document.Lock) (receipt.Receip
 		names = append(names, path)
 	}
 	slices.Sort(names)
-	if err := rejectInstallPathAliases(root, names); err != nil {
+	if err := rejectCommitPathAliases(root, "adoption", names); err != nil {
 		return receipt.Receipt{}, fmt.Errorf(
 			"conflicting path aliases in adopted files: %w",
 			err,
