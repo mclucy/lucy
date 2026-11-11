@@ -886,7 +886,8 @@ func dependencyProjectCoveredByProvider(
 		if !providerSatisfiesRequiredConstraints(
 			packages,
 			targetIndex,
-			provider.Modules,
+			provider,
+			target,
 		) {
 			continue
 		}
@@ -923,21 +924,24 @@ type providedModuleVersion struct {
 	version versionpkg.Version
 }
 
-// moduleIdentityVersions maps every descriptor identity a module declares to
-// the version it exposes. Primary ids and provided aliases are both evidence:
-// a provider must cover all of them to replace a dependency package.
-func moduleIdentityVersions(
+// identityVersions maps every descriptor identity a module declares to the
+// version it exposes, keyed by the caller's scoping. Primary ids and provided
+// aliases are both evidence: a provider must cover all of them to replace a
+// dependency package. The first declaration of a key wins.
+func identityVersions[K comparable](
 	modules []catalog.DescriptorModule,
-) map[string]providedModuleVersion {
-	versions := map[string]providedModuleVersion{}
+	key func(module catalog.DescriptorModule, name string) K,
+) map[K]providedModuleVersion {
+	versions := map[K]providedModuleVersion{}
 	add := func(module catalog.DescriptorModule, name string) {
 		if name == "" {
 			return
 		}
-		if _, exists := versions[name]; exists {
+		k := key(module, name)
+		if _, exists := versions[k]; exists {
 			return
 		}
-		versions[name] = providedModuleVersion{
+		versions[k] = providedModuleVersion{
 			version: module.ProvidedVersion(name),
 		}
 	}
@@ -948,6 +952,39 @@ func moduleIdentityVersions(
 		}
 	}
 	return versions
+}
+
+// moduleIdentityVersions maps every descriptor identity a module declares to
+// the version it exposes, keyed by bare name.
+func moduleIdentityVersions(
+	modules []catalog.DescriptorModule,
+) map[string]providedModuleVersion {
+	return identityVersions(
+		modules,
+		func(_ catalog.DescriptorModule, name string) string {
+			return name
+		},
+	)
+}
+
+// providedIdentityVersions maps the identities a provider package exposes to
+// the versions they expose, scoped the way module resolution scopes them: by
+// the provider's environment, the target-normalized ecosystem, and the
+// normalized ID.
+func providedIdentityVersions(
+	provider document.Package,
+	target Target,
+) map[moduleKey]providedModuleVersion {
+	return identityVersions(
+		provider.Modules,
+		func(module catalog.DescriptorModule, name string) moduleKey {
+			return moduleKey{
+				provider.Environment,
+				moduleEcosystem(target, module.Ecosystem),
+				normalizeModuleID(module.Ecosystem, name),
+			}
+		},
+	)
 }
 
 // moduleIdentitiesCover reports whether the provider modules expose every
@@ -973,15 +1010,20 @@ func moduleIdentitiesCover(
 
 // providerSatisfiesRequiredConstraints checks the provider's exposed alias
 // versions against the module requirements the selected graph actually states.
-// Required and present optional dependencies must match; an incompatible
-// declaration only blocks the provider when its range matches. Advisory kinds
-// impose no constraint.
+// Only requirements in the provider's namespace are compared: the same
+// environment, target-normalized ecosystem, and normalized ID that module
+// resolution scopes by. A requirement in another namespace, such as an MCDR
+// plugin's requirement on a Quilt provider's identity, does not constrain the
+// provider. Required and present optional dependencies must match; an
+// incompatible declaration only blocks the provider when its range matches.
+// Advisory kinds impose no constraint.
 func providerSatisfiesRequiredConstraints(
 	packages []document.Package,
 	skipIndex int,
-	providerModules []catalog.DescriptorModule,
+	provider document.Package,
+	target Target,
 ) bool {
-	provided := moduleIdentityVersions(providerModules)
+	provided := providedIdentityVersions(provider, target)
 	for i := range packages {
 		if i == skipIndex {
 			continue
@@ -996,7 +1038,12 @@ func providerSatisfiesRequiredConstraints(
 					len(dep.Unless) > 0 {
 					continue
 				}
-				got, ok := provided[dep.ID]
+				key := moduleKey{
+					pkg.Environment,
+					moduleEcosystem(target, module.Ecosystem),
+					normalizeModuleID(module.Ecosystem, dep.ID),
+				}
+				got, ok := provided[key]
 				if !ok {
 					continue
 				}
