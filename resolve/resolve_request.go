@@ -67,11 +67,11 @@ type Target struct {
 	CoreModules []catalog.DescriptorModule
 }
 
-// packageRuntime returns the ecosystem whose loader loads server packages on
+// PackageRuntime returns the ecosystem whose loader loads server packages on
 // target. A paperclip server runs Paper regardless of how the manifest names
 // its product. The second result is false for a target that loads no server
 // packages through Lucy.
-func (t Target) packageRuntime() (catalog.Ecosystem, bool) {
+func (t Target) PackageRuntime() (catalog.Ecosystem, bool) {
 	switch t.Product {
 	case serverpkg.ProductFabric,
 		serverpkg.ProductQuilt,
@@ -90,14 +90,14 @@ func (t Target) packageRuntime() (catalog.Ecosystem, bool) {
 // SupportsPackages reports whether the target loads server packages from
 // ecosystem.
 func SupportsPackages(target Target, ecosystem catalog.Ecosystem) bool {
-	runtime, ok := target.packageRuntime()
+	runtime, ok := target.PackageRuntime()
 	return ok && slices.Contains(runtime.Loads(), ecosystem)
 }
 
 // moduleNamespace returns the ecosystem that scopes module identities of
 // descriptor ecosystem d on target.
 func (t Target) moduleNamespace(d catalog.Ecosystem) catalog.Ecosystem {
-	runtime, _ := t.packageRuntime()
+	runtime, _ := t.PackageRuntime()
 	return runtime.ModuleNamespace(d)
 }
 
@@ -105,7 +105,7 @@ func (t Target) moduleNamespace(d catalog.Ecosystem) catalog.Ecosystem {
 // artifact of a package in ecosystem. A runtime that loads the ecosystem
 // reads the artifact as its own loader would.
 func (t Target) descriptorLoader(ecosystem catalog.Ecosystem) catalog.Ecosystem {
-	if runtime, ok := t.packageRuntime(); ok &&
+	if runtime, ok := t.PackageRuntime(); ok &&
 		slices.Contains(runtime.Loads(), ecosystem) {
 		return runtime
 	}

@@ -206,33 +206,19 @@ func infoBuildMatchesEcosystems(
 // compatibility surfaces Lucy models. Unrecognized loaders stay unknown so
 // the human view never claims a proven mismatch.
 func infoBuildEcosystem(loader string) (catalog.Ecosystem, bool) {
-	switch strings.ToLower(strings.TrimSpace(loader)) {
-	case "fabric":
-		return catalog.EcosystemFabric, true
-	case "quilt":
-		return catalog.EcosystemQuilt, true
-	case "forge":
-		return catalog.EcosystemForge, true
-	case "neoforge":
-		return catalog.EcosystemNeoForge, true
-	case "paper", "purpur", "folia", "leaves":
-		return catalog.EcosystemPaper, true
-	case "bukkit", "spigot", "craftbukkit":
-		return catalog.EcosystemBukkit, true
-	case "sponge", "spongevanilla", "spongeforge", "spongeneo":
-		return catalog.EcosystemSponge, true
-	case "bungeecord", "waterfall":
-		return catalog.EcosystemBungeeCord, true
-	case "velocity":
-		return catalog.EcosystemVelocity, true
-	case "mcdr", "mcdreforged":
-		return catalog.EcosystemMCDR, true
-	default:
+	product, ok := server.ParseProduct(loader)
+	if !ok {
+		return catalog.EcosystemUnspecified, false
+	}
+	ecosystem := product.Ecosystem()
+	if ecosystem == catalog.EcosystemUnspecified ||
+		ecosystem == catalog.EcosystemMinecraft {
 		// "minecraft" usually marks a resource pack or data pack rather than
 		// a loader. It stays unknown so a server product is not reported as
 		// incompatible with content it can still serve.
 		return catalog.EcosystemUnspecified, false
 	}
+	return ecosystem, true
 }
 
 // infoBuildsNewestFirst orders the bounded human view. Builds without a

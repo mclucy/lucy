@@ -260,13 +260,7 @@ func reportFindings(
 }
 
 func supportedEcosystem(ecosystem catalog.Ecosystem) bool {
-	switch ecosystem {
-	case catalog.EcosystemFabric, catalog.EcosystemQuilt,
-		catalog.EcosystemForge, catalog.EcosystemNeoForge:
-		return true
-	default:
-		return false
-	}
+	return ecosystem.IsModding()
 }
 
 func selectBuild(layout buildrepo.Layout, requested string) (buildrepo.GradleBuild, error) {

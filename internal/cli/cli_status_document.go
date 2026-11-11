@@ -294,29 +294,14 @@ func statusLockComponents(lock *documentpkg.Lock) []statusComponent {
 		Version:   lock.Server.Minecraft.String(),
 		Ecosystem: catalog.EcosystemMinecraft.String(),
 	})
-	var (
-		name      string
-		ecosystem catalog.Ecosystem
-	)
-	switch lock.Server.Product {
-	case serverpkg.ProductFabric:
-		name, ecosystem = "fabric-loader", catalog.EcosystemFabric
-	case serverpkg.ProductQuilt:
-		name, ecosystem = "quilt-loader", catalog.EcosystemQuilt
-	case serverpkg.ProductForge:
-		name, ecosystem = "forge", catalog.EcosystemForge
-	case serverpkg.ProductNeoForge:
-		name, ecosystem = "neoforge", catalog.EcosystemNeoForge
-	default:
-		return components
-	}
-	if !statusConcreteVersion(lock.Server.CoreVersion) {
+	component := lock.Server.Product.LoaderComponent()
+	if component == "" || !statusConcreteVersion(lock.Server.CoreVersion) {
 		return components
 	}
 	return append(components, statusComponent{
-		Name:      name,
+		Name:      component.String(),
 		Version:   lock.Server.CoreVersion.String(),
-		Ecosystem: ecosystem.String(),
+		Ecosystem: lock.Server.Product.Ecosystem().String(),
 	})
 }
 
@@ -425,10 +410,8 @@ func statusLockPackageDirectories(
 		result = append(result, relative)
 	}
 	ecosystem := statusLockProductEcosystem(lock)
-	switch ecosystem {
-	case catalog.EcosystemFabric, catalog.EcosystemQuilt,
-		catalog.EcosystemForge, catalog.EcosystemNeoForge,
-		catalog.EcosystemBukkit, catalog.EcosystemPaper:
+	switch ecosystem.Family() {
+	case catalog.FamilyMod, catalog.FamilyPlugin:
 		directory, err := lock.PackageDirectory(&documentpkg.Package{
 			Environment: serverpkg.EnvironmentServer,
 			Ecosystem:   ecosystem,

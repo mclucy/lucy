@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/mclucy/lucy/catalog"
+	serverpkg "github.com/mclucy/lucy/server"
 	"github.com/mclucy/lucy/workspace/discovery"
 )
 
@@ -82,52 +83,9 @@ func productServedEcosystems(
 	offers := make([]ServedEcosystem, 0, 3)
 	name = strings.ToLower(strings.TrimSpace(name))
 
+	// Hybrid products bridge ecosystems that no loader table row expresses,
+	// such as Arclight serving both Forge and Bukkit.
 	switch name {
-	case "fabric":
-		if primary.Ecosystem == catalog.EcosystemFabric {
-			offers = appendServedEcosystem(
-				offers,
-				catalog.EcosystemFabric,
-				CompatFull,
-			)
-		}
-	case "quilt":
-		if primary.Ecosystem == catalog.EcosystemQuilt {
-			offers = appendServedEcosystem(
-				offers,
-				catalog.EcosystemQuilt,
-				CompatFull,
-			)
-			// Quilt Loader loads Fabric mods, so a Quilt runtime serves the
-			// Fabric ecosystem fully.
-			offers = appendServedEcosystem(
-				offers,
-				catalog.EcosystemFabric,
-				CompatFull,
-			)
-		}
-	case "forge":
-		if primary.Ecosystem == catalog.EcosystemForge {
-			offers = appendServedEcosystem(
-				offers,
-				catalog.EcosystemForge,
-				CompatFull,
-			)
-		}
-	case "neoforge":
-		if primary.Ecosystem == catalog.EcosystemNeoForge {
-			offers = appendServedEcosystem(
-				offers,
-				catalog.EcosystemNeoForge,
-				CompatFull,
-			)
-		}
-	case "craftbukkit", "bukkit", "spigot":
-		offers = appendServedEcosystem(
-			offers,
-			catalog.EcosystemBukkit,
-			CompatFull,
-		)
 	case "arclight", "arclight-forge", "arclight-neoforge", "arclight-fabric":
 		switch name {
 		case "arclight-forge":
@@ -206,20 +164,32 @@ func productServedEcosystems(
 			CompatFull,
 		)
 	default:
-		if discovery.IsPaperLineage(name) {
-			offers = appendServedEcosystem(
-				offers,
-				catalog.EcosystemPaper,
-				CompatFull,
-			)
-			offers = appendServedEcosystem(
-				offers,
-				catalog.EcosystemBukkit,
-				CompatFull,
-			)
-		}
+		offers = appendProductOffers(offers, primary, name)
 	}
 
+	return offers
+}
+
+// appendProductOffers adds the ecosystems a product serves on its own. A
+// product without a package family serves no packages, unless its name
+// resolves to one that does.
+func appendProductOffers(
+	offers []ServedEcosystem,
+	primary catalog.VersionedRef,
+	name string,
+) []ServedEcosystem {
+	ecosystem := primary.Ecosystem
+	if ecosystem.IsUnspecified() {
+		if product, ok := serverpkg.ParseProduct(name); ok {
+			ecosystem = product.Ecosystem()
+		}
+	}
+	if ecosystem.Family() == catalog.FamilyNone {
+		return offers
+	}
+	for _, served := range ecosystem.Loads() {
+		offers = appendServedEcosystem(offers, served, CompatFull)
+	}
 	return offers
 }
 
@@ -251,31 +221,13 @@ func selectedLoaderEcosystems(
 ) []catalog.Ecosystem {
 	var ecosystems []catalog.Ecosystem
 	for _, component := range components {
-		name := strings.ToLower(strings.TrimSpace(component.Name.String()))
-		switch {
-		case component.Ecosystem == catalog.EcosystemFabric &&
-			(name == "fabric-loader" || name == "fabricloader"):
-			ecosystems = appendUniqueEcosystem(
-				ecosystems,
-				catalog.EcosystemFabric,
-			)
-		case component.Ecosystem == catalog.EcosystemQuilt &&
-			(name == "quilt-loader" || name == "quiltloader" || name == "quilt"):
-			ecosystems = appendUniqueEcosystem(
-				ecosystems,
-				catalog.EcosystemQuilt,
-			)
-		case component.Ecosystem == catalog.EcosystemForge && name == "forge":
-			ecosystems = appendUniqueEcosystem(
-				ecosystems,
-				catalog.EcosystemForge,
-			)
-		case component.Ecosystem == catalog.EcosystemNeoForge && name == "neoforge":
-			ecosystems = appendUniqueEcosystem(
-				ecosystems,
-				catalog.EcosystemNeoForge,
-			)
+		if _, ok := serverpkg.LoaderComponentName(
+			component.Ecosystem,
+			component.Name.String(),
+		); !ok {
+			continue
 		}
+		ecosystems = appendUniqueEcosystem(ecosystems, component.Ecosystem)
 	}
 	return ecosystems
 }

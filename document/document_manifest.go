@@ -187,14 +187,7 @@ func (m *Manifest) Normalize() error {
 		m.Server.Packages = map[catalog.Ecosystem]map[string]Requirement{}
 	}
 	for ecosystem, packages := range m.Server.Packages {
-		switch ecosystem {
-		case catalog.EcosystemFabric,
-			catalog.EcosystemQuilt,
-			catalog.EcosystemForge,
-			catalog.EcosystemNeoForge,
-			catalog.EcosystemBukkit,
-			catalog.EcosystemPaper:
-		default:
+		if !ecosystem.IsSearchable() {
 			return fmt.Errorf("unsupported package ecosystem %q", ecosystem)
 		}
 		for ref, requirement := range packages {

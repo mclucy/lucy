@@ -548,18 +548,7 @@ func packageVersionDialect(p *document.Package) versionpkg.Dialect {
 			return module.VersionDialect
 		}
 	}
-	switch p.Ecosystem {
-	case catalog.EcosystemFabric, catalog.EcosystemQuilt:
-		return versionpkg.DialectFabric
-	case catalog.EcosystemForge, catalog.EcosystemNeoForge:
-		return versionpkg.DialectMaven
-	case catalog.EcosystemMCDR:
-		return versionpkg.DialectMCDR
-	case catalog.EcosystemBukkit, catalog.EcosystemPaper:
-		return versionpkg.DialectOpaque
-	default:
-		return versionpkg.DialectUnknown
-	}
+	return p.Ecosystem.VersionDialect()
 }
 
 func comparePackageVersions(previous, current packageView) (int, bool) {
