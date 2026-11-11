@@ -41,14 +41,34 @@ func decodeMCDRDescriptor(
 	return mcdrDecodedDescriptor(zipRdr, raw, member)
 }
 
+// mcdrDescription is the plugin description. MCDR accepts one string or a map
+// from language to text.
+type mcdrDescription struct {
+	EnUs string
+	ZhCn string
+}
+
+func (d *mcdrDescription) UnmarshalJSON(data []byte) error {
+	var text string
+	if err := json.Unmarshal(data, &text); err == nil {
+		d.EnUs = text
+		return nil
+	}
+	var localized map[string]string
+	if err := json.Unmarshal(data, &localized); err != nil {
+		// The loader ignores a description it cannot read.
+		return nil
+	}
+	d.EnUs = localized["en_us"]
+	d.ZhCn = localized["zh_cn"]
+	return nil
+}
+
 type mcdrPluginFile struct {
-	ID          string `json:"id"`
-	Version     string `json:"version"`
-	Name        string `json:"name"`
-	Description struct {
-		EnUs string `json:"en_us"`
-		ZhCn string `json:"zh_cn"`
-	} `json:"description"`
+	ID               string                   `json:"id"`
+	Version          string                   `json:"version"`
+	Name             string                   `json:"name"`
+	Description      mcdrDescription          `json:"description"`
 	Author           fn.SingleOrSlice[string] `json:"author"`
 	Link             string                   `json:"link"`
 	Dependencies     map[string]string        `json:"dependencies"`

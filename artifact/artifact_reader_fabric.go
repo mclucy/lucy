@@ -139,7 +139,7 @@ func fabricArtifactMetadata(
 	return catalog.Metadata{
 		Title:       modInfo.Name,
 		Description: modInfo.Description,
-		License:     modInfo.License,
+		License:     strings.Join(modInfo.License, ", "),
 		Authors:     fabricArtifactAuthors(modInfo.Authors),
 		URLs:        fabricArtifactURLs(modInfo.Contact),
 	}

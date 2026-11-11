@@ -9,7 +9,7 @@ type FileSpongePluginsIdentifier struct {
 		Name    string `json:"name"`
 		Version string `json:"version"`
 	} `json:"loader"`
-	License string                     `json:"license"`
+	License FileLicense                `json:"license"`
 	Global  FileSpongePluginMetadata   `json:"global"`
 	Plugins []FileSpongePluginMetadata `json:"plugins"`
 }
