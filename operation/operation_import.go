@@ -1,6 +1,8 @@
 package operation
 
 import (
+	"bufio"
+	"bytes"
 	"context"
 	"encoding/json/v2"
 	"errors"
@@ -147,10 +149,7 @@ func (s *Service) importSource(
 	if err != nil {
 		return nil, err
 	}
-	review, err := importReview(filepath.Join(stage, filepath.FromSlash(manifest.Server.Directory)))
-	if err != nil {
-		return nil, err
-	}
+	review := importReview(filepath.Join(stage, filepath.FromSlash(manifest.Server.Directory)))
 
 	// Hold the stage's writer lock across publication and registration. The
 	// rename moves the lock into the target, so another operation cannot enter
@@ -577,34 +576,30 @@ func unmanagedImportFiles(
 }
 
 // importReview reports server settings and grants that the operator should
-// check before the imported server is run.
-func importReview(serverDir string) ([]string, error) {
+// check before the imported server is run. A metadata file that cannot be read
+// within importMetadataMaxBytes is reported as unreadable instead of failing
+// the import.
+func importReview(serverDir string) []string {
 	var review []string
-	onlineMode, found, err := importPropertyValue(
+	props, err := importPropertyValues(
 		filepath.Join(serverDir, "server.properties"),
 		"online-mode",
-	)
-	if err != nil {
-		return nil, err
-	}
-	if found && strings.EqualFold(onlineMode, "false") {
-		review = append(review, "server.properties: online-mode=false; players are not authenticated with Mojang")
-	}
-	rcon, found, err := importPropertyValue(
-		filepath.Join(serverDir, "server.properties"),
 		"enable-rcon",
 	)
 	if err != nil {
-		return nil, err
+		review = append(review, "server.properties: unreadable metadata")
 	}
-	if found && strings.EqualFold(rcon, "true") {
+	if strings.EqualFold(props["online-mode"], "false") {
+		review = append(review, "server.properties: online-mode=false; players are not authenticated with Mojang")
+	}
+	if strings.EqualFold(props["enable-rcon"], "true") {
 		review = append(review, "server.properties: enable-rcon=true; remote console access is enabled")
 	}
-	eula, found, err := importPropertyValue(filepath.Join(serverDir, "eula.txt"), "eula")
+	eula, err := importPropertyValues(filepath.Join(serverDir, "eula.txt"), "eula")
 	if err != nil {
-		return nil, err
+		review = append(review, "eula.txt: unreadable metadata")
 	}
-	if found && strings.EqualFold(eula, "true") {
+	if strings.EqualFold(eula["eula"], "true") {
 		review = append(review, "eula.txt: eula=true; the Minecraft EULA was accepted in the source")
 	}
 	ops, err := importOperatorCount(filepath.Join(serverDir, "ops.json"))
@@ -613,33 +608,68 @@ func importReview(serverDir string) ([]string, error) {
 	} else if ops > 0 {
 		review = append(review, fmt.Sprintf("ops.json: %d operator(s) granted", ops))
 	}
-	return review, nil
+	return review
 }
 
-// importPropertyValue returns the last value for key in a key=value file. A
-// missing file is not an error.
-func importPropertyValue(file, key string) (string, bool, error) {
-	data, err := os.ReadFile(file)
+// errImportMetadataTooLarge reports a metadata file larger than
+// importMetadataMaxBytes.
+var errImportMetadataTooLarge = errors.New("import metadata exceeds size limit")
+
+// importPropertyValues returns the last value of each requested key in a
+// key=value file. Keys absent from the file are absent from the result, and a
+// missing file is not an error. The file is streamed line by line through a
+// reader capped at importMetadataMaxBytes, so a larger file fails with
+// errImportMetadataTooLarge without its contents being loaded.
+func importPropertyValues(file string, keys ...string) (map[string]string, error) {
+	values := make(map[string]string, len(keys))
+	f, err := os.Open(file)
 	if errors.Is(err, os.ErrNotExist) {
-		return "", false, nil
+		return values, nil
 	}
 	if err != nil {
-		return "", false, err
+		return nil, err
 	}
-	var value string
-	found := false
-	for _, line := range strings.Split(string(data), "\n") {
-		line = strings.TrimSpace(line)
-		if line == "" || strings.HasPrefix(line, "#") || strings.HasPrefix(line, "!") {
+	defer f.Close()
+	info, err := f.Stat()
+	if err != nil {
+		return nil, err
+	}
+	if info.Size() > importMetadataMaxBytes {
+		return nil, importMetadataTooLarge(file)
+	}
+	// One byte past the cap lets a file that grows after Stat be detected
+	// below instead of being read to its end.
+	limited := &io.LimitedReader{R: f, N: importMetadataMaxBytes + 1}
+	scanner := bufio.NewScanner(limited)
+	scanner.Buffer(make([]byte, 0, 4096), importMetadataMaxBytes+1)
+	for scanner.Scan() {
+		line := bytes.TrimSpace(scanner.Bytes())
+		if len(line) == 0 || line[0] == '#' || line[0] == '!' {
 			continue
 		}
-		k, v, ok := strings.Cut(line, "=")
-		if ok && strings.TrimSpace(k) == key {
-			value = strings.TrimSpace(v)
-			found = true
+		k, v, ok := bytes.Cut(line, []byte("="))
+		if !ok {
+			continue
+		}
+		name := bytes.TrimSpace(k)
+		for _, key := range keys {
+			if string(name) == key {
+				values[key] = string(bytes.TrimSpace(v))
+			}
 		}
 	}
-	return value, found, nil
+	if err := scanner.Err(); err != nil {
+		return nil, err
+	}
+	if limited.N <= 0 {
+		return nil, importMetadataTooLarge(file)
+	}
+	return values, nil
+}
+
+// importMetadataTooLarge describes a metadata file over importMetadataMaxBytes.
+func importMetadataTooLarge(file string) error {
+	return fmt.Errorf("%s exceeds %d bytes: %w", file, importMetadataMaxBytes, errImportMetadataTooLarge)
 }
 
 // importMetadataMaxBytes caps the review metadata Lucy reads from a server
@@ -663,7 +693,7 @@ func importOperatorCount(file string) (int, error) {
 		return 0, err
 	}
 	if len(data) > importMetadataMaxBytes {
-		return 0, fmt.Errorf("%s exceeds %d bytes", file, importMetadataMaxBytes)
+		return 0, importMetadataTooLarge(file)
 	}
 	var ops []any
 	if err := json.Unmarshal(data, &ops); err != nil {

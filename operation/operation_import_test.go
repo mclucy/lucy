@@ -962,11 +962,153 @@ func TestImportReviewReportsOversizedOpsJSON(t *testing.T) {
 	if err := os.Truncate(file, importMetadataMaxBytes+1); err != nil {
 		t.Fatal(err)
 	}
-	review, err := importReview(dir)
-	if err != nil {
-		t.Fatalf("importReview: %v", err)
-	}
+	review := importReview(dir)
 	if want := []string{"ops.json: unreadable operator list"}; !slices.Equal(review, want) {
 		t.Fatalf("importReview = %v, want %v", review, want)
+	}
+}
+
+// propertyFileOfSize returns a server.properties body of exactly size bytes
+// whose only key is online-mode=false; the rest is one comment line.
+func propertyFileOfSize(size int) string {
+	const head = "online-mode=false\n"
+	return head + "#" + strings.Repeat(" ", size-len(head)-2) + "\n"
+}
+
+// TestImportPropertyValuesParsesRequestedKeys checks last-wins parsing for the
+// requested keys and that comments, blank lines and other keys are ignored.
+func TestImportPropertyValuesParsesRequestedKeys(t *testing.T) {
+	t.Parallel()
+	file := filepath.Join(t.TempDir(), "server.properties")
+	content := "# online-mode=true\n! enable-rcon=true\n\nonline-mode=true\n  enable-rcon = false  \nonline-mode = false\nmotd=hi\r\n"
+	if err := os.WriteFile(file, []byte(content), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	values, err := importPropertyValues(file, "online-mode", "enable-rcon", "absent")
+	if err != nil {
+		t.Fatalf("importPropertyValues: %v", err)
+	}
+	if got := values["online-mode"]; got != "false" {
+		t.Fatalf("online-mode = %q, want false", got)
+	}
+	if got := values["enable-rcon"]; got != "false" {
+		t.Fatalf("enable-rcon = %q, want false", got)
+	}
+	if _, ok := values["absent"]; ok {
+		t.Fatal("absent key reported as present")
+	}
+}
+
+// TestImportPropertyValuesMissingFileIsEmpty keeps a missing file silent.
+func TestImportPropertyValuesMissingFileIsEmpty(t *testing.T) {
+	t.Parallel()
+	file := filepath.Join(t.TempDir(), "server.properties")
+	values, err := importPropertyValues(file, "online-mode")
+	if err != nil {
+		t.Fatalf("missing server.properties: %v", err)
+	}
+	if len(values) != 0 {
+		t.Fatalf("missing server.properties values = %v, want none", values)
+	}
+}
+
+// TestImportPropertyValuesCapsMetadata checks the size cap at its seam, and
+// that an over-cap file, sparse or not, fails without its value being read.
+func TestImportPropertyValuesCapsMetadata(t *testing.T) {
+	t.Parallel()
+	file := filepath.Join(t.TempDir(), "server.properties")
+
+	if err := os.WriteFile(file, []byte(propertyFileOfSize(importMetadataMaxBytes)), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	values, err := importPropertyValues(file, "online-mode")
+	if err != nil || values["online-mode"] != "false" {
+		t.Fatalf("at-cap server.properties = %v, %v; want online-mode=false, nil", values, err)
+	}
+
+	if err := os.WriteFile(file, []byte(propertyFileOfSize(importMetadataMaxBytes+1)), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := importPropertyValues(file, "online-mode"); !errors.Is(err, errImportMetadataTooLarge) {
+		t.Fatalf("over-cap server.properties error = %v, want errImportMetadataTooLarge", err)
+	}
+
+	if err := os.WriteFile(file, nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Truncate(file, importMetadataMaxBytes+1); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := importPropertyValues(file, "online-mode"); !errors.Is(err, errImportMetadataTooLarge) {
+		t.Fatalf("sparse over-cap server.properties error = %v, want errImportMetadataTooLarge", err)
+	}
+}
+
+// TestImportReviewPropertyMetadata checks review lines for property files at,
+// over, and missing from the cap. An unreadable file is reported, not fatal.
+func TestImportReviewPropertyMetadata(t *testing.T) {
+	t.Parallel()
+	const (
+		serverWarn = "server.properties: online-mode=false; players are not authenticated with Mojang"
+		rconWarn   = "server.properties: enable-rcon=true; remote console access is enabled"
+		eulaWarn   = "eula.txt: eula=true; the Minecraft EULA was accepted in the source"
+	)
+	tests := []struct {
+		name     string
+		files    map[string]string
+		oversize []string
+		want     []string
+	}{
+		{
+			name: "missing files are silent",
+		},
+		{
+			name: "normal files parse unchanged",
+			files: map[string]string{
+				"server.properties": "online-mode=false\nenable-rcon=true\n",
+				"eula.txt":          "eula=true\n",
+				"ops.json":          `[{"uuid":"a","name":"alice"}]`,
+			},
+			want: []string{serverWarn, rconWarn, eulaWarn, "ops.json: 1 operator(s) granted"},
+		},
+		{
+			name:  "server.properties at cap is parsed",
+			files: map[string]string{"server.properties": propertyFileOfSize(importMetadataMaxBytes)},
+			want:  []string{serverWarn},
+		},
+		{
+			name:     "oversized server.properties is unreadable",
+			oversize: []string{"server.properties"},
+			want:     []string{"server.properties: unreadable metadata"},
+		},
+		{
+			name:     "oversized eula.txt is unreadable and review continues",
+			files:    map[string]string{"server.properties": "enable-rcon=true\n"},
+			oversize: []string{"eula.txt"},
+			want:     []string{rconWarn, "eula.txt: unreadable metadata"},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			dir := t.TempDir()
+			for name, content := range tt.files {
+				if err := os.WriteFile(filepath.Join(dir, name), []byte(content), 0o644); err != nil {
+					t.Fatal(err)
+				}
+			}
+			for _, name := range tt.oversize {
+				path := filepath.Join(dir, name)
+				if err := os.WriteFile(path, nil, 0o644); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.Truncate(path, importMetadataMaxBytes+1); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if got := importReview(dir); !slices.Equal(got, tt.want) {
+				t.Fatalf("importReview = %q, want %q", got, tt.want)
+			}
+		})
 	}
 }
