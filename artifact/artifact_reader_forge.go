@@ -54,14 +54,27 @@ func readModsToml(
 }
 
 // decodeForgeDescriptor reads META-INF/mods.toml. excludeNeoForge keeps the
-// Forge reader from claiming a descriptor that names the NeoForge loader.
+// Forge reader from claiming a jar of the NeoForge line, whose shared
+// descriptor does not name Forge. A jar that names Forge keeps its Forge
+// identity even when it also carries neoforge.mods.toml.
 func decodeForgeDescriptor(
 	zipRdr *zip.Reader,
 	member string,
 	excludeNeoForge bool,
 	packageView bool,
 ) (*decodedDescriptor, error) {
-	if excludeNeoForge {
+	descriptor, err := readModsToml(zipRdr, forgeModsTomlPath)
+	if err != nil || descriptor == nil {
+		return nil, err
+	}
+	if excludeNeoForge &&
+		!hasLoaderDependency(descriptor.Identifier, "forge") {
+		// Without an explicit Forge dependency, the jar belongs to the
+		// NeoForge line when its shared descriptor names NeoForge or when it
+		// carries the NeoForge descriptor.
+		if isNeoforgeModIdentifier(descriptor.Identifier) {
+			return nil, nil
+		}
 		raw, err := readZipEntryBytes(zipRdr, neoforgeModsTomlPath)
 		if err != nil {
 			return nil, err
@@ -69,13 +82,6 @@ func decodeForgeDescriptor(
 		if raw != nil {
 			return nil, nil
 		}
-	}
-	descriptor, err := readModsToml(zipRdr, forgeModsTomlPath)
-	if err != nil || descriptor == nil {
-		return nil, err
-	}
-	if excludeNeoForge && isNeoforgeModIdentifier(descriptor.Identifier) {
-		return nil, nil
 	}
 	return forgeDecodedDescriptor(
 		zipRdr,
