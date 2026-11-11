@@ -15,6 +15,15 @@ lucy file recover server.properties
 
 Tracking saves the current file as an accepted revision. Use `--immutable` to warn about changes, `--no-hash` to check presence only, or `--recover-url <url>` to provide a recovery source. Presence-only files cannot be recovered.
 
+`lucy file track` accepts shell-style patterns relative to the workspace. Quote a pattern to resolve it against the workspace instead of your shell:
+
+```bash
+lucy file track 'config/*.json'
+lucy file track 'scripts/**/*.sh'
+```
+
+`*` and `?` match within one path component, `[abc]`, `[a-z]`, and `[!abc]` match one character, and `**` matches any number of directories, including none. One invocation tracks every match atomically. A pattern that selects no regular file fails, hidden files need an explicit leading dot, and `.lucy` and `.git` are never selected.
+
 Use `lucy file lock <path>` to accept the current contents and warn about future changes, and `lucy file unlock <path>` to allow changes without warnings. `lucy file untrack <path>` stops tracking without deleting the file.
 
 `lucy file recover` restores the current accepted revision; `lucy file revert` restores an earlier one. Both preserve a local copy of the contents they replace. Pass several paths to `track`, `untrack`, `update`, `recover`, `lock`, or `unlock`; use `--all` with `update` or `recover` to select all applicable files.
