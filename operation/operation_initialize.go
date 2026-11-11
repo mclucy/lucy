@@ -100,8 +100,10 @@ func (s *Service) Initialize(ctx context.Context, root string, opts InitOptions)
 	if fatalIdentification != nil {
 		return initResult(observed), fatalIdentification
 	}
-	if observed != nil {
-		observed.Warnings = append(observed.Warnings, identificationWarnings...)
+	// A failed lookup leaves the file unidentified. Adoption reports it once
+	// when no provider identifies it, so the failure stays at debug level.
+	for _, warning := range identificationWarnings {
+		s.logger.Debug("package identification failed", "error", warning)
 	}
 	if err := s.applyDetectedVersions(manifest, opts, observed); err != nil {
 		return initResult(observed), err
@@ -311,12 +313,9 @@ func (s *Service) applyRuntimeIdentity(
 	return nil
 }
 
-// identificationFailure returns only a cancellation error, which aborts
-// initialization. Other identification failures do not abort it and are not
-// returned as warnings; their files stay unidentified.
 // identificationOutcome separates a cancellation, which aborts
-// initialization, from identification failures, which stay warnings: the file
-// remains unidentified and the adoption report names it.
+// initialization, from identification failures. A failure leaves the file
+// unidentified and adoption reports it when no provider identifies it.
 func identificationOutcome(errs []error) (error, []error) {
 	var fatal error
 	warnings := make([]error, 0, len(errs))

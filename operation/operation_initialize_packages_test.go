@@ -28,6 +28,9 @@ type packageMapperTestSource struct {
 	initializeTestSource
 	mappers  map[catalog.Provider]fakePackageMapper
 	releases map[catalog.Provider][]upstream.Candidate
+	// unidentified adds a jar without a readable descriptor, so initialization
+	// has to identify it through the upstream lookup.
+	unidentified bool
 
 	// artifactURL and artifactSHA256 locate the jar every release points at.
 	// initializePackageMapperLayout sets them after serving the jar.
@@ -48,6 +51,26 @@ func (s packageMapperTestSource) GetArtifactReleaseMapper(
 		url:               s.artifactURL,
 		sha256:            s.artifactSHA256,
 	}, true, nil
+}
+
+// ResolveArtifactByHash reports the mappers that fail, so identification sees
+// the incomplete lookups this source configures instead of an empty answer.
+func (s packageMapperTestSource) ResolveArtifactByHash(
+	context.Context,
+	upstream.ArtifactFingerprint,
+) upstream.ArtifactLookup {
+	lookup := upstream.ArtifactLookup{}
+	for _, provider := range packageMapperProviders {
+		mapper, ok := s.mappers[provider]
+		if !ok || mapper.err == nil {
+			continue
+		}
+		lookup.Errors = append(lookup.Errors, upstream.ProviderError{
+			Provider: provider,
+			Err:      mapper.err,
+		})
+	}
+	return lookup
 }
 
 func (s packageMapperTestSource) Candidates(
@@ -178,6 +201,13 @@ func initializePackageMapperResult(
 	writeInitializeTestJar(t, modPath, map[string]string{
 		"fabric.mod.json": `{"schemaVersion":1,"id":"example","version":"1.0.0"}`,
 	})
+	if source.unidentified {
+		writeInitializeTestJar(
+			t,
+			filepath.Join(root, "mods", "unidentified.jar"),
+			map[string]string{"data.txt": "no descriptor"},
+		)
+	}
 	jar := readFileBytes(t, modPath)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = w.Write(jar)
@@ -290,6 +320,7 @@ func TestInitializeLeavesPackageUnmanagedWithoutMapper(t *testing.T) {
 // once.
 func TestInitializeLeavesPackageUnmanagedWhenHashLookupFails(t *testing.T) {
 	_, result := initializePackageMapperResult(t, packageMapperTestSource{
+		unidentified: true,
 		mappers: map[catalog.Provider]fakePackageMapper{
 			catalog.ProviderModrinth: {
 				provider: catalog.ProviderModrinth,
