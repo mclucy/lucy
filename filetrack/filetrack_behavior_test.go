@@ -264,6 +264,27 @@ func TestFileUntrackSkipsUntrackedFilesAndDirectories(t *testing.T) {
 	behaviorRequireBytes(t, filepath.Join(root, "config/untracked.json"), []byte("{}\n"))
 }
 
+func TestFileTrackRequiresExplicitDotForHiddenEntries(t *testing.T) {
+	root := behaviorWorkspace(t)
+	behaviorWrite(t, root, ".env", []byte("secret\n"), 0o644)
+	behaviorWrite(t, root, ".config/secret.json", []byte("{}\n"), 0o644)
+
+	behaviorRunErr(t, root, Request{Operation: Track, Paths: []string{"[!a]*"}})
+	behaviorRunErr(t, root, Request{Operation: Track, Paths: []string{"[!a]*/*.json"}})
+	if declared := behaviorDeclared(t, root); len(declared) != 0 {
+		t.Fatalf("wildcards tracked hidden files: %+v", declared)
+	}
+
+	behaviorRun(t, root, Request{Operation: Track, Paths: []string{"[.]env"}})
+	behaviorRun(t, root, Request{Operation: Track, Paths: []string{"[.]config/*.json"}})
+	declared := behaviorDeclared(t, root)
+	if len(declared) != 2 ||
+		declared[0].Path != ".config/secret.json" ||
+		declared[1].Path != ".env" {
+		t.Fatalf("explicit dot patterns declared %+v", declared)
+	}
+}
+
 func TestFileTrackRejectsAlreadyTrackedPathAtomically(t *testing.T) {
 	root := behaviorWorkspace(t)
 	rules := []byte("rules\n")

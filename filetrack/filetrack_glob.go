@@ -171,8 +171,35 @@ func matchTrackSegments(pattern, name []string) bool {
 	return err == nil && matched && matchTrackSegments(pattern[1:], name[1:])
 }
 
+// explicitDotSegment reports whether a segment explicitly selects a leading
+// dot. Negated classes and wildcards do not.
 func explicitDotSegment(segment string) bool {
-	return strings.HasPrefix(segment, ".") || strings.HasPrefix(segment, "[")
+	if strings.HasPrefix(segment, ".") {
+		return true
+	}
+	if !strings.HasPrefix(segment, "[") {
+		return false
+	}
+	end := strings.IndexByte(segment, ']')
+	if end < 0 {
+		return false
+	}
+	class := segment[1:end]
+	if class == "" || class[0] == '!' || class[0] == '^' {
+		return false
+	}
+	for index := range class {
+		if class[index] == '.' {
+			return true
+		}
+		if index+2 < len(class) &&
+			class[index+1] == '-' &&
+			class[index] <= '.' &&
+			'.' <= class[index+2] {
+			return true
+		}
+	}
+	return false
 }
 
 // negatedTrackClass accepts the shell spelling [!abc] alongside Go's [^abc].
