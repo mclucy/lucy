@@ -10,8 +10,7 @@ import (
 
 // providerConstraintPackages returns the replaced dependency at index 0, a
 // Quilt provider exposing shared_id 1.0.0 at index 1, and the dependent package
-// under test at index 2. Index 0 is the skipped target, as in provider
-// substitution.
+// under test at index 2.
 func providerConstraintPackages(dependent document.Package) []document.Package {
 	dropped := quiltTestPackage(
 		catalog.EcosystemFabric,
@@ -34,7 +33,7 @@ func providerConstraintInEnvironment(
 	return pkg
 }
 
-func TestProviderSatisfiesRequiredConstraintsScopesByNamespace(t *testing.T) {
+func TestProvidesForScopesConstraintsByNamespace(t *testing.T) {
 	target := quiltTestTarget()
 	requiresSharedID := quiltTestDependency(
 		"shared_id",
@@ -112,16 +111,9 @@ func TestProviderSatisfiesRequiredConstraintsScopesByNamespace(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			packages := providerConstraintPackages(tt.dependent)
-			provider := packages[1]
-			got := providerSatisfiesRequiredConstraints(
-				packages,
-				0,
-				provider,
-				target,
-			)
+			got := providesFor(target, packages[1], packages[0], packages)
 			if got != tt.want {
-				t.Fatalf("providerSatisfiesRequiredConstraints() = %v, want %v",
-					got, tt.want)
+				t.Fatalf("providesFor() = %v, want %v", got, tt.want)
 			}
 		})
 	}

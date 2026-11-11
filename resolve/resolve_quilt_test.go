@@ -837,7 +837,7 @@ func TestQuiltClientOnlyNestedDependencyCoverage(t *testing.T) {
 	}
 }
 
-func TestPruneProvidedDependencyPackages(t *testing.T) {
+func quiltSubstitutionFixture() (document.Package, document.Package) {
 	qfapi := quiltTestPackage(
 		catalog.EcosystemQuilt,
 		"qsl",
@@ -868,316 +868,258 @@ func TestPruneProvidedDependencyPackages(t *testing.T) {
 	)
 	fabricAPI.Modules[0].Provides = []string{"fabric"}
 	fabricAPI.Dependency = true
+	fabricAPI.DependencyOf = []catalog.Ref{{
+		Provider: catalog.ProviderModrinth,
+		Name:     catalog.Name("friends-and-foes"),
+	}}
+	return qfapi, fabricAPI
+}
 
-	t.Run("dependency project is covered by a selected provider", func(t *testing.T) {
-		pruned := pruneProvidedDependencyPackages(
-			[]document.Package{qfapi, fabricAPI},
-			quiltTestTarget(),
-			nil,
-		)
-		if len(pruned) != 1 || pruned[0].ProjectID != "qsl" {
-			t.Fatalf("pruned packages = %+v", pruned)
-		}
-	})
+func quiltBreakConsumer(constraint string) document.Package {
+	return quiltTestPackage(
+		catalog.EcosystemFabric,
+		"voicechat",
+		quiltTestModule(
+			"voicechat",
+			"1.0.0",
+			catalog.EcosystemFabric,
+			quiltTestDependency(
+				"fabric-api",
+				constraint,
+				catalog.DependencyKindIncompatible,
+			),
+		),
+	)
+}
 
-	t.Run("exact release demand is not substituted", func(t *testing.T) {
-		pruned := pruneProvidedDependencyPackages(
-			[]document.Package{qfapi, fabricAPI},
-			quiltTestTarget(),
-			map[projectKey]struct{}{
-				selectedPackageKey(fabricAPI): {},
+func TestProvidesFor(t *testing.T) {
+	qfapi, fabricAPI := quiltSubstitutionFixture()
+
+	partial := qfapi
+	partial.Modules = []catalog.DescriptorModule{qfapi.Modules[0]}
+	partial.Modules[0].Provides = []string{"fabric-api"}
+	partial.Modules[0].ProvidedVersions = map[string]versionpkg.Version{
+		"fabric-api": "0.87.0",
+	}
+
+	older := qfapi
+	older.Modules = []catalog.DescriptorModule{qfapi.Modules[0]}
+	older.Modules[0].ProvidedVersions = map[string]versionpkg.Version{
+		"fabric-api": "0.80.0",
+		"fabric":     "0.80.0",
+	}
+	newerConsumer := quiltTestPackage(
+		catalog.EcosystemFabric,
+		"consumer",
+		quiltTestModule(
+			"fabric-users",
+			"1.0.0",
+			catalog.EcosystemFabric,
+			quiltTestDependency(
+				"fabric-api",
+				">=0.85.0",
+				catalog.DependencyKindRequired,
+			),
+		),
+	)
+
+	fabricProvider := quiltTestPackage(
+		catalog.EcosystemFabric,
+		"fabric-impl",
+		quiltTestModule("fabric-impl", "1.0.0", catalog.EcosystemFabric),
+	)
+	fabricProvider.Modules[0].Provides = qfapi.Modules[0].Provides
+	fabricProvider.Modules[0].ProvidedVersions = qfapi.Modules[0].ProvidedVersions
+
+	quiltTagged := fabricAPI
+	quiltTagged.Ecosystem = catalog.EcosystemQuilt
+
+	alpha := quiltTestPackage(
+		catalog.EcosystemQuilt,
+		"alpha-lib",
+		quiltTestModule("shared-lib", "1.0.0", catalog.EcosystemQuilt),
+	)
+	beta := quiltTestPackage(
+		catalog.EcosystemQuilt,
+		"beta-lib",
+		quiltTestModule("shared-lib", "1.0.0", catalog.EcosystemQuilt),
+	)
+
+	tests := []struct {
+		name       string
+		target     Target
+		provider   document.Package
+		dependency document.Package
+		others     []document.Package
+		want       bool
+	}{
+		{
+			name:       "preferred descriptor covers every identity",
+			target:     quiltTestTarget(),
+			provider:   qfapi,
+			dependency: fabricAPI,
+			want:       true,
+		},
+		{
+			name: "fabric target loads no Quilt provider",
+			target: Target{
+				Product:   serverpkg.ProductFabric,
+				Minecraft: versionpkg.Version("1.20.1"),
 			},
-		)
-		if len(pruned) != 2 {
-			t.Fatalf("pruned packages = %+v", pruned)
-		}
-	})
-
-	t.Run("fabric target does not accept a Quilt provider", func(t *testing.T) {
-		target := Target{
-			Product:   serverpkg.ProductFabric,
-			Minecraft: versionpkg.Version("1.20.1"),
-		}
-		pruned := pruneProvidedDependencyPackages(
-			[]document.Package{qfapi, fabricAPI},
-			target,
-			nil,
-		)
-		if len(pruned) != 2 {
-			t.Fatalf("pruned packages = %+v", pruned)
-		}
-	})
-
-	t.Run("incomplete identity coverage is not substitution", func(t *testing.T) {
-		partial := qfapi
-		partial.Modules = []catalog.DescriptorModule{qfapi.Modules[0]}
-		partial.Modules[0].Provides = []string{"fabric-api"}
-		partial.Modules[0].ProvidedVersions = map[string]versionpkg.Version{
-			"fabric-api": "0.87.0",
-		}
-		pruned := pruneProvidedDependencyPackages(
-			[]document.Package{partial, fabricAPI},
-			quiltTestTarget(),
-			nil,
-		)
-		if len(pruned) != 2 {
-			t.Fatalf("pruned packages = %+v", pruned)
-		}
-	})
-
-	t.Run("older provider version is not substitution", func(t *testing.T) {
-		older := qfapi
-		older.Modules = []catalog.DescriptorModule{qfapi.Modules[0]}
-		older.Modules[0].ProvidedVersions = map[string]versionpkg.Version{
-			"fabric-api": "0.80.0",
-			"fabric":     "0.80.0",
-		}
-		consumer := quiltTestPackage(
-			catalog.EcosystemFabric,
-			"consumer",
-			quiltTestModule(
-				"fabric-users",
-				"1.0.0",
-				catalog.EcosystemFabric,
-				quiltTestDependency(
-					"fabric-api",
-					">=0.85.0",
-					catalog.DependencyKindRequired,
-				),
-			),
-		)
-		consumer.Requirements = []document.RequirementBinding{{
-			Reference: "modrinth:consumer",
-			Enabled:   true,
-		}}
-		pruned := pruneProvidedDependencyPackages(
-			[]document.Package{older, fabricAPI, consumer},
-			quiltTestTarget(),
-			nil,
-		)
-		if len(pruned) != 3 {
-			t.Fatalf("pruned packages = %+v", pruned)
-		}
-	})
-
-	t.Run("dependency edges transfer to the provider", func(t *testing.T) {
-		withEdge := fabricAPI
-		withEdge.DependencyOf = []catalog.Ref{{
-			Provider: catalog.ProviderModrinth,
-			Name:     catalog.Name("friends-and-foes"),
-		}}
-		pruned := pruneProvidedDependencyPackages(
-			[]document.Package{qfapi, withEdge},
-			quiltTestTarget(),
-			nil,
-		)
-		if len(pruned) != 1 || pruned[0].ProjectID != "qsl" {
-			t.Fatalf("pruned packages = %+v", pruned)
-		}
-		if !slices.Contains(pruned[0].DependencyOf, withEdge.DependencyOf[0]) {
-			t.Fatalf(
-				"provider dependency edges = %+v, want %+v",
-				pruned[0].DependencyOf,
-				withEdge.DependencyOf[0],
+			provider:   qfapi,
+			dependency: fabricAPI,
+		},
+		{
+			name: "forge target loads neither package",
+			target: Target{
+				Product:   serverpkg.ProductForge,
+				Minecraft: versionpkg.Version("1.20.1"),
+			},
+			provider:   qfapi,
+			dependency: fabricAPI,
+		},
+		{
+			name:       "incomplete identity coverage",
+			target:     quiltTestTarget(),
+			provider:   partial,
+			dependency: fabricAPI,
+		},
+		{
+			name:       "provided version fails a selected constraint",
+			target:     quiltTestTarget(),
+			provider:   older,
+			dependency: fabricAPI,
+			others:     []document.Package{newerConsumer},
+		},
+		{
+			name:       "same descriptor precedence",
+			target:     quiltTestTarget(),
+			provider:   fabricProvider,
+			dependency: fabricAPI,
+		},
+		{
+			name:       "same descriptor precedence among Quilt packages",
+			target:     quiltTestTarget(),
+			provider:   alpha,
+			dependency: beta,
+		},
+		{
+			name:       "package ecosystem does not decide the descriptor",
+			target:     quiltTestTarget(),
+			provider:   qfapi,
+			dependency: quiltTagged,
+			want:       true,
+		},
+		{
+			name:       "non-matching break permits substitution",
+			target:     quiltTestTarget(),
+			provider:   qfapi,
+			dependency: fabricAPI,
+			others:     []document.Package{quiltBreakConsumer("<0.83.0+1.20.1")},
+			want:       true,
+		},
+		{
+			name:       "matching break blocks substitution",
+			target:     quiltTestTarget(),
+			provider:   qfapi,
+			dependency: fabricAPI,
+			others:     []document.Package{quiltBreakConsumer("<0.90.0")},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			selected := append(
+				[]document.Package{tt.provider, tt.dependency},
+				tt.others...,
 			)
+			got := providesFor(tt.target, tt.provider, tt.dependency, selected)
+			if got != tt.want {
+				t.Fatalf("providesFor() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestSupersedeProvidedDependency(t *testing.T) {
+	qfapi, fabricAPI := quiltSubstitutionFixture()
+	target := quiltTestTarget()
+	qfapiKey := projectKey{
+		serverpkg.EnvironmentServer,
+		catalog.EcosystemQuilt,
+		catalog.ProviderModrinth,
+		"qsl",
+	}
+	fabricKey := projectKey{
+		serverpkg.EnvironmentServer,
+		catalog.EcosystemFabric,
+		catalog.ProviderModrinth,
+		"fabric-api",
+	}
+
+	t.Run("dependents move to the provider and back on restore", func(t *testing.T) {
+		state := newSelectionState()
+		state.install(fabricKey, fabricAPI, nil, false)
+		branches := []selectionBranch{state.install(qfapiKey, qfapi, nil, false)}
+		branches = append(branches, state.supersede(target, qfapiKey)...)
+		if _, ok := state.selection(fabricKey); ok {
+			t.Fatalf("superseded dependency stays selected")
+		}
+		provider, _ := state.selection(qfapiKey)
+		if !provider.Dependency ||
+			!slices.Contains(provider.DependencyOf, fabricAPI.DependencyOf[0]) {
+			t.Fatalf("provider = %+v, want the dependency edge", provider)
+		}
+		state.restoreAll(branches)
+		if _, ok := state.selection(fabricKey); !ok {
+			t.Fatalf("restore did not reselect the dependency")
+		}
+		if _, ok := state.selection(qfapiKey); ok {
+			t.Fatalf("restore kept the provider")
 		}
 	})
 
-	t.Run("mutual identity sets keep one provider", func(t *testing.T) {
-		alpha := quiltTestPackage(
-			catalog.EcosystemQuilt,
-			"alpha-lib",
-			quiltTestModule(
-				"shared-lib",
-				"1.0.0",
-				catalog.EcosystemQuilt,
-			),
-		)
-		alpha.Dependency = true
-		beta := quiltTestPackage(
-			catalog.EcosystemQuilt,
-			"beta-lib",
-			quiltTestModule(
-				"shared-lib",
-				"1.0.0",
-				catalog.EcosystemQuilt,
-			),
-		)
-		beta.Dependency = true
-		pruned := pruneProvidedDependencyPackages(
-			[]document.Package{beta, alpha},
-			quiltTestTarget(),
-			nil,
-		)
-		if len(pruned) != 1 || pruned[0].ProjectID != "alpha-lib" {
-			t.Fatalf("pruned packages = %+v", pruned)
+	t.Run("exact release demand is kept", func(t *testing.T) {
+		state := newSelectionState()
+		state.install(fabricKey, fabricAPI, nil, true)
+		state.install(qfapiKey, qfapi, nil, false)
+		if branches := state.supersede(target, qfapiKey); len(branches) != 0 {
+			t.Fatalf("pinned dependency superseded")
 		}
 	})
 
-	t.Run("non-Quilt product keeps project dependency", func(t *testing.T) {
-		target := Target{
-			Product:   serverpkg.ProductForge,
-			Minecraft: versionpkg.Version("1.20.1"),
-		}
-		pruned := pruneProvidedDependencyPackages(
-			[]document.Package{qfapi, fabricAPI},
-			target,
-			nil,
-		)
-		if len(pruned) != 2 {
-			t.Fatalf("pruned packages = %+v", pruned)
+	t.Run("abandoned pin does not survive its branch", func(t *testing.T) {
+		state := newSelectionState()
+		pinned := state.install(fabricKey, fabricAPI, nil, true)
+		state.restore(pinned)
+		state.install(fabricKey, fabricAPI, nil, false)
+		state.install(qfapiKey, qfapi, nil, false)
+		if branches := state.supersede(target, qfapiKey); len(branches) == 0 {
+			t.Fatalf("unpinned dependency kept after the pin was abandoned")
 		}
 	})
 
-	t.Run("Fabric provider does not substitute", func(t *testing.T) {
-		fabricProvider := quiltTestPackage(
-			catalog.EcosystemFabric,
-			"fabric-impl",
-			quiltTestModule(
-				"fabric-impl",
-				"1.0.0",
-				catalog.EcosystemFabric,
-			),
-		)
-		fabricProvider.Modules[0].Provides = []string{
-			"fabric-api",
-			"fabric",
-		}
-		fabricProvider.Modules[0].ProvidedVersions = map[string]versionpkg.Version{
-			"fabric-api": "0.87.0",
-			"fabric":     "0.87.0",
-		}
-		pruned := pruneProvidedDependencyPackages(
-			[]document.Package{fabricProvider, fabricAPI},
-			quiltTestTarget(),
-			nil,
-		)
-		if len(pruned) != 2 {
-			t.Fatalf("pruned packages = %+v", pruned)
-		}
-	})
-
-	t.Run("Quilt-tagged Fabric dependency can be replaced", func(t *testing.T) {
-		quiltTagged := fabricAPI
-		quiltTagged.Ecosystem = catalog.EcosystemQuilt
-		pruned := pruneProvidedDependencyPackages(
-			[]document.Package{qfapi, quiltTagged},
-			quiltTestTarget(),
-			nil,
-		)
-		if len(pruned) != 1 || pruned[0].ProjectID != "qsl" {
-			t.Fatalf("pruned packages = %+v", pruned)
-		}
-	})
-
-	t.Run("non-matching break permits substitution", func(t *testing.T) {
-		consumer := quiltTestPackage(
-			catalog.EcosystemFabric,
-			"voicechat",
-			quiltTestModule(
-				"voicechat",
-				"1.0.0",
-				catalog.EcosystemFabric,
-				quiltTestDependency(
-					"fabric-api",
-					"<0.83.0+1.20.1",
-					catalog.DependencyKindIncompatible,
-				),
-			),
-		)
-		pruned := pruneProvidedDependencyPackages(
-			[]document.Package{qfapi, fabricAPI, consumer},
-			quiltTestTarget(),
-			nil,
-		)
-		if len(pruned) != 2 {
-			t.Fatalf("pruned packages = %+v", pruned)
-		}
-	})
-
-	t.Run("matching break blocks substitution", func(t *testing.T) {
-		consumer := quiltTestPackage(
-			catalog.EcosystemFabric,
-			"voicechat",
-			quiltTestModule(
-				"voicechat",
-				"1.0.0",
-				catalog.EcosystemFabric,
-				quiltTestDependency(
-					"fabric-api",
-					"<0.90.0",
-					catalog.DependencyKindIncompatible,
-				),
-			),
-		)
-		pruned := pruneProvidedDependencyPackages(
-			[]document.Package{qfapi, fabricAPI, consumer},
-			quiltTestTarget(),
-			nil,
-		)
-		if len(pruned) != 3 {
-			t.Fatalf("pruned packages = %+v", pruned)
-		}
-	})
-
-	t.Run("directly requested project is kept", func(t *testing.T) {
+	t.Run("direct requirement is kept", func(t *testing.T) {
 		direct := fabricAPI
 		direct.Dependency = false
 		direct.Requirements = []document.RequirementBinding{{
 			Reference: "modrinth:fabric-api",
 			Enabled:   true,
 		}}
-		pruned := pruneProvidedDependencyPackages(
-			[]document.Package{qfapi, direct},
-			quiltTestTarget(),
-			nil,
-		)
-		if len(pruned) != 2 {
-			t.Fatalf("pruned packages = %+v", pruned)
+		state := newSelectionState()
+		state.install(fabricKey, direct, nil, false)
+		state.install(qfapiKey, qfapi, nil, false)
+		if branches := state.supersede(target, qfapiKey); len(branches) != 0 {
+			t.Fatalf("direct requirement superseded")
 		}
 	})
 }
 
 // TestProvidedDependencyReplacesStandaloneModule reproduces the mixed
-// Quilt/Fabric collision: a Fabric API requirement and Quilted Fabric API
-// both answer the fabric module identity. Pruning the standalone dependency
-// package leaves one provider and lets the loader-level requirement bind.
+// Quilt/Fabric collision: a Fabric API dependency and Quilted Fabric API both
+// answer the fabric module identity. Superseding the standalone dependency
+// leaves one provider and lets the module requirement bind to it.
 func TestProvidedDependencyReplacesStandaloneModule(t *testing.T) {
-	qfapi := quiltTestPackage(
-		catalog.EcosystemQuilt,
-		"qsl",
-		quiltTestModule(
-			"quilted_fabric_api",
-			"7.1.2+0.87.0-1.20.1",
-			catalog.EcosystemQuilt,
-		),
-	)
-	qfapi.Modules[0].Provides = []string{"fabric-api", "fabric"}
-	qfapi.Modules[0].ProvidedVersions = map[string]versionpkg.Version{
-		"fabric-api": "0.87.0",
-		"fabric":     "0.87.0",
-	}
-	qfapi.Requirements = []document.RequirementBinding{{
-		Reference: "modrinth:qsl",
-		Enabled:   true,
-	}}
-
-	standalone := quiltTestPackage(
-		catalog.EcosystemFabric,
-		"P7dR8mSH",
-		quiltTestModule(
-			"fabric-api",
-			"0.83.0+1.20.1",
-			catalog.EcosystemFabric,
-		),
-	)
-	standalone.Modules[0].Provides = []string{"fabric"}
-	standalone.Dependency = true
-	standalone.DependencyOf = []catalog.Ref{{
-		Provider: catalog.ProviderModrinth,
-		Name:     catalog.Name("friends-and-foes"),
-	}}
-
+	qfapi, standalone := quiltSubstitutionFixture()
 	fabricUser := quiltTestPackage(
 		catalog.EcosystemFabric,
 		"friends-and-foes",
@@ -1197,28 +1139,30 @@ func TestProvidedDependencyReplacesStandaloneModule(t *testing.T) {
 		Enabled:   true,
 	}}
 
-	unprunedPackages := []document.Package{qfapi, standalone, fabricUser}
-	if _, err := finalizeModules(unprunedPackages, quiltTestTarget()); err == nil {
-		t.Fatalf("unpruned graph did not report the duplicate native module")
+	both := []document.Package{qfapi, standalone, fabricUser}
+	if _, err := finalizeModules(both, quiltTestTarget()); err == nil {
+		t.Fatalf("graph with both providers did not report the duplicate native module")
 	}
 
-	packages := pruneProvidedDependencyPackages(
-		[]document.Package{qfapi, standalone, fabricUser},
-		quiltTestTarget(),
-		nil,
-	)
-	if len(packages) != 2 {
-		t.Fatalf("pruned packages = %+v", packages)
+	state := newSelectionState()
+	for _, p := range []document.Package{standalone, fabricUser, qfapi} {
+		state.install(projectKey{
+			p.Environment,
+			p.Ecosystem,
+			p.Provider,
+			p.ProjectID,
+		}, p, nil, false)
 	}
-	if !slices.Contains(
-		packages[0].DependencyOf,
-		standalone.DependencyOf[0],
-	) {
-		t.Fatalf(
-			"provider dependency edges = %+v, want %+v",
-			packages[0].DependencyOf,
-			standalone.DependencyOf[0],
-		)
+	state.supersede(quiltTestTarget(), projectKey{
+		qfapi.Environment,
+		qfapi.Ecosystem,
+		qfapi.Provider,
+		qfapi.ProjectID,
+	})
+	packages := state.packages()
+	sortPackages(packages)
+	if len(packages) != 2 {
+		t.Fatalf("selected packages = %+v", packages)
 	}
 	problems, err := finalizeModules(packages, quiltTestTarget())
 	if err != nil {
@@ -1226,7 +1170,7 @@ func TestProvidedDependencyReplacesStandaloneModule(t *testing.T) {
 	}
 	requireQuiltProblems(t, problems, 0)
 
-	user := quiltTestModuleByID(t, packages[1].Modules, "friends_and_foes")
+	user := quiltTestModuleByID(t, packages[0].Modules, "friends_and_foes")
 	dependency := user.Dependencies[0]
 	if dependency.ModuleID != "quilted_fabric_api" ||
 		dependency.ProjectID != "qsl" {
