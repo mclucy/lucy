@@ -54,10 +54,13 @@ type FileFabricModIdentifier struct {
 	//   - "sources"
 	Contact map[string]string `json:"contact"`
 
-	// License uses the SPDX license expression format.
-	License string `json:"license"`
+	// License uses the SPDX license expression format. Published descriptors
+	// also use other shapes, which the loader ignores.
+	License FileLicense `json:"license"`
 
-	Icon        string            `json:"icon"`
+	// Icon may be a path or a size-to-path map. The loader treats it as
+	// presentation, so lucy does not read it.
+	Icon        string            `json:"-"`
 	Environment FabricEnvironment `json:"environment"`
 	Provides    []string          `json:"provides"`
 	Jars        []struct {

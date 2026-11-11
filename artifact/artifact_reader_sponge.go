@@ -108,7 +108,7 @@ func translateSpongePlugin(
 		Metadata: catalog.Metadata{
 			Title:       fn.Ternary(plugin.Name != "", plugin.Name, plugin.ID),
 			Description: plugin.Description,
-			License:     metadata.License,
+			License:     strings.Join(metadata.License, ", "),
 			Authors: translateSpongeContributors(
 				resolveSpongePluginContributors(metadata, plugin),
 			),
