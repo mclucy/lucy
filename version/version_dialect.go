@@ -22,6 +22,16 @@ func NewEngine(kind Dialect) (Engine, error) {
 	return Engine{kind: kind}, nil
 }
 
+// valueDialect returns the dialect of the concrete versions kind parses.
+// Quilt descriptors constrain Fabric versions, so their values belong to the
+// Fabric dialect and stay comparable with Fabric modules.
+func valueDialect(kind Dialect) Dialect {
+	if kind == DialectQuilt {
+		return DialectFabric
+	}
+	return kind
+}
+
 // ParseVersion parses a concrete version. It rejects selectors, versions
 // containing wildcards, and input outside the dialect grammar.
 func (d Engine) ParseVersion(raw Version) (ResolvableVersion, error) {
@@ -32,7 +42,7 @@ func (d Engine) ParseVersion(raw Version) (ResolvableVersion, error) {
 
 	var parsed ResolvableVersion
 	switch d.kind {
-	case DialectFabric:
+	case DialectFabric, DialectQuilt:
 		parsed = parseFabricVersion(raw)
 	case DialectMCDR:
 		parsed = parseMCDRVersion(string(raw), false)
@@ -69,6 +79,8 @@ func (d Engine) ParseConstraint(raw string) (Expr, error) {
 	switch d.kind {
 	case DialectFabric:
 		return parseFabricConstraint(raw)
+	case DialectQuilt:
+		return parseQuiltConstraint(raw)
 	case DialectMCDR:
 		return parseMCDRConstraint(raw)
 	case DialectMaven:
@@ -114,7 +126,8 @@ func (d Engine) Compare(
 	if left == nil || right == nil {
 		return 0, false
 	}
-	if left.Dialect() != d.kind || right.Dialect() != d.kind {
+	values := valueDialect(d.kind)
+	if left.Dialect() != values || right.Dialect() != values {
 		return 0, false
 	}
 	if comparison, ok := left.Compare(right); ok {
@@ -135,7 +148,7 @@ func (d Engine) Match(
 	if len(expr) == 0 {
 		return true
 	}
-	if actual == nil || actual.Dialect() != d.kind {
+	if actual == nil || actual.Dialect() != valueDialect(d.kind) {
 		return false
 	}
 
@@ -181,11 +194,12 @@ func (d Engine) matchTerm(
 	if term.Operator == OpNever || term.Value == nil {
 		return false
 	}
-	if term.Value.Dialect() != d.kind {
+	values := valueDialect(d.kind)
+	if term.Value.Dialect() != values {
 		return false
 	}
 
-	if d.kind == DialectFabric {
+	if values == DialectFabric {
 		_, actualSemantic := actual.(*SemverVersion)
 		_, boundSemantic := term.Value.(*SemverVersion)
 		if !actualSemantic || !boundSemantic {

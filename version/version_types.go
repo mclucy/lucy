@@ -56,6 +56,10 @@ const (
 	// DialectFabric is the version grammar of fabric.mod.json metadata.
 	// Reference: https://wiki.fabricmc.net/documentation:fabric_mod_json_spec
 	DialectFabric Dialect = "fabric"
+	// DialectQuilt is the constraint grammar of quilt.mod.json metadata. Its
+	// concrete versions are Fabric version values.
+	// Reference: https://github.com/QuiltMC/rfcs/blob/main/specification/0002-quilt.mod.json.md
+	DialectQuilt Dialect = "quilt"
 	// DialectMCDR is the version grammar of mcdreforged.plugin.json metadata.
 	// Reference: https://docs.mcdreforged.com/en/latest/plugin_dev/metadata.html
 	DialectMCDR Dialect = "mcdr"
@@ -75,6 +79,7 @@ const (
 func (d Dialect) Valid() bool {
 	switch d {
 	case DialectFabric,
+		DialectQuilt,
 		DialectMCDR,
 		DialectMaven,
 		DialectMinecraft,
