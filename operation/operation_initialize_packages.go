@@ -388,13 +388,22 @@ func (a *packageAdopter) probeMapped(
 			))
 			return true
 		}
-		if clientOnly, known := a.clientOnlyFile(ctx, p.Path, ecosystem); known &&
-			clientOnly {
+		if release.ServerSide == upstream.ServerSideUnsupported {
 			proposal.warnings = append(proposal.warnings, fmt.Errorf(
-				"package %s left unmanaged: its descriptor declares no server-side module",
+				"package %s left unmanaged: its release does not support a dedicated server",
 				p.Path,
 			))
 			return true
+		}
+		if release.ServerSide == "" {
+			if clientOnly, known := a.clientOnlyFile(ctx, p.Path, ecosystem); known &&
+				clientOnly {
+				proposal.warnings = append(proposal.warnings, fmt.Errorf(
+					"package %s left unmanaged: its descriptor declares no server-side module",
+					p.Path,
+				))
+				return true
+			}
 		}
 		if release.Candidate.ProjectID == "" {
 			proposal.warnings = append(proposal.warnings, fmt.Errorf(
@@ -441,20 +450,16 @@ func (a *packageAdopter) probeMapped(
 	return false
 }
 
-// clientOnlyFile reports whether the file carries a descriptor for ecosystem
-// but no module that descriptor keeps on a dedicated server. A file without a
-// readable top-level descriptor (a library or locator archive) answers false:
+// clientOnlyFile reports whether the file's descriptor for ecosystem keeps
+// every module it declares off a dedicated server. known is false when no
+// descriptor for ecosystem declares a module (a library or locator archive):
 // the hash identifies it, and resolution reads its nested modules.
 func (a *packageAdopter) clientOnlyFile(
 	ctx context.Context,
 	path string,
 	ecosystem catalog.Ecosystem,
 ) (clientOnly, known bool) {
-	infos, err := artifact.ReadInfo(path)
-	if err != nil || len(infos) == 0 {
-		return false, false
-	}
-	modules, err := artifact.ReadModulesFor(
+	clientOnly, known, err := artifact.ReadClientOnly(
 		ctx,
 		path,
 		ecosystem,
@@ -463,7 +468,7 @@ func (a *packageAdopter) clientOnlyFile(
 	if err != nil {
 		return false, false
 	}
-	return len(modules) == 0, true
+	return clientOnly, known
 }
 
 // releaseEcosystem selects the served ecosystem a release belongs to. The

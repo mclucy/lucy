@@ -26,6 +26,7 @@ import (
 	"github.com/mclucy/lucy/internal/workspacewrite"
 	"github.com/mclucy/lucy/receipt"
 	serverpkg "github.com/mclucy/lucy/server"
+	"github.com/mclucy/lucy/upstream"
 	"github.com/mclucy/lucy/version"
 	"github.com/mclucy/lucy/workspace"
 	"github.com/mclucy/lucy/workspace/discovery"
@@ -185,7 +186,7 @@ func (s *Service) importSource(
 	if plan.Format == importpack.FormatMrpack {
 		// A client modpack marks its client-only files server-required, so the
 		// env declaration alone cannot exclude them from a server.
-		removed, err := removeClientOnlyMods(
+		removed, err := s.removeClientOnlyMods(
 			ctx,
 			stage,
 			materialized.Product,
@@ -194,8 +195,9 @@ func (s *Service) importSource(
 		if err != nil {
 			return nil, err
 		}
-		materialized.SkippedClient += removed
-		materialized.ServerFiles -= removed
+		materialized.SkippedClient += len(removed)
+		materialized.ServerFiles -= len(removed)
+		materialized.Skipped = append(materialized.Skipped, removed...)
 	}
 
 	force := false
@@ -603,51 +605,107 @@ func publishImportStage(stage, target string) (*importPublication, error) {
 	return publication, nil
 }
 
-// removeClientOnlyMods deletes mod jars the server loader excludes from a
-// dedicated server. Only the descriptor answers that question: a client modpack
-// marks such files server-required. A jar whose metadata cannot be read stays
-// in place and remains unmanaged.
-func removeClientOnlyMods(
+// removeClientOnlyMods deletes mod jars the server loader declares client-only.
+// Only the descriptor answers that question: a client modpack marks such files
+// server-required, and a jar the loader has no descriptor for may be bridged
+// from another ecosystem. Such files stay in place and remain unmanaged.
+func (s *Service) removeClientOnlyMods(
 	ctx context.Context,
 	stage string,
 	product serverpkg.Product,
 	minecraft string,
-) (int, error) {
+) ([]string, error) {
 	modsDir := filepath.Join(stage, "mods")
 	entries, err := os.ReadDir(modsDir)
 	if errors.Is(err, os.ErrNotExist) {
-		return 0, nil
+		return nil, nil
 	}
 	if err != nil {
-		return 0, fmt.Errorf("read imported mod directory: %w", err)
+		return nil, fmt.Errorf("read imported mod directory: %w", err)
 	}
 	ecosystem := catalog.Ecosystem(product)
-	removed := 0
+	mappers, mapperErr := s.packageMappers()
+	if mapperErr != nil {
+		s.logger.Debug(
+			"package mappers unavailable during import",
+			"error", mapperErr,
+		)
+	}
+	var removed []string
 	for _, entry := range entries {
 		if entry.IsDir() ||
 			!strings.EqualFold(filepath.Ext(entry.Name()), ".jar") {
 			continue
 		}
 		path := filepath.Join(modsDir, entry.Name())
-		info, err := artifact.ReadInfo(path)
-		if err != nil || len(info) == 0 {
-			continue
-		}
-		modules, err := artifact.ReadModulesFor(
-			ctx,
-			path,
-			ecosystem,
-			minecraft,
-		)
-		if err != nil || len(modules) > 0 {
-			continue
+		var reason string
+		if side, known := s.identifiedServerSide(ctx, path, mappers); known &&
+			side != "" {
+			if side != upstream.ServerSideUnsupported {
+				continue
+			}
+			reason = "server_side " + string(side)
+		} else {
+			clientOnly, known, err := artifact.ReadClientOnly(
+				ctx,
+				path,
+				ecosystem,
+				minecraft,
+			)
+			if err != nil || !known || !clientOnly {
+				continue
+			}
+			reason = "client-only descriptor"
 		}
 		if err := os.Remove(path); err != nil {
 			return removed, fmt.Errorf("remove client-only mod %s: %w", path, err)
 		}
-		removed++
+		relative, err := filepath.Rel(stage, path)
+		if err != nil {
+			return removed, fmt.Errorf(
+				"relativize client-only mod %s: %w",
+				path,
+				err,
+			)
+		}
+		s.logger.Debug(
+			"removed client-only mod",
+			"path", filepath.ToSlash(relative),
+			"reason", reason,
+		)
+		removed = append(removed, filepath.ToSlash(relative))
 	}
 	return removed, nil
+}
+
+// identifiedServerSide asks the release mappers whether a provider identifies
+// the file and reports its dedicated-server label. A match without a label
+// still counts as identified, so the caller can fall back to descriptors.
+func (s *Service) identifiedServerSide(
+	ctx context.Context,
+	path string,
+	mappers []packageMapper,
+) (upstream.ServerSide, bool) {
+	for _, mapper := range mappers {
+		release, matched, err := mapper.release.ReleaseByHash(
+			ctx,
+			artifact.File{Path: path},
+		)
+		if err != nil {
+			s.logger.Debug(
+				"artifact hash lookup failed",
+				"path", path,
+				"provider", mapper.provider,
+				"error", err,
+			)
+			continue
+		}
+		if !matched {
+			continue
+		}
+		return release.ServerSide, true
+	}
+	return "", false
 }
 
 // relativeImportPaths reports files relative to root, slash-separated, so no
