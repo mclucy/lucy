@@ -75,8 +75,14 @@ func (s *selectionState) selection(key projectKey) (document.Package, bool) {
 	return p, ok
 }
 
-func (s *selectionState) extend(key projectKey, p document.Package) selectionBranch {
-	return s.install(key, p, s.conflicts[key], s.pinned[key])
+// extend merges a demand into a selected package. The selection keeps its
+// conflicts and pins; an incoming exact-release demand adds a pin.
+func (s *selectionState) extend(
+	key projectKey,
+	p document.Package,
+	pin bool,
+) selectionBranch {
+	return s.install(key, p, s.conflicts[key], s.pinned[key] || pin)
 }
 
 func (s *selectionState) install(
@@ -350,7 +356,11 @@ func Packages(request PackagesRequest) ([]document.Package, []error, error) {
 			if dependencyDemand && !slices.Contains(previous.DependencyOf, r.dependencyOf) {
 				previous.DependencyOf = append(previous.DependencyOf, r.dependencyOf)
 			}
-			branch := state.extend(r.key, previous)
+			branch := state.extend(
+				r.key,
+				previous,
+				len(r.releaseHints) > 0,
+			)
 			if backtrack(rest) {
 				return true
 			}
@@ -551,6 +561,7 @@ func Packages(request PackagesRequest) ([]document.Package, []error, error) {
 					branch := state.extend(
 						providerKey,
 						withDependents(provider, dependencyOf),
+						false,
 					)
 					logger.Debug(
 						"resolve: dependency answered by provider",
