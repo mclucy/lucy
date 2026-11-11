@@ -297,3 +297,157 @@ func lockedMutationPackage(
 		}},
 	}
 }
+
+// TestMutateLockRetainsProviderThroughCrossEcosystemDependent covers a Quilt
+// provider that replaced a Fabric dependency. Its transferred DependencyOf
+// reference names the Fabric dependent, but the reference carries no ecosystem,
+// so reachability must find that dependent across the shared Quilt module
+// namespace. A locked removal of the provider's direct requirement keeps the
+// provider while a dependent still needs it, and prunes it once none remains.
+func TestMutateLockRetainsProviderThroughCrossEcosystemDependent(t *testing.T) {
+	const (
+		consumer = "consumer"
+		provider = "provider"
+	)
+	consumerRef := catalog.Ref{Provider: catalog.ProviderModrinth, Name: consumer}
+	tests := []struct {
+		name              string
+		dependent         catalog.Ecosystem
+		dependency        catalog.Ecosystem
+		dependentDeclared bool
+		wantRetained      bool
+	}{
+		{
+			name:              "quilt provider retained by fabric consumer",
+			dependent:         catalog.EcosystemFabric,
+			dependency:        catalog.EcosystemQuilt,
+			dependentDeclared: true,
+			wantRetained:      true,
+		},
+		{
+			name:              "fabric dependency retained by quilt consumer",
+			dependent:         catalog.EcosystemQuilt,
+			dependency:        catalog.EcosystemFabric,
+			dependentDeclared: true,
+			wantRetained:      true,
+		},
+		{
+			name:         "quilt provider pruned without its consumer",
+			dependent:    catalog.EcosystemFabric,
+			dependency:   catalog.EcosystemQuilt,
+			wantRetained: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			final := lockedMutationManifest(t, "modrinth:"+consumer, versionpkg.Any)
+			final.Server.Core.Product = serverpkg.ProductQuilt
+			final.Server.Packages = map[catalog.Ecosystem]map[string]document.Requirement{}
+			packages := []document.Package{
+				crossEcosystemLockPackage(
+					tt.dependency,
+					provider,
+					[]document.RequirementBinding{{
+						Reference: "modrinth:" + provider,
+						Selector:  versionpkg.Any,
+						Enabled:   true,
+					}},
+					consumerRef,
+				),
+			}
+			packages[0].Dependency = true
+			if tt.dependentDeclared {
+				final.Server.Packages[tt.dependent] = map[string]document.Requirement{
+					"modrinth:" + consumer: {Selector: versionpkg.Any},
+				}
+				packages = append(packages, crossEcosystemLockPackage(
+					tt.dependent,
+					consumer,
+					[]document.RequirementBinding{{
+						Reference: "modrinth:" + consumer,
+						Selector:  versionpkg.Any,
+						Enabled:   true,
+					}},
+				))
+			}
+			lock := &document.Lock{
+				SchemaVersion: document.LockSchemaVersion,
+				Server: document.LockedServer{
+					Directory:   "server",
+					Minecraft:   versionpkg.Version("1.21.4"),
+					Product:     serverpkg.ProductQuilt,
+					CoreVersion: versionpkg.Version("0.29.1"),
+					Artifact: catalog.Artifact{
+						Provider:  catalog.ProviderQuilt,
+						ProjectID: "quilt-loader",
+						Version:   versionpkg.Version("0.29.1"),
+						Filename:  "quilt-loader-0.29.1.jar",
+						Hashes:    map[string]string{"sha256": fmt.Sprintf("%064x", 7)},
+					},
+					Bootstrapper: serverpkg.BootstrapMethodQuilt,
+					Java:         document.LockedJava{Advisory: 21},
+				},
+				Packages: packages,
+			}
+			fingerprint, err := final.Fingerprint()
+			if err != nil {
+				t.Fatalf("manifest.Fingerprint() error = %v", err)
+			}
+			resolved, err := mutateLock(final, lock, fingerprint)
+			if err != nil {
+				t.Fatalf("mutateLock() error = %v", err)
+			}
+
+			var got *document.Package
+			for i := range resolved.Packages {
+				if resolved.Packages[i].ProjectID == provider {
+					got = &resolved.Packages[i]
+				}
+			}
+			if !tt.wantRetained {
+				if got != nil {
+					t.Fatalf("resolved retained %s %s; want it pruned", got.Ecosystem, provider)
+				}
+				return
+			}
+			if got == nil {
+				t.Fatalf("resolved packages = %+v, want %s retained", resolved.Packages, provider)
+			}
+			if got.Ecosystem != tt.dependency {
+				t.Fatalf("resolved %s ecosystem = %q, want %q", provider, got.Ecosystem, tt.dependency)
+			}
+			if len(got.Requirements) != 0 {
+				t.Fatalf("resolved %s requirements = %#v, want none", provider, got.Requirements)
+			}
+			if !reflect.DeepEqual(got.DependencyOf, []catalog.Ref{consumerRef}) {
+				t.Fatalf("resolved %s DependencyOf = %#v, want %#v", provider, got.DependencyOf, []catalog.Ref{consumerRef})
+			}
+			if !got.Dependency {
+				t.Fatalf("resolved %s lost its dependency role", provider)
+			}
+		})
+	}
+}
+
+func crossEcosystemLockPackage(
+	ecosystem catalog.Ecosystem,
+	projectID string,
+	requirements []document.RequirementBinding,
+	dependencyOf ...catalog.Ref,
+) document.Package {
+	return document.Package{
+		Environment: serverpkg.EnvironmentServer,
+		Ecosystem:   ecosystem,
+		Artifact: catalog.Artifact{
+			Provider:  catalog.ProviderModrinth,
+			ProjectID: projectID,
+			ReleaseID: projectID + "-r1",
+			FileID:    projectID + "-f1",
+			Version:   versionpkg.Version("1.0.0"),
+			Filename:  projectID + ".jar",
+			Hashes:    map[string]string{"sha256": fmt.Sprintf("%064x", len(projectID))},
+		},
+		Requirements: requirements,
+		DependencyOf: dependencyOf,
+	}
+}

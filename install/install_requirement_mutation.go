@@ -196,6 +196,22 @@ func retainDeclared(
 		}
 	}
 	indices := make(map[identity]int, len(packages))
+
+	// dependents lists the packages a DependencyOf reference of p names. The
+	// reference carries no ecosystem, so the named dependent may be recorded
+	// under any ecosystem that shares p's module namespace.
+	dependents := func(p *document.Package, source catalog.Ref) []int {
+		key := identityOf(p)
+		key.reference = source
+		var parents []int
+		for _, ecosystem := range sharedModuleEcosystems(p.Ecosystem) {
+			key.ecosystem = ecosystem
+			if parent, ok := indices[key]; ok {
+				parents = append(parents, parent)
+			}
+		}
+		return parents
+	}
 	retained := make([]bool, len(packages))
 	enabled := make([]bool, len(packages))
 	for i := range packages {
@@ -217,10 +233,8 @@ func retainDeclared(
 	children := make([][]int, len(packages))
 	for i := range packages {
 		p := &packages[i]
-		key := identityOf(p)
 		for _, source := range p.DependencyOf {
-			key.reference = source
-			if parent, ok := indices[key]; ok {
+			for _, parent := range dependents(p, source) {
 				children[parent] = append(children[parent], i)
 			}
 		}
@@ -251,18 +265,37 @@ func retainDeclared(
 		}
 		p.Dependency = false
 		sources := p.DependencyOf[:0]
-		key := identityOf(&p)
 		for _, source := range p.DependencyOf {
-			key.reference = source
-			if parent, ok := indices[key]; ok && retained[parent] {
+			kept := false
+			for _, parent := range dependents(&p, source) {
+				if retained[parent] {
+					kept = true
+					p.Dependency = p.Dependency || enabled[parent]
+				}
+			}
+			if kept {
 				sources = append(sources, source)
-				p.Dependency = p.Dependency || enabled[parent]
 			}
 		}
 		p.DependencyOf = sources
 		out = append(out, p)
 	}
 	return out
+}
+
+// sharedModuleEcosystems lists the ecosystems whose modules share one namespace
+// with e. A Quilt server loads Fabric modules beside Quilt ones, so a dependency
+// recorded under one of these ecosystems can name a dependent recorded under
+// the other.
+func sharedModuleEcosystems(e catalog.Ecosystem) []catalog.Ecosystem {
+	switch e {
+	case catalog.EcosystemFabric:
+		return []catalog.Ecosystem{catalog.EcosystemFabric, catalog.EcosystemQuilt}
+	case catalog.EcosystemQuilt:
+		return []catalog.Ecosystem{catalog.EcosystemQuilt, catalog.EcosystemFabric}
+	default:
+		return []catalog.Ecosystem{e}
+	}
 }
 
 // mutateLock produces the lock a locked mutation commits. Only requirements,
