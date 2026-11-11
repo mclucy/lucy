@@ -152,6 +152,30 @@ func (s *selectionState) restoreAll(branches []selectionBranch) {
 	}
 }
 
+// lockedFileID returns the file the lock selected for a reference. A release
+// may publish several files of one version, and the recorded variant must stay
+// eligible so a later resolution does not swap in the release's primary file.
+func lockedFileID(
+	previous []document.Package,
+	environment serverpkg.Environment,
+	ecosystem catalog.Ecosystem,
+	provider catalog.Provider,
+	ref string,
+) string {
+	for _, p := range previous {
+		if p.Environment != environment || p.Ecosystem != ecosystem ||
+			p.Provider != provider {
+			continue
+		}
+		for _, requirement := range p.Requirements {
+			if requirement.Reference == ref {
+				return p.FileID
+			}
+		}
+	}
+	return ""
+}
+
 func Packages(request PackagesRequest) ([]document.Package, []error, error) {
 	ctx := request.Context
 	logger := request.Logger
@@ -195,6 +219,13 @@ func Packages(request PackagesRequest) ([]document.Package, []error, error) {
 			},
 			display: display,
 			origin:  originManifest,
+			previousFileID: lockedFileID(
+				previous,
+				environment,
+				ecosystem,
+				provider,
+				ref,
+			),
 			requirements: []document.RequirementBinding{
 				{
 					Reference:   ref,
@@ -430,12 +461,13 @@ func Packages(request PackagesRequest) ([]document.Package, []error, error) {
 					"project", project,
 				)
 				return backtrack(append([]projectRequest{{
-					key:          canonicalKey,
-					display:      r.display,
-					origin:       r.origin,
-					requirements: r.requirements,
-					dependencyOf: r.dependencyOf,
-					releaseHints: r.releaseHints,
+					key:            canonicalKey,
+					display:        r.display,
+					origin:         r.origin,
+					requirements:   r.requirements,
+					dependencyOf:   r.dependencyOf,
+					previousFileID: r.previousFileID,
+					releaseHints:   r.releaseHints,
 				}}, rest...))
 			}
 		}
