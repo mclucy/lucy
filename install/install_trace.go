@@ -48,6 +48,13 @@ func (t *Trace) phaseDone(phase PhaseInfo) {
 	}
 }
 
+// ReportPhase publishes a finished stage another package ran. Initialization
+// reports identification and adoption, which installation does not perform, so
+// their elapsed time is visible instead of unaccounted.
+func (t *Trace) ReportPhase(phase PhaseInfo) {
+	t.phaseDone(phase)
+}
+
 func (t *Trace) fetchStarted(name string, size int64) {
 	if t != nil && t.FetchStarted != nil {
 		t.FetchStarted(name, size)

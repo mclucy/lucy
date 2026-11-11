@@ -39,9 +39,9 @@ func (initializeTestSource) Candidates(
 	return nil, nil
 }
 
-func (initializeTestSource) GetArtifactMapper(
+func (initializeTestSource) GetArtifactReleaseMapper(
 	catalog.Provider,
-) (upstream.ArtifactMapProvider, bool, error) {
+) (upstream.ArtifactReleaseMapper, bool, error) {
 	return nil, false, nil
 }
 

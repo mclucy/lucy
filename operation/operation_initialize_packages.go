@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"sync"
 
 	"github.com/mclucy/lucy/artifact"
 	"github.com/mclucy/lucy/catalog"
@@ -16,10 +17,12 @@ import (
 )
 
 // packageAdopter recognizes installed packages against the servers and
-// ecosystems this workspace already loads. A manifest requirement names one
-// project, so two installed jars that identify the same project cannot both be
-// managed: the key would record only the last file while the receipt and
-// fingerprint claim both. Conflicting projects stay unmanaged.
+// ecosystems this workspace already loads. The file is the ownership unit:
+// observation reports one entry per descriptor, so several entries can name
+// one file, and adoption claims that path once. A manifest requirement names
+// one project, so two different files that identify the same project cannot
+// both be managed: the key would record only the last file while the receipt
+// and fingerprint claim both. Conflicting projects stay unmanaged.
 type packageAdopter struct {
 	service  *Service
 	root     string
@@ -28,64 +31,124 @@ type packageAdopter struct {
 	served   map[catalog.Ecosystem]struct{}
 	mappers  []packageMapper
 
-	recognized int
-	packages   []install.AdoptedPackage
-	index      map[string]int
-	references map[string]string
-	conflicts  map[string]bool
+	packages  []install.AdoptedPackage
+	releases  []install.AdoptedRelease
+	index     map[string]int
+	claims    map[string]string
+	conflicts map[string]bool
+}
+
+// adoptionProposal is one file's probe result. Probing reads the file and its
+// upstream identity without mutating the adopter, so probes can run in
+// parallel and apply in a deterministic order.
+type adoptionProposal struct {
+	pkg       workspace.DiscoveredPackage
+	ecosystem catalog.Ecosystem
+	key       string
+	reference string
+	packageID string
+	sha256    string
+	mode      uint32
+	candidate upstream.Candidate
+	matched   bool
+	fatal     error
+	warnings  []error
 }
 
 // packageMapper identifies installed packages by content hash for one
-// provider. registry is the catalogue that lists the matched project's
-// releases.
+// provider.
 type packageMapper struct {
 	provider catalog.Provider
-	registry catalog.Registry
-	mapper   upstream.ArtifactMapProvider
+	release  upstream.ArtifactReleaseMapper
 }
 
 // adoptInstalledPackages adds requirements for the packages discovery
-// identified and returns the ownership claims installation must record.
+// identified and returns the ownership claims installation must record,
+// together with the releases resolution selects for them.
 func (s *Service) adoptInstalledPackages(
 	ctx context.Context,
 	root string,
 	manifest *documentpkg.Manifest,
 	observed *workspace.Workspace,
-) ([]install.AdoptedPackage, error) {
+) (packages []install.AdoptedPackage, releases []install.AdoptedRelease, inspected int, err error) {
 	mappers, err := s.packageMappers()
 	if err != nil {
-		return nil, err
+		return nil, nil, 0, err
 	}
 	adopter := &packageAdopter{
-		service:    s,
-		root:       root,
-		manifest:   manifest,
-		observed:   observed,
-		served:     servedEcosystemSet(manifest, observed),
-		mappers:    mappers,
-		index:      map[string]int{},
-		references: map[string]string{},
-		conflicts:  map[string]bool{},
+		service:   s,
+		root:      root,
+		manifest:  manifest,
+		observed:  observed,
+		served:    servedEcosystemSet(manifest, observed),
+		mappers:   mappers,
+		index:     map[string]int{},
+		claims:    map[string]string{},
+		conflicts: map[string]bool{},
 	}
-	var packages []workspace.DiscoveredPackage
+	var discovered []workspace.DiscoveredPackage
 	if observed != nil {
-		packages = observed.Packages
+		discovered = observed.Packages
 	}
-	for _, p := range packages {
-		if err := adopter.adopt(ctx, p); err != nil {
-			return nil, err
+	unique := uniquePackages(discovered, adopter.served)
+	proposals := make([]adoptionProposal, len(unique))
+	var wg sync.WaitGroup
+	for i, p := range unique {
+		wg.Go(func() {
+			proposals[i] = adopter.probe(ctx, p)
+		})
+	}
+	wg.Wait()
+	for _, proposal := range proposals {
+		if proposal.fatal != nil {
+			return nil, nil, 0, proposal.fatal
 		}
+		adopter.apply(proposal)
 	}
-	adopter.packages = slices.DeleteFunc(
+	packages = slices.DeleteFunc(
 		adopter.packages,
 		func(pkg install.AdoptedPackage) bool { return pkg.Path == "" },
 	)
+	releases = slices.DeleteFunc(
+		adopter.releases,
+		func(release install.AdoptedRelease) bool { return release.Reference == "" },
+	)
 	s.logger.Debug(
 		"recognized existing packages",
-		"count", adopter.recognized,
-		"present", len(packages),
+		"count", len(packages),
+		"present", len(discovered),
 	)
-	return adopter.packages, nil
+	return packages, releases, len(unique), nil
+}
+
+// uniquePackages keeps one entry per file, preferring an ecosystem the server
+// serves. Observation reports one entry per descriptor, so a jar carrying
+// descriptors for several loaders would otherwise be claimed several times.
+func uniquePackages(
+	discovered []workspace.DiscoveredPackage,
+	served map[catalog.Ecosystem]struct{},
+) []workspace.DiscoveredPackage {
+	positions := make(map[string]int, len(discovered))
+	unique := make([]workspace.DiscoveredPackage, 0, len(discovered))
+	for _, p := range discovered {
+		if p.Path == "" || !artifact.SupportsPath(p.Path) {
+			continue
+		}
+		path := filepath.Clean(p.Path)
+		position, seen := positions[path]
+		if !seen {
+			positions[path] = len(unique)
+			unique = append(unique, p)
+			continue
+		}
+		if _, current := served[unique[position].ID.Ecosystem]; current {
+			continue
+		}
+		if _, replacement := served[p.ID.Ecosystem]; replacement {
+			unique[position] = p
+		}
+	}
+	return unique
 }
 
 // packageMapperProviders are the hash mappers that identify installed
@@ -96,78 +159,96 @@ var packageMapperProviders = []catalog.Provider{
 	catalog.ProviderCurseForge,
 }
 
-// packageMappers returns the configured hash mappers in trial order. A
+// packageMappers returns the configured release mappers in trial order. A
 // provider without a configured mapper is skipped, not an error.
 func (s *Service) packageMappers() ([]packageMapper, error) {
 	var mappers []packageMapper
 	for _, provider := range packageMapperProviders {
-		mapper, ok, err := s.source.GetArtifactMapper(provider)
+		release, ok, err := s.source.GetArtifactReleaseMapper(provider)
 		if err != nil {
 			return nil, err
 		}
 		if !ok {
 			continue
 		}
-		registry, ok := provider.Registry()
-		if !ok {
-			continue
-		}
 		mappers = append(mappers, packageMapper{
 			provider: provider,
-			registry: registry,
-			mapper:   mapper,
+			release:  release,
 		})
 	}
 	return mappers, nil
 }
 
-func (a *packageAdopter) adopt(
+func (a *packageAdopter) probe(
 	ctx context.Context,
 	p workspace.DiscoveredPackage,
-) error {
-	if !artifact.SupportsPath(p.Path) {
-		return nil
-	}
+) adoptionProposal {
+	proposal := adoptionProposal{pkg: p}
 	ecosystem := p.ID.Ecosystem
 	if ecosystem != catalog.EcosystemMCDR {
 		if _, ok := a.served[ecosystem]; !ok {
 			var adopted bool
 			ecosystem, adopted = servedEcosystemForFile(ctx, p.Path, a.served)
 			if !adopted {
-				return nil
+				proposal.warnings = append(proposal.warnings, fmt.Errorf(
+					"package %s left unmanaged: the server does not load %s",
+					p.Path,
+					p.ID.Ecosystem,
+				))
+				return proposal
 			}
 		}
 	}
+	proposal.ecosystem = ecosystem
 	modules, err := artifact.ReadModules(ctx, p.Path, ecosystem)
-	if err != nil || len(modules) == 0 {
-		return nil
+	if err != nil {
+		proposal.warnings = append(proposal.warnings, fmt.Errorf(
+			"package %s left unmanaged: read descriptor: %w",
+			p.Path,
+			err,
+		))
+		return proposal
+	}
+	if len(modules) == 0 {
+		proposal.warnings = append(proposal.warnings, fmt.Errorf(
+			"package %s left unmanaged: no server-side module descriptor",
+			p.Path,
+		))
+		return proposal
 	}
 	if ecosystem == catalog.EcosystemMCDR {
-		if a.manifest.MCDR == nil {
-			return nil
-		}
-		return a.adoptMCDR(ctx, p, modules[0].ID, ecosystem)
+		a.probeMCDR(ctx, &proposal, modules[0].ID, ecosystem)
+		return proposal
 	}
-	return a.adoptMapped(ctx, p, ecosystem)
+	a.probeMapped(ctx, &proposal, ecosystem)
+	return proposal
 }
 
-func (a *packageAdopter) adoptMCDR(
+func (a *packageAdopter) probeMCDR(
 	ctx context.Context,
-	p workspace.DiscoveredPackage,
+	proposal *adoptionProposal,
 	moduleID string,
 	ecosystem catalog.Ecosystem,
-) error {
+) {
+	p := proposal.pkg
+	if a.manifest.MCDR == nil {
+		proposal.warnings = append(proposal.warnings, fmt.Errorf(
+			"plugin %s left unmanaged: MCDReforged is not configured",
+			p.Path,
+		))
+		return
+	}
 	pluginDirectory := filepath.Join(
 		a.root,
 		a.manifest.MCDR.Directory,
 		"plugins",
 	)
 	if filepath.Clean(filepath.Dir(p.Path)) != filepath.Clean(pluginDirectory) {
-		a.warn(
+		proposal.warnings = append(proposal.warnings, fmt.Errorf(
 			"plugin %s left unmanaged: MCDReforged loads it outside the default plugins directory",
 			filepath.Base(p.Path),
-		)
-		return nil
+		))
+		return
 	}
 	candidates, err := a.service.source.Candidates(
 		ctx,
@@ -177,7 +258,12 @@ func (a *packageAdopter) adoptMCDR(
 		ecosystem,
 	)
 	if err != nil {
-		return nil
+		proposal.warnings = append(proposal.warnings, fmt.Errorf(
+			"plugin %s left unmanaged: %w",
+			p.Path,
+			err,
+		))
+		return
 	}
 	for _, candidate := range candidates {
 		if candidate.Hashes["sha256"] == "" {
@@ -186,159 +272,145 @@ func (a *packageAdopter) adoptMCDR(
 		if _, err := install.DigestFile(p.Path, candidate.Hashes); err != nil {
 			continue
 		}
-		return a.claimMCDR(p, candidate)
+		info, err := os.Lstat(p.Path)
+		if err != nil {
+			proposal.fatal = fmt.Errorf("inspect package %s: %w", p.Path, err)
+			return
+		}
+		packageID := "mcdr:" + candidate.ProjectID
+		proposal.key = packageKey(catalog.EcosystemMCDR, packageID)
+		proposal.packageID = packageID
+		proposal.reference = packageID
+		proposal.sha256 = candidate.Hashes["sha256"]
+		proposal.mode = uint32(info.Mode().Perm())
+		proposal.candidate = candidate
+		proposal.matched = true
+		return
 	}
-	return nil
+	proposal.warnings = append(proposal.warnings, fmt.Errorf(
+		"plugin %s left unmanaged: no listed release matches its bytes",
+		p.Path,
+	))
 }
 
-func (a *packageAdopter) claimMCDR(
-	p workspace.DiscoveredPackage,
-	candidate upstream.Candidate,
-) error {
-	info, err := os.Lstat(p.Path)
-	if err != nil {
-		return fmt.Errorf("inspect package %s: %w", p.Path, err)
-	}
-	packageID := "mcdr:" + candidate.ProjectID
-	key := packageKey(catalog.EcosystemMCDR, packageID)
-	if a.conflicts[key] {
-		a.warn(
-			"package %s left unmanaged: several installed plugins identify the same project",
-			candidate.ProjectID,
-		)
-		return nil
-	}
-	if _, exists := a.index[key]; exists {
-		prior := a.markConflict(key)
-		delete(a.manifest.MCDR.Packages, packageID)
-		a.warn(
-			"package %s left unmanaged: installed plugins %s and %s identify the same project",
-			candidate.ProjectID, prior, p.Path,
-		)
-		return nil
-	}
-	a.manifest.MCDR.Packages[packageID] = documentpkg.Requirement{
-		Selector: candidate.Version,
-	}
-	a.record(key, p, packageID, candidate.Hashes["sha256"], uint32(info.Mode().Perm()))
-	return nil
-}
-
-// adoptMapped identifies an installed package by content hash. Mappers are
-// tried in order: the first one that matches the file and selects its release
-// records the package under its provider.
-func (a *packageAdopter) adoptMapped(
+// probeMapped identifies an installed package by content hash. Mappers are
+// tried in order: the first one that identifies the file records the package
+// under its provider. A release is accepted even when its compatibility labels
+// name another server, because the installed bytes are evidence that the
+// server holds it.
+func (a *packageAdopter) probeMapped(
 	ctx context.Context,
-	p workspace.DiscoveredPackage,
+	proposal *adoptionProposal,
 	ecosystem catalog.Ecosystem,
-) error {
+) {
+	p := proposal.pkg
 	if !supportsHashedPackages(ecosystem) || len(a.mappers) == 0 {
-		return nil
+		proposal.warnings = append(proposal.warnings, fmt.Errorf(
+			"package %s left unmanaged: no provider identifies its hash",
+			p.Path,
+		))
+		return
 	}
 	digests, err := install.DigestFile(p.Path, nil)
 	if err != nil {
-		return fmt.Errorf("digest package %s: %w", p.Path, err)
+		proposal.fatal = fmt.Errorf("digest package %s: %w", p.Path, err)
+		return
 	}
 	info, err := os.Lstat(p.Path)
 	if err != nil {
-		return fmt.Errorf("inspect package %s: %w", p.Path, err)
+		proposal.fatal = fmt.Errorf("inspect package %s: %w", p.Path, err)
+		return
 	}
 	for _, mapper := range a.mappers {
-		ref, _, matched, err := mapper.mapper.PackageByHash(
+		release, matched, err := mapper.release.ReleaseByHash(
 			ctx,
 			artifact.File{Path: p.Path},
 		)
 		if err != nil {
 			// A lookup error is an incomplete lookup, not an artifact miss, so
 			// the file's identification may be wrong or missing entirely.
-			a.warn(
+			proposal.warnings = append(proposal.warnings, fmt.Errorf(
 				"package %s: %s hash lookup failed; identification may be incomplete: %w",
 				p.Path,
 				mapper.provider,
 				err,
-			)
+			))
 			continue
 		}
-		if !matched || ref.Name == "" {
+		if !matched || release.Ref.Name == "" {
 			continue
 		}
-		// A manifest entry that resolution cannot select blocks every later
-		// command, so a match whose catalogue metadata offers no release for
-		// this server is skipped. The next mapper may still identify the file.
-		release, err := a.mappedRelease(ctx, mapper, ref, ecosystem)
-		if err != nil {
-			a.warn(
-				"package %s matched %s but no release could be selected: %w",
-				ref.Name, mapper.provider, err,
-			)
-			continue
-		}
-		if release.ProjectID == "" {
-			a.warn(
+		if release.Candidate.ProjectID == "" {
+			proposal.warnings = append(proposal.warnings, fmt.Errorf(
 				"package %s matched %s but its release has no project ID",
-				ref.Name, mapper.provider,
-			)
+				p.Path,
+				mapper.provider,
+			))
 			continue
+		}
+		candidate := release.Candidate
+		if !release.Supports(
+			string(a.manifest.Server.Minecraft),
+			ecosystem,
+		) {
+			proposal.warnings = append(proposal.warnings, fmt.Errorf(
+				"package %s: %s lists release %s for another server; adopting the installed file",
+				p.Path,
+				mapper.provider,
+				release.Ref.Version,
+			))
+			candidate.CompatibilityUnknown = true
 		}
 		provider := string(mapper.provider)
-		reference := provider + ":" + ref.Name.String()
-		packageID := provider + ":" + release.ProjectID
-		key := packageKey(ecosystem, packageID)
-		if a.conflicts[key] {
-			a.warn(
-				"package %s left unmanaged: several installed jars identify the same project",
-				ref.Name,
-			)
-			return nil
-		}
-		if _, exists := a.index[key]; exists {
-			prior := a.markConflict(key)
-			delete(a.manifest.Server.Packages[ecosystem], a.references[key])
-			delete(a.references, key)
-			a.warn(
-				"package %s left unmanaged: installed jars %s and %s identify the same project",
-				ref.Name, prior, p.Path,
-			)
-			return nil
-		}
-		a.requirePackageMap(ecosystem)[reference] = documentpkg.Requirement{
-			Selector: ref.Version,
-		}
-		a.references[key] = reference
-		a.record(key, p, packageID, digests["sha256"], uint32(info.Mode().Perm()))
-		return nil
+		proposal.reference = provider + ":" + release.Ref.Name.String()
+		proposal.packageID = provider + ":" + candidate.ProjectID
+		proposal.key = packageKey(ecosystem, proposal.packageID)
+		proposal.sha256 = digests["sha256"]
+		proposal.mode = uint32(info.Mode().Perm())
+		proposal.candidate = candidate
+		proposal.matched = true
+		return
 	}
-	return nil
+	proposal.warnings = append(proposal.warnings, fmt.Errorf(
+		"package %s left unmanaged: no configured provider identifies its hash",
+		p.Path,
+	))
 }
 
-// mappedRelease selects the release of the matched project that carries the
-// hash-matched version and a primary file.
-func (a *packageAdopter) mappedRelease(
-	ctx context.Context,
-	mapper packageMapper,
-	ref catalog.VersionedRef,
-	ecosystem catalog.Ecosystem,
-) (upstream.Candidate, error) {
-	candidates, err := a.service.source.Candidates(
-		ctx,
-		mapper.registry,
-		ref.Name.String(),
-		string(a.manifest.Server.Minecraft),
-		ecosystem,
-	)
-	if err != nil {
-		return upstream.Candidate{}, err
+func (a *packageAdopter) apply(proposal adoptionProposal) {
+	for _, warning := range proposal.warnings {
+		a.warn("%v", warning)
 	}
-	index := slices.IndexFunc(candidates, func(candidate upstream.Candidate) bool {
-		return candidate.Version == ref.Version && candidate.PrimaryFile
-	})
-	if index < 0 {
-		return upstream.Candidate{}, fmt.Errorf(
-			"no release provides version %s",
-			ref.Version,
+	if !proposal.matched {
+		return
+	}
+	if _, claimed := a.claims[proposal.pkg.Path]; claimed {
+		return
+	}
+	if a.conflicts[proposal.key] {
+		a.warn(
+			"package %s left unmanaged: several installed files identify the same project",
+			proposal.pkg.Path,
 		)
+		return
 	}
-	return candidates[index], nil
+	if _, exists := a.index[proposal.key]; exists {
+		prior := a.markConflict(proposal.key)
+		a.warn(
+			"package %s left unmanaged: installed jars %s and %s identify the same project",
+			proposal.reference, prior, proposal.pkg.Path,
+		)
+		return
+	}
+	requirement := documentpkg.Requirement{
+		Selector: proposal.candidate.Version,
+	}
+	if proposal.ecosystem == catalog.EcosystemMCDR {
+		a.manifest.MCDR.Packages[proposal.reference] = requirement
+	} else {
+		a.requirePackageMap(proposal.ecosystem)[proposal.reference] = requirement
+	}
+	a.record(proposal)
 }
 
 // markConflict invalidates a project key, removes its earlier claim, and
@@ -350,29 +422,35 @@ func (a *packageAdopter) markConflict(key string) string {
 		return ""
 	}
 	delete(a.index, key)
-	prior := ""
-	if index < len(a.packages) {
-		prior = a.packages[index].Path
-		a.packages[index] = install.AdoptedPackage{}
+	if index >= len(a.packages) {
+		return ""
 	}
-	a.recognized--
+	prior := a.packages[index].Path
+	delete(a.claims, prior)
+	a.packages[index] = install.AdoptedPackage{}
+	release := a.releases[index]
+	a.releases[index] = install.AdoptedRelease{}
+	if release.Ecosystem == catalog.EcosystemMCDR {
+		delete(a.manifest.MCDR.Packages, release.Reference)
+	} else {
+		delete(a.manifest.Server.Packages[release.Ecosystem], release.Reference)
+	}
 	return prior
 }
 
-func (a *packageAdopter) record(
-	key string,
-	p workspace.DiscoveredPackage,
-	packageID string,
-	sha256 string,
-	mode uint32,
-) {
-	a.recognized++
-	a.index[key] = len(a.packages)
+func (a *packageAdopter) record(proposal adoptionProposal) {
+	a.index[proposal.key] = len(a.packages)
+	a.claims[proposal.pkg.Path] = proposal.key
 	a.packages = append(a.packages, install.AdoptedPackage{
-		Path:           p.Path,
-		PackageID:      packageID,
-		ExpectedSHA256: sha256,
-		ExpectedMode:   mode,
+		Path:           proposal.pkg.Path,
+		PackageID:      proposal.packageID,
+		ExpectedSHA256: proposal.sha256,
+		ExpectedMode:   proposal.mode,
+	})
+	a.releases = append(a.releases, install.AdoptedRelease{
+		Reference: proposal.reference,
+		Ecosystem: proposal.ecosystem,
+		Candidate: proposal.candidate,
 	})
 }
 

@@ -119,7 +119,7 @@ func (s *replaySource) Candidates(
 	return nil, nil
 }
 
-func (s *replaySource) GetArtifactMapper(catalog.Provider) (upstream.ArtifactMapProvider, bool, error) {
+func (s *replaySource) GetArtifactReleaseMapper(catalog.Provider) (upstream.ArtifactReleaseMapper, bool, error) {
 	return nil, false, nil
 }
 

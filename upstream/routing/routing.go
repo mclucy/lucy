@@ -43,11 +43,11 @@ var (
 )
 
 type providerCatalog struct {
-	searchProviders map[catalogpkg.Registry]upstream.SearchProvider
-	infoProviders   map[catalogpkg.Provider]upstream.InfoProvider
-	artifactMappers map[catalogpkg.Provider]upstream.ArtifactMapProvider
-	catalogues      map[catalogpkg.Provider]upstream.PackageCatalogue
-	importPacks     map[catalogpkg.Provider]upstream.ImportPackResolver
+	searchProviders  map[catalogpkg.Registry]upstream.SearchProvider
+	infoProviders    map[catalogpkg.Provider]upstream.InfoProvider
+	artifactReleases map[catalogpkg.Provider]upstream.ArtifactReleaseMapper
+	catalogues       map[catalogpkg.Provider]upstream.PackageCatalogue
+	importPacks      map[catalogpkg.Provider]upstream.ImportPackResolver
 }
 
 // Router binds configured provider instances to their capabilities and applies
@@ -112,7 +112,7 @@ func New(
 			catalogpkg.ProviderHangar:   hangarProvider,
 			catalogpkg.ProviderSpiget:   spigetProvider,
 		},
-		artifactMappers: map[catalogpkg.Provider]upstream.ArtifactMapProvider{
+		artifactReleases: map[catalogpkg.Provider]upstream.ArtifactReleaseMapper{
 			catalogpkg.ProviderModrinth: modrinthProvider,
 		},
 		importPacks: map[catalogpkg.Provider]upstream.ImportPackResolver{
@@ -124,7 +124,7 @@ func New(
 		router.providers.searchProviders[catalogpkg.RegistryCurseForge] = curseforgeProvider
 		router.providers.infoProviders[catalogpkg.ProviderCurseForge] = curseforgeProvider
 		router.providers.catalogues[catalogpkg.ProviderCurseForge] = curseforgeProvider
-		router.providers.artifactMappers[catalogpkg.ProviderCurseForge] = curseforgeProvider
+		router.providers.artifactReleases[catalogpkg.ProviderCurseForge] = curseforgeProvider
 		router.providers.importPacks[catalogpkg.ProviderCurseForge] = curseforgeProvider
 	}
 	return router
@@ -135,26 +135,26 @@ func (r *Router) curseforgeAvailable() bool {
 	return ok
 }
 
-// GetArtifactMapper returns the hash mapper registered for provider.
-func (r *Router) GetArtifactMapper(
+// GetArtifactReleaseMapper returns the release mapper registered for provider.
+func (r *Router) GetArtifactReleaseMapper(
 	provider catalogpkg.Provider,
-) (upstream.ArtifactMapProvider, bool, error) {
-	mapper, ok := r.providers.artifactMappers[provider]
+) (upstream.ArtifactReleaseMapper, bool, error) {
+	mapper, ok := r.providers.artifactReleases[provider]
 	if !ok {
 		r.logger.Debug(
-			"routing: no artifact mapper for provider",
+			"routing: no artifact release mapper for provider",
 			"provider", provider,
-			"reason", "provider has no artifact mapper",
+			"reason", "provider has no artifact release mapper",
 		)
 	}
 	return mapper, ok, nil
 }
 
-func (r *Router) artifactMappers() []upstream.ArtifactMapProvider {
+func (r *Router) artifactReleaseMappers() []upstream.ArtifactReleaseMapper {
 	providers := modProviders(r.curseforgeAvailable())
-	mappers := make([]upstream.ArtifactMapProvider, 0, len(providers))
+	mappers := make([]upstream.ArtifactReleaseMapper, 0, len(providers))
 	for _, provider := range providers {
-		mapper, ok := r.providers.artifactMappers[provider]
+		mapper, ok := r.providers.artifactReleases[provider]
 		if ok {
 			mappers = append(mappers, mapper)
 		}

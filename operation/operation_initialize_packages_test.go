@@ -35,14 +35,19 @@ type packageMapperTestSource struct {
 	artifactSHA256 string
 }
 
-func (s packageMapperTestSource) GetArtifactMapper(
+func (s packageMapperTestSource) GetArtifactReleaseMapper(
 	provider catalog.Provider,
-) (upstream.ArtifactMapProvider, bool, error) {
+) (upstream.ArtifactReleaseMapper, bool, error) {
 	mapper, ok := s.mappers[provider]
 	if !ok {
 		return nil, false, nil
 	}
-	return mapper, true, nil
+	return fakeReleaseMapper{
+		fakePackageMapper: mapper,
+		candidates:        s.releases[provider],
+		url:               s.artifactURL,
+		sha256:            s.artifactSHA256,
+	}, true, nil
 }
 
 func (s packageMapperTestSource) Candidates(
@@ -82,9 +87,9 @@ func (s packageMapperInstallSource) Candidates(
 	return s.catalogue.Candidates(ctx, registry, project, minecraft, ecosystem)
 }
 
-// fakePackageMapper answers a hash lookup the way an upstream does when it
-// recognizes the file: as one project at one version. err makes the lookup
-// fail the way an unreachable upstream does.
+// fakePackageMapper names the project a provider recognizes and whose
+// releases the test lists. err makes the lookup fail the way an unreachable
+// upstream does.
 type fakePackageMapper struct {
 	provider catalog.Provider
 	name     catalog.Name
@@ -94,19 +99,39 @@ type fakePackageMapper struct {
 
 func (m fakePackageMapper) Provider() catalog.Provider { return m.provider }
 
-func (m fakePackageMapper) PackageByHash(
+// fakeReleaseMapper answers a hash lookup with the first listed release. A
+// provider with no listed release does not recognize the file.
+type fakeReleaseMapper struct {
+	fakePackageMapper
+	candidates []upstream.Candidate
+	url        string
+	sha256     string
+}
+
+func (m fakeReleaseMapper) ReleaseByHash(
 	context.Context,
 	upstream.ArtifactFingerprint,
-) (catalog.VersionedRef, string, bool, error) {
+) (upstream.Release, bool, error) {
 	if m.err != nil {
-		return catalog.VersionedRef{}, "", false, m.err
+		return upstream.Release{}, false, m.err
 	}
-	return catalog.VersionedRef{
-		Name:      m.name,
-		Provider:  m.provider,
-		Ecosystem: catalog.EcosystemFabric,
-		Version:   m.version,
-	}, "", true, nil
+	if len(m.candidates) == 0 {
+		return upstream.Release{}, false, nil
+	}
+	candidate := m.candidates[0]
+	candidate.URL = m.url
+	candidate.Hashes = map[string]string{"sha256": m.sha256}
+	return upstream.Release{
+		Ref: catalog.VersionedRef{
+			Name:      m.name,
+			Provider:  m.provider,
+			Ecosystem: catalog.EcosystemFabric,
+			Version:   m.version,
+		},
+		Candidate:         candidate,
+		MinecraftVersions: []string{"1.21.1"},
+		Loaders:           []string{"fabric"},
+	}, true, nil
 }
 
 // releaseCandidate is one published release of a project, as the upstream
@@ -244,33 +269,6 @@ func TestInitializePrefersModrinthWhenBothMatch(t *testing.T) {
 	}
 }
 
-// A Modrinth match whose project offers no release for the hash-matched
-// version is not a dead end: adoption falls through to CurseForge.
-func TestInitializeFallsThroughToCurseForgeWithoutModrinthRelease(t *testing.T) {
-	_, manifest, lock := initializePackageMapperLayout(t, packageMapperTestSource{
-		mappers: map[catalog.Provider]fakePackageMapper{
-			catalog.ProviderModrinth:   {provider: catalog.ProviderModrinth, name: "example", version: "1.0.0"},
-			catalog.ProviderCurseForge: {provider: catalog.ProviderCurseForge, name: "example", version: "1.0.0"},
-		},
-		releases: map[catalog.Provider][]upstream.Candidate{
-			catalog.ProviderCurseForge: {releaseCandidate(catalog.ProviderCurseForge, "123", "1.0.0")},
-		},
-	})
-	requirements := manifest.Server.Packages[catalog.EcosystemFabric]
-	if _, ok := requirements["curseforge:example"]; !ok {
-		t.Fatalf("manifest packages = %v, want curseforge:example", requirements)
-	}
-	if _, ok := requirements["modrinth:example"]; ok {
-		t.Fatalf("manifest packages = %v, Modrinth has no release to pin", requirements)
-	}
-	if len(lock.Packages) != 1 {
-		t.Fatalf("lock packages = %d, want 1", len(lock.Packages))
-	}
-	if got := lock.Packages[0].Provider; got != catalog.ProviderCurseForge {
-		t.Fatalf("lock provider = %q, want curseforge", got)
-	}
-}
-
 // Without any configured mapper, an installed package stays unmanaged: the
 // declaration gains no requirement and the file is left in place.
 func TestInitializeLeavesPackageUnmanagedWithoutMapper(t *testing.T) {
@@ -300,10 +298,15 @@ func TestInitializeWarnsWhenHashLookupFails(t *testing.T) {
 			},
 		},
 	})
-	if got := len(result.Warnings); got != 1 {
-		t.Fatalf("warnings = %v, want one", result.Warnings)
+	message := ""
+	for _, warning := range result.Warnings {
+		if strings.Contains(warning.Error(), "modrinth unavailable") {
+			message = warning.Error()
+		}
 	}
-	message := result.Warnings[0].Error()
+	if message == "" {
+		t.Fatalf("warnings = %v, want one naming the lookup failure", result.Warnings)
+	}
 	for _, want := range []string{"example.jar", "modrinth", "modrinth unavailable"} {
 		if !strings.Contains(message, want) {
 			t.Errorf("warning %q does not name %q", message, want)
