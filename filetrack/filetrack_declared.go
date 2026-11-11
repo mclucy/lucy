@@ -75,6 +75,9 @@ func expandDeclaredPaths(
 			tree,
 			pattern,
 			func(name string, _ fs.DirEntry) error {
+				if !explicitlySelectsHidden(pattern, name) {
+					return nil
+				}
 				matched = true
 				if _, explicit := literal[name]; explicit {
 					return nil
