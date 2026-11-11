@@ -7,6 +7,28 @@ import (
 	"github.com/mclucy/lucy/catalog"
 )
 
+// ProjectServerSide is a provider's answer about one project.
+type ProjectServerSide struct {
+	ServerSide ServerSide
+	ClientSide string
+	Title      string
+}
+
+// IsClientOnly reports whether the project stays off a dedicated server.
+func (p ProjectServerSide) IsClientOnly() bool {
+	return ClientOnly(p.ServerSide, p.ClientSide)
+}
+
+// ServerSideResolver reports a project's dedicated-server label by a name the
+// artifact descriptor provides. found is false when the provider has no such
+// project. Providers that publish no side labels answer found=false.
+type ServerSideResolver interface {
+	ServerSideByName(
+		ctx context.Context,
+		name string,
+	) (ProjectServerSide, bool, error)
+}
+
 // ArtifactReleaseMapper resolves an installed artifact to the release it was
 // published as, so a caller adopts the file already on disk without listing
 // the project's releases.
@@ -28,6 +50,15 @@ const (
 	ServerSideUnsupported ServerSide = "unsupported"
 )
 
+// ClientOnly reports whether a project's side labels keep it off a dedicated
+// server. A server-unsupported project is client-only. So is a client-required
+// project that is merely server-optional: a dedicated server has no use for it.
+// A project that is optional on both sides is a shared library.
+func ClientOnly(serverSide ServerSide, clientSide string) bool {
+	return serverSide == ServerSideUnsupported ||
+		(serverSide == ServerSideOptional && clientSide == "required")
+}
+
 // Release is one published artifact as its provider records it. Ref names the
 // project and version; Candidate describes the same file for resolution.
 // Compatibility labels are advisory: installed bytes prove the server holds the
@@ -38,6 +69,12 @@ type Release struct {
 	MinecraftVersions []string
 	Loaders           []string
 	ServerSide        ServerSide
+	ClientSide        string
+}
+
+// ClientOnly reports whether the release belongs on a dedicated server.
+func (r Release) ClientOnly() bool {
+	return ClientOnly(r.ServerSide, r.ClientSide)
 }
 
 // Supports reports whether the release labels itself for minecraft and loader.

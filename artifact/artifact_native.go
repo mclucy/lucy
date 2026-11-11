@@ -55,10 +55,20 @@ func ReadClientOnly(
 	if len(modules) == 0 {
 		return false, false, nil
 	}
+	declared := false
 	for _, module := range modules {
+		if module.Side == "" {
+			continue
+		}
+		declared = true
 		if module.Side != catalog.SideClient {
 			return false, true, nil
 		}
+	}
+	if !declared {
+		// Forge and NeoForge descriptors carry no mod-level side. A module
+		// without a side is not evidence either way.
+		return false, false, nil
 	}
 	return true, true, nil
 }
