@@ -36,7 +36,7 @@ After editing a tracked file, save its current contents as the accepted revision
 lucy file update config/example.json
 ```
 
-You can list several paths, use shell-style patterns such as `config/*.json`, or use `lucy file update --all`. Patterns match tracked declarations, so they do not depend on which working files currently exist. For an immutable file, accepting the change stops warnings about the new contents.
+You can list several paths, use shell-style patterns such as `config/*.json`, or use `lucy file update --all`. Patterns match tracked declarations, so they do not depend on which working files currently exist; hidden tracked paths require an explicit leading dot. For an immutable file, accepting the change stops warnings about the new contents.
 
 To download and accept the current contents from a configured recovery URL, use:
 
