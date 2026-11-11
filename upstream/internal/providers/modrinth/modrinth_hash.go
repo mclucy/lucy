@@ -69,7 +69,7 @@ func (p *Provider) ReleaseByHash(
 		return upstream.Release{}, false, nil
 	}
 
-	candidate, err := p.candidateFromVersion(ctx, &ver, file, true)
+	candidate, err := p.candidateFromVersion(ctx, &ver, file, true, true)
 	if err != nil {
 		return upstream.Release{}, false, err
 	}

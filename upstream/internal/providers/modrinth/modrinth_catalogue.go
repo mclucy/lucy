@@ -35,7 +35,7 @@ func (p *Provider) Candidates(ctx context.Context, project, minecraft string, lo
 			if f.FileType != "" {
 				continue
 			}
-			c, err := p.candidateFromVersion(ctx, v, f, f.IsPrimary || (unmarked && i == 0))
+			c, err := p.candidateFromVersion(ctx, v, f, f.IsPrimary || (unmarked && i == 0), false)
 			if err != nil {
 				return nil, err
 			}
@@ -50,12 +50,16 @@ func (p *Provider) Candidates(ctx context.Context, project, minecraft string, lo
 
 // candidateFromVersion builds the candidate for one file of a version. The
 // caller owns the primary flag; the helper resolves a dependency whose
-// project is carried by its version through the version endpoint.
+// project is carried by its version through the version endpoint. A hash
+// identification keeps the matched release when that metadata is incomplete,
+// because the installed bytes already establish the release; a catalogue
+// listing treats the failure as fatal.
 func (p *Provider) candidateFromVersion(
 	ctx context.Context,
 	v *versionResponse,
 	f fileResponse,
 	primary bool,
+	tolerateIncompleteDependencies bool,
 ) (upstream.Candidate, error) {
 	hashes := map[string]string{}
 	if f.Hashes.Sha512 != "" {
@@ -83,7 +87,19 @@ func (p *Provider) candidateFromVersion(
 		if projectID == "" && d.VersionId != "" {
 			pinned, e := p.getVersionById(ctx, d.VersionId)
 			if e != nil {
-				return upstream.Candidate{}, e
+				if ctx.Err() != nil {
+					return upstream.Candidate{}, ctx.Err()
+				}
+				if !tolerateIncompleteDependencies {
+					return upstream.Candidate{}, e
+				}
+				p.logger.Debug(
+					"modrinth: dependency metadata incomplete",
+					"version", d.VersionId,
+					"error", e,
+				)
+				c.DependenciesUnknown = true
+				continue
 			}
 			projectID = pinned.ProjectId
 		}
