@@ -22,7 +22,7 @@ lucy file track 'config/*.json'
 lucy file track 'scripts/**/*.sh'
 ```
 
-`*` and `?` match within one path component, `[abc]`, `[a-z]`, and `[!abc]` match one character, and `**` matches any number of directories, including none. One invocation tracks every match atomically. A pattern that selects no regular file fails, hidden files need an explicit leading dot, and `.lucy` and `.git` are never selected.
+`*` and `?` match within one path component, `[abc]`, `[a-z]`, and `[!abc]` match one character, and `**` matches any number of directories, including none. One invocation tracks every match atomically. Directories are skipped with a warning; a pattern that matches no file or directory fails. Hidden files need an explicit leading dot, and `.lucy` and `.git` are never selected.
 
 Use `lucy file lock <path>` to accept the current contents and warn about future changes, and `lucy file unlock <path>` to allow changes without warnings. `lucy file untrack <path>` stops tracking without deleting the file.
 

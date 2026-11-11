@@ -45,7 +45,8 @@ const (
 		"shell-style patterns relative to the workspace: * and ? match " +
 		"within one path component, [abc], [a-z], and [!abc] match one " +
 		"character, and ** matches any number of directories, including " +
-		"none. Every pattern must select at least one regular file. " +
+		"none. Directories are reported as skipped. A pattern that " +
+		"matches no file or directory fails. " +
 		"Hidden files require an explicit leading dot, and .lucy and .git " +
 		"are never selected. By default each entry " +
 		"is mutable with an accepted hash; --immutable requires an " +

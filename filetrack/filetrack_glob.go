@@ -1,6 +1,7 @@
 package filetrack
 
 import (
+	"errors"
 	"fmt"
 	"io/fs"
 	"os"
@@ -10,56 +11,76 @@ import (
 	"github.com/mclucy/lucy/input"
 )
 
-// expandTrackPaths resolves shell-style workspace patterns into the regular
-// files they select. Literal paths pass through normalization. A pattern with
-// no trackable match fails, so a typo cannot silently track nothing.
-func expandTrackPaths(root *os.Root, paths []string) ([]string, error) {
-	expanded := make([]string, 0, len(paths))
+// expandTrackPaths resolves shell-style workspace patterns into the entries
+// they select. Literal paths pass through normalization. Directories are
+// reported as skipped because a tracked entry is always a regular file. A
+// pattern that matches neither a file nor a directory fails, so a typo cannot
+// silently track nothing.
+func expandTrackPaths(root *os.Root, paths []string) (selected, skipped []string, resultErr error) {
+	selected = make([]string, 0, len(paths))
+	skipped = make([]string, 0)
 	seen := make(map[string]struct{}, len(paths))
-	appendPath := func(value string) {
+	appendPath := func(destination *[]string, value string) {
 		if _, exists := seen[value]; exists {
 			return
 		}
 		seen[value] = struct{}{}
-		expanded = append(expanded, value)
+		*destination = append(*destination, value)
 	}
-	var candidates []string
+	var files, directories []string
 	loaded := false
 	for _, raw := range paths {
 		normalized, err := input.TrackedPath(raw)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		if !strings.ContainsAny(normalized, "*?[") {
-			appendPath(normalized)
+			info, err := root.Lstat(normalized)
+			switch {
+			case errors.Is(err, os.ErrNotExist):
+				appendPath(&selected, normalized)
+			case err != nil:
+				return nil, nil, err
+			case info.IsDir():
+				appendPath(&skipped, normalized)
+			default:
+				appendPath(&selected, normalized)
+			}
 			continue
 		}
 		if err := validateTrackPattern(normalized); err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		if !loaded {
-			candidates, err = trackableFiles(root)
+			files, directories, err = trackableEntries(root)
 			if err != nil {
-				return nil, err
+				return nil, nil, err
 			}
 			loaded = true
 		}
 		matched := false
-		for _, candidate := range candidates {
+		for _, candidate := range files {
 			if !matchTrackPattern(normalized, candidate) {
 				continue
 			}
-			appendPath(candidate)
+			appendPath(&selected, candidate)
+			matched = true
+		}
+		for _, candidate := range directories {
+			if !matchTrackPattern(normalized, candidate) {
+				continue
+			}
+			appendPath(&skipped, candidate)
 			matched = true
 		}
 		if !matched {
-			return nil, fmt.Errorf(
-				"track pattern %q matches no files in this workspace",
+			return nil, nil, fmt.Errorf(
+				"track pattern %q matches no files or directories in this workspace",
 				raw,
 			)
 		}
 	}
-	return expanded, nil
+	return selected, skipped, nil
 }
 
 // validateTrackPattern rejects malformed character classes before a walk can
@@ -76,11 +97,11 @@ func validateTrackPattern(pattern string) error {
 	return nil
 }
 
-// trackableFiles lists every regular file that a track pattern may select.
-// Reserved state directories are never candidates, and paths that the
-// manifest cannot declare are skipped without failing the whole walk.
-func trackableFiles(root *os.Root) ([]string, error) {
-	files := make([]string, 0)
+// trackableEntries lists every regular file and directory that a track
+// pattern may select. Reserved state directories are never candidates, and
+// paths that the manifest cannot declare are skipped without failing the
+// whole walk.
+func trackableEntries(root *os.Root) (files, directories []string, resultErr error) {
 	err := fs.WalkDir(
 		root.FS(),
 		".",
@@ -88,11 +109,19 @@ func trackableFiles(root *os.Root) ([]string, error) {
 			if walkErr != nil {
 				return walkErr
 			}
+			if name == "." {
+				return nil
+			}
 			if entry.IsDir() {
 				switch strings.ToLower(entry.Name()) {
 				case ".lucy", ".git":
 					return fs.SkipDir
 				}
+				normalized, err := input.TrackedPath(name)
+				if err != nil {
+					return nil
+				}
+				directories = append(directories, normalized)
 				return nil
 			}
 			if !entry.Type().IsRegular() {
@@ -107,9 +136,9 @@ func trackableFiles(root *os.Root) ([]string, error) {
 		},
 	)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	return files, nil
+	return files, directories, nil
 }
 
 // matchTrackPattern reports whether a workspace-relative path matches a

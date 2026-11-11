@@ -54,6 +54,10 @@ func reportFileResult(
 		writeChangeLine(out, result.Event.Operation, change)
 	}
 	for _, skipped := range result.Skipped {
+		if result.Event.Operation == filetrack.Track && !output.JSON() {
+			output.Warn(fmt.Errorf("skipped directory %s", skipped))
+			continue
+		}
 		fmt.Fprintf(out, "skipped %s\n", skipped)
 	}
 	if result.Reclaimed.Objects > 0 {
