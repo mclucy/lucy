@@ -271,6 +271,8 @@ func TestFileTrackRequiresExplicitDotForHiddenEntries(t *testing.T) {
 
 	behaviorRunErr(t, root, Request{Operation: Track, Paths: []string{"[!a]*"}})
 	behaviorRunErr(t, root, Request{Operation: Track, Paths: []string{"[!a]*/*.json"}})
+	behaviorRunErr(t, root, Request{Operation: Track, Paths: []string{"[^a]*"}})
+	behaviorRunErr(t, root, Request{Operation: Track, Paths: []string{"[!a-]*"}})
 	if declared := behaviorDeclared(t, root); len(declared) != 0 {
 		t.Fatalf("wildcards tracked hidden files: %+v", declared)
 	}

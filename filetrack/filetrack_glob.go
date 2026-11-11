@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
-	"path"
 	"strings"
 
+	"github.com/bmatcuk/doublestar/v4"
 	"github.com/mclucy/lucy/input"
 )
 
@@ -36,7 +36,6 @@ func expandFilePaths(root *os.Root, paths []string) (selected, skippedDirectorie
 		}
 		return true
 	}
-	var resolver *patternResolver
 	for _, raw := range paths {
 		normalized, err := input.TrackedPath(raw)
 		if err != nil {
@@ -56,26 +55,33 @@ func expandFilePaths(root *os.Root, paths []string) (selected, skippedDirectorie
 			}
 			continue
 		}
-		if err := validateFilePattern(normalized); err != nil {
-			return nil, nil, err
-		}
-		if resolver == nil {
-			resolver = &patternResolver{
-				fsys:    root.FS(),
-				entries: make(map[string][]fs.DirEntry),
-			}
+		pattern := globPattern(normalized)
+		if !doublestar.ValidatePattern(pattern) {
+			return nil, nil, fmt.Errorf("invalid pattern %q", raw)
 		}
 		matched := false
-		err = resolver.match(
-			".",
-			strings.Split(normalized, "/"),
-			func(name string, directory bool) bool {
-				if !add(name, directory) {
-					return false
+		err = doublestar.GlobWalk(
+			root.FS(),
+			pattern,
+			func(name string, entry fs.DirEntry) error {
+				if entry.IsDir() && reservedDirectory(entry) {
+					return doublestar.SkipDir
 				}
-				matched = true
-				return true
+				switch {
+				case entry.IsDir():
+					if add(name, true) {
+						matched = true
+					}
+				case entry.Type().IsRegular():
+					if add(name, false) {
+						matched = true
+					}
+				}
+				return nil
 			},
+			doublestar.WithFailOnIOErrors(),
+			doublestar.WithNoFollow(),
+			doublestar.WithNoHidden(),
 		)
 		if err != nil {
 			return nil, nil, err
@@ -90,159 +96,39 @@ func expandFilePaths(root *os.Root, paths []string) (selected, skippedDirectorie
 	return selected, skippedDirectories, nil
 }
 
-// validateFilePattern rejects malformed character classes before traversal can
-// report them as a match failure.
-func validateFilePattern(pattern string) error {
-	for segment := range strings.SplitSeq(pattern, "/") {
-		if segment == "**" {
+// globPattern adapts the supported pattern to doublestar. Braces stay literal
+// because only *, ?, character classes, and ** are documented. A leading
+// negated class would otherwise match a leading dot, which WithNoHidden does
+// not suppress.
+func globPattern(pattern string) string {
+	pattern = strings.NewReplacer(
+		"{", `\{`,
+		"}", `\}`,
+	).Replace(pattern)
+	segments := strings.Split(pattern, "/")
+	for index, segment := range segments {
+		if !strings.HasPrefix(segment, "[!") && !strings.HasPrefix(segment, "[^") {
 			continue
 		}
-		if _, err := path.Match(negatedTrackClass(segment), ""); err != nil {
-			return fmt.Errorf("invalid pattern %q: %w", pattern, err)
-		}
-	}
-	return nil
-}
-
-// patternResolver descends only through directories a pattern can select, so
-// an unrelated unreadable directory cannot prevent expansion.
-type patternResolver struct {
-	fsys    fs.FS
-	entries map[string][]fs.DirEntry
-}
-
-func (r *patternResolver) readDir(name string) ([]fs.DirEntry, error) {
-	if entries, exists := r.entries[name]; exists {
-		return entries, nil
-	}
-	entries, err := fs.ReadDir(r.fsys, name)
-	if err != nil {
-		return nil, fmt.Errorf("read workspace directory %s: %w", name, err)
-	}
-	r.entries[name] = entries
-	return entries, nil
-}
-
-// match emits every entry below directory that segments select. The caller
-// filters emitted paths through the tracked-path contract.
-func (r *patternResolver) match(
-	directory string,
-	segments []string,
-	emit func(name string, directory bool) bool,
-) error {
-	if len(segments) == 0 {
-		if directory != "." {
-			emit(directory, true)
-		}
-		return nil
-	}
-	entries, err := r.readDir(directory)
-	if err != nil {
-		return err
-	}
-	if segments[0] == "**" {
-		if err := r.match(directory, segments[1:], emit); err != nil {
-			return err
-		}
-		for _, entry := range entries {
-			name := entry.Name()
-			if strings.HasPrefix(name, ".") || reservedDirectory(entry) {
-				continue
-			}
-			child := path.Join(directory, name)
-			switch {
-			case entry.IsDir():
-				if err := r.match(child, segments, emit); err != nil {
-					return err
-				}
-			case entry.Type().IsRegular() && len(segments) == 1:
-				emit(child, false)
-			}
-		}
-		return nil
-	}
-	segment := segments[0]
-	for _, entry := range entries {
-		name := entry.Name()
-		if strings.HasPrefix(name, ".") && !explicitDotSegment(segment) {
+		end := strings.IndexByte(segment, ']')
+		if end < 0 {
 			continue
 		}
-		if reservedDirectory(entry) {
-			continue
+		content := segment[1:end]
+		insert := end
+		if strings.HasSuffix(content, "-") {
+			insert--
 		}
-		matched, err := path.Match(negatedTrackClass(segment), name)
-		if err != nil {
-			return err
-		}
-		if !matched {
-			continue
-		}
-		child := path.Join(directory, name)
-		if len(segments) == 1 {
-			switch {
-			case entry.IsDir():
-				emit(child, true)
-			case entry.Type().IsRegular():
-				emit(child, false)
-			}
-			continue
-		}
-		if entry.IsDir() {
-			if err := r.match(child, segments[1:], emit); err != nil {
-				return err
-			}
-		}
+		segments[index] = segment[:insert] + "." + segment[insert:]
 	}
-	return nil
+	return strings.Join(segments, "/")
 }
 
 func reservedDirectory(entry fs.DirEntry) bool {
-	if !entry.IsDir() {
-		return false
-	}
 	switch strings.ToLower(entry.Name()) {
 	case ".lucy", ".git":
 		return true
 	default:
 		return false
 	}
-}
-
-// explicitDotSegment reports whether a segment explicitly selects a leading
-// dot. Negated classes and wildcards do not.
-func explicitDotSegment(segment string) bool {
-	if strings.HasPrefix(segment, ".") {
-		return true
-	}
-	if !strings.HasPrefix(segment, "[") {
-		return false
-	}
-	end := strings.IndexByte(segment, ']')
-	if end < 0 {
-		return false
-	}
-	class := segment[1:end]
-	if class == "" || class[0] == '!' || class[0] == '^' {
-		return false
-	}
-	for index := range class {
-		if class[index] == '.' {
-			return true
-		}
-		if index+2 < len(class) &&
-			class[index+1] == '-' &&
-			class[index] <= '.' &&
-			'.' <= class[index+2] {
-			return true
-		}
-	}
-	return false
-}
-
-// negatedTrackClass accepts the shell spelling [!abc] alongside Go's [^abc].
-func negatedTrackClass(segment string) string {
-	if !strings.Contains(segment, "[!") {
-		return segment
-	}
-	return strings.ReplaceAll(segment, "[!", "[^")
 }
