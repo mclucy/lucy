@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"net/url"
 	"os"
 	"path"
@@ -19,6 +20,7 @@ import (
 
 	"github.com/mclucy/lucy/artifact"
 	"github.com/mclucy/lucy/artifactstore"
+	"github.com/mclucy/lucy/bootstrap"
 	"github.com/mclucy/lucy/cache"
 	"github.com/mclucy/lucy/catalog"
 	"github.com/mclucy/lucy/document"
@@ -66,6 +68,14 @@ func importProgress(trace *install.Trace) importpack.Progress {
 		FileDone:     trace.ReportFetchDone,
 	}
 }
+
+// errImportNotInitialized reports an imported tree with no runtime. The tree
+// stays extracted in the target, and the operator initializes it once the
+// modpack is set up.
+var errImportNotInitialized = errors.New(
+	"no server detected; the archive was extracted as-is. " +
+		"Run `lucy init` once the modpack is set up.",
+)
 
 // importSource adopts an external server archive as a new workspace. The
 // archive is materialized and initialized in a private staging directory
@@ -201,16 +211,22 @@ func (s *Service) importSource(
 		materialized.Skipped = append(materialized.Skipped, removed...)
 	}
 
+	var loaderWarnings []error
 	force := false
 	if plan.Format == importpack.FormatMrpack {
 		if err := s.installDeclaredLoader(ctx, stage, name, materialized, opts.Trace); err != nil {
 			return nil, err
 		}
 		force = true
+	} else {
+		loaderWarnings, err = s.runTreeInstaller(ctx, stage, opts.Trace)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	stageRegistered = true
-	initResult, err := s.Initialize(ctx, stage, InitOptions{
+	initResult, initErr := s.Initialize(ctx, stage, InitOptions{
 		Name:          name,
 		MCDRVersion:   opts.MCDRVersion,
 		Force:         force,
@@ -219,8 +235,29 @@ func (s *Service) importSource(
 		PromptRuntime: opts.PromptRuntime,
 		Trace:         opts.Trace,
 	})
-	if err != nil {
-		return nil, err
+	uninitialized := errors.Is(initErr, errNoServerDetected)
+	if initErr != nil && !uninitialized {
+		return nil, initErr
+	}
+	if uninitialized {
+		// applyRuntimeIdentity refuses before registration and document
+		// publication, so the stage was never registered.
+		stageRegistered = false
+		result, err = publishUninitializedImport(
+			stage,
+			target,
+			name,
+			source,
+			plan.Format,
+			materialized,
+			loaderWarnings,
+			initResult,
+		)
+		if err != nil {
+			return nil, err
+		}
+		published = true
+		return result, nil
 	}
 	manifest := initResult.Document
 	lock := initResult.Lock
@@ -254,6 +291,7 @@ func (s *Service) importSource(
 
 	result = &ImportResult{
 		Workspace:     target,
+		Initialized:   true,
 		Source:        source,
 		Format:        string(plan.Format),
 		Name:          manifest.Name,
@@ -268,8 +306,11 @@ func (s *Service) importSource(
 		Review:        review,
 		Manifest:      manifest,
 		Lock:          lock,
-		Warnings:      append([]error(nil), initResult.Warnings...),
-		Discovery:     initResult.Discovery.RebasePaths(stage, target),
+		Warnings: append(
+			append([]error(nil), initResult.Warnings...),
+			loaderWarnings...,
+		),
+		Discovery: initResult.Discovery.RebasePaths(stage, target),
 	}
 	if lock != nil {
 		result.ManagedPackages = len(lock.Packages)
@@ -317,6 +358,215 @@ func (s *Service) importSource(
 	}
 	result.WarningMessages = warningStrings(result.Warnings)
 	return result, nil
+}
+
+// publishUninitializedImport publishes the stage of a source that declares no
+// loader and ships no usable installer. The tree has no runtime, so it is
+// extracted as-is: generated workspace documents are removed, nothing is
+// registered, and the result carries a warning to initialize once the modpack
+// is set up. The stage is private and unpublished, so no writer lock is
+// required.
+func publishUninitializedImport(
+	stage, target, name, source string,
+	format importpack.Format,
+	materialized *importpack.Result,
+	loaderWarnings []error,
+	initResult *InitResult,
+) (*ImportResult, error) {
+	observed := workspace.Observe(stage, discovery.Request{})
+	unmanaged, err := unmanagedImportFilePaths(stage, observed)
+	if err != nil {
+		return nil, err
+	}
+	review := importReview(stage)
+	if err := removeGeneratedImportArtifacts(stage); err != nil {
+		return nil, err
+	}
+	if _, err := publishImportStage(stage, target); err != nil {
+		return nil, err
+	}
+	result := &ImportResult{
+		Workspace:     target,
+		Initialized:   false,
+		Source:        source,
+		Format:        string(format),
+		Name:          name,
+		ServerFiles:   materialized.ServerFiles,
+		SkippedClient: materialized.SkippedClient,
+		Overrides:     materialized.Overrides,
+		Skipped:       materialized.Skipped,
+		Unmanaged:     unmanaged,
+		Review:        review,
+		Warnings:      append(loaderWarnings, errImportNotInitialized),
+	}
+	if initResult != nil {
+		result.Discovery = initResult.Discovery.RebasePaths(stage, target)
+	}
+	result.WarningMessages = warningStrings(result.Warnings)
+	return result, nil
+}
+
+// removeGeneratedImportArtifacts deletes the workspace documents that
+// initialization created in the stage. importpack rejects archive entries with
+// these names, so only generated artifacts can exist.
+func removeGeneratedImportArtifacts(stage string) error {
+	for _, name := range []string{
+		document.ManifestFilename,
+		document.LockFilename,
+	} {
+		if err := os.Remove(filepath.Join(stage, name)); err != nil &&
+			!errors.Is(err, os.ErrNotExist) {
+			return fmt.Errorf("remove generated %s: %w", name, err)
+		}
+	}
+	if err := os.RemoveAll(filepath.Join(stage, ".lucy")); err != nil {
+		return fmt.Errorf("remove generated workspace state: %w", err)
+	}
+	return nil
+}
+
+// runTreeInstaller runs the loader installer that a source shipping its own
+// tree carries. It returns the warnings that leave the extracted files
+// uninstalled; any other failure aborts the import.
+func (s *Service) runTreeInstaller(
+	ctx context.Context,
+	stage string,
+	trace *install.Trace,
+) ([]error, error) {
+	installers, err := s.findImportInstallers(ctx, stage)
+	if err != nil {
+		return nil, err
+	}
+	switch len(installers) {
+	case 0:
+		return nil, nil
+	case 1:
+	default:
+		return []error{
+			errors.New("multiple loader installers found; none was run"),
+		}, nil
+	}
+
+	installer := installers[0]
+	advisory := bootstrap.InstallerJavaAdvisory(installer)
+	lock := &document.Lock{Server: document.LockedServer{
+		Minecraft: installer.Minecraft,
+		Java:      document.NewLockedJava(advisory, nil),
+	}}
+	check, err := s.install.CheckJava(ctx, stage, lock)
+	if err != nil {
+		return nil, err
+	}
+	if !check.Satisfied() {
+		return nil, fmt.Errorf(
+			"run the %s installer: %s",
+			installer.Kind,
+			strings.Join(check.Problems, "; "),
+		)
+	}
+
+	const phase = "loader installer"
+	started := time.Now()
+	trace.ReportPhaseStarted(phase)
+	err = bootstrap.RunInstaller(
+		ctx,
+		stage,
+		installer,
+		check.Executable(),
+		importProcessOutput(trace),
+	)
+	trace.ReportPhase(install.PhaseInfo{
+		Name:    phase,
+		Elapsed: time.Since(started),
+	})
+	if err != nil {
+		if errors.Is(err, bootstrap.ErrInstallerUnsupported) {
+			return []error{fmt.Errorf(
+				"%s was found but is not supported yet; "+
+					"its files were extracted without running it",
+				installer.Kind,
+			)}, nil
+		}
+		return nil, err
+	}
+	return nil, nil
+}
+
+// findImportInstallers lists the loader installers a tree ships. A pack may
+// nest an installer under any directory. A non-archive and an archive without
+// installer metadata are not errors, so a failed read is reported at debug
+// and does not fail the import.
+func (s *Service) findImportInstallers(
+	ctx context.Context,
+	stage string,
+) ([]artifact.Installer, error) {
+	var installers []artifact.Installer
+	err := filepath.WalkDir(
+		stage,
+		func(path string, entry fs.DirEntry, walkErr error) error {
+			if walkErr != nil {
+				return walkErr
+			}
+			if err := ctx.Err(); err != nil {
+				return err
+			}
+			if !entry.Type().IsRegular() {
+				return nil
+			}
+			installer, found, err := artifact.ReadInstaller(path)
+			if err != nil {
+				s.logger.Debug(
+					"read loader installer",
+					"path", path,
+					"error", err,
+				)
+				return nil
+			}
+			if found {
+				installers = append(installers, installer)
+			}
+			return nil
+		},
+	)
+	if err != nil {
+		return nil, err
+	}
+	return installers, nil
+}
+
+// importProcessOutput returns the writer that receives installer output. A nil
+// trace has none.
+func importProcessOutput(trace *install.Trace) io.Writer {
+	if trace == nil {
+		return nil
+	}
+	return trace.ProcessOutput
+}
+
+// unmanagedImportFilePaths lists every observed package file without asking the
+// committed receipt. A tree that is not initialized has no receipt, so all of
+// its package files are unmanaged.
+func unmanagedImportFilePaths(
+	root string,
+	observed *workspace.Workspace,
+) ([]string, error) {
+	paths := make(
+		[]string,
+		0,
+		len(observed.Packages)+len(observed.UnidentifiedPackageFiles),
+	)
+	for _, pkg := range observed.Packages {
+		if pkg.Path != "" {
+			paths = append(paths, pkg.Path)
+		}
+	}
+	paths = append(paths, observed.UnidentifiedPackageFiles...)
+	relative, err := relativeImportPaths(root, paths)
+	if err != nil {
+		return nil, err
+	}
+	slices.Sort(relative)
+	return slices.Compact(relative), nil
 }
 
 // installDeclaredLoader installs the loader an mrpack declares into the

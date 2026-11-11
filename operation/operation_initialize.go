@@ -235,6 +235,10 @@ func promptRuntime(opts InitOptions, observed *workspace.Workspace) error {
 	return observed.Select(discovery.Request{Installation: installation})
 }
 
+// errNoServerDetected reports an adopted tree that holds no runtime. Import
+// extracts such a tree instead of failing.
+var errNoServerDetected = errors.New("no server detected")
+
 // applyRuntimeIdentity records the observed server's product, versions, and
 // directory in the manifest.
 func (s *Service) applyRuntimeIdentity(
@@ -254,7 +258,8 @@ func (s *Service) applyRuntimeIdentity(
 			}
 		}
 		return fmt.Errorf(
-			"no server detected; use `lucy create` to generate a new server",
+			"%w; use `lucy create` to generate a new server",
+			errNoServerDetected,
 		)
 	}
 

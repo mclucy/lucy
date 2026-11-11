@@ -26,6 +26,7 @@ type ImportOptions struct {
 // ImportResult reports the materialized source and the adopted workspace.
 type ImportResult struct {
 	Workspace       string             `json:"workspace"`
+	Initialized     bool               `json:"initialized"`
 	Source          string             `json:"source"`
 	Format          string             `json:"format"`
 	Name            string             `json:"name"`
@@ -46,8 +47,11 @@ type ImportResult struct {
 	Discovery       discovery.Result   `json:"-"`
 }
 
-// Import materializes source, installs a declared loader when needed, adopts
-// the resulting tree, and publishes the workspace at Directory.
+// Import materializes source and publishes the workspace at Directory. A
+// source that declares a loader or ships an installer in its tree gets that
+// installer run in the stage. When a runtime is detected the imported tree is
+// initialized; otherwise the tree is extracted as-is and a warning asks the
+// operator to run `lucy init` once the modpack is set up.
 func (s *Service) Import(
 	ctx context.Context,
 	opts ImportOptions,
