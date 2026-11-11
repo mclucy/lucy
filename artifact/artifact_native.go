@@ -40,7 +40,9 @@ func ReadModulesFor(
 // ReadClientOnly reports whether every module the loader's descriptor declares
 // stays off a dedicated server. known is false when no descriptor for loader
 // declares a module, because a jar the loader has no descriptor for is not
-// evidence of a client-only package. The traversal matches ReadModulesFor, so a
+// evidence of a client-only package. A module that declares no side answers
+// not-client-only, so another loader's client-only descriptor cannot remove a
+// jar this loader accepts. The traversal matches ReadModulesFor, so a
 // client-only descriptor does not contribute its bundled archives.
 func ReadClientOnly(
 	ctx context.Context,
@@ -55,20 +57,13 @@ func ReadClientOnly(
 	if len(modules) == 0 {
 		return false, false, nil
 	}
-	declared := false
 	for _, module := range modules {
-		if module.Side == "" {
-			continue
-		}
-		declared = true
 		if module.Side != catalog.SideClient {
+			// Forge and NeoForge descriptors carry no mod-level side, and a
+			// Fabric or Quilt parent without an environment stays server-side.
+			// A module without a client side is not evidence either way.
 			return false, true, nil
 		}
-	}
-	if !declared {
-		// Forge and NeoForge descriptors carry no mod-level side. A module
-		// without a side is not evidence either way.
-		return false, false, nil
 	}
 	return true, true, nil
 }
