@@ -49,8 +49,9 @@ func (t *Trace) phaseDone(phase PhaseInfo) {
 }
 
 // ReportPhase publishes a finished stage another package ran. Initialization
-// reports identification and adoption, which installation does not perform, so
-// their elapsed time is visible instead of unaccounted.
+// reports identification and adoption, and import reports the source download
+// and the files it writes, which installation does not perform, so their
+// elapsed time and counts are visible instead of unaccounted.
 func (t *Trace) ReportPhase(phase PhaseInfo) {
 	t.phaseDone(phase)
 }
@@ -76,13 +77,6 @@ func (t *Trace) fetchDone(name string, fromCache bool) {
 // ReportPhaseStarted publishes a stage another package began.
 func (t *Trace) ReportPhaseStarted(name string) {
 	t.phaseStarted(name)
-}
-
-// ReportPhase publishes a stage another package finished. Import reports the
-// source download and the files it writes, which installation does not perform,
-// so their elapsed time and counts are visible instead of unaccounted.
-func (t *Trace) ReportPhase(phase PhaseInfo) {
-	t.phaseDone(phase)
 }
 
 // ReportFetchStarted publishes a transfer another package began.
