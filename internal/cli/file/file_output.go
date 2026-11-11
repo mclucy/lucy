@@ -12,20 +12,22 @@ import (
 )
 
 type fileResultView struct {
-	Operation filetrack.Operation `json:"operation"`
-	Changes   []filetrack.Change  `json:"changes,omitempty"`
-	Skipped   []string            `json:"skipped,omitempty"`
-	Reclaimed filetrack.Reclaimed `json:"reclaimed,omitzero"`
+	Operation          filetrack.Operation `json:"operation"`
+	Changes            []filetrack.Change  `json:"changes,omitempty"`
+	Skipped            []string            `json:"skipped,omitempty"`
+	SkippedDirectories []string            `json:"skipped_directories,omitempty"`
+	Reclaimed          filetrack.Reclaimed `json:"reclaimed,omitzero"`
 }
 
 var fileResultJSON cli.JSONResult[fileResultView]
 
 func newFileResultView(result filetrack.Result) fileResultView {
 	return fileResultView{
-		Operation: result.Event.Operation,
-		Changes:   result.Event.Changes,
-		Skipped:   result.Skipped,
-		Reclaimed: result.Reclaimed,
+		Operation:          result.Event.Operation,
+		Changes:            result.Event.Changes,
+		Skipped:            result.Skipped,
+		SkippedDirectories: result.SkippedDirectories,
+		Reclaimed:          result.Reclaimed,
 	}
 }
 
@@ -53,9 +55,12 @@ func reportFileResult(
 	for _, change := range result.Event.Changes {
 		writeChangeLine(out, result.Event.Operation, change)
 	}
+	for _, skipped := range result.SkippedDirectories {
+		output.Warn(fmt.Errorf("skipped directory %s", skipped))
+	}
 	for _, skipped := range result.Skipped {
-		if result.Event.Operation == filetrack.Track && !output.JSON() {
-			output.Warn(fmt.Errorf("skipped directory %s", skipped))
+		if result.Event.Operation == filetrack.Untrack {
+			output.Warn(fmt.Errorf("skipped untracked file %s", skipped))
 			continue
 		}
 		fmt.Fprintf(out, "skipped %s\n", skipped)

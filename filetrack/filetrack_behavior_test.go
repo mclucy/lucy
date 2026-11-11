@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"sync"
 	"testing"
 
@@ -223,6 +224,44 @@ func TestFileTrackPublishesAcceptedRevision(t *testing.T) {
 	if len(events) != 1 || events[0].Sequence != 1 {
 		t.Fatalf("history holds %+v", events)
 	}
+}
+
+func TestFileUntrackSkipsUntrackedFilesAndDirectories(t *testing.T) {
+	root := behaviorWorkspace(t)
+	behaviorWrite(t, root, "config/a.json", []byte("{}\n"), 0o644)
+	behaviorWrite(t, root, "config/b.json", []byte("{}\n"), 0o644)
+	behaviorWrite(t, root, "config/untracked.json", []byte("{}\n"), 0o644)
+	if err := os.MkdirAll(filepath.Join(root, "config/sub"), 0o755); err != nil {
+		t.Fatalf("create config/sub: %v", err)
+	}
+	behaviorRun(t, root, Request{
+		Operation: Track,
+		Paths:     []string{"config/a.json", "config/b.json"},
+	})
+
+	result := behaviorRun(t, root, Request{
+		Operation: Untrack,
+		Paths:     []string{"config/*"},
+	})
+
+	if result.Event.Operation != Untrack || len(result.Event.Changes) != 2 {
+		t.Fatalf("unexpected untrack result %+v", result)
+	}
+	for _, change := range result.Event.Changes {
+		if change.After != nil {
+			t.Fatalf("untrack kept declaration %+v", change)
+		}
+	}
+	if len(result.Skipped) != 1 || result.Skipped[0] != "config/untracked.json" {
+		t.Fatalf("skipped files = %v, want the untracked file", result.Skipped)
+	}
+	if len(result.SkippedDirectories) != 1 || result.SkippedDirectories[0] != "config/sub" {
+		t.Fatalf("skipped directories = %v, want the directory", result.SkippedDirectories)
+	}
+	if declared := behaviorDeclared(t, root); len(declared) != 0 {
+		t.Fatalf("untrack left declarations %+v", declared)
+	}
+	behaviorRequireBytes(t, filepath.Join(root, "config/untracked.json"), []byte("{}\n"))
 }
 
 func TestFileTrackRejectsAlreadyTrackedPathAtomically(t *testing.T) {
@@ -804,10 +843,13 @@ func TestFileTrackSkipsDirectories(t *testing.T) {
 	if change.Path != "config/rules.json" || !change.Accepted {
 		t.Fatalf("unexpected tracked change %+v", change)
 	}
-	if len(result.Skipped) != 2 ||
-		result.Skipped[0] != "server" ||
-		result.Skipped[1] != "config/sub" {
-		t.Fatalf("skipped = %v, want the two directories", result.Skipped)
+	if len(result.SkippedDirectories) != 2 ||
+		result.SkippedDirectories[0] != "server" ||
+		result.SkippedDirectories[1] != "config/sub" {
+		t.Fatalf("skipped directories = %v, want the two directories", result.SkippedDirectories)
+	}
+	if len(result.Skipped) != 0 {
+		t.Fatalf("skipped files = %v, want none", result.Skipped)
 	}
 	if declared := behaviorDeclared(t, root); len(declared) != 1 ||
 		declared[0].Path != "config/rules.json" {
@@ -815,7 +857,7 @@ func TestFileTrackSkipsDirectories(t *testing.T) {
 	}
 }
 
-func TestFileTrackRejectsTraversalToExistingFile(t *testing.T) {
+func TestFileOperationsRejectPathsOutsideWorkspace(t *testing.T) {
 	root := behaviorWorkspace(t)
 	outside := []byte("outside the workspace\n")
 	sibling := filepath.Join(filepath.Dir(root), "outside.txt")
@@ -824,7 +866,21 @@ func TestFileTrackRejectsTraversalToExistingFile(t *testing.T) {
 	}
 	before := behaviorRead(t, root, documentpkg.ManifestFilename)
 
-	behaviorRunErr(t, root, Request{Operation: Track, Paths: []string{"../outside.txt"}})
+	for _, operation := range []Operation{Track, Untrack} {
+		for _, path := range []string{
+			"../outside.txt",
+			"../*",
+			sibling,
+			filepath.Dir(sibling) + "/*",
+			".lucy/*",
+		} {
+			err := behaviorRunErr(t, root, Request{Operation: operation, Paths: []string{path}})
+			if !strings.Contains(err.Error(), "workspace") &&
+				!strings.Contains(err.Error(), "reserved state") {
+				t.Fatalf("%s %q error = %v", operation, path, err)
+			}
+		}
+	}
 
 	behaviorRequireBytes(t, sibling, outside)
 	behaviorRequireBytes(t, filepath.Join(root, documentpkg.ManifestFilename), before)

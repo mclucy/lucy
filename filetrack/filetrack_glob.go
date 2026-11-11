@@ -11,14 +11,14 @@ import (
 	"github.com/mclucy/lucy/input"
 )
 
-// expandTrackPaths resolves shell-style workspace patterns into the entries
+// expandFilePaths resolves shell-style workspace patterns into the entries
 // they select. Literal paths pass through normalization. Directories are
-// reported as skipped because a tracked entry is always a regular file. A
+// reported separately because a tracked entry is always a regular file. A
 // pattern that matches neither a file nor a directory fails, so a typo cannot
-// silently track nothing.
-func expandTrackPaths(root *os.Root, paths []string) (selected, skipped []string, resultErr error) {
+// silently select nothing.
+func expandFilePaths(root *os.Root, paths []string) (selected, skippedDirectories []string, resultErr error) {
 	selected = make([]string, 0, len(paths))
-	skipped = make([]string, 0)
+	skippedDirectories = make([]string, 0)
 	seen := make(map[string]struct{}, len(paths))
 	appendPath := func(destination *[]string, value string) {
 		if _, exists := seen[value]; exists {
@@ -42,13 +42,13 @@ func expandTrackPaths(root *os.Root, paths []string) (selected, skipped []string
 			case err != nil:
 				return nil, nil, err
 			case info.IsDir():
-				appendPath(&skipped, normalized)
+				appendPath(&skippedDirectories, normalized)
 			default:
 				appendPath(&selected, normalized)
 			}
 			continue
 		}
-		if err := validateTrackPattern(normalized); err != nil {
+		if err := validateFilePattern(normalized); err != nil {
 			return nil, nil, err
 		}
 		if !loaded {
@@ -70,37 +70,36 @@ func expandTrackPaths(root *os.Root, paths []string) (selected, skipped []string
 			if !matchTrackPattern(normalized, candidate) {
 				continue
 			}
-			appendPath(&skipped, candidate)
+			appendPath(&skippedDirectories, candidate)
 			matched = true
 		}
 		if !matched {
 			return nil, nil, fmt.Errorf(
-				"track pattern %q matches no files or directories in this workspace",
+				"pattern %q matches no files or directories in this workspace",
 				raw,
 			)
 		}
 	}
-	return selected, skipped, nil
+	return selected, skippedDirectories, nil
 }
 
-// validateTrackPattern rejects malformed character classes before a walk can
+// validateFilePattern rejects malformed character classes before a walk can
 // report them as a match failure.
-func validateTrackPattern(pattern string) error {
+func validateFilePattern(pattern string) error {
 	for segment := range strings.SplitSeq(pattern, "/") {
 		if segment == "**" {
 			continue
 		}
 		if _, err := path.Match(negatedTrackClass(segment), ""); err != nil {
-			return fmt.Errorf("invalid track pattern %q: %w", pattern, err)
+			return fmt.Errorf("invalid pattern %q: %w", pattern, err)
 		}
 	}
 	return nil
 }
 
-// trackableEntries lists every regular file and directory that a track
-// pattern may select. Reserved state directories are never candidates, and
-// paths that the manifest cannot declare are skipped without failing the
-// whole walk.
+// trackableEntries lists every regular file and directory that a pattern may
+// select. Reserved state directories are never candidates, and paths that the
+// manifest cannot declare are skipped without failing the whole walk.
 func trackableEntries(root *os.Root) (files, directories []string, resultErr error) {
 	err := fs.WalkDir(
 		root.FS(),

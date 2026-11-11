@@ -145,13 +145,11 @@ func (s *Service) Run(ctx context.Context, root string, request Request) (result
 		}
 		currentLock = locked.ManifestFingerprint == fingerprint
 	}
-	if request.Operation == Track {
-		var skippedDirectories []string
-		request.Paths, skippedDirectories, err = expandTrackPaths(files, request.Paths)
+	if request.Operation == Track || request.Operation == Untrack {
+		request.Paths, result.SkippedDirectories, err = expandFilePaths(files, request.Paths)
 		if err != nil {
 			return result, err
 		}
-		result.Skipped = skippedDirectories
 	}
 	selected, skipped, err := selectFiles(document.Files, request)
 	if err != nil {
@@ -276,12 +274,13 @@ func validateRequest(request Request) error {
 func selectFiles(files []documentpkg.TrackedFile, request Request) ([]string, []string, error) {
 	if !request.All {
 		selected := make([]string, 0, len(request.Paths))
+		skipped := make([]string, 0)
 		for _, raw := range request.Paths {
 			path, err := input.TrackedPath(raw)
 			if err != nil {
 				return nil, nil, err
 			}
-			if slices.Contains(selected, path) {
+			if slices.Contains(selected, path) || slices.Contains(skipped, path) {
 				continue
 			}
 			index := slices.IndexFunc(files, func(file documentpkg.TrackedFile) bool { return file.Path == path })
@@ -289,11 +288,15 @@ func selectFiles(files []documentpkg.TrackedFile, request Request) ([]string, []
 				return nil, nil, fmt.Errorf("file %s is already tracked; use update", path)
 			}
 			if request.Operation != Track && index < 0 {
+				if request.Operation == Untrack {
+					skipped = append(skipped, path)
+					continue
+				}
 				return nil, nil, fmt.Errorf("file %s is not tracked", path)
 			}
 			selected = append(selected, path)
 		}
-		return selected, nil, nil
+		return selected, skipped, nil
 	}
 	selected, skipped := make([]string, 0, len(files)), make([]string, 0)
 	for _, file := range files {
