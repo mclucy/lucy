@@ -165,7 +165,7 @@ func samePackage(a, b document.Package) bool {
 // the precedence of the target runtime. Native modules decide it; a package
 // without one is ranked by its bundled modules.
 func (t Target) descriptorRank(p document.Package) (int, bool) {
-	runtime, ok := t.packageRuntime()
+	runtime, ok := t.PackageRuntime()
 	if !ok {
 		return 0, false
 	}
