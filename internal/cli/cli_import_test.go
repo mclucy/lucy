@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/spf13/cobra"
 )
 
 func TestImportTargetUsesEmptyInvocationDirectory(t *testing.T) {
@@ -91,6 +93,38 @@ func TestRejectImportScheme(t *testing.T) {
 		if err == nil || !strings.Contains(err.Error(), "unsupported URL scheme") {
 			t.Errorf("rejectImportScheme(%q) = %v, want a scheme error", source, err)
 		}
+	}
+}
+
+func TestImportOptionsRejectsInvalidDerivedName(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "   ")
+	if err := os.Mkdir(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	inv := &Invocation{Directory: dir}
+	_, err := importOptions(&cobra.Command{}, inv, "server.zip")
+	if err == nil || !strings.Contains(err.Error(), "--name") {
+		t.Fatalf("importOptions error = %v, want a --name request", err)
+	}
+}
+
+func TestImportOptionsKeepsExplicitName(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "   ")
+	if err := os.Mkdir(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	inv := &Invocation{Directory: dir}
+	cmd := &cobra.Command{}
+	cmd.Flags().String(flagInitNameName, "", "")
+	if err := cmd.Flags().Set(flagInitNameName, "keep-me"); err != nil {
+		t.Fatal(err)
+	}
+	opts, err := importOptions(cmd, inv, "server.zip")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if opts.Name != "keep-me" {
+		t.Fatalf("name = %q, want keep-me", opts.Name)
 	}
 }
 
