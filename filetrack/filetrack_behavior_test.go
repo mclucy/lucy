@@ -753,7 +753,7 @@ func TestFileUpdateAllFromSourceSkipsEntriesWithoutURL(t *testing.T) {
 	}
 }
 
-func TestFileTrackRejectsForbiddenAndNonRegularPaths(t *testing.T) {
+func TestFileTrackRejectsForbiddenPaths(t *testing.T) {
 	outside := filepath.Join(t.TempDir(), "outside.txt")
 	if err := behaviorWriteFile(outside, []byte("outside the workspace\n"), 0o644); err != nil {
 		t.Fatalf("write outside file: %v", err)
@@ -768,7 +768,6 @@ func TestFileTrackRejectsForbiddenAndNonRegularPaths(t *testing.T) {
 		{"manifest descendant", documentpkg.ManifestFilename + "/config.txt"},
 		{"lock descendant", documentpkg.LockFilename + "/config.txt"},
 		{"root directory", "."},
-		{"directory", "server"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			root := behaviorWorkspace(t)
@@ -782,6 +781,37 @@ func TestFileTrackRejectsForbiddenAndNonRegularPaths(t *testing.T) {
 			behaviorRequireBytes(t, filepath.Join(root, "config/retained.txt"), []byte("retained\n"))
 			behaviorRequireAbsent(t, root, ".lucy/history/files.jsonl")
 		})
+	}
+}
+
+func TestFileTrackSkipsDirectories(t *testing.T) {
+	root := behaviorWorkspace(t)
+	rules := []byte("rules\n")
+	behaviorWrite(t, root, "config/rules.json", rules, 0o644)
+	behaviorWrite(t, root, "config/sub/nested.json", []byte("{}\n"), 0o644)
+	for _, directory := range []string{"server", "config/sub"} {
+		if err := os.MkdirAll(filepath.Join(root, directory), 0o755); err != nil {
+			t.Fatalf("create directory %s: %v", directory, err)
+		}
+	}
+
+	result := behaviorRun(t, root, Request{
+		Operation: Track,
+		Paths:     []string{"server", "config/*"},
+	})
+
+	change := behaviorSoleChange(t, result)
+	if change.Path != "config/rules.json" || !change.Accepted {
+		t.Fatalf("unexpected tracked change %+v", change)
+	}
+	if len(result.Skipped) != 2 ||
+		result.Skipped[0] != "server" ||
+		result.Skipped[1] != "config/sub" {
+		t.Fatalf("skipped = %v, want the two directories", result.Skipped)
+	}
+	if declared := behaviorDeclared(t, root); len(declared) != 1 ||
+		declared[0].Path != "config/rules.json" {
+		t.Fatalf("manifest declares %+v", declared)
 	}
 }
 
