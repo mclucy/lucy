@@ -93,13 +93,19 @@ func (s *Service) adoptInstalledPackages(
 	}
 	unique := uniquePackages(discovered, adopter.served)
 	proposals := make([]adoptionProposal, len(unique))
+	limit := make(chan struct{}, packageProbeLimit)
 	var wg sync.WaitGroup
 	for i, p := range unique {
 		wg.Go(func() {
+			limit <- struct{}{}
+			defer func() { <-limit }()
 			proposals[i] = adopter.probe(ctx, p)
 		})
 	}
 	wg.Wait()
+	if err := ctx.Err(); err != nil {
+		return nil, nil, 0, err
+	}
 	for _, proposal := range proposals {
 		if proposal.fatal != nil {
 			return nil, nil, 0, proposal.fatal
@@ -159,6 +165,11 @@ var packageMapperProviders = []catalog.Provider{
 	catalog.ProviderModrinth,
 	catalog.ProviderCurseForge,
 }
+
+// packageProbeLimit bounds concurrent provider lookups. Every probe asks each
+// mapper for a release, so an unbounded fan-out over a large modpack would
+// rate-limit the requests and leave identifiable packages unmanaged.
+const packageProbeLimit = 8
 
 // packageMappers returns the configured release mappers in trial order. A
 // provider without a configured mapper is skipped, not an error.
