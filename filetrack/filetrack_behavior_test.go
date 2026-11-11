@@ -289,24 +289,26 @@ func TestFileTrackRequiresExplicitDotForHiddenEntries(t *testing.T) {
 
 func TestFileUpdateExpandsDeclaredPatterns(t *testing.T) {
 	root := behaviorWorkspace(t)
-	paths := []string{
+	visible := []string{
 		"config/a.json",
 		"config/deep/b.json",
-		"config/untracked.json",
 		"other.txt",
 	}
-	for _, path := range paths[:2] {
+	hidden := []string{
+		"config/.hidden.json",
+		"config/.hidden/c.json",
+	}
+	for _, path := range append(visible, hidden...) {
 		behaviorWrite(t, root, path, []byte("old\n"), 0o644)
 	}
-	behaviorWrite(t, root, paths[3], []byte("other old\n"), 0o644)
 	behaviorRun(t, root, Request{
 		Operation: Track,
-		Paths:     []string{paths[0], paths[1], paths[3]},
+		Paths:     append(append([]string{}, visible...), hidden...),
 	})
-	for _, path := range []string{paths[0], paths[1], paths[3]} {
+	for _, path := range append(visible, hidden...) {
 		behaviorWrite(t, root, path, []byte("new\n"), 0o644)
 	}
-	behaviorWrite(t, root, paths[2], []byte("untracked\n"), 0o644)
+	behaviorWrite(t, root, "config/untracked.json", []byte("untracked\n"), 0o644)
 
 	result := behaviorRun(t, root, Request{
 		Operation: Update,
@@ -326,7 +328,7 @@ func TestFileUpdateExpandsDeclaredPatterns(t *testing.T) {
 	if _, exists := updated["config/deep/b.json"]; !exists {
 		t.Fatalf("pattern did not update config/deep/b.json: %+v", updated)
 	}
-	declared := make(map[string]string, 3)
+	declared := make(map[string]string, len(visible)+len(hidden))
 	for _, file := range behaviorDeclared(t, root) {
 		declared[file.Path] = file.Hash
 	}
@@ -337,6 +339,11 @@ func TestFileUpdateExpandsDeclaredPatterns(t *testing.T) {
 	if declared["other.txt"] == behaviorDigest([]byte("new\n")) {
 		t.Fatalf("pattern updated an unmatched file: %+v", declared)
 	}
+	for _, path := range hidden {
+		if declared[path] != behaviorDigest([]byte("old\n")) {
+			t.Fatalf("pattern updated hidden file %s: %+v", path, declared)
+		}
+	}
 	behaviorRunErr(t, root, Request{
 		Operation: Update,
 		Paths:     []string{"config/*.yaml"},
@@ -345,9 +352,20 @@ func TestFileUpdateExpandsDeclaredPatterns(t *testing.T) {
 
 func TestFileRecoverExpandsDeclaredPatterns(t *testing.T) {
 	root := behaviorWorkspace(t)
-	accepted := map[string][]byte{
+	visible := map[string][]byte{
 		"config/a.json":      []byte("a accepted\n"),
 		"config/deep/b.json": []byte("b accepted\n"),
+	}
+	hidden := map[string][]byte{
+		"config/.hidden.json":   []byte("hidden accepted\n"),
+		"config/.hidden/c.json": []byte("nested hidden accepted\n"),
+	}
+	accepted := make(map[string][]byte, len(visible)+len(hidden))
+	for path, content := range visible {
+		accepted[path] = content
+	}
+	for path, content := range hidden {
+		accepted[path] = content
 	}
 	for path, content := range accepted {
 		behaviorWrite(t, root, path, content, 0o644)
@@ -376,9 +394,23 @@ func TestFileRecoverExpandsDeclaredPatterns(t *testing.T) {
 	if len(result.Skipped) != 1 || result.Skipped[0] != "config/present.bin" {
 		t.Fatalf("skipped = %v, want the presence-only entry", result.Skipped)
 	}
-	for path, content := range accepted {
+	for path, content := range visible {
 		behaviorRequireBytes(t, filepath.Join(root, path), content)
 	}
+	for path := range hidden {
+		behaviorRequireAbsent(t, root, path)
+	}
+
+	behaviorRun(t, root, Request{
+		Operation: Recover,
+		Paths:     []string{"config/.hidden*"},
+	})
+	behaviorRequireBytes(
+		t,
+		filepath.Join(root, "config/.hidden.json"),
+		hidden["config/.hidden.json"],
+	)
+	behaviorRequireAbsent(t, root, "config/.hidden/c.json")
 
 	presenceOnly := behaviorRun(t, root, Request{
 		Operation: Recover,

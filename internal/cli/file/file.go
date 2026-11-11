@@ -64,7 +64,8 @@ const (
 	UpdateLong = "Snapshot and accept current bytes for one or more tracked " +
 		"files, or accept every tracked file at once with --all. Paths " +
 		"accept shell-style patterns matched against tracked declarations " +
-		"rather than the working tree. The change policy " +
+		"rather than the working tree; hidden tracked paths need an " +
+		"explicit leading dot. The change policy " +
 		"and recover_url stay unchanged. --from-source fetches fresh bytes " +
 		"from recover_url, preserves the displaced working bytes, and " +
 		"accepts the new digest without requiring a match on the old one."
@@ -72,7 +73,8 @@ const (
 	RecoverLong = "Restore one or more tracked files to their accepted " +
 		"digests without accepting a new revision. Paths accept " +
 		"shell-style patterns matched against tracked declarations, so a " +
-		"deleted working file still matches. Local content-addressed blobs " +
+		"deleted working file still matches; hidden tracked paths need an " +
+		"explicit leading dot. Local content-addressed blobs " +
 		"are verified first; when none is available the recover_url is " +
 		"fetched directly and checked against the accepted digest. " +
 		"Displaced working bytes are preserved without being accepted. " +
