@@ -35,64 +35,157 @@ func ParseFileModLoaderIdentifier(data []byte) (FileModLoaderIdentifier, error) 
 	return identifier, nil
 }
 
-// normalizeForgeDescriptor rewrites the descriptor shapes FML tolerates into
-// the documented shapes. FML reads dependencies only as dependencies.<modId>
-// and never reads authors, so an ownerless dependency array contributes no
-// dependencies and an authors array carries no server behavior.
+// normalizeForgeDescriptor projects the fields the schema reads through the
+// same accessors FML uses. FML reads a descriptor with NightConfig: a path
+// resolves through tables only, so a list at an intermediate segment makes the
+// path absent, while getConfigList requires a list at its final path and
+// getConfigElement rejects a list of tables at a single-element path. The
+// projection keeps only the schema fields and coerces list/scalar shapes, so
+// go-toml decodes the documented struct.
 func normalizeForgeDescriptor(data []byte) ([]byte, error) {
 	var document map[string]any
 	if err := toml.Unmarshal(data, &document); err != nil {
 		return nil, err
 	}
-	normalizeForgeDependencies(document)
-	normalizeForgeAuthors(document)
-	return toml.Marshal(document)
+	normalized := map[string]any{}
+	copyForgeStrings(normalized, document,
+		"modLoader", "loaderVersion", "issueTrackerURL", "logoFile", "license")
+	mods := normalizeForgeMods(document)
+	if len(mods) == 0 {
+		return toml.Marshal(normalized)
+	}
+	normalized["mods"] = mods
+	if dependencies := normalizeForgeDependencies(document, mods); len(dependencies) > 0 {
+		normalized["dependencies"] = dependencies
+	}
+	return toml.Marshal(normalized)
 }
 
-func normalizeForgeDependencies(document map[string]any) {
-	dependencies, ok := document["dependencies"].(map[string]any)
+// configList mirrors NightConfigWrapper.getConfigList: the path resolves
+// through tables and its final value must be a list. A non-list final value is
+// a malformed descriptor; the projection drops it.
+func configList(document map[string]any, path ...string) ([]any, bool) {
+	value, ok := configPath(document, path...)
 	if !ok {
-		delete(document, "dependencies")
-		return
+		return nil, false
 	}
-	for owner, value := range dependencies {
-		if _, ok := value.([]any); !ok {
-			delete(dependencies, owner)
+	list, ok := value.([]any)
+	return list, ok
+}
+
+// configPath mirrors NightConfig's path lookup. A list at an intermediate
+// segment is not a table, so the path does not exist. That is how FML ignores
+// an ownerless [[dependencies]] array when it reads dependencies.<modId>.
+func configPath(document map[string]any, path ...string) (any, bool) {
+	var current any = document
+	for _, key := range path {
+		table, ok := current.(map[string]any)
+		if !ok {
+			return nil, false
+		}
+		current, ok = table[key]
+		if !ok {
+			return nil, false
 		}
 	}
-	if len(dependencies) == 0 {
-		delete(document, "dependencies")
+	return current, true
+}
+
+func normalizeForgeMods(document map[string]any) []any {
+	entries, ok := configList(document, "mods")
+	if !ok {
+		return nil
+	}
+	mods := make([]any, 0, len(entries))
+	for _, entry := range entries {
+		table, ok := entry.(map[string]any)
+		if !ok {
+			continue
+		}
+		mod := map[string]any{}
+		copyForgeStrings(mod, table,
+			"modId", "version", "displayName", "itemIcon", "displayURL",
+			"updateJSONURL", "logoFile", "credits", "description")
+		if authors := normalizeForgeAuthors(table["authors"]); len(authors) > 0 {
+			mod["authors"] = authors
+		}
+		if len(mod) > 0 {
+			mods = append(mods, mod)
+		}
+	}
+	return mods
+}
+
+// normalizeForgeAuthors accepts the documented string form and the array form
+// some published jars use. FML never reads authors, so an unknown shape carries
+// no server behavior and is dropped.
+func normalizeForgeAuthors(value any) []any {
+	switch authors := value.(type) {
+	case string:
+		return []any{authors}
+	case []any:
+		kept := make([]any, 0, len(authors))
+		for _, author := range authors {
+			if _, ok := author.(string); ok {
+				kept = append(kept, author)
+			}
+		}
+		return kept
+	default:
+		return nil
 	}
 }
 
-func normalizeForgeAuthors(document map[string]any) {
-	mods, ok := document["mods"].([]any)
-	if !ok {
-		return
-	}
+// normalizeForgeDependencies reads dependencies.<modId> for every declared mod,
+// matching ModInfo's getConfigList call. An ownerless dependencies list, or any
+// other non-table dependencies value, yields no path and contributes nothing.
+func normalizeForgeDependencies(document map[string]any, mods []any) map[string]any {
+	dependencies := map[string]any{}
 	for _, entry := range mods {
 		mod, ok := entry.(map[string]any)
 		if !ok {
 			continue
 		}
-		switch authors := mod["authors"].(type) {
-		case string:
-			mod["authors"] = []any{authors}
-		case []any:
-			kept := make([]any, 0, len(authors))
-			for _, author := range authors {
-				if _, ok := author.(string); ok {
-					kept = append(kept, author)
-				}
-			}
-			if len(kept) == 0 {
-				delete(mod, "authors")
-				continue
-			}
-			mod["authors"] = kept
-		case nil:
-		default:
-			delete(mod, "authors")
+		modID, ok := mod["modId"].(string)
+		if !ok || modID == "" {
+			continue
+		}
+		entries, ok := configList(document, "dependencies", modID)
+		if !ok {
+			continue
+		}
+		normalized := normalizeForgeDependencyEntries(entries)
+		if len(normalized) > 0 {
+			dependencies[modID] = normalized
+		}
+	}
+	return dependencies
+}
+
+func normalizeForgeDependencyEntries(entries []any) []any {
+	normalized := make([]any, 0, len(entries))
+	for _, entry := range entries {
+		table, ok := entry.(map[string]any)
+		if !ok {
+			continue
+		}
+		dependency := map[string]any{}
+		copyForgeStrings(dependency, table,
+			"modId", "type", "versionRange", "ordering", "side")
+		if mandatory, ok := table["mandatory"].(bool); ok {
+			dependency["mandatory"] = mandatory
+		}
+		if len(dependency) > 0 {
+			normalized = append(normalized, dependency)
+		}
+	}
+	return normalized
+}
+
+func copyForgeStrings(destination, source map[string]any, keys ...string) {
+	for _, key := range keys {
+		if value, ok := source[key].(string); ok {
+			destination[key] = value
 		}
 	}
 }
