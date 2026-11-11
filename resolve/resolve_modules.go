@@ -14,8 +14,9 @@ import (
 // clientOnlyIdentities collects module identities that only client-only
 // declarations answer. A loader filters those candidates out of a dedicated
 // server, so requirements they alone would answer are not failures. Each
-// identity is scoped like module resolution, by the environment and ecosystem
-// of the declaring package, so it exempts only requirements in that namespace.
+// identity is scoped like module resolution, by the environment of the
+// declaring package and the target's module namespace, so it exempts only
+// requirements in that namespace.
 func clientOnlyIdentities(
 	packages []document.Package,
 	target Target,
@@ -52,7 +53,7 @@ func clientOnlyIdentities(
 }
 
 // moduleKey scopes a module identity so identically named modules in
-// different environments or ecosystems stay distinct.
+// different environments or module namespaces stay distinct.
 type moduleKey struct {
 	environment serverpkg.Environment
 	ecosystem   catalog.Ecosystem
@@ -113,14 +114,15 @@ func finalizeModules(packages []document.Package, target Target) ([]ModuleProble
 			}
 			problems = append(
 				problems,
-				checkModuleDependencies(
-					p,
-					m,
-					target,
-					index,
-					runtime,
-					clientOnly,
-				)...,
+				checkModuleDependencies(p, m, moduleScope{
+					target:      target,
+					environment: p.Environment,
+					ecosystem:   m.Ecosystem,
+					dialect:     m.VersionDialect,
+					runtime:     runtime,
+					index:       index,
+					clientOnly:  clientOnly,
+				})...,
 			)
 			surviving[pi] = append(surviving[pi], m)
 		}
@@ -134,6 +136,18 @@ func finalizeModules(packages []document.Package, target Target) ([]ModuleProble
 		packages[pi].Modules = surviving[pi]
 	}
 	return problems, nil
+}
+
+// moduleIdentities lists every identity a module answers: its ID, the
+// identities it provides, and its group-qualified ID.
+func moduleIdentities(m catalog.DescriptorModule) []string {
+	names := make([]string, 0, len(m.Provides)+2)
+	names = append(names, m.ID)
+	names = append(names, m.Provides...)
+	if m.Group != "" {
+		names = append(names, m.Group+":"+m.ID)
+	}
+	return names
 }
 
 // buildModuleIndex resolves every module identity to the declaration that
@@ -154,13 +168,7 @@ func buildModuleIndex(
 			continue
 		}
 		for mi, m := range p.Modules {
-			names := make([]string, 0, len(m.Provides)+2)
-			names = append(names, m.ID)
-			names = append(names, m.Provides...)
-			if m.Group != "" {
-				names = append(names, m.Group+":"+m.ID)
-			}
-			for _, name := range names {
+			for _, name := range moduleIdentities(m) {
 				module := m
 				if name != m.ID {
 					module.Version = m.ProvidedVersion(name)
@@ -280,134 +288,26 @@ func servesTarget(
 	target Target,
 	runtime map[string]catalog.DescriptorModule,
 ) (bool, bool) {
+	scope := moduleScope{
+		target:    target,
+		ecosystem: m.Ecosystem,
+		dialect:   m.VersionDialect,
+		runtime:   runtime,
+	}
 	for di := range m.Dependencies {
 		dep := &m.Dependencies[di]
 		if dep.Kind != catalog.DependencyKindRequired || dep.ID == "java" {
 			continue
 		}
-		exempt, known := runtimeUnlessMatches(
-			dep,
-			m.Ecosystem,
-			m.VersionDialect,
-			runtime,
-		)
-		if !known {
+		outcome, err := scope.evaluate(dep, false)
+		if err != nil {
 			return false, false
 		}
-		if exempt {
-			continue
-		}
-		matched, known := runtimeRequirementMatches(
-			dep,
-			m.Ecosystem,
-			target,
-			m.VersionDialect,
-			runtime,
-		)
-		if !known {
-			return false, false
-		}
-		if !matched {
+		if outcome.present && !outcome.matched {
 			return false, true
 		}
 	}
 	return true, true
-}
-
-// runtimeUnlessMatches reports whether any unless condition of dep holds for
-// the modules the server provides. A condition that names a module the runtime
-// does not provide cannot be evaluated here.
-func runtimeUnlessMatches(
-	dep *catalog.DescriptorDependency,
-	ecosystem catalog.Ecosystem,
-	dialect versionpkg.Dialect,
-	runtime map[string]catalog.DescriptorModule,
-) (bool, bool) {
-	for i := range dep.Unless {
-		condition := &dep.Unless[i]
-		provided, ok := runtime[normalizeModuleID(ecosystem, condition.ID)]
-		if !ok {
-			continue
-		}
-		matched := condition.Constraint == ""
-		if !matched {
-			var err error
-			matched, err = versionpkg.Match(
-				condition.Constraint,
-				provided.Version,
-				dialect,
-			)
-			if err != nil {
-				return false, false
-			}
-		}
-		if matched {
-			return true, true
-		}
-	}
-	return false, true
-}
-
-// runtimeRequirementMatches checks a dependency and its alternatives against
-// the modules the runtime provides. A requirement answered by a package is
-// deliberately left out of the variant decision.
-func runtimeRequirementMatches(
-	dep *catalog.DescriptorDependency,
-	ecosystem catalog.Ecosystem,
-	target Target,
-	dialect versionpkg.Dialect,
-	runtime map[string]catalog.DescriptorModule,
-) (bool, bool) {
-	alternatives := make(
-		[]*catalog.DescriptorDependency,
-		0,
-		1+len(dep.AnyOf),
-	)
-	alternatives = append(alternatives, dep)
-	for i := range dep.AnyOf {
-		alternatives = append(alternatives, &dep.AnyOf[i])
-	}
-	providedAny := false
-	for _, alternative := range alternatives {
-		provided, ok := runtime[normalizeModuleID(ecosystem, alternative.ID)]
-		if !ok {
-			continue
-		}
-		providedAny = true
-		matched := fmlLoader(target) && provided.Version == "0.0NONE"
-		if !matched && alternative.Constraint == "" {
-			matched = true
-		}
-		if !matched && alternative.Constraint != "" {
-			var err error
-			matched, err = versionpkg.Match(
-				alternative.Constraint,
-				provided.Version,
-				dialect,
-			)
-			if err != nil {
-				return false, false
-			}
-		}
-		if !matched && alternative.Constraint != "" {
-			var err error
-			matched, err = matchesLoaderCompatibility(
-				alternative.Constraint,
-				alternative.ID,
-				target,
-				dialect,
-			)
-			if err != nil {
-				return false, false
-			}
-		}
-		if matched {
-			return true, true
-		}
-	}
-	// A requirement no runtime module answers is settled by the package graph,
-	// not by this variant decision.
-	return !providedAny, true
 }
 
 // runtimeModules reports the modules the runtime itself provides. They answer
@@ -499,474 +399,4 @@ func normalizeModuleID(ecosystem catalog.Ecosystem, id string) string {
 		return strings.ToLower(id)
 	}
 	return id
-}
-
-func checkModuleDependencies(
-	p *document.Package,
-	m catalog.DescriptorModule,
-	target Target,
-	index map[moduleKey]moduleProvider,
-	runtime map[string]catalog.DescriptorModule,
-	clientOnly map[moduleKey]struct{},
-) []ModuleProblem {
-	var problems []ModuleProblem
-	for di := range m.Dependencies {
-		dep := &m.Dependencies[di]
-		// A Java requirement is checked against the Java runtime that runs
-		// the server, and only warns.
-		if dep.Kind == catalog.DependencyKindPython || dep.ID == "java" {
-			continue
-		}
-		exempt, err := moduleDependencyExempted(
-			dep,
-			p.Environment,
-			m.Ecosystem,
-			target,
-			m.VersionDialect,
-			index,
-			runtime,
-		)
-		if err != nil {
-			problems = append(problems, moduleProblem(
-				p,
-				m.ID,
-				*dep,
-				"",
-				false,
-				fmt.Sprintf("module %s requires %s: %v", m.ID, dep.ID, err),
-			))
-			continue
-		}
-		if exempt {
-			continue
-		}
-		outcome, err := matchModuleDependency(
-			dep,
-			p.Environment,
-			m.Ecosystem,
-			target,
-			m.VersionDialect,
-			index,
-			runtime,
-			clientOnly,
-		)
-		if err != nil {
-			problems = append(problems, moduleProblem(
-				p,
-				m.ID,
-				*dep,
-				outcome.value,
-				false,
-				fmt.Sprintf("module %s requires %s: %v", m.ID, dep.ID, err),
-			))
-			continue
-		}
-
-		requirement := dependencyRequirementText(dep)
-		serverProvided := outcome.owner == nil && outcome.value != ""
-		switch {
-		case dep.Kind == catalog.DependencyKindIncompatible:
-			if outcome.matched {
-				problems = append(problems, moduleProblem(
-					p,
-					m.ID,
-					*dep,
-					outcome.value,
-					serverProvided,
-					fmt.Sprintf(
-						"module %s breaks %s %s",
-						m.ID,
-						dependencyAlternativeID(dep, outcome.matchedID),
-						outcome.value,
-					),
-				))
-			}
-		case len(dep.AnyOf) > 0 &&
-			(dep.Kind == catalog.DependencyKindRequired ||
-				dep.Kind == catalog.DependencyKindOptional):
-			if !outcome.matched {
-				if outcome.value == "" {
-					problems = append(problems, moduleProblem(
-						p,
-						m.ID,
-						*dep,
-						"",
-						false,
-						fmt.Sprintf(
-							"module %s requires %s, which no selected package provides",
-							m.ID,
-							requirement,
-						),
-					))
-				} else {
-					problems = append(problems, moduleProblem(
-						p,
-						m.ID,
-						*dep,
-						outcome.value,
-						serverProvided,
-						fmt.Sprintf(
-							"module %s requires %s (selected %s)",
-							m.ID,
-							requirement,
-							outcome.value,
-						),
-					))
-				}
-			}
-		case dep.Kind == catalog.DependencyKindOptional:
-			// An optional dependency is checked only when it is present.
-			if outcome.present && !outcome.matched {
-				problems = append(problems, moduleProblem(
-					p,
-					m.ID,
-					*dep,
-					outcome.value,
-					serverProvided,
-					fmt.Sprintf(
-						"module %s optionally requires %s (selected %s)",
-						m.ID,
-						requirement,
-						outcome.value,
-					),
-				))
-			}
-		case dep.Kind == catalog.DependencyKindRequired:
-			if !outcome.matched {
-				if outcome.value == "" {
-					problems = append(problems, moduleProblem(
-						p,
-						m.ID,
-						*dep,
-						"",
-						false,
-						fmt.Sprintf(
-							"module %s requires %s, which no selected package provides",
-							m.ID,
-							requirement,
-						),
-					))
-				} else {
-					problems = append(problems, moduleProblem(
-						p,
-						m.ID,
-						*dep,
-						outcome.value,
-						serverProvided,
-						fmt.Sprintf(
-							"module %s requires %s (selected %s)",
-							m.ID,
-							requirement,
-							outcome.value,
-						),
-					))
-				}
-			}
-		}
-
-		if outcome.matched && !outcome.waived {
-			if outcome.owner != nil && !outcome.owner.source.runtime() {
-				dep.Provider = outcome.owner.provider
-				dep.ProjectID = outcome.owner.projectID
-				dep.ModuleID = outcome.owner.module.ID
-			} else if outcome.matchedID != "" {
-				dep.ModuleID = outcome.matchedID
-			} else {
-				dep.ModuleID = dep.ID
-			}
-		}
-	}
-	return problems
-}
-
-// moduleRequirement records the selected module state a dependency and its
-// alternatives observe.
-type moduleRequirement struct {
-	present   bool
-	matched   bool
-	waived    bool
-	value     string
-	owner     *moduleProvider
-	matchedID string
-}
-
-// moduleDependencyExempted reports whether an unless condition of dep holds.
-// Any matching condition makes the dependency unnecessary.
-func moduleDependencyExempted(
-	dep *catalog.DescriptorDependency,
-	environment serverpkg.Environment,
-	ecosystem catalog.Ecosystem,
-	target Target,
-	dialect versionpkg.Dialect,
-	index map[moduleKey]moduleProvider,
-	runtime map[string]catalog.DescriptorModule,
-) (bool, error) {
-	for i := range dep.Unless {
-		matched, err := moduleConditionMatches(
-			&dep.Unless[i],
-			environment,
-			ecosystem,
-			target,
-			dialect,
-			index,
-			runtime,
-		)
-		if err != nil {
-			return false, err
-		}
-		if matched {
-			return true, nil
-		}
-	}
-	return false, nil
-}
-
-func moduleConditionMatches(
-	condition *catalog.DescriptorDependency,
-	environment serverpkg.Environment,
-	ecosystem catalog.Ecosystem,
-	target Target,
-	dialect versionpkg.Dialect,
-	index map[moduleKey]moduleProvider,
-	runtime map[string]catalog.DescriptorModule,
-) (bool, error) {
-	exempt, err := moduleDependencyExempted(
-		condition,
-		environment,
-		ecosystem,
-		target,
-		dialect,
-		index,
-		runtime,
-	)
-	if err != nil || exempt {
-		return false, err
-	}
-	value, _ := lookupSelectedModule(
-		target,
-		environment,
-		ecosystem,
-		condition.ID,
-		index,
-		runtime,
-	)
-	if value == "" {
-		return false, nil
-	}
-	return matchModuleConstraint(condition, value, target, dialect)
-}
-
-// matchModuleDependency evaluates a dependency together with its any-of
-// alternatives against the selected modules.
-func matchModuleDependency(
-	dep *catalog.DescriptorDependency,
-	environment serverpkg.Environment,
-	ecosystem catalog.Ecosystem,
-	target Target,
-	dialect versionpkg.Dialect,
-	index map[moduleKey]moduleProvider,
-	runtime map[string]catalog.DescriptorModule,
-	clientOnly map[moduleKey]struct{},
-) (moduleRequirement, error) {
-	alternatives := make(
-		[]*catalog.DescriptorDependency,
-		0,
-		1+len(dep.AnyOf),
-	)
-	alternatives = append(alternatives, dep)
-	for i := range dep.AnyOf {
-		alternatives = append(alternatives, &dep.AnyOf[i])
-	}
-
-	var outcome moduleRequirement
-	group := len(dep.AnyOf) > 0
-	for _, alternative := range alternatives {
-		exempt, err := moduleDependencyExempted(
-			alternative,
-			environment,
-			ecosystem,
-			target,
-			dialect,
-			index,
-			runtime,
-		)
-		if err != nil {
-			return outcome, err
-		}
-		if exempt {
-			if dep.Kind == catalog.DependencyKindIncompatible {
-				// An exempt break does not apply.
-				continue
-			}
-			// An unless condition satisfies a requirement alternative.
-			outcome.matched = true
-			outcome.waived = true
-			return outcome, nil
-		}
-		value, owner := lookupSelectedModule(
-			target,
-			environment,
-			ecosystem,
-			alternative.ID,
-			index,
-			runtime,
-		)
-		if value != "" {
-			outcome.present = true
-			if outcome.value == "" {
-				outcome.value = value
-			}
-		}
-		var matched bool
-		if value != "" {
-			matched, err = matchModuleConstraint(
-				alternative,
-				value,
-				target,
-				dialect,
-			)
-		} else if alternative.Constraint != "" {
-			matched, err = matchesLoaderCompatibility(
-				alternative.Constraint,
-				alternative.ID,
-				target,
-				dialect,
-			)
-		}
-		if err != nil {
-			return outcome, err
-		}
-		if matched {
-			outcome.matched = true
-			outcome.value = value
-			outcome.owner = owner
-			outcome.matchedID = alternative.ID
-			break
-		}
-		if owner == nil && value == "" &&
-			dep.Kind != catalog.DependencyKindIncompatible {
-			if _, ok := clientOnly[moduleKey{
-				environment,
-				target.moduleNamespace(ecosystem),
-				normalizeModuleID(ecosystem, alternative.ID),
-			}]; ok {
-				// The only candidate is client-only, so the loader filters it
-				// out of a dedicated server instead of failing the dependency.
-				outcome.matched = true
-				outcome.waived = true
-				return outcome, nil
-			}
-		}
-		if group &&
-			alternative.Kind == catalog.DependencyKindOptional &&
-			value == "" {
-			// An absent optional alternative satisfies an any-of group.
-			outcome.matched = true
-			outcome.waived = true
-			return outcome, nil
-		}
-	}
-	if !outcome.matched {
-		return outcome, nil
-	}
-	// A conjunctive entry, such as a Quilt breaks array, applies only when
-	// every one of its conditions matches.
-	for i := range dep.AllOf {
-		condition, err := matchModuleDependency(
-			&dep.AllOf[i],
-			environment,
-			ecosystem,
-			target,
-			dialect,
-			index,
-			runtime,
-			clientOnly,
-		)
-		if err != nil {
-			return outcome, err
-		}
-		if !condition.matched {
-			outcome.matched = false
-			return outcome, nil
-		}
-	}
-	return outcome, nil
-}
-
-func lookupSelectedModule(
-	target Target,
-	environment serverpkg.Environment,
-	ecosystem catalog.Ecosystem,
-	id string,
-	index map[moduleKey]moduleProvider,
-	runtime map[string]catalog.DescriptorModule,
-) (string, *moduleProvider) {
-	if module, ok := runtime[normalizeModuleID(ecosystem, id)]; ok {
-		return string(module.Version), nil
-	}
-	key := moduleKey{
-		environment,
-		target.moduleNamespace(ecosystem),
-		normalizeModuleID(ecosystem, id),
-	}
-	if provider, ok := index[key]; ok {
-		return string(provider.module.Version), &provider
-	}
-	return "", nil
-}
-
-// matchModuleConstraint applies one dependency constraint to a selected
-// version, including the loader support matrices that substitute versions for
-// modules the loader knows about.
-func matchModuleConstraint(
-	dep *catalog.DescriptorDependency,
-	value string,
-	target Target,
-	dialect versionpkg.Dialect,
-) (bool, error) {
-	if fmlLoader(target) && value == "0.0NONE" {
-		// FMLLoader treats the 0.0NONE sentinel as satisfying every range.
-		return true, nil
-	}
-	if dep.Constraint == "" {
-		return true, nil
-	}
-	matched, err := versionpkg.Match(
-		dep.Constraint,
-		versionpkg.Version(value),
-		dialect,
-	)
-	if err != nil {
-		return false, err
-	}
-	if matched {
-		return true, nil
-	}
-	return matchesLoaderCompatibility(dep.Constraint, dep.ID, target, dialect)
-}
-
-func dependencyRequirementText(dep *catalog.DescriptorDependency) string {
-	parts := make([]string, 0, 1+len(dep.AnyOf))
-	parts = append(parts, strings.TrimSpace(dep.ID+" "+dep.Constraint))
-	for i := range dep.AnyOf {
-		alternative := &dep.AnyOf[i]
-		parts = append(
-			parts,
-			strings.TrimSpace(alternative.ID+" "+alternative.Constraint),
-		)
-	}
-	if len(parts) == 1 {
-		return parts[0]
-	}
-	return "one of " + strings.Join(parts, ", ")
-}
-
-func dependencyAlternativeID(
-	dep *catalog.DescriptorDependency,
-	matched string,
-) string {
-	if matched != "" {
-		return matched
-	}
-	return dep.ID
 }
