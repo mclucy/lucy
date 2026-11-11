@@ -30,12 +30,49 @@ func ReadModulesFor(
 	loader catalog.Ecosystem,
 	minecraft string,
 ) ([]catalog.DescriptorModule, error) {
-	if strings.EqualFold(filepath.Ext(filename), ".py") {
-		modules, err := inspectPython(ctx, filename)
-		if err != nil {
-			return nil, err
+	modules, err := readModulesFor(ctx, filename, loader, minecraft)
+	if err != nil {
+		return nil, err
+	}
+	return normalizeModules(modules), nil
+}
+
+// ReadClientOnly reports whether every module the loader's descriptor declares
+// stays off a dedicated server. known is false when no descriptor for loader
+// declares a module, because a jar the loader has no descriptor for is not
+// evidence of a client-only package. The traversal matches ReadModulesFor, so a
+// client-only descriptor does not contribute its bundled archives.
+func ReadClientOnly(
+	ctx context.Context,
+	filename string,
+	loader catalog.Ecosystem,
+	minecraft string,
+) (clientOnly, known bool, err error) {
+	modules, err := readModulesFor(ctx, filename, loader, minecraft)
+	if err != nil {
+		return false, false, err
+	}
+	if len(modules) == 0 {
+		return false, false, nil
+	}
+	for _, module := range modules {
+		if module.Side != catalog.SideClient {
+			return false, true, nil
 		}
-		return normalizeModules(modules), nil
+	}
+	return true, true, nil
+}
+
+// readModulesFor reads every module the descriptor declares without filtering
+// client-only ones.
+func readModulesFor(
+	ctx context.Context,
+	filename string,
+	loader catalog.Ecosystem,
+	minecraft string,
+) ([]catalog.DescriptorModule, error) {
+	if strings.EqualFold(filepath.Ext(filename), ".py") {
+		return inspectPython(ctx, filename)
 	}
 	z, err := zip.OpenReader(filename)
 	if err != nil {
@@ -44,17 +81,13 @@ func ReadModulesFor(
 		// fall back to its static metadata when the extension is absent.
 		if loader == catalog.EcosystemMCDR {
 			if modules, pythonErr := inspectPython(ctx, filename); pythonErr == nil {
-				return normalizeModules(modules), nil
+				return modules, nil
 			}
 		}
 		return nil, err
 	}
 	defer z.Close()
-	modules, err := inspectArchive(&z.Reader, loader, "", 0, minecraft)
-	if err != nil {
-		return nil, err
-	}
-	return normalizeModules(modules), nil
+	return inspectArchive(&z.Reader, loader, "", 0, minecraft)
 }
 
 // normalizeModules makes descriptor order independent of map iteration. The

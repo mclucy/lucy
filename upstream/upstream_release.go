@@ -18,6 +18,16 @@ type ArtifactReleaseMapper interface {
 	) (Release, bool, error)
 }
 
+// ServerSide is a project's dedicated-server support label. Providers report
+// it when they publish one; an empty value means the provider has no answer.
+type ServerSide string
+
+const (
+	ServerSideRequired    ServerSide = "required"
+	ServerSideOptional    ServerSide = "optional"
+	ServerSideUnsupported ServerSide = "unsupported"
+)
+
 // Release is one published artifact as its provider records it. Ref names the
 // project and version; Candidate describes the same file for resolution.
 // Compatibility labels are advisory: installed bytes prove the server holds the
@@ -27,6 +37,7 @@ type Release struct {
 	Candidate         Candidate
 	MinecraftVersions []string
 	Loaders           []string
+	ServerSide        ServerSide
 }
 
 // Supports reports whether the release labels itself for minecraft and loader.
