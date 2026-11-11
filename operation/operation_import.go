@@ -5,6 +5,7 @@ import (
 	"encoding/json/v2"
 	"errors"
 	"fmt"
+	"io"
 	"net/url"
 	"os"
 	"path"
@@ -641,14 +642,28 @@ func importPropertyValue(file, key string) (string, bool, error) {
 	return value, found, nil
 }
 
-// importOperatorCount counts entries in ops.json. A missing file has none.
+// importMetadataMaxBytes caps the review metadata Lucy reads from a server
+// directory. Operator lists are small; a larger file is reported as unreadable
+// instead of being loaded.
+const importMetadataMaxBytes = 1 << 20
+
+// importOperatorCount counts entries in ops.json. A missing file has none. A
+// file larger than importMetadataMaxBytes is an error.
 func importOperatorCount(file string) (int, error) {
-	data, err := os.ReadFile(file)
+	f, err := os.Open(file)
 	if errors.Is(err, os.ErrNotExist) {
 		return 0, nil
 	}
 	if err != nil {
 		return 0, err
+	}
+	defer f.Close()
+	data, err := io.ReadAll(io.LimitReader(f, importMetadataMaxBytes+1))
+	if err != nil {
+		return 0, err
+	}
+	if len(data) > importMetadataMaxBytes {
+		return 0, fmt.Errorf("%s exceeds %d bytes", file, importMetadataMaxBytes)
 	}
 	var ops []any
 	if err := json.Unmarshal(data, &ops); err != nil {

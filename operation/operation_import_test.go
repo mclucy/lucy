@@ -14,6 +14,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync/atomic"
 	"testing"
 
 	"github.com/mclucy/lucy/cache"
@@ -819,5 +820,153 @@ func TestImportDirectURLBypassesRemoteResolver(t *testing.T) {
 	}
 	if len(resolver.calls) != 0 {
 		t.Fatalf("resolver called for direct URL: %v", resolver.calls)
+	}
+}
+
+// TestImportRemotePackDigestVerifiesCacheHit primes the shared cache with a
+// direct-URL download, which carries no provider digest. The same URL resolved
+// through a remote source must then be checked against the provider digest, even
+// though the cache serves it without verifying.
+func TestImportRemotePackDigestVerifiesCacheHit(t *testing.T) {
+	data, err := os.ReadFile(writeImportTreeZip(t))
+	if err != nil {
+		t.Fatalf("read pack: %v", err)
+	}
+	var downloads atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		downloads.Add(1)
+		_, _ = w.Write(data)
+	}))
+	t.Cleanup(server.Close)
+	packURL := server.URL + "/files/server.zip"
+	network := newRemoteImportNetwork(t)
+
+	direct := newRemoteImportTestService(t, &fakePackResolver{})
+	if _, err := direct.Import(
+		t.Context(),
+		ImportOptions{Source: packURL, Directory: filepath.Join(t.TempDir(), "direct")},
+		network,
+	); err != nil {
+		t.Fatalf("prime cache from direct URL: %v", err)
+	}
+
+	sum := sha512.Sum512(data)
+	tests := []struct {
+		name    string
+		hashes  map[string]string
+		wantErr string
+	}{
+		{
+			name:   "matching cached sha512",
+			hashes: map[string]string{"sha512": hex.EncodeToString(sum[:])},
+		},
+		{
+			name:    "cached sha512 mismatch",
+			hashes:  map[string]string{"sha512": strings.Repeat("0", 128)},
+			wantErr: "sha512 checksum mismatch",
+		},
+		{
+			name:    "cached sha1 mismatch",
+			hashes:  map[string]string{"sha1": strings.Repeat("0", 40)},
+			wantErr: "sha1 checksum mismatch",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			resolver := &fakePackResolver{pack: upstream.ImportPack{
+				Provider: catalog.ProviderModrinth,
+				Project:  "all-the-mods",
+				Filename: "server.zip",
+				URL:      packURL,
+				Hashes:   tt.hashes,
+			}}
+			service := newRemoteImportTestService(t, resolver)
+			parent := t.TempDir()
+			target := filepath.Join(parent, "imported")
+			_, err := service.Import(
+				t.Context(),
+				ImportOptions{Source: "modrinth:all-the-mods", Directory: target},
+				network,
+			)
+			if got := downloads.Load(); got != 1 {
+				t.Fatalf("server served %d downloads, want 1: resolve must hit the cache", got)
+			}
+			if tt.wantErr == "" {
+				if err != nil {
+					t.Fatalf("Import: %v", err)
+				}
+				return
+			}
+			if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
+				t.Fatalf("Import error = %v, want error containing %q", err, tt.wantErr)
+			}
+			if _, statErr := os.Stat(target); !os.IsNotExist(statErr) {
+				t.Fatalf("target exists after failed import: %v", statErr)
+			}
+			assertNoImportStage(t, parent)
+		})
+	}
+}
+
+// TestImportOperatorCountCapsMetadata checks the metadata cap at its seam and
+// for a sparse file over the cap, which must not be allocated to be rejected.
+func TestImportOperatorCountCapsMetadata(t *testing.T) {
+	t.Parallel()
+	file := filepath.Join(t.TempDir(), "ops.json")
+
+	if got, err := importOperatorCount(file); err != nil || got != 0 {
+		t.Fatalf("missing ops.json = %d, %v; want 0, nil", got, err)
+	}
+	if err := os.WriteFile(file, []byte(`[{"uuid":"a","name":"alice"},{"uuid":"b","name":"bob"}]`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := importOperatorCount(file); err != nil || got != 2 {
+		t.Fatalf("importOperatorCount = %d, %v; want 2, nil", got, err)
+	}
+
+	// Trailing whitespace keeps the document valid, so only the size decides.
+	atCap := "[]" + strings.Repeat(" ", importMetadataMaxBytes-2)
+	if err := os.WriteFile(file, []byte(atCap), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := importOperatorCount(file); err != nil || got != 0 {
+		t.Fatalf("at-cap ops.json = %d, %v; want 0, nil", got, err)
+	}
+	if err := os.WriteFile(file, []byte(atCap+" "), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := importOperatorCount(file); err == nil {
+		t.Fatal("over-cap ops.json was read, want error")
+	}
+
+	if err := os.WriteFile(file, nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Truncate(file, importMetadataMaxBytes+1); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := importOperatorCount(file); err == nil {
+		t.Fatal("sparse over-cap ops.json was read, want error")
+	}
+}
+
+// TestImportReviewReportsOversizedOpsJSON keeps an unreadable operator list in
+// the review instead of failing the import.
+func TestImportReviewReportsOversizedOpsJSON(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	file := filepath.Join(dir, "ops.json")
+	if err := os.WriteFile(file, nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Truncate(file, importMetadataMaxBytes+1); err != nil {
+		t.Fatal(err)
+	}
+	review, err := importReview(dir)
+	if err != nil {
+		t.Fatalf("importReview: %v", err)
+	}
+	if want := []string{"ops.json: unreadable operator list"}; !slices.Equal(review, want) {
+		t.Fatalf("importReview = %v, want %v", review, want)
 	}
 }
