@@ -57,12 +57,12 @@ func decodeNeoForgeDescriptor(
 	}
 	service := neoforgeServiceProvider(zipRdr)
 	if service {
-		if embedded := attributes["Embedded-Dependencies-Mod"]; embedded != "" {
+		if embedded := manifestAttribute(attributes, "Embedded-Dependencies-Mod"); embedded != "" {
 			nested = append(nested, embedded)
 		}
 	}
 	if descriptor == nil {
-		if !forgeLoadsWithoutDescriptor(attributes["FMLModType"]) && !service {
+		if !forgeLoadsWithoutDescriptor(manifestAttribute(attributes, "FMLModType")) && !service {
 			return nil, nil
 		}
 		if !service && len(nested) == 0 {
