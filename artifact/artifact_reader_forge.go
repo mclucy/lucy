@@ -81,12 +81,12 @@ func decodeForgeDescriptor(
 	if service {
 		// Connector's locator names its mod archive here; FML itself reads
 		// only JarJar metadata.
-		if embedded := attributes["Embedded-Dependencies-Mod"]; embedded != "" {
+		if embedded := manifestAttribute(attributes, "Embedded-Dependencies-Mod"); embedded != "" {
 			nested = append(nested, embedded)
 		}
 	}
 	if descriptor == nil {
-		if !forgeLoadsWithoutDescriptor(attributes["FMLModType"]) && !service {
+		if !forgeLoadsWithoutDescriptor(manifestAttribute(attributes, "FMLModType")) && !service {
 			return nil, nil
 		}
 		if !service && len(nested) == 0 {

@@ -12,9 +12,10 @@ import (
 const manifestPath = "META-INF/MANIFEST.MF"
 
 // readManifestAttributes parses the main attributes of the archive manifest.
-// An attribute value wraps onto following lines that start with one space; the
-// space is removed and the parts join without a separator, as the JAR
-// specification defines.
+// Attribute names are case-insensitive, so the returned map is keyed by
+// lowercased names. An attribute value wraps onto following lines that start
+// with one space; the space is removed and the parts join without a separator,
+// as the JAR specification defines.
 func readManifestAttributes(
 	zipRdr *zip.Reader,
 	maxBytes int64,
@@ -61,10 +62,16 @@ func manifestAttributes(manifest []byte) map[string]string {
 				continue
 			}
 		}
-		key = string(name)
+		key = strings.ToLower(string(name))
 		attributes[key] = strings.TrimPrefix(string(value), " ")
 	}
 	return attributes
+}
+
+// manifestAttribute returns the value of a main manifest attribute. Names are
+// case-insensitive, so the lookup normalizes the requested name.
+func manifestAttribute(attributes map[string]string, name string) string {
+	return attributes[strings.ToLower(name)]
 }
 
 // readManifestImplementationVersion returns Unknown for a missing manifest or
