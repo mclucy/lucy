@@ -55,8 +55,17 @@ func decodeNeoForgeDescriptor(
 	if err != nil {
 		return nil, err
 	}
+	service := neoforgeServiceProvider(zipRdr)
+	if service {
+		if embedded := attributes["Embedded-Dependencies-Mod"]; embedded != "" {
+			nested = append(nested, embedded)
+		}
+	}
 	if descriptor == nil {
-		if !forgeLoadsWithoutDescriptor(attributes["FMLModType"]) {
+		if !forgeLoadsWithoutDescriptor(attributes["FMLModType"]) && !service {
+			return nil, nil
+		}
+		if !service && len(nested) == 0 {
 			return nil, nil
 		}
 		return &decodedDescriptor{Nested: nested}, nil
@@ -96,6 +105,23 @@ func decodeNeoForgeDescriptor(
 	}
 	decoded.Nested = nested
 	return decoded, nil
+}
+
+// neoforgeServiceProvider reports whether the jar supplies a ModLauncher or
+// NeoForge service. FML loads such a jar into its service layer and excludes it
+// from the mods-folder scan, so the jar itself is not a mod.
+func neoforgeServiceProvider(zipRdr *zip.Reader) bool {
+	for _, file := range zipRdr.File {
+		switch file.Name {
+		case "META-INF/services/cpw.mods.modlauncher.api.ITransformationService",
+			"META-INF/services/net.neoforged.neoforgespi.locating.IModLocator",
+			"META-INF/services/net.neoforged.neoforgespi.locating.IDependencyLocator",
+			"META-INF/services/net.neoforged.neoforgespi.locating.IModFileCandidateLocator",
+			"META-INF/services/net.neoforged.fml.loading.ImmediateWindowProvider":
+			return true
+		}
+	}
+	return false
 }
 
 // readNeoforgeDescriptor selects the descriptor path of this FML line. FML 3
