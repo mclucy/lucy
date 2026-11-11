@@ -11,6 +11,7 @@ import (
 
 	"github.com/mclucy/lucy/cache"
 	"github.com/mclucy/lucy/catalog"
+	"github.com/mclucy/lucy/install"
 	"github.com/mclucy/lucy/internal/importpack"
 	"github.com/mclucy/lucy/upstream"
 )
@@ -210,8 +211,9 @@ func (s *Service) acquireRemoteImportSource(
 }
 
 // downloadImportPack fetches a resolved pack into a private temporary directory
-// through the bounded source download. The cache verifies the provider's hash,
-// preferring SHA-512 over SHA-1, and --sha256 is checked on the downloaded bytes.
+// through the bounded source download. The provider's digest, preferring SHA-512
+// over SHA-1, is checked on the materialized file, including cache hits that the
+// cache serves without verifying. --sha256 is checked on the same bytes.
 func downloadImportPack(
 	ctx context.Context,
 	source string,
@@ -273,6 +275,10 @@ func downloadImportPack(
 		release()
 		return "", "", nil, err
 	}
+	if err := verifyImportPackDigest(file, algorithm, digest); err != nil {
+		release()
+		return "", "", nil, fmt.Errorf("verify resolved pack for %q: %w", source, err)
+	}
 	if err := verifyImportSHA256(file, sha256); err != nil {
 		release()
 		return "", "", nil, err
@@ -296,4 +302,15 @@ func importPackDigest(hashes map[string]string) (cache.HashAlgorithm, string) {
 		}
 	}
 	return cache.HashNone, ""
+}
+
+// verifyImportPackDigest checks the materialized pack against the digest the
+// provider published. It runs for cache hits as well, because the cache does not
+// verify bytes it serves. An empty digest means the provider published none.
+func verifyImportPackDigest(file string, algorithm cache.HashAlgorithm, digest string) error {
+	if digest == "" {
+		return nil
+	}
+	_, err := install.DigestFile(file, map[string]string{algorithm.String(): digest})
+	return err
 }
