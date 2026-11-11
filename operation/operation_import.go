@@ -268,6 +268,7 @@ func (s *Service) importSource(
 		Manifest:      manifest,
 		Lock:          lock,
 		Warnings:      append([]error(nil), initResult.Warnings...),
+		Discovery:     initResult.Discovery.RebasePaths(stage, target),
 	}
 	if lock != nil {
 		result.ManagedPackages = len(lock.Packages)
