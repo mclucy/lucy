@@ -448,6 +448,11 @@ func (s *Service) runTreeInstaller(
 	}
 
 	installer := installers[0]
+	if !bootstrap.InstallerSupported(installer.Kind) {
+		// An unsupported installer is never executed, so importing it must
+		// not require a Java runtime.
+		return []error{unsupportedInstallerWarning(installer.Kind)}, nil
+	}
 	advisory := bootstrap.InstallerJavaAdvisory(installer)
 	lock := &document.Lock{Server: document.LockedServer{
 		Minecraft: installer.Minecraft,
@@ -481,15 +486,21 @@ func (s *Service) runTreeInstaller(
 	})
 	if err != nil {
 		if errors.Is(err, bootstrap.ErrInstallerUnsupported) {
-			return []error{fmt.Errorf(
-				"%s was found but is not supported yet; "+
-					"its files were extracted without running it",
-				installer.Kind,
-			)}, nil
+			return []error{unsupportedInstallerWarning(installer.Kind)}, nil
 		}
 		return nil, err
 	}
 	return nil, nil
+}
+
+// unsupportedInstallerWarning reports an installer that was found but cannot
+// be executed yet. Its extracted files remain untouched.
+func unsupportedInstallerWarning(kind artifact.InstallerKind) error {
+	return fmt.Errorf(
+		"%s was found but is not supported yet; "+
+			"its files were extracted without running it",
+		kind,
+	)
 }
 
 // findImportInstallers lists the loader installers a tree ships. A pack may
