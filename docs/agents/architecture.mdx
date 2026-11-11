@@ -50,7 +50,7 @@ Serialization uses `encoding/json/v2` with `encoding/json/jsontext` for raw JSON
 
 ## Package identity is not module identity
 
-A registry project and release identify an artifact to download. A descriptor inside that artifact identifies one or more modules that the Minecraft loader sees. Descriptor dependency constraints refer to those module IDs, not necessarily the registry project name. Artifact metadata alone does not establish its registry provenance; hash identification can associate local bytes with an upstream project when a provider supports it. Modrinth and, when configured, CurseForge implement hash identification; Hangar and Spiget artifacts are identified only by an explicit project reference.
+A registry project and release identify an artifact to download. A descriptor inside that artifact identifies one or more modules that the Minecraft loader sees. Descriptor dependency constraints refer to those module IDs, not necessarily the registry project name. Artifact metadata alone does not establish its registry provenance; hash identification associates local bytes with an upstream project when a provider supports it.
 
 A locked package combines an artifact pin with its environment, ecosystem, and requirement bindings. Multiple declarations may bind to the same artifact. A dependency can keep a package enabled even when a direct binding is disabled. Consequently a row in the lock is not, by itself, proof that the file is installed.
 

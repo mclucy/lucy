@@ -300,6 +300,18 @@ func phaseText(phase install.PhaseInfo) string {
 			return "Fetched 1 server file"
 		}
 		return fmt.Sprintf("Fetched %d server files", phase.Count)
+	case "adoption":
+		if phase.Total == 0 {
+			return ""
+		}
+		if phase.Count == phase.Total {
+			return fmt.Sprintf("Adopted %d installed files", phase.Count)
+		}
+		return fmt.Sprintf(
+			"Adopted %d of %d installed files",
+			phase.Count,
+			phase.Total,
+		)
 	case "install":
 		if phase.Count == 0 {
 			return ""

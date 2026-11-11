@@ -13,7 +13,8 @@ import (
 )
 
 // Source is the configured routing capability that workspace operations
-// consume: catalogue builds, artifact mappers, and build identification.
+// consume: catalogue builds, artifact release identification, and build
+// identification.
 type Source interface {
 	Candidates(
 		ctx context.Context,
@@ -21,7 +22,7 @@ type Source interface {
 		project, minecraft string,
 		ecosystem catalog.Ecosystem,
 	) ([]upstream.Candidate, error)
-	GetArtifactMapper(provider catalog.Provider) (upstream.ArtifactMapProvider, bool, error)
+	GetArtifactReleaseMapper(provider catalog.Provider) (upstream.ArtifactReleaseMapper, bool, error)
 	IdentifyFillBuild(
 		ctx context.Context,
 		project string,

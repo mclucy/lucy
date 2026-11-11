@@ -11,7 +11,7 @@ Discovery and selection are separate. Discovery does not choose a runtime or rea
 
 Workspace observation assembles local observations of installations, environment wrappers, declarations, and package files. Reselection refreshes package observations; upstream identification must be repeated afterward.
 
-Package descriptors provide local module metadata. Hash identification can additionally associate unidentified files with upstream identities through hash lookup when invoked by an operation or command. The core workspace observation has no upstream dependency, so a missing registry identity does not imply that a local descriptor was unreadable or that the file is absent.
+Package descriptors provide local module metadata. Observation keeps one entry per readable descriptor, so a jar carrying several loaders yields several entries. Adoption claims one package per file under the ecosystem the server loads. Every file left unmanaged is reported with its reason: client-only, unreadable descriptor, an ecosystem the server does not load, or no upstream identity.
 
 ## Tracked-file state
 
