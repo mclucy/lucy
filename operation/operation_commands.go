@@ -135,43 +135,33 @@ func servedEcosystemSet(d *documentpkg.Manifest, observed *workspace.Workspace) 
 	return served
 }
 
-// servedEcosystemForFile reports the served loader whose descriptor the file
-// carries. A jar without a top-level descriptor can declare its loader inside
-// a JarJar container, while the upstream project label may name a loader the
-// server does not offer.
+// servedEcosystemForFile reports the served loader whose descriptor reader
+// recognizes the file. Each reader applies its loader's descriptor precedence,
+// so a returned module proves that loader loads the file.
 func servedEcosystemForFile(
 	ctx context.Context,
 	path string,
 	served map[catalog.Ecosystem]struct{},
+	minecraft string,
 ) (catalog.Ecosystem, bool) {
 	for _, ecosystem := range slices.Sorted(maps.Keys(served)) {
 		if ecosystem == catalog.EcosystemMCDR {
 			continue
 		}
-		modules, err := artifact.ReadModules(ctx, path, ecosystem)
+		modules, err := artifact.ReadModulesFor(
+			ctx,
+			path,
+			ecosystem,
+			minecraft,
+		)
 		if err != nil {
 			continue
 		}
-		for _, module := range modules {
-			if loaderSpecificDescriptor(module) {
-				return ecosystem, true
-			}
+		if len(modules) > 0 {
+			return ecosystem, true
 		}
 	}
 	return catalog.EcosystemUnspecified, false
-}
-
-// loaderSpecificDescriptor reports whether a module's descriptor names the
-// loader that read it. Forge and NeoForge share META-INF/mods.toml, so only a
-// loader dependency declared inside it identifies the loader.
-func loaderSpecificDescriptor(module catalog.DescriptorModule) bool {
-	if module.DescriptorPath != "META-INF/mods.toml" {
-		return true
-	}
-	loader := module.Ecosystem.String()
-	return slices.ContainsFunc(module.Dependencies, func(dep catalog.DescriptorDependency) bool {
-		return dep.ID == loader
-	})
 }
 
 func commandReference(d *documentpkg.Manifest, old *documentpkg.Lock, raw string, ecosystem catalog.Ecosystem) (string, version.Version, error) {

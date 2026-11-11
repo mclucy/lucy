@@ -37,6 +37,13 @@ func (r Release) Supports(minecraft string, loader catalog.Ecosystem) bool {
 		!slices.Contains(r.MinecraftVersions, minecraft) {
 		return false
 	}
+	return r.SupportsLoader(loader)
+}
+
+// SupportsLoader reports whether the release names a loader that loader runs.
+// An unspecified loader asks nothing. Labels that name no modeled ecosystem
+// answer nothing either.
+func (r Release) SupportsLoader(loader catalog.Ecosystem) bool {
 	if loader == catalog.EcosystemUnspecified {
 		return true
 	}

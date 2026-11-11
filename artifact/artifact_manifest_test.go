@@ -75,7 +75,16 @@ func TestManifestVersionAcrossArtifactViews(t *testing.T) {
 					if err != nil {
 						t.Fatalf("read artifact metadata: %v", err)
 					}
-					if len(infos) != 1 || infos[0].Ref.Version != manifest.want {
+					var observed PackageInfo
+					found := false
+					for _, info := range infos {
+						if info.Ref.Ecosystem == loader.ecosystem {
+							observed = info
+							found = true
+							break
+						}
+					}
+					if !found || observed.Ref.Version != manifest.want {
 						t.Fatalf("observed version: got %+v, want example@%s", infos, manifest.want)
 					}
 					modules, err := ReadModules(t.Context(), path, loader.ecosystem)
