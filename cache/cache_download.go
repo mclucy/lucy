@@ -208,6 +208,36 @@ func (r *limitedDownloadReader) Read(p []byte) (int, error) {
 	return n, err
 }
 
+// ProgressReader reports the cumulative bytes read from reader. It is the
+// counting half of a DownloadOptions.WrapReader, whose size argument is the
+// transfer total the response announced.
+func ProgressReader(
+	reader io.Reader,
+	total int64,
+	report func(read, total int64),
+) io.Reader {
+	if report == nil {
+		return reader
+	}
+	return &progressReader{reader: reader, total: total, report: report}
+}
+
+type progressReader struct {
+	reader io.Reader
+	total  int64
+	read   int64
+	report func(read, total int64)
+}
+
+func (r *progressReader) Read(p []byte) (int, error) {
+	n, err := r.reader.Read(p)
+	r.read += int64(n)
+	if n > 0 {
+		r.report(r.read, r.total)
+	}
+	return n, err
+}
+
 type contextReader struct {
 	ctx    context.Context
 	reader io.Reader

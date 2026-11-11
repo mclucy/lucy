@@ -14,6 +14,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/mclucy/lucy/artifactstore"
 	"github.com/mclucy/lucy/cache"
@@ -27,6 +28,40 @@ import (
 	"github.com/mclucy/lucy/workspace"
 	"github.com/mclucy/lucy/workspace/discovery"
 )
+
+// Import stage names the command renders. A remote reference and a direct URL
+// both fetch an archive, but only a remote reference is a modpack; a local
+// source starts directly with writing files.
+const (
+	importDownloadPackPhase    = "download pack"
+	importDownloadArchivePhase = "download archive"
+	importFilesPhase           = "files"
+)
+
+// importDownloadPhase names the stage that fetches the source, or "" when the
+// source is already local.
+func importDownloadPhase(source string) string {
+	if _, remote, err := ParseRemoteImportSource(source); remote && err == nil {
+		return importDownloadPackPhase
+	}
+	if strings.Contains(source, "://") {
+		return importDownloadArchivePhase
+	}
+	return ""
+}
+
+// importProgress adapts the operation trace to importpack's download hooks. A
+// nil trace reports nothing.
+func importProgress(trace *install.Trace) importpack.Progress {
+	if trace == nil {
+		return importpack.Progress{}
+	}
+	return importpack.Progress{
+		FileStarted:  trace.ReportFetchStarted,
+		FileProgress: trace.ReportFetchProgress,
+		FileDone:     trace.ReportFetchDone,
+	}
+}
 
 // importSource adopts an external server archive as a new workspace. The
 // archive is materialized and initialized in a private staging directory
@@ -65,11 +100,18 @@ func (s *Service) importSource(
 		resultErr = errors.Join(resultErr, closeErr)
 	}()
 
+	downloadPhase := importDownloadPhase(opts.Source)
+	downloadStarted := time.Now()
+	if downloadPhase != "" {
+		opts.Trace.ReportPhaseStarted(downloadPhase)
+	}
+	progress := importProgress(opts.Trace)
 	sourcePath, source, releaseSource, err := s.resolveImportSource(
 		ctx,
 		opts.Source,
 		opts.SHA256,
 		network,
+		progress,
 	)
 	if err != nil {
 		return nil, err
@@ -79,6 +121,12 @@ func (s *Service) importSource(
 	plan, err := importpack.Inspect(ctx, sourcePath)
 	if err != nil {
 		return nil, err
+	}
+	if downloadPhase != "" {
+		opts.Trace.ReportPhase(install.PhaseInfo{
+			Name:    downloadPhase,
+			Elapsed: time.Since(downloadStarted),
+		})
 	}
 
 	name := opts.Name
@@ -115,10 +163,23 @@ func (s *Service) importSource(
 		return nil, fmt.Errorf("prepare import staging directory: %w", err)
 	}
 
-	materialized, err := importpack.Materialize(ctx, sourcePath, stage, network)
+	filesStarted := time.Now()
+	opts.Trace.ReportPhaseStarted(importFilesPhase)
+	materialized, err := importpack.Materialize(
+		ctx,
+		sourcePath,
+		stage,
+		network,
+		progress,
+	)
 	if err != nil {
 		return nil, err
 	}
+	opts.Trace.ReportPhase(install.PhaseInfo{
+		Name:    importFilesPhase,
+		Elapsed: time.Since(filesStarted),
+		Count:   materialized.ServerFiles,
+	})
 
 	force := false
 	if plan.Format == importpack.FormatMrpack {
@@ -312,9 +373,10 @@ func acquireImportSource(
 	ctx context.Context,
 	source, sha256 string,
 	network *cache.Client,
+	progress importpack.Progress,
 ) (string, string, func(), error) {
 	if strings.Contains(source, "://") {
-		return downloadImportSource(ctx, source, sha256, network)
+		return downloadImportSource(ctx, source, sha256, network, progress)
 	}
 	local, err := filepath.Abs(source)
 	if err != nil {
@@ -340,6 +402,7 @@ func downloadImportSource(
 	ctx context.Context,
 	source, sha256 string,
 	network *cache.Client,
+	progress importpack.Progress,
 ) (string, string, func(), error) {
 	parsed, err := url.Parse(source)
 	if err != nil {
@@ -371,6 +434,12 @@ func downloadImportSource(
 		Filename: filename,
 		FileMode: 0o600,
 		MaxBytes: importpack.MaxSourceBytes,
+		WrapReader: func(r io.Reader, size int64) io.Reader {
+			progress.ReportStarted(filename, size)
+			return cache.ProgressReader(r, size, func(read, total int64) {
+				progress.ReportProgress(filename, read, total)
+			})
+		},
 	})
 	if err != nil {
 		release()
@@ -385,6 +454,7 @@ func downloadImportSource(
 		release()
 		return "", "", nil, err
 	}
+	progress.ReportDone(filename, download.CacheHit)
 	return file, source, release, nil
 }
 

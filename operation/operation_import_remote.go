@@ -3,6 +3,7 @@ package operation
 import (
 	"context"
 	"fmt"
+	"io"
 	"net/url"
 	"os"
 	"path"
@@ -172,15 +173,16 @@ func (s *Service) resolveImportSource(
 	ctx context.Context,
 	source, sha256 string,
 	network *cache.Client,
+	progress importpack.Progress,
 ) (string, string, func(), error) {
 	ref, ok, err := ParseRemoteImportSource(source)
 	if err != nil {
 		return "", "", nil, err
 	}
 	if !ok {
-		return acquireImportSource(ctx, source, sha256, network)
+		return acquireImportSource(ctx, source, sha256, network, progress)
 	}
-	return s.acquireRemoteImportSource(ctx, source, ref, sha256, network)
+	return s.acquireRemoteImportSource(ctx, source, ref, sha256, network, progress)
 }
 
 // acquireRemoteImportSource asks the configured resolver for the pack a remote
@@ -191,6 +193,7 @@ func (s *Service) acquireRemoteImportSource(
 	ref RemoteImportSource,
 	sha256 string,
 	network *cache.Client,
+	progress importpack.Progress,
 ) (string, string, func(), error) {
 	resolver, ok := s.source.(importPackResolver)
 	if !ok {
@@ -207,7 +210,7 @@ func (s *Service) acquireRemoteImportSource(
 	if err != nil {
 		return "", "", nil, fmt.Errorf("resolve import source %q: %w", source, err)
 	}
-	return downloadImportPack(ctx, source, pack, sha256, network)
+	return downloadImportPack(ctx, source, pack, sha256, network, progress)
 }
 
 // downloadImportPack fetches a resolved pack into a private temporary directory
@@ -220,6 +223,7 @@ func downloadImportPack(
 	pack upstream.ImportPack,
 	sha256 string,
 	network *cache.Client,
+	progress importpack.Progress,
 ) (string, string, func(), error) {
 	rawURL := strings.TrimSpace(pack.URL)
 	if rawURL == "" {
@@ -265,6 +269,12 @@ func downloadImportPack(
 		Filename:      name,
 		FileMode:      0o600,
 		MaxBytes:      importpack.MaxSourceBytes,
+		WrapReader: func(r io.Reader, size int64) io.Reader {
+			progress.ReportStarted(name, size)
+			return cache.ProgressReader(r, size, func(read, total int64) {
+				progress.ReportProgress(name, read, total)
+			})
+		},
 	})
 	if err != nil {
 		release()
@@ -283,6 +293,7 @@ func downloadImportPack(
 		release()
 		return "", "", nil, err
 	}
+	progress.ReportDone(name, download.CacheHit)
 	return file, source, release, nil
 }
 

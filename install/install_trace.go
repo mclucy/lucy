@@ -66,6 +66,33 @@ func (t *Trace) fetchDone(name string, fromCache bool) {
 	}
 }
 
+// ReportPhaseStarted publishes a stage another package began.
+func (t *Trace) ReportPhaseStarted(name string) {
+	t.phaseStarted(name)
+}
+
+// ReportPhase publishes a stage another package finished. Import reports the
+// source download and the files it writes, which installation does not perform,
+// so their elapsed time and counts are visible instead of unaccounted.
+func (t *Trace) ReportPhase(phase PhaseInfo) {
+	t.phaseDone(phase)
+}
+
+// ReportFetchStarted publishes a transfer another package began.
+func (t *Trace) ReportFetchStarted(name string, size int64) {
+	t.fetchStarted(name, size)
+}
+
+// ReportFetchProgress updates the transfer's byte count.
+func (t *Trace) ReportFetchProgress(name string, read, total int64) {
+	t.fetchProgress(name, read, total)
+}
+
+// ReportFetchDone publishes that the transfer ended.
+func (t *Trace) ReportFetchDone(name string, fromCache bool) {
+	t.fetchDone(name, fromCache)
+}
+
 func (t *Trace) processOutput() io.Writer {
 	if t == nil || t.ProcessOutput == nil {
 		return io.Discard

@@ -50,6 +50,33 @@ type Result struct {
 	Skipped []string
 }
 
+// Progress receives facts about the downloads Materialize performs. Every hook
+// is optional: a nil hook reports nothing. ReportDone runs after the file is
+// verified and written, fromCache when no bytes crossed the network.
+type Progress struct {
+	FileStarted  func(name string, size int64)
+	FileProgress func(name string, read, total int64)
+	FileDone     func(name string, fromCache bool)
+}
+
+func (p Progress) ReportStarted(name string, size int64) {
+	if p.FileStarted != nil {
+		p.FileStarted(name, size)
+	}
+}
+
+func (p Progress) ReportProgress(name string, read, total int64) {
+	if p.FileProgress != nil {
+		p.FileProgress(name, read, total)
+	}
+}
+
+func (p Progress) ReportDone(name string, fromCache bool) {
+	if p.FileDone != nil {
+		p.FileDone(name, fromCache)
+	}
+}
+
 // FormatError reports an archive whose contents are not a supported server
 // source. Reason is user-facing and should name the observed format.
 type FormatError struct {
@@ -73,12 +100,14 @@ func Inspect(ctx context.Context, path string) (*Plan, error) {
 // Materialize writes the server-side contents of path into dest. Unix file
 // modes are sanitized; symlinks, devices, and paths escaping dest are
 // rejected. network may be nil only when the source needs no downloads.
+// progress may be zero; its hooks stay silent.
 func Materialize(
 	ctx context.Context,
 	path, dest string,
 	network *cache.Client,
+	progress Progress,
 ) (*Result, error) {
-	return materialize(ctx, path, dest, network)
+	return materialize(ctx, path, dest, network, progress)
 }
 
 const (
