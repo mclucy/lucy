@@ -13,6 +13,15 @@ lucy file track server.properties config/example.json
 
 Lucy saves their current contents as accepted revisions. Add `--immutable` to warn about later changes, or `--no-hash` to check only that the files exist. A presence-only file cannot be recovered.
 
+You can also select files with shell-style patterns. Quote them so the workspace, not your shell, resolves them:
+
+```bash
+lucy file track 'config/*.json'
+lucy file track 'scripts/**/*.sh'
+```
+
+`*` and `?` match within one path component, character classes such as `[abc]` and `[!abc]` match one character, and `**` matches any number of directories, including none. One invocation tracks every match atomically, and a pattern that selects no regular file fails instead of tracking nothing. Hidden files require an explicit leading dot; `.lucy` and `.git` are never selected.
+
 To provide a recovery source when tracking a file, pass its URL:
 
 ```bash

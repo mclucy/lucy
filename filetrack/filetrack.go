@@ -145,6 +145,12 @@ func (s *Service) Run(ctx context.Context, root string, request Request) (result
 		}
 		currentLock = locked.ManifestFingerprint == fingerprint
 	}
+	if request.Operation == Track {
+		request.Paths, err = expandTrackPaths(files, request.Paths)
+		if err != nil {
+			return result, err
+		}
+	}
 	selected, skipped, err := selectFiles(document.Files, request)
 	if err != nil {
 		return result, err

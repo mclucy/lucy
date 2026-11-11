@@ -41,7 +41,13 @@ const (
 
 	TrackLong = "Snapshot the current contents of existing regular files " +
 		"into the local content store and declare them in lucy.yaml. One " +
-		"invocation accepts every path atomically. By default each entry " +
+		"invocation accepts every path atomically. Paths accept " +
+		"shell-style patterns relative to the workspace: * and ? match " +
+		"within one path component, [abc], [a-z], and [!abc] match one " +
+		"character, and ** matches any number of directories, including " +
+		"none. Every pattern must select at least one regular file. " +
+		"Hidden files require an explicit leading dot, and .lucy and .git " +
+		"are never selected. By default each entry " +
 		"is mutable with an accepted hash; --immutable requires an " +
 		"accepted hash and raises warnings on deviation, --no-hash tracks " +
 		"presence only, and --recover-url records an explicit recovery " +
