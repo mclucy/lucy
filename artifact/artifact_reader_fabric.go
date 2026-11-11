@@ -3,7 +3,6 @@ package artifact
 import (
 	"archive/zip"
 	"bytes"
-	"encoding/json/v2"
 	"strings"
 
 	"github.com/mclucy/lucy/catalog"
@@ -113,7 +112,7 @@ func readFabricDescriptor(
 		return nil, err
 	}
 	modInfo := &fileschema.FileFabricModIdentifier{}
-	if err := json.Unmarshal(raw, modInfo); err != nil {
+	if err := unmarshalDescriptor(raw, modInfo); err != nil {
 		return nil, err
 	}
 	return modInfo, nil
