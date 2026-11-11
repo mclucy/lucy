@@ -11,7 +11,13 @@ If an edit breaks your server, restore the current accepted revision:
 lucy file recover config/example.json
 ```
 
-Lucy keeps a local copy of the contents it replaces. You can include several paths or a shell-style pattern such as `config/*.json`; patterns match tracked declarations, so a deleted working file still matches. Hidden tracked paths require an explicit leading dot. To recover every tracked file with an accepted revision, use `lucy file recover --all`; files tracked without a hash are skipped.
+Lucy keeps a local copy of the contents it replaces. You can include several paths, or quote a shell-style pattern so the shell passes it to Lucy literally:
+
+```bash
+lucy file recover 'config/*.json'
+```
+
+Patterns match tracked declarations, so a deleted working file still matches. Hidden tracked paths require an explicit leading dot. To recover every tracked file with an accepted revision, use `lucy file recover --all`; files tracked without a hash are skipped.
 
 If the local copy is unavailable, lucy can use the file's configured recovery URL. The download must match the accepted contents; otherwise recovery fails without changing the destination.
 
