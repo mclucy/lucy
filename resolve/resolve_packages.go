@@ -509,7 +509,7 @@ func Packages(request PackagesRequest) ([]document.Package, []error, error) {
 				}
 			}
 			var modules []catalog.DescriptorModule
-			moduleEcosystem := descriptorEcosystem(target, r.key.ecosystem)
+			descriptorLoader := target.descriptorLoader(r.key.ecosystem)
 			entry, cached := analysisEntry{}, false
 			if cache != nil {
 				entry, cached = cache.get(candidateAnalysisKey(candidate))
@@ -523,7 +523,7 @@ func Packages(request PackagesRequest) ([]document.Package, []error, error) {
 					return hardFail(err)
 				}
 				a.Hashes = materialized.Hashes
-				modules, err = artifact.ReadModules(ctx, materialized.Path, moduleEcosystem)
+				modules, err = artifact.ReadModules(ctx, materialized.Path, descriptorLoader)
 				if err != nil {
 					return hardFail(err)
 				}
@@ -535,7 +535,7 @@ func Packages(request PackagesRequest) ([]document.Package, []error, error) {
 				}
 			}
 			if len(modules) == 0 {
-				message := fmt.Sprintf("artifact %s has no server-visible %s modules", a.Filename, moduleEcosystem)
+				message := fmt.Sprintf("artifact %s has no server-visible %s modules", a.Filename, descriptorLoader)
 				lastErr = errors.New(message)
 				ledger.record(r.key, r.display, string(candidate.Version), message, RejectionModules)
 				trace.rejected(r.display, string(candidate.Version), message)
@@ -756,25 +756,15 @@ func selectedPackageServesRequest(
 	)
 }
 
-// dependencyEcosystemCompatible mirrors the module namespace rules: a Quilt
-// target resolves Quilt and Fabric modules together, while every other target
-// keeps its own ecosystem. Fabric satisfies nothing Quilt-specific.
+// dependencyEcosystemCompatible reports whether a package of the provided
+// ecosystem can answer a request of the requested ecosystem on target: both
+// share one module namespace there.
 func dependencyEcosystemCompatible(
 	target Target,
 	provided catalog.Ecosystem,
 	requested catalog.Ecosystem,
 ) bool {
-	if provided == requested {
-		return true
-	}
-	if target.Product == serverpkg.ProductQuilt &&
-		(provided == catalog.EcosystemQuilt ||
-			provided == catalog.EcosystemFabric) &&
-		(requested == catalog.EcosystemQuilt ||
-			requested == catalog.EcosystemFabric) {
-		return true
-	}
-	return provided.Satisfy(requested)
+	return target.moduleNamespace(provided) == target.moduleNamespace(requested)
 }
 
 // pruneProvidedDependencyPackages drops packages selected only because another
@@ -1028,7 +1018,7 @@ func providedIdentityVersions(
 		func(module catalog.DescriptorModule, name string) moduleKey {
 			return moduleKey{
 				provider.Environment,
-				moduleEcosystem(target, module.Ecosystem),
+				target.moduleNamespace(module.Ecosystem),
 				normalizeModuleID(module.Ecosystem, name),
 			}
 		},
@@ -1088,7 +1078,7 @@ func providerSatisfiesRequiredConstraints(
 				}
 				key := moduleKey{
 					pkg.Environment,
-					moduleEcosystem(target, module.Ecosystem),
+					target.moduleNamespace(module.Ecosystem),
 					normalizeModuleID(module.Ecosystem, dep.ID),
 				}
 				got, ok := provided[key]

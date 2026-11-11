@@ -43,6 +43,17 @@ func (p Product) String() string {
 	return string(p)
 }
 
+// Ecosystem returns the package ecosystem p natively serves, or
+// catalog.EcosystemUnspecified when p serves none on its own.
+func (p Product) Ecosystem() catalog.Ecosystem {
+	for _, definition := range productDefinitions {
+		if definition.Product == p {
+			return definition.Ecosystem
+		}
+	}
+	return catalog.EcosystemUnspecified
+}
+
 func (p Product) Title() string {
 	switch p {
 	case ProductMinecraft:

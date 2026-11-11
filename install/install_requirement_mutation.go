@@ -199,12 +199,12 @@ func retainDeclared(
 
 	// dependents lists the packages a DependencyOf reference of p names. The
 	// reference carries no ecosystem, so the named dependent may be recorded
-	// under any ecosystem that shares p's module namespace.
+	// under any ecosystem that can share p's module namespace.
 	dependents := func(p *document.Package, source catalog.Ref) []int {
 		key := identityOf(p)
 		key.reference = source
 		var parents []int
-		for _, ecosystem := range sharedModuleEcosystems(p.Ecosystem) {
+		for _, ecosystem := range p.Ecosystem.LoadedAlongside() {
 			key.ecosystem = ecosystem
 			if parent, ok := indices[key]; ok {
 				parents = append(parents, parent)
@@ -281,21 +281,6 @@ func retainDeclared(
 		out = append(out, p)
 	}
 	return out
-}
-
-// sharedModuleEcosystems lists the ecosystems whose modules share one namespace
-// with e. A Quilt server loads Fabric modules beside Quilt ones, so a dependency
-// recorded under one of these ecosystems can name a dependent recorded under
-// the other.
-func sharedModuleEcosystems(e catalog.Ecosystem) []catalog.Ecosystem {
-	switch e {
-	case catalog.EcosystemFabric:
-		return []catalog.Ecosystem{catalog.EcosystemFabric, catalog.EcosystemQuilt}
-	case catalog.EcosystemQuilt:
-		return []catalog.Ecosystem{catalog.EcosystemQuilt, catalog.EcosystemFabric}
-	default:
-		return []catalog.Ecosystem{e}
-	}
 }
 
 // mutateLock produces the lock a locked mutation commits. Only requirements,

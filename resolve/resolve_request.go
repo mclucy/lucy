@@ -2,6 +2,7 @@ package resolve
 
 import (
 	"context"
+	"slices"
 
 	"github.com/mclucy/lucy/artifact"
 	"github.com/mclucy/lucy/catalog"
@@ -66,39 +67,47 @@ type Target struct {
 	CoreModules []catalog.DescriptorModule
 }
 
-// SupportsPackages reports whether the target product loads packages from
-// ecosystem. A paperclip server loads Paper and Bukkit packages regardless of
-// how the manifest names its product.
-func SupportsPackages(target Target, ecosystem catalog.Ecosystem) bool {
-	switch target.Product {
-	case serverpkg.ProductFabric:
-		return ecosystem == catalog.EcosystemFabric
-	case serverpkg.ProductQuilt:
-		return ecosystem == catalog.EcosystemQuilt ||
-			ecosystem == catalog.EcosystemFabric
-	case serverpkg.ProductForge:
-		return ecosystem == catalog.EcosystemForge
-	case serverpkg.ProductNeoForge:
-		return ecosystem == catalog.EcosystemNeoForge
-	case serverpkg.ProductPaper, serverpkg.ProductPurpur:
-		return ecosystem == catalog.EcosystemPaper || ecosystem == catalog.EcosystemBukkit
-	default:
-		return target.Bootstrapper == serverpkg.BootstrapMethodPaperclip &&
-			(ecosystem == catalog.EcosystemPaper || ecosystem == catalog.EcosystemBukkit)
+// packageRuntime returns the ecosystem whose loader loads server packages on
+// target. A paperclip server runs Paper regardless of how the manifest names
+// its product. The second result is false for a target that loads no server
+// packages through Lucy.
+func (t Target) packageRuntime() (catalog.Ecosystem, bool) {
+	switch t.Product {
+	case serverpkg.ProductFabric,
+		serverpkg.ProductQuilt,
+		serverpkg.ProductForge,
+		serverpkg.ProductNeoForge,
+		serverpkg.ProductPaper,
+		serverpkg.ProductPurpur:
+		return t.Product.Ecosystem(), true
 	}
+	if t.Bootstrapper == serverpkg.BootstrapMethodPaperclip {
+		return catalog.EcosystemPaper, true
+	}
+	return catalog.EcosystemUnspecified, false
 }
 
-// descriptorEcosystem returns the descriptor family the active server loader
-// reads for a package. Quilt Loader selects quilt.mod.json from an artifact
-// that carries both descriptors, so a Fabric-declared package on a Quilt
-// server must be analyzed as Quilt.
-func descriptorEcosystem(
-	target Target,
-	ecosystem catalog.Ecosystem,
-) catalog.Ecosystem {
-	if target.Product == serverpkg.ProductQuilt &&
-		ecosystem == catalog.EcosystemFabric {
-		return catalog.EcosystemQuilt
+// SupportsPackages reports whether the target loads server packages from
+// ecosystem.
+func SupportsPackages(target Target, ecosystem catalog.Ecosystem) bool {
+	runtime, ok := target.packageRuntime()
+	return ok && slices.Contains(runtime.Loads(), ecosystem)
+}
+
+// moduleNamespace returns the ecosystem that scopes module identities of
+// descriptor ecosystem d on target.
+func (t Target) moduleNamespace(d catalog.Ecosystem) catalog.Ecosystem {
+	runtime, _ := t.packageRuntime()
+	return runtime.ModuleNamespace(d)
+}
+
+// descriptorLoader returns the loader whose descriptor precedence reads an
+// artifact of a package in ecosystem. A runtime that loads the ecosystem
+// reads the artifact as its own loader would.
+func (t Target) descriptorLoader(ecosystem catalog.Ecosystem) catalog.Ecosystem {
+	if runtime, ok := t.packageRuntime(); ok &&
+		slices.Contains(runtime.Loads(), ecosystem) {
+		return runtime
 	}
 	return ecosystem
 }
