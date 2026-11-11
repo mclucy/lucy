@@ -16,8 +16,20 @@ import (
 )
 
 // ReadModules keeps each descriptor identity and nested container location
-// intact.
+// intact. Without a server version it reads the descriptor an inventory reader
+// reports; callers that select for a server use ReadModulesFor.
 func ReadModules(ctx context.Context, filename string, loader catalog.Ecosystem) ([]catalog.DescriptorModule, error) {
+	return ReadModulesFor(ctx, filename, loader, "")
+}
+
+// ReadModulesFor keeps each descriptor identity and nested container location
+// intact, selecting version-dependent descriptors for minecraft.
+func ReadModulesFor(
+	ctx context.Context,
+	filename string,
+	loader catalog.Ecosystem,
+	minecraft string,
+) ([]catalog.DescriptorModule, error) {
 	if strings.EqualFold(filepath.Ext(filename), ".py") {
 		modules, err := inspectPython(ctx, filename)
 		if err != nil {
@@ -38,7 +50,7 @@ func ReadModules(ctx context.Context, filename string, loader catalog.Ecosystem)
 		return nil, err
 	}
 	defer z.Close()
-	modules, err := inspectArchive(&z.Reader, loader, "", 0)
+	modules, err := inspectArchive(&z.Reader, loader, "", 0, minecraft)
 	if err != nil {
 		return nil, err
 	}
@@ -180,34 +192,50 @@ func nativeEntry(z *zip.Reader, name string) ([]byte, error) {
 var descriptorDecoders = map[catalog.Ecosystem]func(
 	*zip.Reader,
 	string,
+	string,
 ) (*decodedDescriptor, error){
 	catalog.EcosystemQuilt: func(
 		z *zip.Reader,
-		member string,
+		member, _ string,
 	) (*decodedDescriptor, error) {
 		return decodeQuiltDescriptor(z, member, false)
 	},
 	catalog.EcosystemFabric: func(
 		z *zip.Reader,
-		member string,
+		member, _ string,
 	) (*decodedDescriptor, error) {
 		return decodeFabricDescriptor(z, member, false)
 	},
 	catalog.EcosystemForge: func(
 		z *zip.Reader,
-		member string,
+		member, _ string,
 	) (*decodedDescriptor, error) {
-		return decodeForgeDescriptor(z, member, false, false)
+		return decodeForgeDescriptor(z, member, false)
 	},
 	catalog.EcosystemNeoForge: func(
 		z *zip.Reader,
-		member string,
+		member, minecraft string,
 	) (*decodedDescriptor, error) {
-		return decodeNeoForgeDescriptor(z, member, false, false)
+		return decodeNeoForgeDescriptor(z, member, false, minecraft)
 	},
-	catalog.EcosystemBukkit: decodeBukkitDescriptor,
-	catalog.EcosystemPaper:  decodeBukkitDescriptor,
-	catalog.EcosystemMCDR:   decodeMCDRDescriptor,
+	catalog.EcosystemBukkit: func(
+		z *zip.Reader,
+		member, _ string,
+	) (*decodedDescriptor, error) {
+		return decodeBukkitDescriptor(z, member)
+	},
+	catalog.EcosystemPaper: func(
+		z *zip.Reader,
+		member, _ string,
+	) (*decodedDescriptor, error) {
+		return decodeBukkitDescriptor(z, member)
+	},
+	catalog.EcosystemMCDR: func(
+		z *zip.Reader,
+		member, _ string,
+	) (*decodedDescriptor, error) {
+		return decodeMCDRDescriptor(z, member)
+	},
 }
 
 // inspectArchive reads one archive with the descriptor precedence of loader
@@ -217,11 +245,12 @@ func inspectArchive(
 	loader catalog.Ecosystem,
 	member string,
 	depth int,
+	minecraft string,
 ) ([]catalog.DescriptorModule, error) {
 	if depth > 16 {
 		return nil, fmt.Errorf("nested archive depth exceeds 16")
 	}
-	decoded, err := decodeArchiveDescriptor(z, loader, member)
+	decoded, err := decodeArchiveDescriptor(z, loader, member, minecraft)
 	if err != nil {
 		return nil, err
 	}
@@ -249,7 +278,13 @@ func inspectArchive(
 		if member != "" {
 			path = member + "/" + path
 		}
-		nestedModules, err := inspectArchive(nested, loader, path, depth+1)
+		nestedModules, err := inspectArchive(
+			nested,
+			loader,
+			path,
+			depth+1,
+			minecraft,
+		)
 		if err != nil {
 			return nil, err
 		}
@@ -264,13 +299,14 @@ func decodeArchiveDescriptor(
 	z *zip.Reader,
 	loader catalog.Ecosystem,
 	member string,
+	minecraft string,
 ) (*decodedDescriptor, error) {
 	for _, ecosystem := range loader.Loads() {
 		decoder, ok := descriptorDecoders[ecosystem]
 		if !ok {
 			continue
 		}
-		decoded, err := decoder(z, member)
+		decoded, err := decoder(z, member, minecraft)
 		if err != nil {
 			return nil, err
 		}

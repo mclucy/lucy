@@ -3,6 +3,7 @@ package operation
 import (
 	"context"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
 	"slices"
@@ -184,44 +185,76 @@ func (a *packageAdopter) probe(
 	p workspace.DiscoveredPackage,
 ) adoptionProposal {
 	proposal := adoptionProposal{pkg: p}
-	ecosystem := p.ID.Ecosystem
+	if p.ID.Ecosystem == catalog.EcosystemMCDR {
+		a.probeDescriptor(ctx, &proposal, catalog.EcosystemMCDR)
+		return proposal
+	}
+	// A provider that identifies the file already answers its project,
+	// version, and release, so descriptor inspection cannot add ownership.
+	if a.probeMapped(ctx, &proposal) {
+		return proposal
+	}
+	a.probeDescriptor(ctx, &proposal, p.ID.Ecosystem)
+	return proposal
+}
+
+// probeDescriptor classifies a file no provider identified. Adoption needs a
+// release, so this path only explains why the file stays unmanaged.
+func (a *packageAdopter) probeDescriptor(
+	ctx context.Context,
+	proposal *adoptionProposal,
+	ecosystem catalog.Ecosystem,
+) {
+	p := proposal.pkg
 	if ecosystem != catalog.EcosystemMCDR {
 		if _, ok := a.served[ecosystem]; !ok {
 			var adopted bool
-			ecosystem, adopted = servedEcosystemForFile(ctx, p.Path, a.served)
+			ecosystem, adopted = servedEcosystemForFile(
+				ctx,
+				p.Path,
+				a.served,
+				string(a.manifest.Server.Minecraft),
+			)
 			if !adopted {
 				proposal.warnings = append(proposal.warnings, fmt.Errorf(
 					"package %s left unmanaged: the server does not load %s",
 					p.Path,
 					p.ID.Ecosystem,
 				))
-				return proposal
+				return
 			}
 		}
 	}
 	proposal.ecosystem = ecosystem
-	modules, err := artifact.ReadModules(ctx, p.Path, ecosystem)
+	modules, err := artifact.ReadModulesFor(
+		ctx,
+		p.Path,
+		ecosystem,
+		string(a.manifest.Server.Minecraft),
+	)
 	if err != nil {
 		proposal.warnings = append(proposal.warnings, fmt.Errorf(
 			"package %s left unmanaged: read descriptor: %w",
 			p.Path,
 			err,
 		))
-		return proposal
+		return
 	}
 	if len(modules) == 0 {
 		proposal.warnings = append(proposal.warnings, fmt.Errorf(
 			"package %s left unmanaged: its descriptor declares no server-side module",
 			p.Path,
 		))
-		return proposal
+		return
 	}
 	if ecosystem == catalog.EcosystemMCDR {
-		a.probeMCDR(ctx, &proposal, modules[0].ID, ecosystem)
-		return proposal
+		a.probeMCDR(ctx, proposal, modules[0].ID, ecosystem)
+		return
 	}
-	a.probeMapped(ctx, &proposal, ecosystem)
-	return proposal
+	proposal.warnings = append(proposal.warnings, fmt.Errorf(
+		"package %s left unmanaged: no configured provider identifies its hash",
+		p.Path,
+	))
 }
 
 func (a *packageAdopter) probeMCDR(
@@ -295,31 +328,26 @@ func (a *packageAdopter) probeMCDR(
 
 // probeMapped identifies an installed package by content hash. Mappers are
 // tried in order: the first one that identifies the file records the package
-// under its provider. A release is accepted even when its compatibility labels
-// name another server, because the installed bytes are evidence that the
-// server holds it.
+// under its provider. The release names the ecosystem that serves it; the
+// installed bytes are evidence that the server holds the artifact, so a
+// release whose compatibility labels miss the target stays installable.
 func (a *packageAdopter) probeMapped(
 	ctx context.Context,
 	proposal *adoptionProposal,
-	ecosystem catalog.Ecosystem,
-) {
+) bool {
 	p := proposal.pkg
-	if !supportsHashedPackages(ecosystem) || len(a.mappers) == 0 {
-		proposal.warnings = append(proposal.warnings, fmt.Errorf(
-			"package %s left unmanaged: no provider identifies its hash",
-			p.Path,
-		))
-		return
+	if len(a.mappers) == 0 {
+		return false
 	}
 	digests, err := install.DigestFile(p.Path, nil)
 	if err != nil {
 		proposal.fatal = fmt.Errorf("digest package %s: %w", p.Path, err)
-		return
+		return false
 	}
 	info, err := os.Lstat(p.Path)
 	if err != nil {
 		proposal.fatal = fmt.Errorf("inspect package %s: %w", p.Path, err)
-		return
+		return false
 	}
 	for _, mapper := range a.mappers {
 		release, matched, err := mapper.release.ReleaseByHash(
@@ -340,13 +368,30 @@ func (a *packageAdopter) probeMapped(
 		if !matched || release.Ref.Name == "" {
 			continue
 		}
+		ecosystem, ok := a.releaseEcosystem(p, release)
+		if !ok {
+			proposal.warnings = append(proposal.warnings, fmt.Errorf(
+				"package %s matched %s but its release lists no loader this server runs",
+				p.Path,
+				mapper.provider,
+			))
+			return true
+		}
+		if clientOnly, known := a.clientOnlyFile(ctx, p.Path, ecosystem); known &&
+			clientOnly {
+			proposal.warnings = append(proposal.warnings, fmt.Errorf(
+				"package %s left unmanaged: its descriptor declares no server-side module",
+				p.Path,
+			))
+			return true
+		}
 		if release.Candidate.ProjectID == "" {
 			proposal.warnings = append(proposal.warnings, fmt.Errorf(
 				"package %s matched %s but its release has no project ID",
 				p.Path,
 				mapper.provider,
 			))
-			continue
+			return true
 		}
 		if release.Candidate.URL == "" {
 			// Resolution materializes the adopted release, so a release the
@@ -356,7 +401,7 @@ func (a *packageAdopter) probeMapped(
 				p.Path,
 				mapper.provider,
 			))
-			continue
+			return true
 		}
 		candidate := release.Candidate
 		if !release.Supports(
@@ -372,6 +417,7 @@ func (a *packageAdopter) probeMapped(
 			candidate.CompatibilityUnknown = true
 		}
 		provider := string(mapper.provider)
+		proposal.ecosystem = ecosystem
 		proposal.reference = provider + ":" + release.Ref.Name.String()
 		proposal.packageID = provider + ":" + candidate.ProjectID
 		proposal.key = packageKey(ecosystem, proposal.packageID)
@@ -379,12 +425,57 @@ func (a *packageAdopter) probeMapped(
 		proposal.mode = uint32(info.Mode().Perm())
 		proposal.candidate = candidate
 		proposal.matched = true
-		return
+		return true
 	}
-	proposal.warnings = append(proposal.warnings, fmt.Errorf(
-		"package %s left unmanaged: no configured provider identifies its hash",
-		p.Path,
-	))
+	return false
+}
+
+// clientOnlyFile reports whether the file carries a descriptor for ecosystem
+// but no module that descriptor keeps on a dedicated server. A file without a
+// readable top-level descriptor (a library or locator archive) answers false:
+// the hash identifies it, and resolution reads its nested modules.
+func (a *packageAdopter) clientOnlyFile(
+	ctx context.Context,
+	path string,
+	ecosystem catalog.Ecosystem,
+) (clientOnly, known bool) {
+	infos, err := artifact.ReadInfo(path)
+	if err != nil || len(infos) == 0 {
+		return false, false
+	}
+	modules, err := artifact.ReadModulesFor(
+		ctx,
+		path,
+		ecosystem,
+		string(a.manifest.Server.Minecraft),
+	)
+	if err != nil {
+		return false, false
+	}
+	return len(modules) == 0, true
+}
+
+// releaseEcosystem selects the served ecosystem a release belongs to. The
+// file's descriptor ecosystem wins when the server serves it; otherwise the
+// release's loader labels decide. A release with no recognized loader labels
+// belongs to any served ecosystem.
+func (a *packageAdopter) releaseEcosystem(
+	p workspace.DiscoveredPackage,
+	release upstream.Release,
+) (catalog.Ecosystem, bool) {
+	if _, served := a.served[p.ID.Ecosystem]; served &&
+		release.SupportsLoader(p.ID.Ecosystem) {
+		return p.ID.Ecosystem, true
+	}
+	for _, ecosystem := range slices.Sorted(maps.Keys(a.served)) {
+		if ecosystem == catalog.EcosystemMCDR {
+			continue
+		}
+		if release.SupportsLoader(ecosystem) {
+			return ecosystem, true
+		}
+	}
+	return catalog.EcosystemUnspecified, false
 }
 
 func (a *packageAdopter) apply(proposal adoptionProposal) {
@@ -482,18 +573,4 @@ func (a *packageAdopter) warn(format string, args ...any) {
 		return
 	}
 	a.observed.Warnings = append(a.observed.Warnings, fmt.Errorf(format, args...))
-}
-
-func supportsHashedPackages(ecosystem catalog.Ecosystem) bool {
-	switch ecosystem {
-	case catalog.EcosystemFabric,
-		catalog.EcosystemQuilt,
-		catalog.EcosystemForge,
-		catalog.EcosystemNeoForge,
-		catalog.EcosystemBukkit,
-		catalog.EcosystemPaper:
-		return true
-	default:
-		return false
-	}
 }

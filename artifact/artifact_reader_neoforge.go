@@ -2,14 +2,11 @@ package artifact
 
 import (
 	"archive/zip"
-	"bytes"
-	"encoding/json/v2"
+	"strconv"
+	"strings"
 
 	"github.com/mclucy/lucy/catalog"
-	"github.com/mclucy/lucy/input"
-	"github.com/mclucy/lucy/internal/fileschema"
 	"github.com/mclucy/lucy/internal/fsutil"
-	"github.com/mclucy/lucy/version"
 )
 
 const (
@@ -29,7 +26,7 @@ func (r *neoforgeReader) Read(
 	zipRdr *zip.Reader,
 	filePath string,
 ) ([]PackageInfo, error) {
-	decoded, err := decodeNeoForgeDescriptor(zipRdr, "", true, true)
+	decoded, err := decodeNeoForgeDescriptor(zipRdr, "", true, "")
 	if err != nil {
 		return nil, err
 	}
@@ -42,36 +39,44 @@ func (r *neoforgeReader) Read(
 func decodeNeoForgeDescriptor(
 	zipRdr *zip.Reader,
 	member string,
-	requireMarker bool,
 	packageView bool,
+	minecraft string,
 ) (*decodedDescriptor, error) {
-	descriptor, err := readNeoforgeDescriptor(zipRdr, requireMarker)
+	descriptor, err := readNeoforgeDescriptor(zipRdr, minecraft)
 	if err != nil {
 		return nil, err
 	}
-	jarjarMeta := readNeoforgeJarjarMeta(zipRdr)
+	jarjarMeta := readJarjarMetadata(zipRdr)
+	nested := jarjarNestedPaths(jarjarMeta)
+	attributes, err := readManifestAttributes(
+		zipRdr,
+		fsutil.MaxNestedZipEntryBytes,
+	)
+	if err != nil {
+		return nil, err
+	}
 	if descriptor == nil {
-		// A jar without its own descriptor may ship its mods only through
-		// JarJar containers, which FML loads from the outer archive.
-		if jarjarMeta == nil || len(jarjarMeta.Jars) == 0 {
+		if !forgeLoadsWithoutDescriptor(attributes["FMLModType"]) {
 			return nil, nil
 		}
-		return &decodedDescriptor{
-			Nested: neoforgeJarjarPaths(jarjarMeta),
-		}, nil
+		return &decodedDescriptor{Nested: nested}, nil
 	}
 
 	var origins map[string]catalog.DependencyOrigin
 	var embeddedDependencies []Dependency
 	if packageView {
-		embeddedModIDs := neoforgeJarjarEmbeddedModIDs(zipRdr, jarjarMeta)
+		embeddedModIDs := jarjarEmbeddedModIDs(
+			zipRdr,
+			jarjarMeta,
+			func(nested *zip.Reader) (*decodedModsToml, error) {
+				return readNeoforgeDescriptor(nested, minecraft)
+			},
+		)
 		origins = make(map[string]catalog.DependencyOrigin, len(embeddedModIDs))
 		for id := range embeddedModIDs {
 			origins[id] = catalog.DependencyEmbedded
 		}
-		embeddedDependencies, err = neoforgeJarjarEmbeddedDependencies(
-			jarjarMeta,
-		)
+		embeddedDependencies, err = jarjarEmbeddedDependencies(jarjarMeta)
 		if err != nil {
 			return nil, err
 		}
@@ -89,164 +94,59 @@ func decodeNeoForgeDescriptor(
 	if err != nil {
 		return nil, err
 	}
-	if jarjarMeta != nil {
-		decoded.Nested = neoforgeJarjarPaths(jarjarMeta)
-	}
+	decoded.Nested = nested
 	return decoded, nil
 }
 
-// neoforgeJarjarPaths lists the containers FML loads from the outer archive.
-func neoforgeJarjarPaths(meta *fileschema.FileNeoforgeJarjar) []string {
-	paths := make([]string, 0, len(meta.Jars))
-	for _, jar := range meta.Jars {
-		paths = append(paths, jar.Path)
-	}
-	return paths
-}
-
+// readNeoforgeDescriptor selects the descriptor path of this FML line. FML 3
+// (Minecraft 1.20.6) probes neoforge.mods.toml; earlier lines probe the shared
+// mods.toml. Without a server version, report whichever descriptor the jar
+// carries.
 func readNeoforgeDescriptor(
 	zipRdr *zip.Reader,
-	requireMarker bool,
+	minecraft string,
 ) (*decodedModsToml, error) {
-	descriptor, err := readModsToml(zipRdr, neoforgeModsTomlPath)
-	if err != nil || descriptor != nil {
-		return descriptor, err
-	}
-
-	descriptor, err = readModsToml(zipRdr, legacyNeoforgeModsTomlPath)
-	if err != nil || descriptor == nil {
-		return descriptor, err
-	}
-	if requireMarker && !isNeoforgeModIdentifier(descriptor.Identifier) {
-		return nil, nil
-	}
-	return descriptor, nil
-}
-
-func isNeoforgeModIdentifier(
-	modIdentifier fileschema.FileModLoaderIdentifier,
-) bool {
-	// Legacy NeoForge and Forge both use mods.toml, so loader identity comes
-	// from the dependency target: NeoForge docs use modId="neoforge".
-	// Docs: https://docs.neoforged.net/docs/1.20.4/gettingstarted/modfiles/
-	return hasLoaderDependency(modIdentifier, "neoforge")
-}
-
-func hasLoaderDependency(
-	modIdentifier fileschema.FileModLoaderIdentifier,
-	modID string,
-) bool {
-	for _, deps := range modIdentifier.Dependencies {
-		for _, dep := range deps {
-			if dep.ModID == modID {
-				return true
-			}
+	if minecraft == "" {
+		descriptor, err := readModsToml(zipRdr, neoforgeModsTomlPath)
+		if err != nil || descriptor != nil {
+			return descriptor, err
 		}
+		return readModsToml(zipRdr, legacyNeoforgeModsTomlPath)
 	}
-	return false
+	if neoforgeReadsNeoDescriptor(minecraft) {
+		return readModsToml(zipRdr, neoforgeModsTomlPath)
+	}
+	return readModsToml(zipRdr, legacyNeoforgeModsTomlPath)
 }
 
-func readNeoforgeJarjarMeta(
-	zipRdr *zip.Reader,
-) *fileschema.FileNeoforgeJarjar {
-	raw, err := readZipEntryBytes(zipRdr, "META-INF/jarjar/metadata.json")
-	if err != nil || raw == nil {
-		return nil
+// neoforgeReadsNeoDescriptor reports whether the FML line for minecraft
+// probes META-INF/neoforge.mods.toml. FML 3 starts with Minecraft 1.20.6.
+func neoforgeReadsNeoDescriptor(minecraft string) bool {
+	major, minor, patch, ok := minecraftVersion(minecraft)
+	if !ok {
+		return true
 	}
-
-	var meta fileschema.FileNeoforgeJarjar
-	if err := json.Unmarshal(raw, &meta); err != nil {
-		return nil
+	if major != 1 {
+		return major > 1
 	}
-	return &meta
+	if minor != 20 {
+		return minor > 20
+	}
+	return patch >= 6
 }
 
-func neoforgeJarjarEmbeddedModIDs(
-	zipRdr *zip.Reader,
-	meta *fileschema.FileNeoforgeJarjar,
-) map[string]bool {
-	if meta == nil {
-		return nil
+func minecraftVersion(raw string) (major, minor, patch int, ok bool) {
+	parts := strings.Split(raw, ".")
+	if len(parts) < 2 {
+		return 0, 0, 0, false
 	}
-
-	byName := make(map[string]*zip.File, len(zipRdr.File))
-	for _, file := range zipRdr.File {
-		byName[file.Name] = file
-	}
-
-	modIDs := make(map[string]bool)
-	for _, entry := range meta.Jars {
-		file, ok := byName[entry.Path]
-		if !ok {
-			continue
-		}
-
-		reader, err := file.Open()
+	numbers := make([]int, 3)
+	for i := 0; i < len(numbers) && i < len(parts); i++ {
+		value, err := strconv.Atoi(parts[i])
 		if err != nil {
-			continue
+			return 0, 0, 0, false
 		}
-		jarBytes, err := fsutil.CopyBytes(reader, fsutil.MaxZipEntryBytes)
-		_ = reader.Close()
-		if err != nil {
-			continue
-		}
-
-		nested, err := zip.NewReader(
-			bytes.NewReader(jarBytes),
-			int64(len(jarBytes)),
-		)
-		if err != nil {
-			continue
-		}
-
-		descriptor, err := readNeoforgeDescriptor(nested, true)
-		if err != nil || descriptor == nil {
-			continue
-		}
-		for _, mod := range descriptor.Identifier.Mods {
-			if mod.ModID != "" {
-				modIDs[mod.ModID] = true
-			}
-		}
+		numbers[i] = value
 	}
-
-	return modIDs
-}
-
-func neoforgeJarjarEmbeddedDependencies(
-	meta *fileschema.FileNeoforgeJarjar,
-) ([]Dependency, error) {
-	if meta == nil {
-		return nil, nil
-	}
-
-	dependencies := make([]Dependency, 0, len(meta.Jars))
-	for _, entry := range meta.Jars {
-		constraint, err := version.ParseConstraint(
-			entry.Version.Range,
-			version.DialectMaven,
-		)
-		if err != nil {
-			return nil, err
-		}
-		dependencies = append(
-			dependencies,
-			Dependency{
-				Ref: catalog.VersionedRef{
-					Ref: catalog.Ref{
-						Name: input.ToProjectName(
-							entry.Identifier.Group + ":" +
-								entry.Identifier.Artifact,
-						),
-						Provider: catalog.ProviderUnknown,
-					},
-					Ecosystem: catalog.EcosystemUnspecified,
-				},
-				Constraint: constraint,
-				Mandatory:  true,
-				Origin:     catalog.DependencyEmbedded,
-			},
-		)
-	}
-	return dependencies, nil
+	return numbers[0], numbers[1], numbers[2], true
 }

@@ -23,7 +23,7 @@ func (r *forgeReader) Read(
 	zipRdr *zip.Reader,
 	filePath string,
 ) ([]PackageInfo, error) {
-	decoded, err := decodeForgeDescriptor(zipRdr, "", true, true)
+	decoded, err := decodeForgeDescriptor(zipRdr, "", true)
 	if err != nil {
 		return nil, err
 	}
@@ -53,45 +53,110 @@ func readModsToml(
 	return &decodedModsToml{Identifier: identifier, Path: name}, nil
 }
 
-// decodeForgeDescriptor reads META-INF/mods.toml. excludeNeoForge keeps the
-// Forge reader from claiming a jar of the NeoForge line, whose shared
-// descriptor does not name Forge. A jar that names Forge keeps its Forge
-// identity even when it also carries neoforge.mods.toml.
+// decodeForgeDescriptor reads META-INF/mods.toml and every archive Forge adds
+// from it. Forge ignores neoforge.mods.toml, so a jar carrying both descriptors
+// stays a Forge mod. A library or language-provider jar may have no descriptor;
+// its JarJar children still carry modules. A jar with an
+// Embedded-Dependencies-Mod attribute contributes that archive, as Connector's
+// locator does.
 func decodeForgeDescriptor(
 	zipRdr *zip.Reader,
 	member string,
-	excludeNeoForge bool,
 	packageView bool,
 ) (*decodedDescriptor, error) {
 	descriptor, err := readModsToml(zipRdr, forgeModsTomlPath)
-	if err != nil || descriptor == nil {
+	if err != nil {
 		return nil, err
 	}
-	if excludeNeoForge &&
-		!hasLoaderDependency(descriptor.Identifier, "forge") {
-		// Without an explicit Forge dependency, the jar belongs to the
-		// NeoForge line when its shared descriptor names NeoForge or when it
-		// carries the NeoForge descriptor.
-		if isNeoforgeModIdentifier(descriptor.Identifier) {
+	jarjarMeta := readJarjarMetadata(zipRdr)
+	nested := jarjarNestedPaths(jarjarMeta)
+	attributes, err := readManifestAttributes(
+		zipRdr,
+		fsutil.MaxNestedZipEntryBytes,
+	)
+	if err != nil {
+		return nil, err
+	}
+	service := forgeServiceProvider(zipRdr)
+	if service {
+		// Connector's locator names its mod archive here; FML itself reads
+		// only JarJar metadata.
+		if embedded := attributes["Embedded-Dependencies-Mod"]; embedded != "" {
+			nested = append(nested, embedded)
+		}
+	}
+	if descriptor == nil {
+		if !forgeLoadsWithoutDescriptor(attributes["FMLModType"]) && !service {
 			return nil, nil
 		}
-		raw, err := readZipEntryBytes(zipRdr, neoforgeModsTomlPath)
+		if !service && len(nested) == 0 {
+			return nil, nil
+		}
+		return &decodedDescriptor{Nested: nested}, nil
+	}
+
+	var origins map[string]catalog.DependencyOrigin
+	var embeddedDependencies []Dependency
+	if packageView {
+		embeddedModIDs := jarjarEmbeddedModIDs(
+			zipRdr,
+			jarjarMeta,
+			func(nested *zip.Reader) (*decodedModsToml, error) {
+				return readModsToml(nested, forgeModsTomlPath)
+			},
+		)
+		origins = make(map[string]catalog.DependencyOrigin, len(embeddedModIDs))
+		for id := range embeddedModIDs {
+			origins[id] = catalog.DependencyEmbedded
+		}
+		embeddedDependencies, err = jarjarEmbeddedDependencies(jarjarMeta)
 		if err != nil {
 			return nil, err
 		}
-		if raw != nil {
-			return nil, nil
-		}
 	}
-	return forgeDecodedDescriptor(
+
+	decoded, err := forgeDecodedDescriptor(
 		zipRdr,
 		descriptor,
 		member,
 		catalog.EcosystemForge,
 		packageView,
-		nil,
-		nil,
+		origins,
+		embeddedDependencies,
 	)
+	if err != nil {
+		return nil, err
+	}
+	decoded.Nested = nested
+	return decoded, nil
+}
+
+// forgeLoadsWithoutDescriptor reports whether FML keeps a jar that has no
+// mods.toml. Every mod file type except MOD is accepted without one.
+func forgeLoadsWithoutDescriptor(modType string) bool {
+	switch modType {
+	case "LIBRARY", "GAMELIBRARY", "LANGPROVIDER":
+		return true
+	default:
+		return false
+	}
+}
+
+// forgeServiceProvider reports whether the jar supplies a ModLauncher or FML
+// service. FML loads such a jar into its service layer and excludes it from
+// the mods-folder scan, so the jar itself is not a mod. Connector uses this
+// path and points at its mod archive through Embedded-Dependencies-Mod.
+func forgeServiceProvider(zipRdr *zip.Reader) bool {
+	for _, file := range zipRdr.File {
+		switch file.Name {
+		case "META-INF/services/cpw.mods.modlauncher.api.ITransformationService",
+			"META-INF/services/net.minecraftforge.forgespi.locating.IModLocator",
+			"META-INF/services/net.minecraftforge.forgespi.locating.IDependencyLocator",
+			"META-INF/services/net.minecraftforge.fml.loading.ImmediateWindowProvider":
+			return true
+		}
+	}
+	return false
 }
 
 // forgeDecodedDescriptor converts one mods.toml descriptor into modules and

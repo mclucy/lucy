@@ -611,6 +611,7 @@ func removeClientOnlyMods(
 	ctx context.Context,
 	stage string,
 	product serverpkg.Product,
+	minecraft string,
 ) (int, error) {
 	modsDir := filepath.Join(stage, "mods")
 	entries, err := os.ReadDir(modsDir)
@@ -632,7 +633,12 @@ func removeClientOnlyMods(
 		if err != nil || len(info) == 0 {
 			continue
 		}
-		modules, err := artifact.ReadModules(ctx, path, ecosystem)
+		modules, err := artifact.ReadModulesFor(
+			ctx,
+			path,
+			ecosystem,
+			minecraft,
+		)
 		if err != nil || len(modules) > 0 {
 			continue
 		}

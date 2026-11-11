@@ -517,7 +517,12 @@ func Packages(request PackagesRequest) ([]document.Package, []error, error) {
 					return hardFail(err)
 				}
 				a.Hashes = materialized.Hashes
-				modules, err = artifact.ReadModules(ctx, materialized.Path, descriptorLoader)
+				modules, err = artifact.ReadModulesFor(
+					ctx,
+					materialized.Path,
+					descriptorLoader,
+					string(target.Minecraft),
+				)
 				if err != nil {
 					return hardFail(err)
 				}
