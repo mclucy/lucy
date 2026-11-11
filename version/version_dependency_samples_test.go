@@ -133,7 +133,7 @@ func TestForgeDependencyParsingFromSample(t *testing.T) {
 	}
 
 	var minecraftRange string
-	for _, dep := range mod.Dependencies.For("ae2") {
+	for _, dep := range mod.Dependencies["ae2"] {
 		if dep.ModID == "minecraft" {
 			minecraftRange = dep.VersionRange
 			break
@@ -187,7 +187,7 @@ func TestForgeDependencyParsingFromSample(t *testing.T) {
 	}
 
 	var yungsApiRange string
-	for _, dep := range yungs.Dependencies.For("yungsextras") {
+	for _, dep := range yungs.Dependencies["yungsextras"] {
 		if dep.ModID == "yungsapi" {
 			yungsApiRange = dep.VersionRange
 			break
