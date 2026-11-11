@@ -885,8 +885,8 @@ func clientOnlyDescriptor(
 }
 
 // catalogProjectSide asks a provider that publishes side labels for the
-// file's project. The descriptor title and project name select the project;
-// a title-derived name must agree with the project title, so a same-named but
+// file's project. The descriptor title and project name select the project; a
+// provider title must agree with the descriptor title, so a same-named but
 // different project cannot classify the file.
 func (s *Service) catalogProjectSide(
 	ctx context.Context,
@@ -910,12 +910,12 @@ func (s *Service) catalogProjectSide(
 			for _, candidate := range names {
 				project, found, err := resolver.ServerSideByName(
 					ctx,
-					candidate.Name,
+					candidate,
 				)
 				if err != nil {
 					s.logger.Debug(
 						"project side lookup failed",
-						"name", candidate.Name,
+						"name", candidate,
 						"provider", mapper.provider,
 						"error", err,
 					)
@@ -924,46 +924,29 @@ func (s *Service) catalogProjectSide(
 				if !found {
 					continue
 				}
-				trusted := !candidate.FromTitle ||
-					sameProjectTitle(info.Metadata.Title, project.Title)
-				if trusted {
-					return project, true
+				if info.Metadata.Title == "" ||
+					!sameProjectTitle(info.Metadata.Title, project.Title) {
+					break
 				}
-				break
+				return project, true
 			}
 		}
 	}
 	return upstream.ProjectServerSide{}, false
 }
 
-// projectNameCandidate is one name a provider may use for the project. A name
-// derived from the title must still match the project title; a module ID is
-// trusted because it is the project's own identifier.
-type projectNameCandidate struct {
-	Name      string
-	FromTitle bool
-}
-
 // projectNameCandidates lists the names a provider may use for the project:
 // the descriptor title as a slug, then the module name.
-func projectNameCandidates(info artifact.PackageInfo) []projectNameCandidate {
-	var candidates []projectNameCandidate
-	add := func(name string, fromTitle bool) {
-		if name == "" {
+func projectNameCandidates(info artifact.PackageInfo) []string {
+	var candidates []string
+	add := func(name string) {
+		if name == "" || slices.Contains(candidates, name) {
 			return
 		}
-		for _, candidate := range candidates {
-			if candidate.Name == name {
-				return
-			}
-		}
-		candidates = append(candidates, projectNameCandidate{
-			Name:      name,
-			FromTitle: fromTitle,
-		})
+		candidates = append(candidates, name)
 	}
-	add(slugify(info.Metadata.Title), true)
-	add(string(info.Ref.Name), false)
+	add(slugify(info.Metadata.Title))
+	add(string(info.Ref.Name))
 	return candidates
 }
 
