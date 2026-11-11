@@ -1,7 +1,10 @@
 package modrinth
 
 import (
+	"slices"
 	"strings"
+
+	"github.com/mclucy/lucy/catalog"
 )
 
 type searchOptions struct {
@@ -165,19 +168,12 @@ var facetFabricOnly = facetItems{
 	},
 }
 
-// facetQuiltSupported selects projects a Quilt server loads: Quilt Loader runs
-// Fabric mods, so both loader categories qualify. Fabric search remains
-// fabric-only because Fabric does not load Quilt mods.
-var facetQuiltSupported = facetItems{
+// facetQuiltOnly selects projects published under the Quilt loader category.
+var facetQuiltOnly = facetItems{
 	{
 		Type:      "categories",
 		Operation: operationEq,
 		Match:     "quilt",
-	},
-	{
-		Type:      "categories",
-		Operation: operationEq,
-		Match:     "fabric",
 	},
 }
 
@@ -195,6 +191,35 @@ var facetBukkitOnly = facetItems{
 		Operation: operationEq,
 		Match:     "bukkit",
 	},
+}
+
+// loaderFacetsByEcosystem maps an ecosystem to the loader category that
+// identifies its packages. An ecosystem absent from the table searches every
+// loader.
+var loaderFacetsByEcosystem = map[catalog.Ecosystem]facetItems{
+	catalog.EcosystemForge:    facetForgeOnly,
+	catalog.EcosystemFabric:   facetFabricOnly,
+	catalog.EcosystemQuilt:    facetQuiltOnly,
+	catalog.EcosystemNeoForge: facetNeoforgeOnly,
+	catalog.EcosystemBukkit:   facetBukkitOnly,
+}
+
+// loaderFacets returns the loader categories a runtime of ecosystem loads, in
+// descriptor precedence order. A runtime that loads more than one ecosystem
+// (Quilt loads Fabric) matches their union.
+func loaderFacets(ecosystem catalog.Ecosystem) facetItems {
+	facets, ok := loaderFacetsByEcosystem[ecosystem]
+	if !ok {
+		return facetAllLoaders
+	}
+	facets = slices.Clone(facets)
+	for _, loaded := range ecosystem.Loads() {
+		if loaded == ecosystem {
+			continue
+		}
+		facets = append(facets, loaderFacetsByEcosystem[loaded]...)
+	}
+	return facets
 }
 
 var facetServerSupported = facetItems{
