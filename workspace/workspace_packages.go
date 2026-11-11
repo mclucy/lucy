@@ -45,6 +45,10 @@ func discoverPackages(
 		for _, jarPath := range jarFiles {
 			wg.Go(func() {
 				analyzed, err := artifact.ReadInfo(jarPath)
+				analyzed = artifact.PreferredPackageInfos(
+					analyzed,
+					catalog.EcosystemUnspecified,
+				)
 
 				if err != nil || len(analyzed) == 0 {
 					// An unreadable descriptor leaves the package
@@ -73,6 +77,10 @@ func discoverPackages(
 		}
 		for _, pluginFile := range pluginFiles {
 			analyzed, err := artifact.ReadInfo(pluginFile)
+			analyzed = artifact.PreferredPackageInfos(
+				analyzed,
+				catalog.EcosystemUnspecified,
+			)
 			if err == nil && len(analyzed) > 0 {
 				pkgs := artifactInfoToDiscoveredPackage(analyzed)
 				idx.Merge(pkgs)

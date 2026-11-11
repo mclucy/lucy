@@ -83,10 +83,11 @@ func selectArtifact(project gradleProject, ecosystem catalog.Ecosystem) (string,
 		if !info.Mode().IsRegular() {
 			continue
 		}
-		packages, err := artifact.ReadInfoForLoader(output.File, ecosystem)
+		packages, err := artifact.ReadInfo(output.File)
 		if err != nil {
 			return "", fmt.Errorf("verify built archive %q: %w", output.File, err)
 		}
+		packages = artifact.PreferredPackageInfos(packages, ecosystem)
 		matches := slices.ContainsFunc(packages, func(info artifact.PackageInfo) bool {
 			return supportedEcosystem(info.Ref.Ecosystem) && (ecosystem == "" || info.Ref.Ecosystem == ecosystem)
 		})
