@@ -271,7 +271,7 @@ func forgeDependencies(
 	packageView bool,
 	origins map[string]catalog.DependencyOrigin,
 ) ([]catalog.DescriptorDependency, []Dependency, error) {
-	deps := identifier.Dependencies.For(modID)
+	deps := identifier.Dependencies[modID]
 	moduleDependencies := make([]catalog.DescriptorDependency, 0, len(deps))
 	packageDependencies := make([]Dependency, 0, len(deps))
 	for _, dep := range deps {
