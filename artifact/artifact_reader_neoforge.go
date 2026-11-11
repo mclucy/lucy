@@ -46,11 +46,21 @@ func decodeNeoForgeDescriptor(
 	packageView bool,
 ) (*decodedDescriptor, error) {
 	descriptor, err := readNeoforgeDescriptor(zipRdr, requireMarker)
-	if err != nil || descriptor == nil {
+	if err != nil {
 		return nil, err
 	}
-
 	jarjarMeta := readNeoforgeJarjarMeta(zipRdr)
+	if descriptor == nil {
+		// A jar without its own descriptor may ship its mods only through
+		// JarJar containers, which FML loads from the outer archive.
+		if jarjarMeta == nil || len(jarjarMeta.Jars) == 0 {
+			return nil, nil
+		}
+		return &decodedDescriptor{
+			Nested: neoforgeJarjarPaths(jarjarMeta),
+		}, nil
+	}
+
 	var origins map[string]catalog.DependencyOrigin
 	var embeddedDependencies []Dependency
 	if packageView {
@@ -80,12 +90,18 @@ func decodeNeoForgeDescriptor(
 		return nil, err
 	}
 	if jarjarMeta != nil {
-		decoded.Nested = make([]string, 0, len(jarjarMeta.Jars))
-		for _, jar := range jarjarMeta.Jars {
-			decoded.Nested = append(decoded.Nested, jar.Path)
-		}
+		decoded.Nested = neoforgeJarjarPaths(jarjarMeta)
 	}
 	return decoded, nil
+}
+
+// neoforgeJarjarPaths lists the containers FML loads from the outer archive.
+func neoforgeJarjarPaths(meta *fileschema.FileNeoforgeJarjar) []string {
+	paths := make([]string, 0, len(meta.Jars))
+	for _, jar := range meta.Jars {
+		paths = append(paths, jar.Path)
+	}
+	return paths
 }
 
 func readNeoforgeDescriptor(
