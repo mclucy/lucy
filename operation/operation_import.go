@@ -14,6 +14,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/mclucy/lucy/artifact"
@@ -634,63 +635,33 @@ func (s *Service) removeClientOnlyMods(
 		)
 	}
 
-	var files []importModFile
+	var paths []string
 	for _, entry := range entries {
 		if entry.IsDir() ||
 			!strings.EqualFold(filepath.Ext(entry.Name()), ".jar") {
 			continue
 		}
-		path := filepath.Join(modsDir, entry.Name())
-		modules, _ := artifact.ReadModulesFor(
-			ctx,
-			path,
-			ecosystem,
-			minecraft,
-		)
-		file := importModFile{
-			path:    path,
-			modules: modules,
-			kept:    true,
-		}
-		switch sides, known := s.identifiedServerSide(
-			ctx,
-			path,
-			mappers,
-		); {
-		case known && sides != nil:
-			switch {
-			case sides.Server == upstream.ServerSideUnsupported:
-				file.reason = "project does not support a dedicated server"
-				file.removable, file.kept = true, false
-			case sides.ClientOnly():
-				file.reason = "project declares client-only support"
-				file.kept = false
-			}
-		default:
-			if reason, clientOnly := clientOnlyDescriptor(
+		paths = append(paths, filepath.Join(modsDir, entry.Name()))
+	}
+	files := make([]importModFile, len(paths))
+	limit := make(chan struct{}, packageProbeLimit)
+	var wg sync.WaitGroup
+	for i, path := range paths {
+		wg.Go(func() {
+			limit <- struct{}{}
+			defer func() { <-limit }()
+			files[i] = s.classifyImportMod(
 				ctx,
 				path,
 				ecosystem,
 				minecraft,
-			); clientOnly {
-				file.reason = reason
-				file.removable, file.kept = true, false
-			} else if project, found := s.catalogProjectSide(
-				ctx,
-				path,
 				mappers,
-			); found {
-				switch {
-				case project.ServerSide == upstream.ServerSideUnsupported:
-					file.reason = "project does not support a dedicated server"
-					file.removable, file.kept = true, false
-				case project.IsClientOnly():
-					file.reason = "project declares client-only support"
-					file.kept = false
-				}
-			}
-		}
-		files = append(files, file)
+			)
+		})
+	}
+	wg.Wait()
+	if err := ctx.Err(); err != nil {
+		return nil, err
 	}
 
 	// Keep candidates a server package depends on. A promoted candidate can
@@ -740,6 +711,68 @@ func (s *Service) removeClientOnlyMods(
 		removed = append(removed, filepath.ToSlash(relative))
 	}
 	return removed, nil
+}
+
+// classifyImportMod reads one archive and decides whether a dedicated server
+// can use it. Classification runs concurrently across files, so the helper
+// reads no shared mutable state.
+func (s *Service) classifyImportMod(
+	ctx context.Context,
+	path string,
+	ecosystem catalog.Ecosystem,
+	minecraft string,
+	mappers []packageMapper,
+) importModFile {
+	modules, _ := artifact.ReadModulesFor(
+		ctx,
+		path,
+		ecosystem,
+		minecraft,
+	)
+	file := importModFile{
+		path:    path,
+		modules: modules,
+		kept:    true,
+	}
+	switch sides, known := s.identifiedServerSide(
+		ctx,
+		path,
+		mappers,
+	); {
+	case known && sides != nil:
+		switch {
+		case sides.Server == upstream.ServerSideUnsupported:
+			file.reason = "project does not support a dedicated server"
+			file.removable, file.kept = true, false
+		case sides.ClientOnly():
+			file.reason = "project declares client-only support"
+			file.kept = false
+		}
+	default:
+		if reason, clientOnly := clientOnlyDescriptor(
+			ctx,
+			path,
+			ecosystem,
+			minecraft,
+		); clientOnly {
+			file.reason = reason
+			file.removable, file.kept = true, false
+		} else if project, found := s.catalogProjectSide(
+			ctx,
+			path,
+			mappers,
+		); found {
+			switch {
+			case project.ServerSide == upstream.ServerSideUnsupported:
+				file.reason = "project does not support a dedicated server"
+				file.removable, file.kept = true, false
+			case project.IsClientOnly():
+				file.reason = "project declares client-only support"
+				file.kept = false
+			}
+		}
+	}
+	return file
 }
 
 // importModFile is one imported mod archive and its classification.

@@ -166,9 +166,10 @@ var packageMapperProviders = []catalog.Provider{
 	catalog.ProviderCurseForge,
 }
 
-// packageProbeLimit bounds concurrent provider lookups. Every probe asks each
-// mapper for a release, so an unbounded fan-out over a large modpack would
-// rate-limit the requests and leave identifiable packages unmanaged.
+// packageProbeLimit bounds concurrent provider lookups during initialization
+// and import. Every probe asks each mapper for a release, so an unbounded
+// fan-out over a large modpack would rate-limit the requests and leave
+// identifiable packages unmanaged.
 const packageProbeLimit = 8
 
 // packageMappers returns the configured release mappers in trial order. A
