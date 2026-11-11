@@ -1087,6 +1087,20 @@ func TestSupersedeProvidedDependency(t *testing.T) {
 		}
 	})
 
+	t.Run("merged exact release demand is kept", func(t *testing.T) {
+		state := newSelectionState()
+		state.install(fabricKey, fabricAPI, nil, false)
+		merged := state.extend(fabricKey, fabricAPI, true)
+		state.install(qfapiKey, qfapi, nil, false)
+		if branches := state.supersede(target, qfapiKey); len(branches) != 0 {
+			t.Fatalf("merged exact release demand superseded")
+		}
+		state.restore(merged)
+		if branches := state.supersede(target, qfapiKey); len(branches) == 0 {
+			t.Fatalf("unpinned dependency kept after the merge was abandoned")
+		}
+	})
+
 	t.Run("abandoned pin does not survive its branch", func(t *testing.T) {
 		state := newSelectionState()
 		pinned := state.install(fabricKey, fabricAPI, nil, true)

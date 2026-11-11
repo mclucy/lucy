@@ -67,7 +67,7 @@ func (s *selectionState) supersede(
 	}
 	return append(
 		branches,
-		s.extend(key, withDependents(provider, dependents)),
+		s.extend(key, withDependents(provider, dependents), false),
 	)
 }
 
