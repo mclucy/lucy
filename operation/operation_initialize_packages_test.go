@@ -285,9 +285,10 @@ func TestInitializeLeavesPackageUnmanagedWithoutMapper(t *testing.T) {
 	readFileBytes(t, filepath.Join(root, "mods", "example.jar"))
 }
 
-// A lookup error is not a miss: the file stays unmanaged, and the warning
-// names the package, the provider, and the failure.
-func TestInitializeWarnsWhenHashLookupFails(t *testing.T) {
+// A failed lookup is not a user-facing warning by itself. Without a provider
+// that identifies the file, the file stays unmanaged and the report names it
+// once.
+func TestInitializeLeavesPackageUnmanagedWhenHashLookupFails(t *testing.T) {
 	_, result := initializePackageMapperResult(t, packageMapperTestSource{
 		mappers: map[catalog.Provider]fakePackageMapper{
 			catalog.ProviderModrinth: {
@@ -298,19 +299,19 @@ func TestInitializeWarnsWhenHashLookupFails(t *testing.T) {
 			},
 		},
 	})
-	message := ""
+	unmanaged := false
 	for _, warning := range result.Warnings {
-		if strings.Contains(warning.Error(), "modrinth unavailable") {
-			message = warning.Error()
+		message := warning.Error()
+		if strings.Contains(message, "modrinth unavailable") {
+			t.Errorf("warning %q reports a provider lookup failure", message)
+		}
+		if strings.Contains(message, "example.jar") &&
+			strings.Contains(message, "left unmanaged") {
+			unmanaged = true
 		}
 	}
-	if message == "" {
-		t.Fatalf("warnings = %v, want one naming the lookup failure", result.Warnings)
-	}
-	for _, want := range []string{"example.jar", "modrinth", "modrinth unavailable"} {
-		if !strings.Contains(message, want) {
-			t.Errorf("warning %q does not name %q", message, want)
-		}
+	if !unmanaged {
+		t.Fatalf("warnings = %v, want the unmanaged package warning", result.Warnings)
 	}
 	if got := len(result.Document.Server.Packages[catalog.EcosystemFabric]); got != 0 {
 		t.Fatalf("manifest packages = %d, want none", got)

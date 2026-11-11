@@ -327,14 +327,14 @@ func (a *packageAdopter) probeMapped(
 			artifact.File{Path: p.Path},
 		)
 		if err != nil {
-			// A lookup error is an incomplete lookup, not an artifact miss, so
-			// the file's identification may be wrong or missing entirely.
-			proposal.warnings = append(proposal.warnings, fmt.Errorf(
-				"package %s: %s hash lookup failed; identification may be incomplete: %w",
-				p.Path,
-				mapper.provider,
-				err,
-			))
+			// Another provider may still identify the file. Report the file
+			// only when every provider failed to identify it.
+			a.service.logger.Debug(
+				"artifact hash lookup failed",
+				"path", p.Path,
+				"provider", mapper.provider,
+				"error", err,
+			)
 			continue
 		}
 		if !matched || release.Ref.Name == "" {
