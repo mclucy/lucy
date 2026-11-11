@@ -20,6 +20,7 @@ import (
 	"errors"
 	"path/filepath"
 
+	"github.com/mclucy/lucy/catalog"
 	"github.com/mclucy/lucy/document"
 	versionpkg "github.com/mclucy/lucy/version"
 	"github.com/mclucy/lucy/workspace/discovery"
@@ -140,9 +141,14 @@ func (ws *Workspace) observePackages() {
 	if ws == nil {
 		return
 	}
+	runtime := catalog.EcosystemUnspecified
+	if selection := ws.Runtime(); selection != nil {
+		runtime = selection.Ecosystem()
+	}
 	packages, unidentified, warnings := discoverPackages(
 		ws.PackageDirs(),
 		mcdrPluginDirs(ws.Wrappers),
+		runtime,
 	)
 	ws.Packages, ws.UnidentifiedPackageFiles = packages, unidentified
 	ws.Warnings = append(ws.Warnings, warnings...)
