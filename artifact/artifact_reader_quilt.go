@@ -9,14 +9,11 @@ import (
 	"strings"
 
 	"github.com/mclucy/lucy/catalog"
-	"github.com/mclucy/lucy/input"
 	"github.com/mclucy/lucy/internal/fileschema"
 	"github.com/mclucy/lucy/version"
 )
 
-// quiltReader reads schema_version 1 quilt.mod.json descriptors. A Quilt mod
-// may also carry fabric.mod.json for Fabric compatibility, and the Quilt
-// descriptor wins when both are present.
+// quiltReader reads schema_version 1 quilt.mod.json descriptors.
 type quiltReader struct{}
 
 var _ Reader = (*quiltReader)(nil)
@@ -27,6 +24,53 @@ func (r *quiltReader) Read(
 	zipRdr *zip.Reader,
 	filePath string,
 ) ([]PackageInfo, error) {
+	decoded, err := decodeQuiltDescriptor(zipRdr, "", true)
+	if err != nil {
+		return nil, err
+	}
+	return packageInfosFromDecoded(filePath, decoded)
+}
+
+// decodeQuiltDescriptor reads quilt.mod.json and returns nil when the archive
+// does not carry it. packageView adds the metadata ReadInfo reports.
+func decodeQuiltDescriptor(
+	zipRdr *zip.Reader,
+	member string,
+	packageView bool,
+) (*decodedDescriptor, error) {
+	descriptor, err := readQuiltDescriptor(zipRdr)
+	if err != nil || descriptor == nil {
+		return nil, err
+	}
+	loader := &descriptor.Loader
+	module, err := quiltModule(descriptor, member)
+	if err != nil {
+		return nil, err
+	}
+	decoded := decodedModule{Module: *module}
+	if packageView {
+		embeddedNames, err := quiltEmbeddedNames(zipRdr, loader)
+		if err != nil {
+			return nil, err
+		}
+		decoded.Metadata = quiltArtifactMetadata(loader.Metadata)
+		decoded.Origins = quiltDependencyOrigins(
+			module.Dependencies,
+			embeddedNames,
+		)
+		decoded.PackageNames = quiltDependencyPackageNames(
+			module.Dependencies,
+		)
+		decoded.PackageEcosystem = catalog.EcosystemQuilt
+	}
+	return &decodedDescriptor{
+		Modules:    []decodedModule{decoded},
+		Nested:     loader.Jars,
+		SkipNested: module.Side == catalog.SideClient,
+	}, nil
+}
+
+func readQuiltDescriptor(zipRdr *zip.Reader) (*quiltModFile, error) {
 	raw, err := readZipEntryBytes(zipRdr, quiltModPath)
 	if err != nil || raw == nil {
 		return nil, err
@@ -38,26 +82,70 @@ func (r *quiltReader) Read(
 	if err := validateQuiltDescriptor(descriptor); err != nil {
 		return nil, err
 	}
-	info, err := translateQuiltArtifact(zipRdr, descriptor, filePath)
+	return descriptor, nil
+}
+
+// quiltModule converts one quilt_loader descriptor into the module the
+// resolver indexes.
+func quiltModule(
+	descriptor *quiltModFile,
+	member string,
+) (*catalog.DescriptorModule, error) {
+	loader := &descriptor.Loader
+	side := catalog.ParseSide(quiltEnvironment(descriptor.Minecraft.Environment))
+
+	provides := make([]string, 0, len(loader.Provides))
+	var providedVersions map[string]version.Version
+	for _, provided := range loader.Provides {
+		if provided.ID == "" {
+			continue
+		}
+		provides = append(provides, provided.ID)
+		if provided.Version != "" {
+			if providedVersions == nil {
+				providedVersions = map[string]version.Version{}
+			}
+			providedVersions[provided.ID] = provided.Version
+		}
+	}
+
+	dependencies, err := quiltDescriptorDependencies(loader)
 	if err != nil {
 		return nil, err
 	}
-	return []PackageInfo{info}, nil
+
+	return &catalog.DescriptorModule{
+		ID:               loader.ID,
+		Version:          version.Version(loader.Version),
+		Ecosystem:        catalog.EcosystemQuilt,
+		VersionDialect:   version.DialectQuilt,
+		NestedPath:       member,
+		DescriptorPath:   quiltModPath,
+		Group:            loader.Group,
+		Provides:         provides,
+		ProvidedVersions: providedVersions,
+		Side:             side,
+		Dependencies:     dependencies,
+	}, nil
 }
 
-func translateQuiltArtifact(
-	zipRdr *zip.Reader,
-	modInfo *quiltModFile,
-	filePath string,
-) (PackageInfo, error) {
-	loader := &modInfo.Loader
-	embeddedNames, err := quiltArtifactEmbeddedNames(zipRdr, loader)
-	if err != nil {
-		return PackageInfo{}, err
+func quiltEnvironment(raw string) string {
+	switch strings.ToLower(strings.TrimSpace(raw)) {
+	case "dedicated_server", "server":
+		return "server"
+	default:
+		return raw
 	}
+}
 
+// quiltDescriptorDependencies translates depends and breaks. A nested array in
+// depends offers any-of alternatives, and a nested array in breaks applies
+// every entry.
+func quiltDescriptorDependencies(
+	loader *quiltLoader,
+) ([]catalog.DescriptorDependency, error) {
 	dependencies := make(
-		[]Dependency,
+		[]catalog.DescriptorDependency,
 		0,
 		len(loader.Depends)+len(loader.Breaks),
 	)
@@ -67,26 +155,22 @@ func translateQuiltArtifact(
 			continue
 		}
 		// A depends array is any-of. Each alternative keeps its own optional
-		// flag, matching the descriptor module representation.
-		converted := make([]Dependency, 0, len(alternatives))
+		// flag: an absent optional alternative satisfies the group, while an
+		// absent required alternative does not.
+		converted := make([]catalog.DescriptorDependency, 0, len(alternatives))
 		for _, alternative := range alternatives {
 			kind := catalog.DependencyKindRequired
 			if alternative.Optional {
 				kind = catalog.DependencyKindOptional
 			}
-			dependency, err := quiltArtifactDependency(
-				alternative,
-				kind,
-				embeddedNames,
-				false,
-			)
+			dependency, err := quiltDescriptorDependency(alternative, kind)
 			if err != nil {
-				return PackageInfo{}, err
+				return nil, err
 			}
 			converted = append(converted, dependency)
 		}
 		primary := converted[0]
-		primary.AnyOf = converted[1:]
+		primary.AnyOf = append(primary.AnyOf, converted[1:]...)
 		dependencies = append(dependencies, primary)
 	}
 	for _, entry := range loader.Breaks {
@@ -94,130 +178,89 @@ func translateQuiltArtifact(
 		if len(alternatives) == 0 {
 			continue
 		}
-		converted, err := quiltArtifactAlternatives(
-			alternatives,
-			catalog.DependencyKindIncompatible,
-			embeddedNames,
-			true,
-		)
-		if err != nil {
-			return PackageInfo{}, err
+		converted := make([]catalog.DescriptorDependency, 0, len(alternatives))
+		for _, alternative := range alternatives {
+			dependency, err := quiltDescriptorDependency(
+				alternative,
+				catalog.DependencyKindIncompatible,
+			)
+			if err != nil {
+				return nil, err
+			}
+			converted = append(converted, dependency)
 		}
 		primary := converted[0]
-		primary.AllOf = converted[1:]
+		primary.AllOf = append(primary.AllOf, converted[1:]...)
 		dependencies = append(dependencies, primary)
 	}
-
-	return PackageInfo{
-		Ref: catalog.VersionedRef{
-			Ref: catalog.Ref{
-				Name:     input.ToProjectName(loader.ID),
-				Provider: catalog.ProviderUnknown,
-			},
-			Ecosystem: catalog.EcosystemQuilt,
-			Version:   version.Version(loader.Version),
-		},
-		FilePath:     filePath,
-		Dependencies: dependencies,
-		Metadata:     quiltArtifactMetadata(loader.Metadata),
-	}, nil
+	return dependencies, nil
 }
 
-func quiltArtifactAlternatives(
-	alternatives []quiltDependencyEntry,
-	kind catalog.DependencyKind,
-	embeddedNames map[string]struct{},
-	negate bool,
-) ([]Dependency, error) {
-	converted := make([]Dependency, 0, len(alternatives))
-	for _, alternative := range alternatives {
-		dependency, err := quiltArtifactDependency(
-			alternative,
-			kind,
-			embeddedNames,
-			negate,
-		)
-		if err != nil {
-			return nil, err
-		}
-		converted = append(converted, dependency)
-	}
-	return converted, nil
-}
-
-func quiltArtifactDependency(
+func quiltDescriptorDependency(
 	entry quiltDependencyEntry,
 	kind catalog.DependencyKind,
-	embeddedNames map[string]struct{},
-	negate bool,
-) (Dependency, error) {
-	constraint, err := parseQuiltVersions(entry.Versions)
+) (catalog.DescriptorDependency, error) {
+	dependency, err := quiltVersionNode(entry.Versions, entry.ID, kind)
 	if err != nil {
-		return Dependency{}, err
+		return catalog.DescriptorDependency{}, err
 	}
-	if negate {
-		constraint = constraint.Negate()
-	}
-
-	name := quiltDependencyName(entry.ID)
-	origin := dependencyOriginForEmbedded(
-		quiltEmbeddedName(embeddedNames, entry.ID),
-	)
-	switch quiltDependencyServerID(name) {
-	case true:
-		origin = catalog.DependencyServerProvided
-	}
-
-	dependency := Dependency{
-		Ref: catalog.VersionedRef{
-			Ref: catalog.Ref{
-				Name:     input.ToProjectName(name),
-				Provider: catalog.ProviderUnknown,
-			},
-			Ecosystem: catalog.EcosystemQuilt,
-		},
-		Constraint: constraint,
-		Kind:       kind,
-		Mandatory:  kind == catalog.DependencyKindRequired,
-		Origin:     origin,
-	}
-	dependency.Unless, err = quiltArtifactConditions(entry.Unless)
+	dependency.Unless, err = quiltDescriptorConditions(entry.Unless)
 	if err != nil {
-		return Dependency{}, err
+		return catalog.DescriptorDependency{}, err
 	}
 	return dependency, nil
 }
 
-func quiltArtifactConditions(
+func quiltDescriptorConditions(
 	entry *quiltDependencyEntry,
-) ([]Dependency, error) {
+) ([]catalog.DescriptorDependency, error) {
 	if entry == nil {
 		return nil, nil
 	}
-	var conditions []Dependency
+	var conditions []catalog.DescriptorDependency
 	for _, alternative := range entry.serverAlternatives() {
-		constraint, err := parseQuiltVersions(alternative.Versions)
+		condition, err := quiltVersionNode(
+			alternative.Versions,
+			alternative.ID,
+			catalog.DependencyKindRequired,
+		)
 		if err != nil {
 			return nil, err
 		}
-		condition := Dependency{
-			Ref: catalog.VersionedRef{
-				Ref: catalog.Ref{
-					Name:     input.ToProjectName(quiltDependencyName(alternative.ID)),
-					Provider: catalog.ProviderUnknown,
-				},
-				Ecosystem: catalog.EcosystemQuilt,
-			},
-			Constraint: constraint,
-			Kind:       catalog.DependencyKindRequired,
-		}
-		condition.Unless, err = quiltArtifactConditions(alternative.Unless)
+		condition.Unless, err = quiltDescriptorConditions(alternative.Unless)
 		if err != nil {
 			return nil, err
 		}
 		conditions = append(conditions, condition)
 	}
 	return conditions, nil
+}
+
+func quiltDependencyOrigins(
+	dependencies []catalog.DescriptorDependency,
+	embeddedNames map[string]struct{},
+) map[string]catalog.DependencyOrigin {
+	origins := make(map[string]catalog.DependencyOrigin, len(dependencies))
+	for _, dependency := range dependencies {
+		if quiltDependencyServerID(quiltDependencyName(dependency.ID)) {
+			origins[dependency.ID] = catalog.DependencyServerProvided
+			continue
+		}
+		if quiltEmbeddedName(embeddedNames, dependency.ID) {
+			origins[dependency.ID] = catalog.DependencyEmbedded
+		}
+	}
+	return origins
+}
+
+func quiltDependencyPackageNames(
+	dependencies []catalog.DescriptorDependency,
+) map[string]string {
+	names := make(map[string]string, len(dependencies))
+	for _, dependency := range dependencies {
+		names[dependency.ID] = quiltDependencyName(dependency.ID)
+	}
+	return names
 }
 
 // quiltDependencyName returns the project identity a dependency names. Quilt
@@ -304,10 +347,10 @@ func quiltArtifactURLs(contact map[string]string) []catalog.URL {
 	return urls
 }
 
-// quiltArtifactEmbeddedNames lists the identities the jars field bundles.
-// Nested jars carry their own descriptor, and a jar without one falls back to
-// the filename convention used by Fabric wrappers.
-func quiltArtifactEmbeddedNames(
+// quiltEmbeddedNames lists the identities the jars field bundles. Nested jars
+// carry their own descriptor, and a jar without one falls back to the filename
+// convention used by Fabric wrappers.
+func quiltEmbeddedNames(
 	zipRdr *zip.Reader,
 	loader *quiltLoader,
 ) (map[string]struct{}, error) {
@@ -361,18 +404,11 @@ func quiltRecordNestedNames(
 	nested *zip.Reader,
 	names map[string]struct{},
 ) (bool, error) {
-	raw, err := readZipEntryBytes(nested, quiltModPath)
+	descriptor, err := readQuiltDescriptor(nested)
 	if err != nil {
 		return false, err
 	}
-	if raw != nil {
-		descriptor := &quiltModFile{}
-		if err := json.Unmarshal(raw, descriptor); err != nil {
-			return false, err
-		}
-		if err := validateQuiltDescriptor(descriptor); err != nil {
-			return false, err
-		}
+	if descriptor != nil {
 		quiltRecordNames(names, descriptor.Loader.ID)
 		for _, provided := range descriptor.Loader.Provides {
 			quiltRecordNames(names, provided.ID)
@@ -380,7 +416,7 @@ func quiltRecordNestedNames(
 		return true, nil
 	}
 
-	raw, err = readZipEntryBytes(nested, "fabric.mod.json")
+	raw, err := readZipEntryBytes(nested, "fabric.mod.json")
 	if err != nil {
 		return false, err
 	}
@@ -404,169 +440,4 @@ func quiltRecordNames(names map[string]struct{}, id string) {
 	}
 	names[id] = struct{}{}
 	names[quiltDependencyName(id)] = struct{}{}
-}
-
-// quiltArchiveModule converts one quilt_loader descriptor into the module the
-// resolver indexes. It returns nil for a client-only descriptor.
-func quiltArchiveModule(
-	descriptor *quiltModFile,
-	member string,
-) (*catalog.DescriptorModule, error) {
-	loader := &descriptor.Loader
-	side := catalog.ParseSide(quiltEnvironment(descriptor.Minecraft.Environment))
-
-	provides := make([]string, 0, len(loader.Provides))
-	var providedVersions map[string]version.Version
-	for _, provided := range loader.Provides {
-		if provided.ID == "" {
-			continue
-		}
-		provides = append(provides, provided.ID)
-		if provided.Version != "" {
-			if providedVersions == nil {
-				providedVersions = map[string]version.Version{}
-			}
-			providedVersions[provided.ID] = provided.Version
-		}
-	}
-
-	dependencies, err := quiltDescriptorDependencies(loader)
-	if err != nil {
-		return nil, err
-	}
-
-	return &catalog.DescriptorModule{
-		ID:               loader.ID,
-		Version:          version.Version(loader.Version),
-		Ecosystem:        catalog.EcosystemQuilt,
-		VersionDialect:   version.DialectFabric,
-		NestedPath:       member,
-		DescriptorPath:   quiltModPath,
-		Group:            loader.Group,
-		Provides:         provides,
-		ProvidedVersions: providedVersions,
-		Side:             side,
-		Dependencies:     dependencies,
-	}, nil
-}
-
-func quiltEnvironment(raw string) string {
-	switch strings.ToLower(strings.TrimSpace(raw)) {
-	case "dedicated_server", "server":
-		return "server"
-	default:
-		return raw
-	}
-}
-
-// quiltDescriptorDependencies translates depends and breaks. Entries are
-// independent requirements; a nested array in depends offers any-of
-// alternatives, and a nested array in breaks applies every entry.
-func quiltDescriptorDependencies(
-	loader *quiltLoader,
-) ([]catalog.DescriptorDependency, error) {
-	dependencies := make(
-		[]catalog.DescriptorDependency,
-		0,
-		len(loader.Depends)+len(loader.Breaks),
-	)
-	for _, entry := range loader.Depends {
-		alternatives := entry.serverAlternatives()
-		if len(alternatives) == 0 {
-			continue
-		}
-		// A depends array is any-of. Each alternative keeps its own optional
-		// flag: an absent optional alternative satisfies the group, while an
-		// absent required alternative does not.
-		converted := make([]catalog.DescriptorDependency, 0, len(alternatives))
-		for _, alternative := range alternatives {
-			kind := catalog.DependencyKindRequired
-			if alternative.Optional {
-				kind = catalog.DependencyKindOptional
-			}
-			dependency, err := quiltDescriptorDependency(alternative, kind)
-			if err != nil {
-				return nil, err
-			}
-			converted = append(converted, dependency)
-		}
-		primary := converted[0]
-		primary.AnyOf = converted[1:]
-		dependencies = append(dependencies, primary)
-	}
-	for _, entry := range loader.Breaks {
-		alternatives := entry.serverAlternatives()
-		if len(alternatives) == 0 {
-			continue
-		}
-		converted := make([]catalog.DescriptorDependency, 0, len(alternatives))
-		for _, alternative := range alternatives {
-			dependency, err := quiltDescriptorDependency(
-				alternative,
-				catalog.DependencyKindIncompatible,
-			)
-			if err != nil {
-				return nil, err
-			}
-			converted = append(converted, dependency)
-		}
-		primary := converted[0]
-		primary.AllOf = converted[1:]
-		dependencies = append(dependencies, primary)
-	}
-	return dependencies, nil
-}
-
-func quiltDescriptorDependency(
-	entry quiltDependencyEntry,
-	kind catalog.DependencyKind,
-) (catalog.DescriptorDependency, error) {
-	expr, err := parseQuiltVersions(entry.Versions)
-	if err != nil {
-		return catalog.DescriptorDependency{}, err
-	}
-	constraint, err := renderVersionExpr(expr)
-	if err != nil {
-		return catalog.DescriptorDependency{}, err
-	}
-	dependency := catalog.DescriptorDependency{
-		ID:         entry.ID,
-		Kind:       kind,
-		Constraint: constraint,
-	}
-	dependency.Unless, err = quiltDescriptorConditions(entry.Unless)
-	if err != nil {
-		return catalog.DescriptorDependency{}, err
-	}
-	return dependency, nil
-}
-
-func quiltDescriptorConditions(
-	entry *quiltDependencyEntry,
-) ([]catalog.DescriptorDependency, error) {
-	if entry == nil {
-		return nil, nil
-	}
-	var conditions []catalog.DescriptorDependency
-	for _, alternative := range entry.serverAlternatives() {
-		expr, err := parseQuiltVersions(alternative.Versions)
-		if err != nil {
-			return nil, err
-		}
-		constraint, err := renderVersionExpr(expr)
-		if err != nil {
-			return nil, err
-		}
-		condition := catalog.DescriptorDependency{
-			ID:         alternative.ID,
-			Kind:       catalog.DependencyKindRequired,
-			Constraint: constraint,
-		}
-		condition.Unless, err = quiltDescriptorConditions(alternative.Unless)
-		if err != nil {
-			return nil, err
-		}
-		conditions = append(conditions, condition)
-	}
-	return conditions, nil
 }

@@ -75,7 +75,7 @@ var ecosystemDefinitions = map[Ecosystem]ecosystemDefinition{
 		title:      "Quilt",
 		searchable: true,
 		family:     FamilyMod,
-		dialect:    version.DialectFabric,
+		dialect:    version.DialectQuilt,
 		alsoLoads:  []Ecosystem{EcosystemFabric},
 	},
 	EcosystemForge: {
