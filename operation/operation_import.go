@@ -606,10 +606,11 @@ func publishImportStage(stage, target string) (*importPublication, error) {
 	return publication, nil
 }
 
-// removeClientOnlyMods deletes mod jars the server loader declares client-only.
-// Only the descriptor answers that question: a client modpack marks such files
-// server-required, and a jar the loader has no descriptor for may be bridged
-// from another ecosystem. Such files stay in place and remain unmanaged.
+// removeClientOnlyMods deletes mod jars a dedicated server cannot use. The
+// provider's project labels decide first; descriptors answer files no provider
+// identifies. A client-required project that is merely server-optional is a
+// candidate, not a certainty: a server package may depend on it, so candidates
+// stay when a kept package names one of their modules.
 func (s *Service) removeClientOnlyMods(
 	ctx context.Context,
 	stage string,
@@ -632,61 +633,347 @@ func (s *Service) removeClientOnlyMods(
 			"error", mapperErr,
 		)
 	}
-	var removed []string
+
+	var files []importModFile
 	for _, entry := range entries {
 		if entry.IsDir() ||
 			!strings.EqualFold(filepath.Ext(entry.Name()), ".jar") {
 			continue
 		}
 		path := filepath.Join(modsDir, entry.Name())
-		var reason string
-		if side, known := s.identifiedServerSide(ctx, path, mappers); known &&
-			side != "" {
-			if side != upstream.ServerSideUnsupported {
-				continue
+		modules, _ := artifact.ReadModulesFor(
+			ctx,
+			path,
+			ecosystem,
+			minecraft,
+		)
+		file := importModFile{
+			path:    path,
+			modules: modules,
+			kept:    true,
+		}
+		switch sides, known := s.identifiedServerSide(
+			ctx,
+			path,
+			mappers,
+		); {
+		case known && sides != nil:
+			switch {
+			case sides.Server == upstream.ServerSideUnsupported:
+				file.reason = "project does not support a dedicated server"
+				file.removable, file.kept = true, false
+			case sides.ClientOnly():
+				file.reason = "project declares client-only support"
+				file.kept = false
 			}
-			reason = "server_side " + string(side)
-		} else {
-			clientOnly, known, err := artifact.ReadClientOnly(
+		default:
+			if reason, clientOnly := clientOnlyDescriptor(
 				ctx,
 				path,
 				ecosystem,
 				minecraft,
-			)
-			if err != nil || !known || !clientOnly {
+			); clientOnly {
+				file.reason = reason
+				file.removable, file.kept = true, false
+			} else if project, found := s.catalogProjectSide(
+				ctx,
+				path,
+				mappers,
+			); found {
+				switch {
+				case project.ServerSide == upstream.ServerSideUnsupported:
+					file.reason = "project does not support a dedicated server"
+					file.removable, file.kept = true, false
+				case project.IsClientOnly():
+					file.reason = "project declares client-only support"
+					file.kept = false
+				}
+			}
+		}
+		files = append(files, file)
+	}
+
+	// Keep candidates a server package depends on. A promoted candidate can
+	// itself require another candidate, so repeat until nothing changes.
+	for {
+		required := requiredModuleIDs(files)
+		changed := false
+		for i := range files {
+			if files[i].kept || files[i].removable {
 				continue
 			}
-			reason = "client-only descriptor"
+			if modulesProvide(files[i].modules, required) {
+				files[i].kept = true
+				changed = true
+			}
 		}
-		if err := os.Remove(path); err != nil {
-			return removed, fmt.Errorf("remove client-only mod %s: %w", path, err)
+		if !changed {
+			break
 		}
-		relative, err := filepath.Rel(stage, path)
+	}
+
+	var removed []string
+	for _, file := range files {
+		if file.kept {
+			continue
+		}
+		if err := os.Remove(file.path); err != nil {
+			return removed, fmt.Errorf(
+				"remove client-only mod %s: %w",
+				file.path,
+				err,
+			)
+		}
+		relative, err := filepath.Rel(stage, file.path)
 		if err != nil {
 			return removed, fmt.Errorf(
 				"relativize client-only mod %s: %w",
-				path,
+				file.path,
 				err,
 			)
 		}
 		s.logger.Debug(
 			"removed client-only mod",
 			"path", filepath.ToSlash(relative),
-			"reason", reason,
+			"reason", file.reason,
 		)
 		removed = append(removed, filepath.ToSlash(relative))
 	}
 	return removed, nil
 }
 
-// identifiedServerSide asks the release mappers whether a provider identifies
-// the file and reports its dedicated-server label. A match without a label
-// still counts as identified, so the caller can fall back to descriptors.
+// importModFile is one imported mod archive and its classification.
+type importModFile struct {
+	path      string
+	modules   []catalog.DescriptorModule
+	reason    string
+	kept      bool
+	removable bool
+}
+
+// requiredModuleIDs lists every dependency a kept archive declares.
+func requiredModuleIDs(files []importModFile) map[string]bool {
+	required := make(map[string]bool)
+	for _, file := range files {
+		if !file.kept {
+			continue
+		}
+		for _, module := range file.modules {
+			for _, dependency := range module.Dependencies {
+				addDependencyIDs(required, dependency)
+			}
+		}
+	}
+	return required
+}
+
+func addDependencyIDs(ids map[string]bool, dependency catalog.DescriptorDependency) {
+	if dependency.ID != "" {
+		ids[dependency.ID] = true
+	}
+	for _, alternative := range dependency.AnyOf {
+		addDependencyIDs(ids, alternative)
+	}
+	for _, condition := range dependency.AllOf {
+		addDependencyIDs(ids, condition)
+	}
+}
+
+// modulesProvide reports whether any module or provided identity satisfies one
+// of the required IDs.
+func modulesProvide(
+	modules []catalog.DescriptorModule,
+	required map[string]bool,
+) bool {
+	for _, module := range modules {
+		if required[module.ID] {
+			return true
+		}
+		for _, provided := range module.Provides {
+			if required[provided] {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// clientOnlyDescriptor reports which descriptor makes the file client-only.
+// The server loader is tried first because its view decides whether the file
+// can load at all. A file whose descriptor belongs to another ecosystem (a
+// Fabric jar bridged by Connector) is checked with that descriptor's loader.
+func clientOnlyDescriptor(
+	ctx context.Context,
+	path string,
+	loader catalog.Ecosystem,
+	minecraft string,
+) (string, bool) {
+	clientOnly, known, err := artifact.ReadClientOnly(
+		ctx,
+		path,
+		loader,
+		minecraft,
+	)
+	if err == nil && known {
+		if clientOnly {
+			return "client-only " + string(loader), true
+		}
+		return "", false
+	}
+	infos, err := artifact.ReadInfo(path)
+	if err != nil {
+		return "", false
+	}
+	for _, info := range infos {
+		ecosystem := info.Ref.Ecosystem
+		if ecosystem == loader ||
+			ecosystem == catalog.EcosystemUnspecified {
+			continue
+		}
+		clientOnly, known, err := artifact.ReadClientOnly(
+			ctx,
+			path,
+			ecosystem,
+			minecraft,
+		)
+		if err == nil && known && clientOnly {
+			return "client-only " + string(ecosystem), true
+		}
+	}
+	return "", false
+}
+
+// catalogProjectSide asks a provider that publishes side labels for the
+// file's project. The descriptor title and project name select the project;
+// a title-derived name must agree with the project title, so a same-named but
+// different project cannot classify the file.
+func (s *Service) catalogProjectSide(
+	ctx context.Context,
+	path string,
+	mappers []packageMapper,
+) (upstream.ProjectServerSide, bool) {
+	infos, err := artifact.ReadInfo(path)
+	if err != nil {
+		return upstream.ProjectServerSide{}, false
+	}
+	for _, info := range infos {
+		names := projectNameCandidates(info)
+		if len(names) == 0 {
+			continue
+		}
+		for _, mapper := range mappers {
+			resolver, ok := mapper.release.(upstream.ServerSideResolver)
+			if !ok {
+				continue
+			}
+			for _, candidate := range names {
+				project, found, err := resolver.ServerSideByName(
+					ctx,
+					candidate.Name,
+				)
+				if err != nil {
+					s.logger.Debug(
+						"project side lookup failed",
+						"name", candidate.Name,
+						"provider", mapper.provider,
+						"error", err,
+					)
+					continue
+				}
+				if !found {
+					continue
+				}
+				trusted := !candidate.FromTitle ||
+					sameProjectTitle(info.Metadata.Title, project.Title)
+				if trusted {
+					return project, true
+				}
+				break
+			}
+		}
+	}
+	return upstream.ProjectServerSide{}, false
+}
+
+// projectNameCandidate is one name a provider may use for the project. A name
+// derived from the title must still match the project title; a module ID is
+// trusted because it is the project's own identifier.
+type projectNameCandidate struct {
+	Name      string
+	FromTitle bool
+}
+
+// projectNameCandidates lists the names a provider may use for the project:
+// the descriptor title as a slug, then the module name.
+func projectNameCandidates(info artifact.PackageInfo) []projectNameCandidate {
+	var candidates []projectNameCandidate
+	add := func(name string, fromTitle bool) {
+		if name == "" {
+			return
+		}
+		for _, candidate := range candidates {
+			if candidate.Name == name {
+				return
+			}
+		}
+		candidates = append(candidates, projectNameCandidate{
+			Name:      name,
+			FromTitle: fromTitle,
+		})
+	}
+	add(slugify(info.Metadata.Title), true)
+	add(string(info.Ref.Name), false)
+	return candidates
+}
+
+// slugify lowercases a project title and joins its words with hyphens.
+func slugify(raw string) string {
+	var b strings.Builder
+	pending := false
+	for _, r := range strings.ToLower(raw) {
+		alphanumeric := (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9')
+		if !alphanumeric {
+			pending = true
+			continue
+		}
+		if pending && b.Len() > 0 {
+			b.WriteByte('-')
+		}
+		pending = false
+		b.WriteRune(r)
+	}
+	return b.String()
+}
+
+// sameProjectTitle reports whether two titles name the same project. An empty
+// title on either side gives the slug lookup the benefit of the doubt.
+func sameProjectTitle(left, right string) bool {
+	a, b := slugify(left), slugify(right)
+	if a == "" || b == "" {
+		return true
+	}
+	return a == b
+}
+
+// identifiedSide asks the release mappers whether a provider identifies the
+// file and reports its side labels. A match without labels still counts as
+// identified, so the caller can fall back to descriptors.
+type identifiedSide struct {
+	Server upstream.ServerSide
+	Client string
+}
+
+// ClientOnly reports whether the labels keep the project off a dedicated
+// server.
+func (s identifiedSide) ClientOnly() bool {
+	return upstream.ClientOnly(s.Server, s.Client)
+}
+
 func (s *Service) identifiedServerSide(
 	ctx context.Context,
 	path string,
 	mappers []packageMapper,
-) (upstream.ServerSide, bool) {
+) (*identifiedSide, bool) {
 	for _, mapper := range mappers {
 		release, matched, err := mapper.release.ReleaseByHash(
 			ctx,
@@ -704,9 +991,15 @@ func (s *Service) identifiedServerSide(
 		if !matched {
 			continue
 		}
-		return release.ServerSide, true
+		if release.ServerSide == "" && release.ClientSide == "" {
+			return nil, false
+		}
+		return &identifiedSide{
+			Server: release.ServerSide,
+			Client: release.ClientSide,
+		}, true
 	}
-	return "", false
+	return nil, false
 }
 
 // relativeImportPaths reports files relative to root, slash-separated, so no

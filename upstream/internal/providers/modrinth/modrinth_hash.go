@@ -85,6 +85,7 @@ func (p *Provider) ReleaseByHash(
 		MinecraftVersions: ver.GameVersions,
 		Loaders:           ver.Loaders,
 		ServerSide:        upstream.ServerSide(project.ServerSide),
+		ClientSide:        project.ClientSide,
 	}
 	return release, true, nil
 }

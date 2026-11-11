@@ -395,7 +395,24 @@ func (a *packageAdopter) probeMapped(
 			))
 			return true
 		}
-		if release.ServerSide == "" {
+		if release.ClientOnly() {
+			// A client-required, server-optional project may still ship a
+			// server-visible module, and a server package may depend on it.
+			// The artifact decides.
+			modules, err := artifact.ReadModulesFor(
+				ctx,
+				p.Path,
+				ecosystem,
+				string(a.manifest.Server.Minecraft),
+			)
+			if err == nil && len(modules) == 0 {
+				proposal.warnings = append(proposal.warnings, fmt.Errorf(
+					"package %s left unmanaged: its descriptor declares no server-side module",
+					p.Path,
+				))
+				return true
+			}
+		} else if release.ServerSide == "" && release.ClientSide == "" {
 			if clientOnly, known := a.clientOnlyFile(ctx, p.Path, ecosystem); known &&
 				clientOnly {
 				proposal.warnings = append(proposal.warnings, fmt.Errorf(
