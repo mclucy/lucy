@@ -145,10 +145,24 @@ func (s *Service) Run(ctx context.Context, root string, request Request) (result
 		}
 		currentLock = locked.ManifestFingerprint == fingerprint
 	}
-	if request.Operation == Track || request.Operation == Untrack {
+	switch request.Operation {
+	case Track, Untrack:
 		request.Paths, result.SkippedDirectories, err = expandFilePaths(files, request.Paths)
 		if err != nil {
 			return result, err
+		}
+	case Update, Recover:
+		if !request.All {
+			var skipped []string
+			request.Paths, skipped, err = expandDeclaredPaths(
+				document.Files,
+				request.Paths,
+				request.Operation,
+			)
+			if err != nil {
+				return result, err
+			}
+			result.Skipped = append(result.Skipped, skipped...)
 		}
 	}
 	selected, skipped, err := selectFiles(document.Files, request)

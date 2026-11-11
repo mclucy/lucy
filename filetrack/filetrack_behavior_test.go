@@ -287,6 +287,114 @@ func TestFileTrackRequiresExplicitDotForHiddenEntries(t *testing.T) {
 	}
 }
 
+func TestFileUpdateExpandsDeclaredPatterns(t *testing.T) {
+	root := behaviorWorkspace(t)
+	paths := []string{
+		"config/a.json",
+		"config/deep/b.json",
+		"config/untracked.json",
+		"other.txt",
+	}
+	for _, path := range paths[:2] {
+		behaviorWrite(t, root, path, []byte("old\n"), 0o644)
+	}
+	behaviorWrite(t, root, paths[3], []byte("other old\n"), 0o644)
+	behaviorRun(t, root, Request{
+		Operation: Track,
+		Paths:     []string{paths[0], paths[1], paths[3]},
+	})
+	for _, path := range []string{paths[0], paths[1], paths[3]} {
+		behaviorWrite(t, root, path, []byte("new\n"), 0o644)
+	}
+	behaviorWrite(t, root, paths[2], []byte("untracked\n"), 0o644)
+
+	result := behaviorRun(t, root, Request{
+		Operation: Update,
+		Paths:     []string{"config/**/*.json"},
+	})
+
+	if len(result.Event.Changes) != 2 {
+		t.Fatalf("updated changes = %+v, want two", result.Event.Changes)
+	}
+	updated := make(map[string]struct{}, len(result.Event.Changes))
+	for _, change := range result.Event.Changes {
+		updated[change.Path] = struct{}{}
+	}
+	if _, exists := updated["config/a.json"]; !exists {
+		t.Fatalf("pattern did not update config/a.json: %+v", updated)
+	}
+	if _, exists := updated["config/deep/b.json"]; !exists {
+		t.Fatalf("pattern did not update config/deep/b.json: %+v", updated)
+	}
+	declared := make(map[string]string, 3)
+	for _, file := range behaviorDeclared(t, root) {
+		declared[file.Path] = file.Hash
+	}
+	if declared["config/a.json"] != behaviorDigest([]byte("new\n")) ||
+		declared["config/deep/b.json"] != behaviorDigest([]byte("new\n")) {
+		t.Fatalf("pattern did not accept current contents: %+v", declared)
+	}
+	if declared["other.txt"] == behaviorDigest([]byte("new\n")) {
+		t.Fatalf("pattern updated an unmatched file: %+v", declared)
+	}
+	behaviorRunErr(t, root, Request{
+		Operation: Update,
+		Paths:     []string{"config/*.yaml"},
+	})
+}
+
+func TestFileRecoverExpandsDeclaredPatterns(t *testing.T) {
+	root := behaviorWorkspace(t)
+	accepted := map[string][]byte{
+		"config/a.json":      []byte("a accepted\n"),
+		"config/deep/b.json": []byte("b accepted\n"),
+	}
+	for path, content := range accepted {
+		behaviorWrite(t, root, path, content, 0o644)
+		behaviorRun(t, root, Request{Operation: Track, Paths: []string{path}})
+	}
+	behaviorWrite(t, root, "config/present.bin", []byte("presence\n"), 0o644)
+	behaviorRun(t, root, Request{
+		Operation: Track,
+		Paths:     []string{"config/present.bin"},
+		NoHash:    true,
+	})
+	for path := range accepted {
+		if err := os.Remove(filepath.Join(root, path)); err != nil {
+			t.Fatalf("remove %s: %v", path, err)
+		}
+	}
+
+	result := behaviorRun(t, root, Request{
+		Operation: Recover,
+		Paths:     []string{"config/**"},
+	})
+
+	if len(result.Event.Changes) != 2 {
+		t.Fatalf("recovered changes = %+v, want two", result.Event.Changes)
+	}
+	if len(result.Skipped) != 1 || result.Skipped[0] != "config/present.bin" {
+		t.Fatalf("skipped = %v, want the presence-only entry", result.Skipped)
+	}
+	for path, content := range accepted {
+		behaviorRequireBytes(t, filepath.Join(root, path), content)
+	}
+
+	presenceOnly := behaviorRun(t, root, Request{
+		Operation: Recover,
+		Paths:     []string{"config/*.bin"},
+	})
+	if len(presenceOnly.Event.Changes) != 0 ||
+		len(presenceOnly.Skipped) != 1 ||
+		presenceOnly.Skipped[0] != "config/present.bin" {
+		t.Fatalf("presence-only pattern recovered %+v", presenceOnly)
+	}
+	behaviorRunErr(t, root, Request{
+		Operation: Recover,
+		Paths:     []string{"config/*.yaml"},
+	})
+}
+
 func TestFileTrackRejectsAlreadyTrackedPathAtomically(t *testing.T) {
 	root := behaviorWorkspace(t)
 	rules := []byte("rules\n")
@@ -889,7 +997,7 @@ func TestFileOperationsRejectPathsOutsideWorkspace(t *testing.T) {
 	}
 	before := behaviorRead(t, root, documentpkg.ManifestFilename)
 
-	for _, operation := range []Operation{Track, Untrack} {
+	for _, operation := range []Operation{Track, Untrack, Update, Recover} {
 		for _, path := range []string{
 			"../outside.txt",
 			"../*",
