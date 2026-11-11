@@ -55,8 +55,11 @@ const (
 		"source. An already tracked path fails rather than being " +
 		"implicitly updated."
 
-	UntrackLong = "Remove the declarations from lucy.yaml. Working content " +
-		"and historical backups are preserved."
+	UntrackLong = "Remove the declarations from lucy.yaml. Paths accept " +
+		"shell-style patterns relative to the workspace. Working content " +
+		"and historical backups are preserved. Directories are reported " +
+		"as skipped, and files that are not currently tracked are skipped " +
+		"with a warning. A pattern that matches no file or directory fails."
 
 	UpdateLong = "Snapshot and accept current bytes for one or more tracked " +
 		"files, or accept every tracked file at once with --all. The " +
