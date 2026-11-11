@@ -3,6 +3,7 @@ package curseforge
 import (
 	"fmt"
 	"net/url"
+	"slices"
 	"strconv"
 
 	"github.com/mclucy/lucy/catalog"
@@ -13,32 +14,40 @@ const (
 	modsClassId     = 6
 )
 
-// modLoaderType maps lucy Platform to CurseForge ModLoaderType enum.
+// curseForgeLoaderTypes maps a lucy ecosystem to the CurseForge ModLoaderType
+// enum. An ecosystem absent from the table searches every loader.
 // Docs: https://docs.curseforge.com/rest-api/#search-mods
-func modLoaderType(p catalog.Ecosystem) int {
-	switch p {
-	case catalog.EcosystemForge:
-		return 1
-	case catalog.EcosystemFabric:
-		return 4
-	case catalog.EcosystemQuilt:
-		return 5
-	case catalog.EcosystemNeoForge:
-		return 6
-	default:
-		return 0 // Any
-	}
+var curseForgeLoaderTypes = map[catalog.Ecosystem]int{
+	catalog.EcosystemForge:    1,
+	catalog.EcosystemFabric:   4,
+	catalog.EcosystemQuilt:    5,
+	catalog.EcosystemNeoForge: 6,
 }
 
-// modLoaderTypes lists the server-side loader filters that serve an
-// ecosystem. Quilt Loader runs Fabric mods, so a Quilt request accepts both
-// the Quilt and Fabric loader types; the REST filter takes one value per
-// request, so callers union the results. Any always yields exactly one filter.
+// modLoaderType maps a lucy ecosystem to its CurseForge ModLoaderType enum.
+func modLoaderType(p catalog.Ecosystem) int {
+	return curseForgeLoaderTypes[p]
+}
+
+// modLoaderTypes lists the loader filters that serve a runtime of p, in
+// descriptor precedence order. A runtime that loads more than one ecosystem
+// (Quilt loads Fabric) needs one request per distinct enum value; the REST
+// filter takes one value per request, so callers union the results. Any
+// runtime without a mapped loader yields exactly one unfiltered request.
 func modLoaderTypes(p catalog.Ecosystem) []int {
-	if p == catalog.EcosystemQuilt {
-		return []int{5, 4}
+	loaders := p.Loads()
+	if len(loaders) == 0 {
+		return []int{0}
 	}
-	return []int{modLoaderType(p)}
+	types := make([]int, 0, len(loaders))
+	for _, loader := range loaders {
+		loaderType := modLoaderType(loader)
+		if slices.Contains(types, loaderType) {
+			continue
+		}
+		types = append(types, loaderType)
+	}
+	return types
 }
 
 // searchUrl builds a project search: https://docs.curseforge.com/rest-api/#search-mods.
