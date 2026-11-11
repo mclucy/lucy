@@ -11,12 +11,9 @@ import (
 
 	"github.com/mclucy/lucy/bootstrap"
 	"github.com/mclucy/lucy/document"
-	"github.com/mclucy/lucy/internal/fsutil"
-	"github.com/mclucy/lucy/internal/workspaceguard"
 	"github.com/mclucy/lucy/internal/workspacewrite"
 	"github.com/mclucy/lucy/log"
 	"github.com/mclucy/lucy/receipt"
-	"go.yaml.in/yaml/v4"
 )
 
 type installCommitMode int
@@ -169,7 +166,6 @@ func applyCommitFiles(root, stage string, d *document.Manifest, l *document.Lock
 		return err
 	}
 	owned := map[string]receipt.Entry{}
-	occupantHashes := map[string]string{}
 	observedBefore := map[string]*workspacewrite.InstallImage{}
 	for _, entry := range previous.Entries {
 		owned[entry.Path] = entry
@@ -301,7 +297,6 @@ func applyCommitFiles(root, stage string, d *document.Manifest, l *document.Lock
 				if err != nil {
 					return err
 				}
-				occupantHashes[relative] = actual["sha256"]
 				observedBefore[relative] = &workspacewrite.InstallImage{
 					SHA256: actual["sha256"],
 					Mode:   workspacewrite.EffectiveInstallMode(targetInfo.Mode().Perm()),
@@ -448,311 +443,79 @@ func applyCommitFiles(root, stage string, d *document.Manifest, l *document.Lock
 	if receiptExisted {
 		receiptBase = workspacewrite.InstallBytesImage(raw, receiptMode)
 	}
-	afterImages := make(map[string]*workspacewrite.InstallImage, len(sources)+3)
-	for name, image := range sourceImages {
+	writes := make([]commitWrite, 0, len(sources)+3)
+	owners := make(map[string]struct{}, len(sources)+3)
+	claim := func(name string) error {
+		if _, exists := owners[name]; exists {
+			return fmt.Errorf("installation path %s has conflicting owners", name)
+		}
+		owners[name] = struct{}{}
+		return nil
+	}
+	for name, source := range sources {
 		if installPathReserved(root, name) {
 			return fmt.Errorf("staged output %s is reserved", name)
 		}
-		image := image
-		afterImages[name] = &image
-	}
-	planAfter := func(name string, image *workspacewrite.InstallImage) error {
-		if installPathMatchesReserved(
-			root, name, workspacewrite.InstallJournalName,
-		) {
-			return fmt.Errorf("installation path %s is reserved", name)
+		if err := claim(name); err != nil {
+			return err
 		}
-		if _, exists := afterImages[name]; exists {
-			return fmt.Errorf("installation path %s has conflicting owners", name)
-		}
-		afterImages[name] = image
-		return nil
+		after := sourceImages[name]
+		writes = append(writes, commitWrite{
+			path:   name,
+			source: source,
+			base:   observedBefore[name],
+			after:  &after,
+		})
 	}
-	if err := planAfter(document.LockFilename, &lockPlan.Image); err != nil {
-		return err
+	documents := []commitWrite{
+		{
+			path:  document.LockFilename,
+			data:  lockPlan.Data,
+			base:  lockPlan.Base,
+			after: &lockPlan.Image,
+		},
+		{
+			path:  receipt.Filename,
+			data:  receiptBytes,
+			base:  receiptBase,
+			after: receiptAfter,
+		},
 	}
 	if publish {
-		if err := planAfter(document.ManifestFilename, &manifestPlan.Image); err != nil {
+		documents = append(documents, commitWrite{
+			path:  document.ManifestFilename,
+			data:  manifestPlan.Data,
+			base:  manifestPlan.Base,
+			after: &manifestPlan.Image,
+		})
+	}
+	documentAfter := make(map[string]*workspacewrite.InstallImage, len(documents))
+	baseImages := make(map[string]*workspacewrite.InstallImage, len(documents))
+	for _, document := range documents {
+		if err := claim(document.path); err != nil {
 			return err
 		}
+		writes = append(writes, document)
+		documentAfter[document.path] = document.after
+		baseImages[document.path] = document.base
 	}
-	if err := planAfter(receipt.Filename, receiptAfter); err != nil {
-		return err
-	}
-	baseImages := map[string]*workspacewrite.InstallImage{
-		document.LockFilename: lockPlan.Base,
-		receipt.Filename:      receiptBase,
-	}
-	documentAfter := map[string]*workspacewrite.InstallImage{
-		document.LockFilename: &lockPlan.Image,
-		receipt.Filename:      receiptAfter,
-	}
-	if publish {
-		baseImages[document.ManifestFilename] = manifestPlan.Base
-		documentAfter[document.ManifestFilename] = &manifestPlan.Image
-	}
-	if reconcile {
-		pruneNames := make([]string, 0, len(pruneExpected))
-		for name := range pruneExpected {
-			pruneNames = append(pruneNames, name)
+	prunes := make([]commitPrune, 0, len(pruneExpected))
+	for name, expected := range pruneExpected {
+		if installPathMatchesReserved(root, name, document.ManifestFilename) {
+			return fmt.Errorf("installation receipt path %s is reserved", name)
 		}
-		slices.Sort(pruneNames)
-		for _, name := range pruneNames {
-			if installPathMatchesReserved(root, name, document.ManifestFilename) {
-				return fmt.Errorf("installation receipt path %s is reserved", name)
-			}
-			if err := planAfter(name, nil); err != nil {
-				return err
-			}
-		}
-	}
-	names := make([]string, 0, len(afterImages))
-	for name := range afterImages {
-		names = append(names, name)
-	}
-	slices.Sort(names)
-	if err := rejectInstallPathAliases(root, names); err != nil {
-		return err
-	}
-	backup, err := os.MkdirTemp(filepath.Join(root, ".lucy"), "rollback-*")
-	if err != nil {
-		return err
-	}
-	journalPublished := false
-	defer func() {
-		if journalPublished {
-			return
-		}
-		if err := os.RemoveAll(backup); err != nil {
-			logger.Warn(fmt.Errorf("remove unused installation backup: %w", err))
-		}
-	}()
-	backupRelative := filepath.ToSlash(
-		filepath.Join(".lucy", filepath.Base(backup)),
-	)
-	journal := workspacewrite.InstallJournal{
-		Backup:  backupRelative,
-		Entries: make([]workspacewrite.InstallJournalEntry, 0, len(names)),
-	}
-	prepareErr := func() (resultErr error) {
-		files, err := os.OpenRoot(root)
-		if err != nil {
+		if err := claim(name); err != nil {
 			return err
 		}
-		defer func() { resultErr = errors.Join(resultErr, files.Close()) }()
-		for _, name := range names {
-			if err := workspacewrite.SafePath(root, name); err != nil {
-				return err
-			}
-			target := filepath.Join(root, name)
-			entry := workspacewrite.InstallJournalEntry{
-				Path:  name,
-				After: afterImages[name],
-			}
-			before, err := workspacewrite.ObserveInstallImage(files, name)
-			if err != nil {
-				return err
-			}
-			entry.Before = before
-			if expected, observed := observedBefore[name]; observed {
-				if !workspacewrite.InstallImagesEqual(entry.Before, expected) {
-					return fmt.Errorf(
-						"installation path %s changed while planning",
-						name,
-					)
-				}
-			}
-			if base, planned := baseImages[name]; planned {
-				if !workspacewrite.InstallImagesEqual(entry.Before, base) {
-					return fmt.Errorf(
-						"installation path %s changed while planning",
-						name,
-					)
-				}
-			}
-			if entry.Before == nil && entry.After == nil {
-				continue
-			}
-			if entry.After == nil {
-				expected, validated := pruneExpected[name]
-				if validated && expected == nil {
-					return fmt.Errorf("absent owned output %s reappeared before pruning", name)
-				}
-				if !validated || entry.Before == nil ||
-					!workspacewrite.InstallImagesEqual(entry.Before, expected) {
-					return fmt.Errorf(
-						"modified or unowned output cannot be pruned: %s",
-						name,
-					)
-				}
-			}
-			if entry.Before != nil && entry.After != nil &&
-				workspacewrite.InstallImagesEqual(entry.Before, entry.After) {
-				continue
-			}
-			if entry.Before != nil {
-				if err := preserveInstallPreImage(
-					files, backup, backupRelative, *entry.Before, target,
-				); err != nil {
-					return err
-				}
-			}
-			journal.Entries = append(journal.Entries, entry)
-		}
-		return nil
-	}()
-	if prepareErr != nil {
-		return prepareErr
+		prunes = append(prunes, commitPrune{path: name, expected: expected})
 	}
-	journalBytes, err := yaml.Marshal(journal)
-	if err != nil {
-		return err
-	}
-	journalPath := filepath.Join(root, workspacewrite.InstallJournalName)
-	if err := fsutil.AtomicWrite(journalPath, journalBytes, 0o600); err != nil {
-		// AtomicWrite can return a sync error after the journal replacement was
-		// published. Keep the backup while any journal remains, so recovery can
-		// still verify and remove it.
-		if _, statErr := os.Lstat(journalPath); statErr == nil {
-			journalPublished = true
-		}
-		return err
-	}
-	journalPublished = true
-	logger.Debug(
-		"installation transaction journaled",
-		"journal", journalPath,
-		"backup", journal.Backup,
-		"paths", len(journal.Entries),
-	)
-	mutations := make(map[string]workspacewrite.InstallJournalEntry, len(journal.Entries))
-	for _, entry := range journal.Entries {
-		mutations[entry.Path] = entry
-	}
-	failed := true
-	defer func() {
-		if !failed {
-			return
-		}
-		committed, _ := workspacewrite.InstallJournalCommitted(root)
-		resultErr = errors.Join(resultErr, workspaceguard.RecoverInstall(root, logger))
-		if committed && resultErr != nil {
-			resultErr = &CommittedError{Err: fmt.Errorf(
-				"installation committed; %w", resultErr,
-			)}
-		}
-	}()
-	applyErr := func() (resultErr error) {
-		files, err := os.OpenRoot(root)
-		if err != nil {
-			return err
-		}
-		defer func() { resultErr = errors.Join(resultErr, files.Close()) }()
-		for name, source := range sources {
-			entry, mutated := mutations[name]
-			if !mutated {
-				continue
-			}
-			image := sourceImages[name]
-			_, statErr := files.Lstat(name)
-			exists := statErr == nil
-			if !exists {
-				counts.Created++
-			} else if occupantHashes[name] != image.SHA256 {
-				counts.Replaced++
-			}
-			parent := filepath.Dir(name)
-			if parent != "." {
-				if err := files.MkdirAll(parent, 0o755); err != nil {
-					return err
-				}
-			}
-			input, err := os.Open(source)
-			if err != nil {
-				return err
-			}
-			copyErr := fsutil.WriteRoot(
-				files,
-				name,
-				input,
-				fsutil.WriteOptions{
-					Mode:    os.FileMode(entry.After.Mode),
-					Replace: true,
-					Check:   installBeforeCheck(files, entry),
-				},
-			)
-			closeErr := input.Close()
-			if copyErr != nil || closeErr != nil {
-				return errors.Join(copyErr, closeErr)
-			}
-		}
-		pruned := 0
-		if reconcile {
-			for _, old := range previous.Entries {
-				if tracked[strings.ToLower(old.Path)] {
-					continue
-				}
-				if _, ok := sources[old.Path]; ok {
-					continue
-				}
-				entry, mutated := mutations[old.Path]
-				if !mutated {
-					continue
-				}
-				current, err := workspacewrite.ObserveInstallImage(files, old.Path)
-				if err != nil {
-					return err
-				}
-				if !workspacewrite.InstallImagesEqual(current, entry.Before) {
-					return fmt.Errorf(
-						"installation output %s changed before pruning",
-						old.Path,
-					)
-				}
-				if err := files.Remove(old.Path); err != nil {
-					if errors.Is(err, os.ErrNotExist) {
-						continue
-					}
-					return err
-				}
-				pruned++
-			}
-		}
-		counts.Removed = pruned
-		if publish {
-			if entry, mutated := mutations[document.ManifestFilename]; mutated {
-				if err := publishInstallBytes(
-					files,
-					document.ManifestFilename,
-					manifestPlan.Data,
-					&manifestPlan.Image,
-					entry,
-				); err != nil {
-					return err
-				}
-			}
-		}
-		if entry, mutated := mutations[document.LockFilename]; mutated {
-			if err := publishInstallBytes(
-				files,
-				document.LockFilename,
-				lockPlan.Data,
-				&lockPlan.Image,
-				entry,
-			); err != nil {
-				return err
-			}
-		}
-		if entry, mutated := mutations[receipt.Filename]; mutated {
-			if err := publishInstallBytes(
-				files,
-				receipt.Filename,
-				receiptBytes,
-				receiptAfter,
-				entry,
-			); err != nil {
-				return err
-			}
+	verify := func(
+		files *os.Root,
+		entries []workspacewrite.InstallJournalEntry,
+	) error {
+		mutated := make(map[string]struct{}, len(entries))
+		for _, entry := range entries {
+			mutated[entry.Path] = struct{}{}
 		}
 		for name, expected := range documentAfter {
 			current, err := workspacewrite.ObserveInstallImage(files, name)
@@ -767,11 +530,24 @@ func applyCommitFiles(root, stage string, d *document.Manifest, l *document.Lock
 				)
 			}
 		}
-		for name, expected := range afterImages {
-			if _, mutated := mutations[name]; mutated {
+		for name, image := range sourceImages {
+			if _, changed := mutated[name]; changed {
 				continue
 			}
-			if _, document := documentAfter[name]; document {
+			image := image
+			current, err := workspacewrite.ObserveInstallImage(files, name)
+			if err != nil {
+				return err
+			}
+			if !workspacewrite.InstallImagesEqual(current, &image) {
+				return fmt.Errorf(
+					"installation path %s changed before commit",
+					name,
+				)
+			}
+		}
+		for name, expected := range pruneExpected {
+			if _, changed := mutated[name]; changed {
 				continue
 			}
 			current, err := workspacewrite.ObserveInstallImage(files, name)
@@ -786,28 +562,31 @@ func applyCommitFiles(root, stage string, d *document.Manifest, l *document.Lock
 			}
 		}
 		return nil
-	}()
-	if applyErr != nil {
-		return applyErr
 	}
-	journal.Committed = true
-	committedBytes, err := yaml.Marshal(journal)
+	applied, err := executeCommit(root, commitRequest{
+		label:  "installation",
+		writes: writes,
+		prunes: prunes,
+		verify: verify,
+	}, logger)
 	if err != nil {
 		return err
 	}
-	if err := fsutil.AtomicWrite(journalPath, committedBytes, 0o600); err != nil {
-		return err
-	}
-	failed = false
-	if err := os.RemoveAll(backup); err != nil {
-		return &CommittedError{Err: fmt.Errorf(
-			"installation committed; remove rollback backup: %w", err,
-		)}
-	}
-	if err := os.Remove(journalPath); err != nil && !errors.Is(err, os.ErrNotExist) {
-		return &CommittedError{Err: fmt.Errorf(
-			"installation committed; remove transaction journal: %w", err,
-		)}
+	for _, entry := range applied {
+		if entry.After == nil {
+			if _, pruned := pruneExpected[entry.Path]; pruned {
+				counts.Removed++
+			}
+			continue
+		}
+		if _, staged := sources[entry.Path]; !staged {
+			continue
+		}
+		if entry.Before == nil {
+			counts.Created++
+		} else if entry.Before.SHA256 != entry.After.SHA256 {
+			counts.Replaced++
+		}
 	}
 	logger.Info(
 		"installation committed",
