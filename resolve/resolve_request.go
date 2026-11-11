@@ -134,7 +134,11 @@ type PackagesRequest struct {
 	Context  context.Context
 	Manifest *document.Manifest
 	Previous []document.Package
-	Target   Target
+	// PreserveLocked keeps the file recorded by Previous selectable when the
+	// catalogue no longer publishes it for the current labels. It applies only
+	// while the runtime target is unchanged.
+	PreserveLocked bool
+	Target         Target
 	// Candidates lists the builds a direct or dependency requirement may
 	// select. It is required for every non-empty resolution.
 	Candidates CandidateSource
