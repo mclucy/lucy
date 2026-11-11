@@ -16,6 +16,17 @@ import (
 // this package cannot execute yet.
 var ErrInstallerUnsupported = errors.New("installer execution is not supported")
 
+// InstallerSupported reports whether RunInstaller can execute kind natively.
+// Callers use it before selecting Java for an installer they cannot run.
+func InstallerSupported(kind artifact.InstallerKind) bool {
+	switch kind {
+	case artifact.InstallerForge, artifact.InstallerNeoForge:
+		return true
+	default:
+		return false
+	}
+}
+
 // RunInstaller executes an identified installer with its native entry point
 // in root. It requires a Java executable for every supported installer.
 func RunInstaller(
@@ -37,10 +48,8 @@ func RunInstaller(
 			return fmt.Errorf("%s: %w\n%s", installer.Kind, err, captured)
 		}
 		return nil
-	case artifact.InstallerFabric, artifact.InstallerQuilt:
-		return fmt.Errorf("%w: %s", ErrInstallerUnsupported, installer.Kind)
 	default:
-		return ErrInstallerUnsupported
+		return fmt.Errorf("%w: %s", ErrInstallerUnsupported, installer.Kind)
 	}
 }
 
