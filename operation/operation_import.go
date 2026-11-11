@@ -801,6 +801,11 @@ func requiredModuleIDs(files []importModFile) map[string]bool {
 }
 
 func addDependencyIDs(ids map[string]bool, dependency catalog.DescriptorDependency) {
+	switch dependency.Kind {
+	case catalog.DependencyKindIncompatible, catalog.DependencyKindConflict:
+		// A negative relation keeps the candidate away; it does not require it.
+		return
+	}
 	if dependency.ID != "" {
 		ids[dependency.ID] = true
 	}
