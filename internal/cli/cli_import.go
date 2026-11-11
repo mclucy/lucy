@@ -160,7 +160,14 @@ func importOptions(
 			)
 		}
 	} else {
-		name = filepath.Base(target)
+		name, err = document.NormalizeName(filepath.Base(target))
+		if err != nil {
+			return operation.ImportOptions{}, fmt.Errorf(
+				"invalid default workspace name: %w; use --%s",
+				err,
+				flagInitNameName,
+			)
+		}
 	}
 	sha := strings.ToLower(
 		strings.TrimSpace(flagStringInit(cmd, flagImportSHA256Name)),
