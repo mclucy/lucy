@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/bmatcuk/doublestar/v4"
+	documentpkg "github.com/mclucy/lucy/document"
 	"github.com/mclucy/lucy/input"
 )
 
@@ -41,7 +42,7 @@ func expandFilePaths(root *os.Root, paths []string) (selected, skippedDirectorie
 		if err != nil {
 			return nil, nil, err
 		}
-		if !strings.ContainsAny(normalized, "*?[") {
+		if !hasPatternMeta(normalized) {
 			info, err := root.Lstat(normalized)
 			switch {
 			case errors.Is(err, os.ErrNotExist):
@@ -131,4 +132,88 @@ func reservedDirectory(entry fs.DirEntry) bool {
 	default:
 		return false
 	}
+}
+
+// expandDeclaredPaths resolves patterns against tracked declarations without
+// walking the workspace, so a declared file that no longer exists still
+// matches. Recover reports matched presence-only declarations as skipped.
+func expandDeclaredPaths(
+	files []documentpkg.TrackedFile,
+	paths []string,
+	operation Operation,
+) (selected, skipped []string, resultErr error) {
+	type argument struct {
+		raw  string
+		path string
+	}
+	arguments := make([]argument, 0, len(paths))
+	literal := make(map[string]struct{}, len(paths))
+	for _, raw := range paths {
+		path, err := input.TrackedPath(raw)
+		if err != nil {
+			return nil, nil, err
+		}
+		arguments = append(arguments, argument{raw: raw, path: path})
+		if !hasPatternMeta(path) {
+			literal[path] = struct{}{}
+		}
+	}
+	selected = make([]string, 0, len(files))
+	skipped = make([]string, 0)
+	selectedSeen := make(map[string]struct{}, len(files))
+	skippedSeen := make(map[string]struct{}, len(files))
+	addSelected := func(path string) {
+		if _, exists := selectedSeen[path]; exists {
+			return
+		}
+		selectedSeen[path] = struct{}{}
+		selected = append(selected, path)
+	}
+	addSkipped := func(path string) {
+		if _, exists := skippedSeen[path]; exists {
+			return
+		}
+		skippedSeen[path] = struct{}{}
+		skipped = append(skipped, path)
+	}
+	for _, argument := range arguments {
+		if !hasPatternMeta(argument.path) {
+			addSelected(argument.path)
+			continue
+		}
+		pattern := globPattern(argument.path)
+		if !doublestar.ValidatePattern(pattern) {
+			return nil, nil, fmt.Errorf("invalid pattern %q", argument.raw)
+		}
+		matched := false
+		for _, file := range files {
+			ok, err := doublestar.Match(pattern, file.Path)
+			if err != nil {
+				return nil, nil, err
+			}
+			if !ok {
+				continue
+			}
+			matched = true
+			if _, explicit := literal[file.Path]; explicit {
+				continue
+			}
+			if operation == Recover && file.Hash == "" {
+				addSkipped(file.Path)
+				continue
+			}
+			addSelected(file.Path)
+		}
+		if !matched {
+			return nil, nil, fmt.Errorf(
+				"pattern %q matches no tracked files",
+				argument.raw,
+			)
+		}
+	}
+	return selected, skipped, nil
+}
+
+func hasPatternMeta(value string) bool {
+	return strings.ContainsAny(value, "*?[")
 }
