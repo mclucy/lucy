@@ -140,10 +140,15 @@ func (s *Service) resolveInstall(
 	if old != nil {
 		previousPackages = old.Packages
 	}
+	preserveLocked := old != nil &&
+		old.Server.Minecraft == resolved.Server.Minecraft &&
+		old.Server.Product == resolved.Server.Product &&
+		old.Server.CoreVersion == resolved.Server.CoreVersion
 	packageRequest := resolve.PackagesRequest{
-		Context:  ctx,
-		Manifest: d,
-		Previous: previousPackages,
+		Context:        ctx,
+		Manifest:       d,
+		Previous:       previousPackages,
+		PreserveLocked: preserveLocked,
 		Target: resolve.Target{
 			Product:      resolved.Server.Product,
 			Bootstrapper: resolved.Server.Bootstrapper,

@@ -176,6 +176,53 @@ func lockedFileID(
 	return ""
 }
 
+// lockedCandidate rebuilds the candidate the lock accepted for this request.
+// An adopted release can carry a compatibility exception that ordinary
+// provider filtering drops, so the locked file stays selectable while its
+// runtime target is unchanged.
+func lockedCandidate(
+	previous []document.Package,
+	r projectRequest,
+) (upstream.Candidate, bool) {
+	for _, p := range previous {
+		if p.Environment != r.key.environment ||
+			p.Ecosystem != r.key.ecosystem ||
+			p.Provider != r.key.provider ||
+			p.ProjectID != r.key.project ||
+			p.Filename == "" {
+			continue
+		}
+		locked := upstream.Candidate{Artifact: p.Artifact}
+		locked.PrimaryFile = true
+		locked.CompatibilityUnknown = true
+		return locked, true
+	}
+	return upstream.Candidate{}, false
+}
+
+// appendLockedCandidate adds the locked file when the catalogue did not
+// publish a matching candidate.
+func appendLockedCandidate(
+	list []upstream.Candidate,
+	previous []document.Package,
+	r projectRequest,
+) []upstream.Candidate {
+	locked, ok := lockedCandidate(previous, r)
+	if !ok {
+		return list
+	}
+	if slices.ContainsFunc(list, func(candidate upstream.Candidate) bool {
+		if locked.FileID != "" && candidate.FileID != "" {
+			return candidate.FileID == locked.FileID
+		}
+		return candidate.Version == locked.Version &&
+			candidate.Filename == locked.Filename
+	}) {
+		return list
+	}
+	return append(list, locked)
+}
+
 func Packages(request PackagesRequest) ([]document.Package, []error, error) {
 	ctx := request.Context
 	logger := request.Logger
@@ -185,6 +232,7 @@ func Packages(request PackagesRequest) ([]document.Package, []error, error) {
 	}
 	d := request.Manifest
 	previous := request.Previous
+	preserveLocked := request.PreserveLocked
 	target := request.Target
 	materialize := request.Materialize
 	withOptional := request.WithOptional
@@ -436,7 +484,22 @@ func Packages(request PackagesRequest) ([]document.Package, []error, error) {
 			var err error
 			list, err = candidatesFor(ctx, catalogueRegistry(r.key.provider), r.key.project, string(target.Minecraft), r.key.ecosystem)
 			if err != nil {
-				return hardFail(err)
+				if !preserveLocked {
+					return hardFail(err)
+				}
+				locked, ok := lockedCandidate(previous, r)
+				if !ok {
+					return hardFail(err)
+				}
+				logger.Debug(
+					"resolve: catalogue failed; keeping locked file",
+					"provider", r.key.provider,
+					"project", r.key.project,
+					"reason", err,
+				)
+				list = []upstream.Candidate{locked}
+			} else if preserveLocked {
+				list = appendLockedCandidate(list, previous, r)
 			}
 			list = orderCandidates(list, previous, r)
 			candidates[r.key] = list
