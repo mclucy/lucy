@@ -20,15 +20,23 @@ func expandFilePaths(root *os.Root, paths []string) (selected, skippedDirectorie
 	selected = make([]string, 0, len(paths))
 	skippedDirectories = make([]string, 0)
 	seen := make(map[string]struct{}, len(paths))
-	appendPath := func(destination *[]string, value string) {
-		if _, exists := seen[value]; exists {
-			return
+	add := func(name string, directory bool) bool {
+		normalized, err := input.TrackedPath(name)
+		if err != nil {
+			return false
 		}
-		seen[value] = struct{}{}
-		*destination = append(*destination, value)
+		if _, exists := seen[normalized]; exists {
+			return true
+		}
+		seen[normalized] = struct{}{}
+		if directory {
+			skippedDirectories = append(skippedDirectories, normalized)
+		} else {
+			selected = append(selected, normalized)
+		}
+		return true
 	}
-	var files, directories []string
-	loaded := false
+	var resolver *patternResolver
 	for _, raw := range paths {
 		normalized, err := input.TrackedPath(raw)
 		if err != nil {
@@ -38,40 +46,39 @@ func expandFilePaths(root *os.Root, paths []string) (selected, skippedDirectorie
 			info, err := root.Lstat(normalized)
 			switch {
 			case errors.Is(err, os.ErrNotExist):
-				appendPath(&selected, normalized)
+				add(normalized, false)
 			case err != nil:
 				return nil, nil, err
 			case info.IsDir():
-				appendPath(&skippedDirectories, normalized)
+				add(normalized, true)
 			default:
-				appendPath(&selected, normalized)
+				add(normalized, false)
 			}
 			continue
 		}
 		if err := validateFilePattern(normalized); err != nil {
 			return nil, nil, err
 		}
-		if !loaded {
-			files, directories, err = trackableEntries(root)
-			if err != nil {
-				return nil, nil, err
+		if resolver == nil {
+			resolver = &patternResolver{
+				fsys:    root.FS(),
+				entries: make(map[string][]fs.DirEntry),
 			}
-			loaded = true
 		}
 		matched := false
-		for _, candidate := range files {
-			if !matchTrackPattern(normalized, candidate) {
-				continue
-			}
-			appendPath(&selected, candidate)
-			matched = true
-		}
-		for _, candidate := range directories {
-			if !matchTrackPattern(normalized, candidate) {
-				continue
-			}
-			appendPath(&skippedDirectories, candidate)
-			matched = true
+		err = resolver.match(
+			".",
+			strings.Split(normalized, "/"),
+			func(name string, directory bool) bool {
+				if !add(name, directory) {
+					return false
+				}
+				matched = true
+				return true
+			},
+		)
+		if err != nil {
+			return nil, nil, err
 		}
 		if !matched {
 			return nil, nil, fmt.Errorf(
@@ -83,7 +90,7 @@ func expandFilePaths(root *os.Root, paths []string) (selected, skippedDirectorie
 	return selected, skippedDirectories, nil
 }
 
-// validateFilePattern rejects malformed character classes before a walk can
+// validateFilePattern rejects malformed character classes before traversal can
 // report them as a match failure.
 func validateFilePattern(pattern string) error {
 	for segment := range strings.SplitSeq(pattern, "/") {
@@ -97,78 +104,108 @@ func validateFilePattern(pattern string) error {
 	return nil
 }
 
-// trackableEntries lists every regular file and directory that a pattern may
-// select. Reserved state directories are never candidates, and paths that the
-// manifest cannot declare are skipped without failing the whole walk.
-func trackableEntries(root *os.Root) (files, directories []string, resultErr error) {
-	err := fs.WalkDir(
-		root.FS(),
-		".",
-		func(name string, entry fs.DirEntry, walkErr error) error {
-			if walkErr != nil {
-				return walkErr
-			}
-			if name == "." {
-				return nil
-			}
-			if entry.IsDir() {
-				switch strings.ToLower(entry.Name()) {
-				case ".lucy", ".git":
-					return fs.SkipDir
-				}
-				normalized, err := input.TrackedPath(name)
-				if err != nil {
-					return nil
-				}
-				directories = append(directories, normalized)
-				return nil
-			}
-			if !entry.Type().IsRegular() {
-				return nil
-			}
-			normalized, err := input.TrackedPath(name)
-			if err != nil {
-				return nil
-			}
-			files = append(files, normalized)
-			return nil
-		},
-	)
+// patternResolver descends only through directories a pattern can select, so
+// an unrelated unreadable directory cannot prevent expansion.
+type patternResolver struct {
+	fsys    fs.FS
+	entries map[string][]fs.DirEntry
+}
+
+func (r *patternResolver) readDir(name string) ([]fs.DirEntry, error) {
+	if entries, exists := r.entries[name]; exists {
+		return entries, nil
+	}
+	entries, err := fs.ReadDir(r.fsys, name)
 	if err != nil {
-		return nil, nil, err
+		return nil, fmt.Errorf("read workspace directory %s: %w", name, err)
 	}
-	return files, directories, nil
+	r.entries[name] = entries
+	return entries, nil
 }
 
-// matchTrackPattern reports whether a workspace-relative path matches a
-// pattern. Wildcards match within one component; ** matches zero or more
-// components. A leading dot is matched only by an explicit dot or character
-// class, as in a shell.
-func matchTrackPattern(pattern, name string) bool {
-	return matchTrackSegments(strings.Split(pattern, "/"), strings.Split(name, "/"))
+// match emits every entry below directory that segments select. The caller
+// filters emitted paths through the tracked-path contract.
+func (r *patternResolver) match(
+	directory string,
+	segments []string,
+	emit func(name string, directory bool) bool,
+) error {
+	if len(segments) == 0 {
+		if directory != "." {
+			emit(directory, true)
+		}
+		return nil
+	}
+	entries, err := r.readDir(directory)
+	if err != nil {
+		return err
+	}
+	if segments[0] == "**" {
+		if err := r.match(directory, segments[1:], emit); err != nil {
+			return err
+		}
+		for _, entry := range entries {
+			name := entry.Name()
+			if strings.HasPrefix(name, ".") || reservedDirectory(entry) {
+				continue
+			}
+			child := path.Join(directory, name)
+			switch {
+			case entry.IsDir():
+				if err := r.match(child, segments, emit); err != nil {
+					return err
+				}
+			case entry.Type().IsRegular() && len(segments) == 1:
+				emit(child, false)
+			}
+		}
+		return nil
+	}
+	segment := segments[0]
+	for _, entry := range entries {
+		name := entry.Name()
+		if strings.HasPrefix(name, ".") && !explicitDotSegment(segment) {
+			continue
+		}
+		if reservedDirectory(entry) {
+			continue
+		}
+		matched, err := path.Match(negatedTrackClass(segment), name)
+		if err != nil {
+			return err
+		}
+		if !matched {
+			continue
+		}
+		child := path.Join(directory, name)
+		if len(segments) == 1 {
+			switch {
+			case entry.IsDir():
+				emit(child, true)
+			case entry.Type().IsRegular():
+				emit(child, false)
+			}
+			continue
+		}
+		if entry.IsDir() {
+			if err := r.match(child, segments[1:], emit); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
-func matchTrackSegments(pattern, name []string) bool {
-	if len(pattern) == 0 {
-		return len(name) == 0
-	}
-	if pattern[0] == "**" {
-		if matchTrackSegments(pattern[1:], name) {
-			return true
-		}
-		if len(name) == 0 || strings.HasPrefix(name[0], ".") {
-			return false
-		}
-		return matchTrackSegments(pattern, name[1:])
-	}
-	if len(name) == 0 {
+func reservedDirectory(entry fs.DirEntry) bool {
+	if !entry.IsDir() {
 		return false
 	}
-	if strings.HasPrefix(name[0], ".") && !explicitDotSegment(pattern[0]) {
+	switch strings.ToLower(entry.Name()) {
+	case ".lucy", ".git":
+		return true
+	default:
 		return false
 	}
-	matched, err := path.Match(negatedTrackClass(pattern[0]), name[0])
-	return err == nil && matched && matchTrackSegments(pattern[1:], name[1:])
 }
 
 // explicitDotSegment reports whether a segment explicitly selects a leading
