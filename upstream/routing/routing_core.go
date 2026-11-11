@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json/v2"
 	"fmt"
-	"net/url"
 	"strings"
 
 	"github.com/mclucy/lucy/artifact"
@@ -24,13 +23,8 @@ func CoreModules(
 	core catalog.Artifact,
 	acquire func(*catalog.Artifact) (artifact.MaterializedFile, error),
 ) ([]catalog.DescriptorModule, error) {
-	var ecosystem catalog.Ecosystem
-	switch product {
-	case server.ProductFabric:
-		ecosystem = catalog.EcosystemFabric
-	case server.ProductQuilt:
-		ecosystem = catalog.EcosystemQuilt
-	default:
+	definition, ok := loaderRuntimeFor(product)
+	if !ok {
 		return nil, nil
 	}
 	if len(core.Modules) > 0 {
@@ -40,7 +34,7 @@ func CoreModules(
 	if err != nil {
 		return nil, err
 	}
-	return artifact.ReadModules(ctx, materialized.Path, ecosystem)
+	return artifact.ReadModules(ctx, materialized.Path, definition.ecosystem)
 }
 
 // Metadata fetches JSON metadata through the router's configured network.
@@ -165,87 +159,10 @@ func (r *Router) ResolveServerProduct(
 			"repository", req.Repository,
 		)
 		err = r.resolveGithubProduct(ctx, req, &out, acquire)
+	} else if definition, ok := loaderRuntimeFor(req.Product); ok {
+		err = r.resolveLoaderProduct(ctx, req, &out, definition)
 	} else {
 		switch req.Product {
-		case server.ProductFabric:
-			selected, e := r.fabric.ResolveVersionSelector(
-				ctx,
-				catalog.VersionedRef{
-					Name:      "fabric",
-					Ecosystem: catalog.EcosystemFabric,
-					Version:   req.ProductVersion,
-				},
-			)
-			if e != nil {
-				return out, e
-			}
-			out.ProductVersion = selected.Version
-			out.Bootstrapper = server.BootstrapMethodFabric
-			r.logger.Debug(
-				"routing: server product route selected",
-				"product", req.Product,
-				"provider", catalog.ProviderFabric,
-				"version", out.ProductVersion,
-			)
-			var profile struct {
-				MainClass string         `json:"mainClass"`
-				Libraries []mavenLibrary `json:"libraries"`
-			}
-			if e := r.Metadata(
-				ctx,
-				"https://meta.fabricmc.net/v2/versions/loader/"+
-					url.PathEscape(req.Minecraft.String())+"/"+
-					url.PathEscape(out.ProductVersion.String())+
-					"/server/json",
-				&profile,
-			); e != nil {
-				return out, e
-			}
-			out.Artifact = catalog.Artifact{
-				Provider:  catalog.ProviderFabric,
-				ProjectID: "fabric-loader",
-				Version:   out.ProductVersion,
-				Filename:  "fabric-loader-" + out.ProductVersion.String() + ".jar",
-				URL: "https://maven.fabricmc.net/net/fabricmc/fabric-loader/" +
-					out.ProductVersion.String() + "/fabric-loader-" +
-					out.ProductVersion.String() + ".jar",
-				Hashes: map[string]string{},
-			}
-			if e := r.trustMavenChecksum(ctx, &out.Artifact); e != nil {
-				return out, e
-			}
-			materialized, e := acquire(&out.Artifact)
-			if e != nil {
-				return out, e
-			}
-			out.Artifact.Hashes = materialized.Hashes
-			modules, e := artifact.ReadModules(
-				ctx,
-				materialized.Path,
-				catalog.EcosystemFabric,
-			)
-			if e != nil {
-				return out, e
-			}
-			out.Artifact.Modules = modules
-			for _, lib := range profile.Libraries {
-				input, downloadable, e := libraryInput(
-					lib,
-					nil,
-					out.ProductVersion,
-				)
-				if e != nil {
-					return out, e
-				}
-				if !downloadable || input.Artifact.URL == out.Artifact.URL {
-					continue
-				}
-				out.Inputs = append(out.Inputs, input)
-			}
-		case server.ProductQuilt:
-			if err := r.resolveQuilt(ctx, req, &out); err != nil {
-				return out, err
-			}
 		case server.ProductForge, server.ProductNeoForge:
 			var (
 				remote   upstream.ResolvedPackage
@@ -362,6 +279,17 @@ func (r *Router) ResolveServerProduct(
 		return out, err
 	}
 	out.Artifact.Hashes = materialized.Hashes
+	if definition, ok := loaderRuntimeFor(out.Product); ok {
+		modules, e := artifact.ReadModules(
+			ctx,
+			materialized.Path,
+			definition.ecosystem,
+		)
+		if e != nil {
+			return out, e
+		}
+		out.Artifact.Modules = modules
+	}
 	if out.Bootstrapper == server.BootstrapMethodPaperclip {
 		if err := paperclipInput(&out, materialized.Path); err != nil {
 			return out, err

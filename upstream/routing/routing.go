@@ -21,16 +21,16 @@ import (
 	"github.com/mclucy/lucy/cache"
 	catalogpkg "github.com/mclucy/lucy/catalog"
 	"github.com/mclucy/lucy/log"
+	"github.com/mclucy/lucy/server"
 	"github.com/mclucy/lucy/upstream"
 	"github.com/mclucy/lucy/upstream/internal/providers/curseforge"
-	"github.com/mclucy/lucy/upstream/internal/providers/fabric"
 	"github.com/mclucy/lucy/upstream/internal/providers/forge"
 	"github.com/mclucy/lucy/upstream/internal/providers/hangar"
+	"github.com/mclucy/lucy/upstream/internal/providers/loadermeta"
 	"github.com/mclucy/lucy/upstream/internal/providers/mcdr"
 	"github.com/mclucy/lucy/upstream/internal/providers/modrinth"
 	"github.com/mclucy/lucy/upstream/internal/providers/mojang"
 	"github.com/mclucy/lucy/upstream/internal/providers/neoforge"
-	"github.com/mclucy/lucy/upstream/internal/providers/quilt"
 	"github.com/mclucy/lucy/upstream/internal/providers/spiget"
 )
 
@@ -58,10 +58,9 @@ type Router struct {
 	providers providerCatalog
 
 	mojang   *mojang.Provider
-	fabric   *fabric.Provider
-	quilt    *quilt.Provider
 	forge    *forge.Provider
 	neoforge *neoforge.Provider
+	loaders  map[server.Product]*loadermeta.Provider
 }
 
 // New constructs a router over provider instances. network carries HTTP and
@@ -82,10 +81,15 @@ func New(
 		logger:   logger,
 		network:  network,
 		mojang:   mojang.New(network),
-		fabric:   fabric.New(network),
-		quilt:    quilt.New(network),
 		forge:    forge.New(network),
 		neoforge: neoforge.New(network),
+	}
+	router.loaders = make(
+		map[server.Product]*loadermeta.Provider,
+		len(loaderRuntimes),
+	)
+	for product, definition := range loaderRuntimes {
+		router.loaders[product] = loadermeta.New(network, definition.meta)
 	}
 	router.providers = providerCatalog{
 		searchProviders: map[catalogpkg.Registry]upstream.SearchProvider{
