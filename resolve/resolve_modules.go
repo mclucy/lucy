@@ -30,7 +30,7 @@ func clientOnlyIdentities(
 			if id != "" {
 				identities[moduleKey{
 					environment,
-					moduleEcosystem(target, module.Ecosystem),
+					target.moduleNamespace(module.Ecosystem),
 					id,
 				}] = struct{}{}
 			}
@@ -74,24 +74,6 @@ func (s moduleSource) runtime() bool {
 	return s.packageIndex < 0
 }
 
-// moduleEcosystem collapses the Quilt and Fabric module namespaces under a
-// Quilt target. Quilt Loader resolves both descriptor kinds in one mod graph,
-// so a Quilt mod can depend on a Fabric module and the reverse is impossible:
-// a Fabric target never normalizes the other way.
-func moduleEcosystem(
-	target Target,
-	ecosystem catalog.Ecosystem,
-) catalog.Ecosystem {
-	if target.Product != serverpkg.ProductQuilt {
-		return ecosystem
-	}
-	if ecosystem == catalog.EcosystemQuilt ||
-		ecosystem == catalog.EcosystemFabric {
-		return catalog.EcosystemFabric
-	}
-	return ecosystem
-}
-
 // moduleProvider is the module that answers one identity, together with the
 // coordinates a dependency binds to.
 type moduleProvider struct {
@@ -123,7 +105,7 @@ func finalizeModules(packages []document.Package, target Target) ([]ModuleProble
 			m := p.Modules[mi]
 			key := moduleKey{
 				p.Environment,
-				moduleEcosystem(target, m.Ecosystem),
+				target.moduleNamespace(m.Ecosystem),
 				normalizeModuleID(m.Ecosystem, m.ID),
 			}
 			if owner, ok := index[key]; !ok || !owner.source.owns(pi, mi) {
@@ -194,7 +176,7 @@ func buildModuleIndex(
 				}
 				key := moduleKey{
 					p.Environment,
-					moduleEcosystem(target, m.Ecosystem),
+					target.moduleNamespace(m.Ecosystem),
 					normalizeModuleID(m.Ecosystem, name),
 				}
 				previous, ok := index[key]
@@ -865,7 +847,7 @@ func matchModuleDependency(
 			dep.Kind != catalog.DependencyKindIncompatible {
 			if _, ok := clientOnly[moduleKey{
 				environment,
-				moduleEcosystem(target, ecosystem),
+				target.moduleNamespace(ecosystem),
 				normalizeModuleID(ecosystem, alternative.ID),
 			}]; ok {
 				// The only candidate is client-only, so the loader filters it
@@ -924,7 +906,7 @@ func lookupSelectedModule(
 	}
 	key := moduleKey{
 		environment,
-		moduleEcosystem(target, ecosystem),
+		target.moduleNamespace(ecosystem),
 		normalizeModuleID(ecosystem, id),
 	}
 	if provider, ok := index[key]; ok {
