@@ -305,6 +305,9 @@ func phaseText(phase install.PhaseInfo) string {
 			return ""
 		}
 		if phase.Count == phase.Total {
+			if phase.Count == 1 {
+				return "Adopted 1 installed file"
+			}
 			return fmt.Sprintf("Adopted %d installed files", phase.Count)
 		}
 		return fmt.Sprintf(
