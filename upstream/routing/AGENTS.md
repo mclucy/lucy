@@ -13,6 +13,7 @@ Applies provider selection policy, parallel execution strategies, and server pro
 - **First-success racing**: `GetInfoFirstSuccess` races providers in parallel, returning the first successful response tagged with winning source provenance on `catalog.Ref.Provider`.
 - **Ordered hash lookup**: `ResolveArtifactByHash` checks hash mappers sequentially by priority; errors yield an incomplete lookup rather than halting subsequent candidates.
 - **Server product resolution**: `ResolveServerProduct` resolves vanilla and loader server runtimes (Mojang, Fabric, Quilt, Paperclip, GitHub forks), enforcing trusted Maven sidecar checksums or API digest manifests before staging.
+- **Loader meta**: `New` binds one `loadermeta.Provider` per Fabric-style loader. `loaderRuntimes` maps each server product to that provider's definition, ecosystem, and bootstrap method. Fabric and Quilt share one profile library path, pin the loader core and every profile library to the repository `.sha256` sidecar, and record the loader's descriptor modules at resolution.
 
 ## Architecture Invariants
 
