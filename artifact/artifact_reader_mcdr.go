@@ -82,7 +82,7 @@ func mcdrDecodedDescriptor(
 	member string,
 ) (*decodedDescriptor, error) {
 	descriptor := &mcdrPluginFile{}
-	if err := json.Unmarshal(raw, descriptor); err != nil {
+	if err := unmarshalDescriptor(raw, descriptor); err != nil {
 		return nil, err
 	}
 	module := catalog.DescriptorModule{
