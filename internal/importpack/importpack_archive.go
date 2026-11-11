@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"compress/gzip"
 	"context"
+	"encoding/binary"
 	"encoding/json/v2"
 	"errors"
 	"fmt"
@@ -214,6 +215,12 @@ func (a *archive) open(ctx context.Context) error {
 		return err
 	}
 	if a.container == containerZip {
+		// The archive reader allocates one structure per entry the central
+		// directory declares, so the entry limit applies before it parses.
+		if entries, ok := zipDirectoryEntries(a.file, info.Size()); ok &&
+			entries > uint64(maxEntries) {
+			return limitError("archive has more than %d entries", maxEntries)
+		}
 		reader, err := zip.NewReader(a.file, info.Size())
 		if err != nil {
 			return fmt.Errorf("read zip archive %s: %w", a.path, err)
@@ -232,6 +239,56 @@ func (a *archive) matchesMagic(magic []byte) bool {
 		return bytes.HasPrefix(magic, []byte{0x1f, 0x8b})
 	}
 	return false
+}
+
+// zipDirectoryEntries reports how many entries a zip central directory
+// declares. The end record holds the count unless the archive is too large for
+// it, in which case the ZIP64 record holds it. A directory this scan cannot
+// read reports false, leaving the archive reader to describe the input.
+func zipDirectoryEntries(file *os.File, size int64) (uint64, bool) {
+	const (
+		endRecordSize   = 22
+		maxCommentSize  = 0xffff
+		zip64LocatorMax = 20
+		zip64RecordSize = 56
+		endRecordSig    = 0x06054b50
+		zip64LocatorSig = 0x07064b50
+		zip64RecordSig  = 0x06064b50
+	)
+	tailSize := min(size, int64(endRecordSize+maxCommentSize))
+	if tailSize < endRecordSize {
+		return 0, false
+	}
+	tail := make([]byte, tailSize)
+	if _, err := file.ReadAt(tail, size-tailSize); err != nil {
+		return 0, false
+	}
+	position := bytes.LastIndex(tail, []byte("PK\x05\x06"))
+	if position < 0 || len(tail)-position < endRecordSize {
+		return 0, false
+	}
+	record := tail[position:]
+	if binary.LittleEndian.Uint32(record) != endRecordSig {
+		return 0, false
+	}
+	entries := uint64(binary.LittleEndian.Uint16(record[10:12]))
+	locatorStart := position - zip64LocatorMax
+	if locatorStart < 0 {
+		return entries, true
+	}
+	locator := tail[locatorStart:]
+	if binary.LittleEndian.Uint32(locator) != zip64LocatorSig {
+		return entries, true
+	}
+	counted := make([]byte, zip64RecordSize)
+	offset := binary.LittleEndian.Uint64(locator[8:16])
+	if _, err := file.ReadAt(counted, int64(offset)); err != nil {
+		return entries, true
+	}
+	if binary.LittleEndian.Uint32(counted) != zip64RecordSig {
+		return entries, true
+	}
+	return binary.LittleEndian.Uint64(counted[32:40]), true
 }
 
 // scan validates every entry name and removes a single wrapper directory.
