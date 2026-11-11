@@ -351,6 +351,7 @@ func (m *materializer) fetch(it *item) error {
 // only when it stores an entry.
 func (m *materializer) downloadFrom(url string, it *item) (string, error) {
 	digest := it.download
+	name := path.Base(it.rel)
 	// A cache hit bypasses WrapReader, so the transfer limit must also bound
 	// the cache copy: the per-file limit and the remaining extraction budget.
 	limit := min(maxFileBytes, m.budget.left)
@@ -362,12 +363,15 @@ func (m *materializer) downloadFrom(url string, it *item) (string, error) {
 		Kind:          cache.KindArtifact,
 		ExpectedHash:  digest.digest,
 		HashAlgorithm: digest.algorithm,
-		Filename:      path.Base(it.rel),
+		Filename:      name,
 		FileMode:      0o644,
 		MaxBytes:      limit,
-		WrapReader: func(r io.Reader, _ int64) io.Reader {
+		WrapReader: func(r io.Reader, size int64) io.Reader {
 			attempt = newChargedReader(m.ctx, r, m.budget)
-			return attempt
+			m.progress.ReportStarted(it.rel, size)
+			return cache.ProgressReader(attempt, size, func(read, total int64) {
+				m.progress.ReportProgress(it.rel, read, total)
+			})
 		},
 	})
 	if err != nil {
@@ -385,6 +389,7 @@ func (m *materializer) downloadFrom(url string, it *item) (string, error) {
 		_ = os.Remove(staged)
 		return "", closeErr
 	}
+	m.progress.ReportDone(it.rel, res.CacheHit)
 	return filepath.Base(staged), nil
 }
 

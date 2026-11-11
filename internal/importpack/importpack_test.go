@@ -167,7 +167,7 @@ func TestMaterializeTreeRejectsTraversalAndCaseCollision(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			path := writeZip(t, tt.files)
 			dest := t.TempDir()
-			_, err := Materialize(context.Background(), path, dest, nil)
+			_, err := Materialize(context.Background(), path, dest, nil, Progress{})
 			if !errors.Is(err, tt.want) {
 				t.Fatalf("err = %v, want error matching %v", err, tt.want)
 			}
@@ -184,7 +184,7 @@ func TestMaterializeTreeFlattensSingleRoot(t *testing.T) {
 		"pack/mods/example.jar":  "jar",
 	})
 	dest := t.TempDir()
-	result, err := Materialize(context.Background(), path, dest, nil)
+	result, err := Materialize(context.Background(), path, dest, nil, Progress{})
 	if err != nil {
 		t.Fatalf("Materialize: %v", err)
 	}
@@ -205,7 +205,7 @@ func TestMaterializeTarball(t *testing.T) {
 		"root/mods/a.jar":        "jar",
 	})
 	dest := t.TempDir()
-	result, err := Materialize(context.Background(), path, dest, nil)
+	result, err := Materialize(context.Background(), path, dest, nil, Progress{})
 	if err != nil {
 		t.Fatalf("Materialize: %v", err)
 	}
@@ -234,7 +234,7 @@ func TestMaterializeMrpackSkipsClientAndAppliesServerOverrides(t *testing.T) {
 		"server-overrides/config/example.toml": "server",
 	})
 	dest := t.TempDir()
-	result, err := Materialize(context.Background(), path, dest, nil)
+	result, err := Materialize(context.Background(), path, dest, nil, Progress{})
 	if err != nil {
 		t.Fatalf("Materialize: %v", err)
 	}

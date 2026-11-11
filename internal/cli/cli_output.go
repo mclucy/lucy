@@ -31,6 +31,7 @@ type installOutput struct {
 	rejectedProject string
 	fetchedBase     int64
 	fetchedCurrent  int64
+	fetchedFiles    int
 }
 
 func newInstallOutput(cmd *cobra.Command, inv *Invocation) *installOutput {
@@ -61,6 +62,7 @@ func (o *installOutput) phaseStarted(name string) {
 	o.pending = 0
 	o.rejected = 0
 	o.rejectedProject = ""
+	o.fetchedFiles = 0
 	o.renderer.PhaseStarted(phaseLabel(name))
 }
 
@@ -88,6 +90,7 @@ func (o *installOutput) fetchProgress(name string, read, total int64) {
 func (o *installOutput) fetchDone(string, bool) {
 	o.fetchedBase += o.fetchedCurrent
 	o.fetchedCurrent = 0
+	o.fetchedFiles++
 	o.renderer.DownloadDone()
 	o.updateStatus()
 }
@@ -119,6 +122,13 @@ func (o *installOutput) statusText() string {
 			fmt.Sprintf("%d resolved", o.resolved),
 			fmt.Sprintf("%d pending", o.pending),
 		)
+	}
+	if o.phase == "files" && o.fetchedFiles > 0 {
+		label := fmt.Sprintf("%d files", o.fetchedFiles)
+		if o.fetchedFiles == 1 {
+			label = "1 file"
+		}
+		parts = append(parts, label)
 	}
 	if fetched := o.fetchedBase + o.fetchedCurrent; fetched > 0 {
 		parts = append(parts, style.FormatBytesDecimal(fetched)+" fetched")
@@ -240,6 +250,12 @@ func phaseLabel(name string) string {
 		return "Preparing Python environment"
 	case "install":
 		return "Installing"
+	case "download pack":
+		return "Downloading the modpack"
+	case "download archive":
+		return "Downloading the archive"
+	case "files":
+		return "Writing server files"
 	default:
 		return style.Capitalize(name)
 	}
@@ -272,6 +288,18 @@ func phaseText(phase install.PhaseInfo) string {
 		return fmt.Sprintf("Resolved %d packages", phase.Count)
 	case "python environment":
 		return "Prepared Python environment"
+	case "download pack":
+		return "Downloaded the modpack"
+	case "download archive":
+		return "Downloaded the archive"
+	case "files":
+		if phase.Count == 0 {
+			return ""
+		}
+		if phase.Count == 1 {
+			return "Wrote 1 server file"
+		}
+		return fmt.Sprintf("Wrote %d server files", phase.Count)
 	case "install":
 		if phase.Count == 0 {
 			return ""

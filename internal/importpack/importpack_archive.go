@@ -115,6 +115,7 @@ func materialize(
 	ctx context.Context,
 	path, dest string,
 	network *cache.Client,
+	progress Progress,
 ) (*Result, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
@@ -135,7 +136,7 @@ func materialize(
 			lay.downloads,
 		)
 	}
-	m, err := newMaterializer(ctx, dest, network)
+	m, err := newMaterializer(ctx, dest, network, progress)
 	if err != nil {
 		return nil, err
 	}
@@ -737,15 +738,21 @@ func fileMode(exec bool) fs.FileMode {
 // materializer writes a layout beneath dest through an os.Root, so no write can
 // follow a link out of the destination.
 type materializer struct {
-	ctx     context.Context
-	dest    string
-	root    *os.Root
-	stage   string
-	network *cache.Client
-	budget  *byteBudget
+	ctx      context.Context
+	dest     string
+	root     *os.Root
+	stage    string
+	network  *cache.Client
+	progress Progress
+	budget   *byteBudget
 }
 
-func newMaterializer(ctx context.Context, dest string, network *cache.Client) (*materializer, error) {
+func newMaterializer(
+	ctx context.Context,
+	dest string,
+	network *cache.Client,
+	progress Progress,
+) (*materializer, error) {
 	abs, err := filepath.Abs(dest)
 	if err != nil {
 		return nil, err
@@ -758,11 +765,12 @@ func newMaterializer(ctx context.Context, dest string, network *cache.Client) (*
 		return nil, err
 	}
 	return &materializer{
-		ctx:     ctx,
-		dest:    abs,
-		root:    root,
-		network: network,
-		budget:  &byteBudget{left: maxExtractedBytes},
+		ctx:      ctx,
+		dest:     abs,
+		root:     root,
+		network:  network,
+		progress: progress,
+		budget:   &byteBudget{left: maxExtractedBytes},
 	}, nil
 }
 
