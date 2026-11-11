@@ -54,6 +54,10 @@ func actionArtifactInfo(
 	if err != nil {
 		return infoArtifactReadFailure(root, filePath, err)
 	}
+	infos = artifact.PreferredPackageInfos(
+		infos,
+		catalog.EcosystemUnspecified,
+	)
 	if len(infos) == 0 {
 		return infoArtifactEmptyFailure(root, filePath)
 	}

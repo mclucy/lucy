@@ -61,6 +61,10 @@ func quiltPackage(t *testing.T, path string) artifact.PackageInfo {
 	if err != nil {
 		t.Fatalf("ReadInfo() error = %v", err)
 	}
+	infos = artifact.PreferredPackageInfos(
+		infos,
+		catalog.EcosystemUnspecified,
+	)
 	if len(infos) != 1 {
 		t.Fatalf("ReadInfo() packages = %d, want 1: %+v", len(infos), infos)
 	}
