@@ -134,6 +134,11 @@ func importOptions(
 	if err != nil {
 		return operation.ImportOptions{}, err
 	}
+	if !isRemote {
+		if err := rejectImportScheme(source); err != nil {
+			return operation.ImportOptions{}, err
+		}
+	}
 	if _, ok := importURL(source); !ok && !isRemote {
 		source = resolveInvocationPath(inv.Directory, source)
 	}
@@ -266,6 +271,24 @@ func sanitizeImportSlug(name string) string {
 		separator = true
 	}
 	return builder.String()
+}
+
+// rejectImportScheme reports a source that names a URL scheme other than http
+// or https. Such a source is neither downloadable nor a local path, so treating
+// it as a path would report a misleading missing file.
+func rejectImportScheme(source string) error {
+	scheme, rest, found := strings.Cut(source, "://")
+	if !found || rest == "" {
+		return nil
+	}
+	if strings.EqualFold(scheme, "http") || strings.EqualFold(scheme, "https") {
+		return nil
+	}
+	return fmt.Errorf(
+		"source %q uses unsupported URL scheme %q: use an http or https URL, a local path, or a modrinth: or curseforge: reference",
+		source,
+		scheme,
+	)
 }
 
 // importURL reports whether source is an http or https URL.

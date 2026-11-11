@@ -74,6 +74,26 @@ func TestImportSlugRejectsSourceWithoutName(t *testing.T) {
 	}
 }
 
+func TestRejectImportScheme(t *testing.T) {
+	for _, source := range []string{
+		"http://host/a.zip",
+		"HTTPS://host/a.zip",
+		"packs/a.zip",
+		"/tmp/a.zip",
+		"modrinth:all-the-mods",
+	} {
+		if err := rejectImportScheme(source); err != nil {
+			t.Errorf("rejectImportScheme(%q) = %v, want nil", source, err)
+		}
+	}
+	for _, source := range []string{"file:///tmp/a.zip", "ftp://host/a.zip"} {
+		err := rejectImportScheme(source)
+		if err == nil || !strings.Contains(err.Error(), "unsupported URL scheme") {
+			t.Errorf("rejectImportScheme(%q) = %v, want a scheme error", source, err)
+		}
+	}
+}
+
 func TestImportURLDetection(t *testing.T) {
 	tests := map[string]bool{
 		"https://example.com/pack.mrpack": true,
