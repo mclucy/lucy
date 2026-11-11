@@ -827,6 +827,9 @@ func modulesProvide(
 		if required[module.ID] {
 			return true
 		}
+		if module.Group != "" && required[module.Group+":"+module.ID] {
+			return true
+		}
 		for _, provided := range module.Provides {
 			if required[provided] {
 				return true
