@@ -723,12 +723,7 @@ func (s *Service) classifyImportMod(
 	minecraft string,
 	mappers []packageMapper,
 ) importModFile {
-	modules, _ := artifact.ReadModulesFor(
-		ctx,
-		path,
-		ecosystem,
-		minecraft,
-	)
+	modules := importModules(ctx, path, ecosystem, minecraft)
 	file := importModFile{
 		path:    path,
 		modules: modules,
@@ -839,6 +834,45 @@ func modulesProvide(
 	return false
 }
 
+// descriptorLoaders lists the loaders whose descriptor the file carries,
+// starting with the server loader. A file with no readable descriptor answers
+// only the server loader.
+func descriptorLoaders(path string, loader catalog.Ecosystem) []catalog.Ecosystem {
+	loaders := []catalog.Ecosystem{loader}
+	infos, err := artifact.ReadInfo(path)
+	if err != nil {
+		return loaders
+	}
+	for _, info := range infos {
+		ecosystem := info.Ref.Ecosystem
+		if ecosystem == catalog.EcosystemUnspecified ||
+			slices.Contains(loaders, ecosystem) {
+			continue
+		}
+		loaders = append(loaders, ecosystem)
+	}
+	return loaders
+}
+
+// importModules reads the modules that describe a file. The server loader's
+// descriptor answers first; a file it has no descriptor for (a Fabric jar
+// bridged by Connector) contributes the modules of the descriptor it carries,
+// so the dependencies that keep server-optional libraries stay visible.
+func importModules(
+	ctx context.Context,
+	path string,
+	loader catalog.Ecosystem,
+	minecraft string,
+) []catalog.DescriptorModule {
+	for _, candidate := range descriptorLoaders(path, loader) {
+		modules, err := artifact.ReadModulesFor(ctx, path, candidate, minecraft)
+		if err == nil && len(modules) > 0 {
+			return modules
+		}
+	}
+	return nil
+}
+
 // clientOnlyDescriptor reports which descriptor makes the file client-only.
 // The server loader is tried first because its view decides whether the file
 // can load at all. A file whose descriptor belongs to another ecosystem (a
@@ -849,36 +883,23 @@ func clientOnlyDescriptor(
 	loader catalog.Ecosystem,
 	minecraft string,
 ) (string, bool) {
-	clientOnly, known, err := artifact.ReadClientOnly(
-		ctx,
-		path,
-		loader,
-		minecraft,
-	)
-	if err == nil && known {
-		if clientOnly {
-			return "client-only " + string(loader), true
-		}
-		return "", false
-	}
-	infos, err := artifact.ReadInfo(path)
-	if err != nil {
-		return "", false
-	}
-	for _, info := range infos {
-		ecosystem := info.Ref.Ecosystem
-		if ecosystem == loader ||
-			ecosystem == catalog.EcosystemUnspecified {
-			continue
-		}
+	for _, candidate := range descriptorLoaders(path, loader) {
 		clientOnly, known, err := artifact.ReadClientOnly(
 			ctx,
 			path,
-			ecosystem,
+			candidate,
 			minecraft,
 		)
-		if err == nil && known && clientOnly {
-			return "client-only " + string(ecosystem), true
+		if err != nil || !known {
+			continue
+		}
+		if clientOnly {
+			return "client-only " + string(candidate), true
+		}
+		if candidate == loader {
+			// The server loader accepts the file, so another loader's
+			// client-only descriptor cannot remove it.
+			return "", false
 		}
 	}
 	return "", false
