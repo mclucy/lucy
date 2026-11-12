@@ -6,10 +6,9 @@ import (
 	"fmt"
 	"io"
 	"os/exec"
-	"strconv"
-	"strings"
 
 	"github.com/mclucy/lucy/artifact"
+	versionpkg "github.com/mclucy/lucy/version"
 )
 
 // ErrInstallerUnsupported reports an identified installer whose native method
@@ -53,49 +52,37 @@ func RunInstaller(
 	}
 }
 
+// nativeInstallerJava is the Java major version a Forge-family native
+// installer needs. It does not depend on the Minecraft version the installer
+// provisions.
+const nativeInstallerJava = 17
+
 // InstallerJavaAdvisory returns the Java major version an installer for the
-// given Minecraft version needs. It returns 0 when the version is unknown.
+// given Minecraft version needs. A version whose release line is unknown
+// answers the native installer's own minimum.
 func InstallerJavaAdvisory(installer artifact.Installer) int {
-	major, minor, patch, ok := parseMinecraftRelease(string(installer.Minecraft))
-	if !ok {
-		return 0
+	parsed, err := versionpkg.ParseVersion(
+		installer.Minecraft,
+		versionpkg.DialectMinecraft,
+	)
+	if err != nil {
+		return nativeInstallerJava
+	}
+	minecraft, ok := parsed.(*versionpkg.MinecraftVersion)
+	if !ok || minecraft.Post26 {
+		// A snapshot or a year-scheme release names no line this table
+		// covers, so only the installer's own minimum is known.
+		return nativeInstallerJava
 	}
 	switch {
-	case major == 1 && (minor > 20 || minor == 20 && patch >= 5):
+	case minecraft.Year == 1 &&
+		(minecraft.Update > 20 || minecraft.Update == 20 && minecraft.Hotfix >= 5):
 		return 21
-	case major == 1 && minor >= 18:
+	case minecraft.Year == 1 && minecraft.Update >= 18:
 		return 17
-	case major == 1 && minor >= 17:
+	case minecraft.Year == 1 && minecraft.Update >= 17:
 		return 16
 	default:
 		return 8
 	}
-}
-
-// parseMinecraftRelease splits a Minecraft release version into numeric
-// components. It requires one of the forms 1.N or 1.N.P. Any other input,
-// including snapshots and prereleases, is unknown.
-func parseMinecraftRelease(raw string) (major, minor, patch int, ok bool) {
-	parts := strings.Split(raw, ".")
-	if len(parts) < 2 || len(parts) > 3 {
-		return 0, 0, 0, false
-	}
-	values := make([]int, len(parts))
-	for i, part := range parts {
-		if part == "" {
-			return 0, 0, 0, false
-		}
-		value, err := strconv.Atoi(part)
-		if err != nil || value < 0 {
-			return 0, 0, 0, false
-		}
-		values[i] = value
-	}
-	if values[0] != 1 {
-		return 0, 0, 0, false
-	}
-	if len(values) == 2 {
-		return values[0], values[1], 0, true
-	}
-	return values[0], values[1], values[2], true
 }
