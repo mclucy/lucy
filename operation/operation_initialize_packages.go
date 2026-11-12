@@ -439,23 +439,21 @@ func (a *packageAdopter) probeMapped(
 		if readErr == nil {
 			proposal.modules = modules
 		}
-		if release.ClientOnly() {
-			// A client-required, server-optional project may still ship a
-			// server-visible module, and a server package may depend on it.
-			// The artifact decides.
-			if readErr == nil && len(modules) == 0 {
-				proposal.warnings = append(proposal.warnings, fmt.Errorf(
-					"package %s left unmanaged: its descriptor declares no server-side module",
-					p.Path,
-				))
-				return true
-			}
-		} else if release.ServerSide == "" && release.ClientSide == "" {
+		if readErr == nil && len(modules) == 0 {
+			proposal.warnings = append(proposal.warnings, fmt.Errorf(
+				"package %s left unmanaged: its descriptor declares no %s module this server can load",
+				p.Path,
+				ecosystem,
+			))
+			return true
+		}
+		if !release.ClientOnly() && release.ServerSide == "" && release.ClientSide == "" {
 			if clientOnly, known := a.clientOnlyFile(ctx, p.Path, ecosystem); known &&
 				clientOnly {
 				proposal.warnings = append(proposal.warnings, fmt.Errorf(
-					"package %s left unmanaged: its descriptor declares no server-side module",
+					"package %s left unmanaged: its descriptor declares no %s module this server can load",
 					p.Path,
+					ecosystem,
 				))
 				return true
 			}
