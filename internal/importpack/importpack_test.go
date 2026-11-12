@@ -125,7 +125,13 @@ func TestInspectRejectsClientPackAndLauncher(t *testing.T) {
 }
 
 func TestCheckDestPathRejectsWorkspaceDocuments(t *testing.T) {
-	for _, rel := range []string{"lucy.yaml", "LUCY-LOCK.YAML", "Lucy.Yaml"} {
+	for _, rel := range []string{
+		"lucy.yaml",
+		"LUCY-LOCK.YAML",
+		"Lucy.Yaml",
+		"lucy.yaml/child",
+		"Lucy-Lock.Yaml/child",
+	} {
 		err := checkDestPath(rel)
 		if !errors.Is(err, ErrUnsafeEntry) {
 			t.Errorf("checkDestPath(%q) = %v, want ErrUnsafeEntry", rel, err)
