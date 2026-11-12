@@ -14,6 +14,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/mclucy/lucy/cache"
@@ -387,7 +388,35 @@ func wrapperRoot(entries []entry) string {
 	if !nested {
 		return ""
 	}
+	if serverRootDir(top) && !wrapsServerRoot(entries, top) {
+		// The lone folder is itself a server root, as a mods or plugins folder
+		// of jars is. Stripping it would scatter its files across the root.
+		return ""
+	}
 	return top
+}
+
+// wrapsServerRoot reports whether a lone top-level folder holds a server root
+// at its own top level. A config folder that holds server.properties wraps one;
+// a mods folder of jars does not.
+func wrapsServerRoot(entries []entry, wrapper string) bool {
+	prefix := wrapper + "/"
+	for _, e := range entries {
+		rest, ok := strings.CutPrefix(e.name, prefix)
+		if !ok {
+			continue
+		}
+		child, _, _ := strings.Cut(rest, "/")
+		if serverRootFiles[child] || serverRootDir(child) {
+			return true
+		}
+	}
+	return false
+}
+
+// serverRootDir reports whether name is a directory that marks a server root.
+func serverRootDir(name string) bool {
+	return slices.Contains(serverRootDirs, name)
 }
 
 func stripWrapper(name, wrapper string) string {
