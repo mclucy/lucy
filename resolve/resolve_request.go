@@ -72,6 +72,13 @@ type Target struct {
 	CoreModules []catalog.DescriptorModule
 }
 
+// ModuleIdentity names one scoped module identity.
+type ModuleIdentity struct {
+	Environment serverpkg.Environment
+	Namespace   catalog.Ecosystem
+	ID          string
+}
+
 // PackageRuntime returns the ecosystem whose loader loads server packages on
 // target. A paperclip server runs Paper regardless of how the manifest names
 // its product. The second result is false for a target that loads no server
@@ -104,6 +111,12 @@ func SupportsPackages(target Target, ecosystem catalog.Ecosystem) bool {
 func (t Target) moduleNamespace(d catalog.Ecosystem) catalog.Ecosystem {
 	runtime, _ := t.PackageRuntime()
 	return runtime.ModuleNamespace(d)
+}
+
+// ModuleNamespace returns the ecosystem that scopes module identities of
+// descriptor ecosystem d on target.
+func (t Target) ModuleNamespace(d catalog.Ecosystem) catalog.Ecosystem {
+	return t.moduleNamespace(d)
 }
 
 // descriptorLoader returns the loader whose descriptor precedence reads an

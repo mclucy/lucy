@@ -150,6 +150,52 @@ func moduleIdentities(m catalog.DescriptorModule) []string {
 	return names
 }
 
+// ModuleIdentityKeys returns every scoped identity a module answers.
+func (t Target) ModuleIdentityKeys(
+	environment serverpkg.Environment,
+	ecosystem catalog.Ecosystem,
+	m catalog.DescriptorModule,
+) []ModuleIdentity {
+	names := moduleIdentities(m)
+	identities := make([]ModuleIdentity, 0, len(names))
+	namespace := t.moduleNamespace(ecosystem)
+	for _, name := range names {
+		identities = append(identities, ModuleIdentity{
+			Environment: environment,
+			Namespace:   namespace,
+			ID:          normalizeModuleID(ecosystem, name),
+		})
+	}
+	return identities
+}
+
+// ModuleOrder compares two modules that answer one identity. A native module
+// outranks a nested one; otherwise the higher version wins. It returns 0 when
+// the versions are equal or unparseable.
+func ModuleOrder(a, b catalog.DescriptorModule) int {
+	aNative := a.NestedPath == ""
+	bNative := b.NestedPath == ""
+	if aNative != bNative {
+		if aNative {
+			return 1
+		}
+		return -1
+	}
+	aVersion, err := versionpkg.ParseVersion(a.Version, a.VersionDialect)
+	if err != nil {
+		return 0
+	}
+	bVersion, err := versionpkg.ParseVersion(b.Version, b.VersionDialect)
+	if err != nil {
+		return 0
+	}
+	comparison, comparable := versionpkg.Compare(aVersion, bVersion)
+	if !comparable {
+		return 0
+	}
+	return comparison
+}
+
 // buildModuleIndex resolves every module identity to the declaration that
 // answers it. A native module outranks a bundled copy of the same identity.
 // Bundled copies from different packages compare versions; bundled copies from
