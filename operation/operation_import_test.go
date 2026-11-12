@@ -641,6 +641,14 @@ func TestImportRemoteSourceFailuresLeaveTargetUntouched(t *testing.T) {
 			wantErr:  "no download URL",
 		},
 		{
+			name: "no published digest",
+			resolver: &fakePackResolver{pack: upstream.ImportPack{
+				URL:      "https://example.com/server.zip",
+				Filename: "server.zip",
+			}},
+			wantErr: "publishes no checksum",
+		},
+		{
 			name: "ftp scheme",
 			resolver: &fakePackResolver{pack: upstream.ImportPack{
 				URL:      "ftp://example.com/server.zip",
