@@ -26,6 +26,10 @@ func expandDeclaredPaths(
 		raw  string
 		path string
 	}
+	declared := make(map[string]documentpkg.TrackedFile, len(files))
+	for _, file := range files {
+		declared[file.Path] = file
+	}
 	arguments := make([]argument, 0, len(paths))
 	literal := make(map[string]struct{}, len(paths))
 	for _, raw := range paths {
@@ -34,13 +38,10 @@ func expandDeclaredPaths(
 			return nil, nil, err
 		}
 		arguments = append(arguments, argument{raw: raw, path: path})
-		if !hasPatternMeta(path) {
+		_, exists := declared[path]
+		if !hasPatternMeta(path) || exists {
 			literal[path] = struct{}{}
 		}
-	}
-	declared := make(map[string]documentpkg.TrackedFile, len(files))
-	for _, file := range files {
-		declared[file.Path] = file
 	}
 	tree := newDeclarationTree(files)
 	selected = make([]string, 0, len(files))
@@ -62,7 +63,7 @@ func expandDeclaredPaths(
 		skipped = append(skipped, path)
 	}
 	for _, argument := range arguments {
-		if !hasPatternMeta(argument.path) {
+		if _, exact := literal[argument.path]; exact {
 			addSelected(argument.path)
 			continue
 		}

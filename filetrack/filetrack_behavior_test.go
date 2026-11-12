@@ -427,6 +427,54 @@ func TestFileRecoverExpandsDeclaredPatterns(t *testing.T) {
 	})
 }
 
+func TestFileLiteralPathsContainingPatternCharactersSelectExactly(t *testing.T) {
+	root := behaviorWorkspace(t)
+	accepted := []byte("accepted\n")
+	behaviorWrite(t, root, "mods/[Forge]Mod.jar", accepted, 0o644)
+	behaviorWrite(t, root, "mods/FMod.jar", []byte("decoy\n"), 0o644)
+
+	result := behaviorRun(t, root, Request{
+		Operation: Track,
+		Paths:     []string{"mods/[Forge]Mod.jar"},
+	})
+	if change := behaviorSoleChange(t, result); change.Path != "mods/[Forge]Mod.jar" {
+		t.Fatalf("literal path tracked %+v", change)
+	}
+	if declared := behaviorDeclared(t, root); len(declared) != 1 ||
+		declared[0].Path != "mods/[Forge]Mod.jar" {
+		t.Fatalf("literal path declared %+v", declared)
+	}
+
+	updated := []byte("updated\n")
+	behaviorWrite(t, root, "mods/[Forge]Mod.jar", updated, 0o644)
+	result = behaviorRun(t, root, Request{
+		Operation: Update,
+		Paths:     []string{"mods/[Forge]Mod.jar"},
+	})
+	if change := behaviorSoleChange(t, result); change.Path != "mods/[Forge]Mod.jar" ||
+		change.After == nil || change.After.Hash != behaviorDigest(updated) {
+		t.Fatalf("literal path updated %+v", change)
+	}
+
+	if err := os.Remove(filepath.Join(root, "mods/[Forge]Mod.jar")); err != nil {
+		t.Fatalf("remove literal path: %v", err)
+	}
+	behaviorRun(t, root, Request{
+		Operation: Recover,
+		Paths:     []string{"mods/[Forge]Mod.jar"},
+	})
+	behaviorRequireBytes(t, filepath.Join(root, "mods/[Forge]Mod.jar"), updated)
+
+	behaviorRun(t, root, Request{
+		Operation: Untrack,
+		Paths:     []string{"mods/[Forge]Mod.jar"},
+	})
+	if declared := behaviorDeclared(t, root); len(declared) != 0 {
+		t.Fatalf("literal path untracked %+v", declared)
+	}
+	behaviorRequireBytes(t, filepath.Join(root, "mods/FMod.jar"), []byte("decoy\n"))
+}
+
 func TestFileTrackRejectsAlreadyTrackedPathAtomically(t *testing.T) {
 	root := behaviorWorkspace(t)
 	rules := []byte("rules\n")
