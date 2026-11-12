@@ -287,21 +287,27 @@ func validateRequest(request Request) error {
 
 func selectFiles(files []documentpkg.TrackedFile, request Request) ([]string, []string, error) {
 	if !request.All {
+		declared := make(map[string]struct{}, len(files))
+		for _, file := range files {
+			declared[file.Path] = struct{}{}
+		}
 		selected := make([]string, 0, len(request.Paths))
 		skipped := make([]string, 0)
+		seen := make(map[string]struct{}, len(request.Paths))
 		for _, raw := range request.Paths {
 			path, err := input.TrackedPath(raw)
 			if err != nil {
 				return nil, nil, err
 			}
-			if slices.Contains(selected, path) || slices.Contains(skipped, path) {
+			if _, exists := seen[path]; exists {
 				continue
 			}
-			index := slices.IndexFunc(files, func(file documentpkg.TrackedFile) bool { return file.Path == path })
-			if request.Operation == Track && index >= 0 {
+			seen[path] = struct{}{}
+			_, tracked := declared[path]
+			if request.Operation == Track && tracked {
 				return nil, nil, fmt.Errorf("file %s is already tracked; use update", path)
 			}
-			if request.Operation != Track && index < 0 {
+			if request.Operation != Track && !tracked {
 				if request.Operation == Untrack {
 					skipped = append(skipped, path)
 					continue
