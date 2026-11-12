@@ -205,6 +205,68 @@ func TestMaterializeTreeFlattensSingleRoot(t *testing.T) {
 	}
 }
 
+// TestMaterializeKeepsServerRootWrapper checks that a lone top-level folder
+// that is itself a server root keeps its name, while a folder that only holds
+// a server root is removed.
+func TestMaterializeKeepsServerRootWrapper(t *testing.T) {
+	tests := []struct {
+		name  string
+		files map[string]string
+		want  []string
+		gone  []string
+	}{
+		{
+			name:  "mods folder of jars",
+			files: map[string]string{"mods/a.jar": "a", "mods/b.jar": "b"},
+			want:  []string{"mods/a.jar", "mods/b.jar"},
+			gone:  []string{"a.jar"},
+		},
+		{
+			name:  "plugins folder of jars",
+			files: map[string]string{"plugins/a.jar": "a"},
+			want:  []string{"plugins/a.jar"},
+			gone:  []string{"a.jar"},
+		},
+		{
+			name: "config wrapper holding a server root",
+			files: map[string]string{
+				"config/server.properties": "online-mode=false\n",
+				"config/mods/a.jar":        "a",
+			},
+			want: []string{"server.properties", "mods/a.jar"},
+			gone: []string{"config/server.properties"},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dest := t.TempDir()
+			result, err := Materialize(
+				context.Background(),
+				writeZip(t, tt.files),
+				dest,
+				nil,
+				Progress{},
+			)
+			if err != nil {
+				t.Fatalf("Materialize: %v", err)
+			}
+			if result.Format != FormatTree {
+				t.Fatalf("Format = %q, want %q", result.Format, FormatTree)
+			}
+			for _, rel := range tt.want {
+				if _, err := os.Stat(filepath.Join(dest, filepath.FromSlash(rel))); err != nil {
+					t.Errorf("%s: %v", rel, err)
+				}
+			}
+			for _, rel := range tt.gone {
+				if _, err := os.Stat(filepath.Join(dest, filepath.FromSlash(rel))); !os.IsNotExist(err) {
+					t.Errorf("%s should not exist", rel)
+				}
+			}
+		})
+	}
+}
+
 func TestMaterializeTarball(t *testing.T) {
 	path := writeTarball(t, map[string]string{
 		"root/server.properties": "online-mode=false\n",
