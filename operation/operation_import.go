@@ -471,11 +471,19 @@ func (s *Service) runTreeInstaller(
 	}
 
 	const phase = "loader installer"
+	root := importServerRoot(stage)
+	if err := os.MkdirAll(root, 0o755); err != nil {
+		return nil, fmt.Errorf(
+			"create the installer working directory %s: %w",
+			root,
+			err,
+		)
+	}
 	started := time.Now()
 	trace.ReportPhaseStarted(phase)
 	err = bootstrap.RunInstaller(
 		ctx,
-		importServerRoot(stage),
+		root,
 		installer,
 		check.Executable(),
 		importProcessOutput(trace),
