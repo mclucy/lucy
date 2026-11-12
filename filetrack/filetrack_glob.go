@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
-	"path"
 	"strings"
 
 	"github.com/bmatcuk/doublestar/v4"
@@ -138,7 +137,7 @@ func explicitlySelectsHidden(pattern, name string) bool {
 					!hiddenComponent(components[component]) &&
 					search(segment, component+1)
 		case component < len(components):
-			matched, err := path.Match(segments[segment], components[component])
+			matched, err := doublestar.Match(segments[segment], components[component])
 			selects = err == nil && matched &&
 				(!hiddenComponent(components[component]) ||
 					explicitDotSegment(segments[segment])) &&
@@ -174,7 +173,7 @@ func explicitDotSegment(segment string) bool {
 	if strings.HasPrefix(content, "!") || strings.HasPrefix(content, "^") {
 		return false
 	}
-	matched, err := path.Match(class, ".")
+	matched, err := doublestar.Match(class, ".")
 	return err == nil && matched
 }
 
@@ -203,6 +202,8 @@ func leadingCharacterClass(segment string) string {
 	return ""
 }
 
+// reservedDirectory reports whether the directory holds Lucy or version
+// control state rather than server files. Patterns never select these.
 func reservedDirectory(entry fs.DirEntry) bool {
 	switch strings.ToLower(entry.Name()) {
 	case ".lucy", ".git":
