@@ -145,11 +145,42 @@ func (s *Service) Run(ctx context.Context, root string, request Request) (result
 		}
 		currentLock = locked.ManifestFingerprint == fingerprint
 	}
+	switch request.Operation {
+	case Track, Untrack:
+		var exact map[string]struct{}
+		if request.Operation == Untrack {
+			exact = make(map[string]struct{}, len(document.Files))
+			for _, file := range document.Files {
+				exact[file.Path] = struct{}{}
+			}
+		}
+		request.Paths, result.SkippedDirectories, err = expandFilePaths(
+			files,
+			request.Paths,
+			exact,
+		)
+		if err != nil {
+			return result, err
+		}
+	case Update, Recover:
+		if !request.All {
+			var skipped []string
+			request.Paths, skipped, err = expandDeclaredPaths(
+				document.Files,
+				request.Paths,
+				request.Operation,
+			)
+			if err != nil {
+				return result, err
+			}
+			result.Skipped = append(result.Skipped, skipped...)
+		}
+	}
 	selected, skipped, err := selectFiles(document.Files, request)
 	if err != nil {
 		return result, err
 	}
-	result.Skipped = skipped
+	result.Skipped = append(result.Skipped, skipped...)
 	if len(selected) == 0 {
 		return result, nil
 	}
@@ -267,25 +298,36 @@ func validateRequest(request Request) error {
 
 func selectFiles(files []documentpkg.TrackedFile, request Request) ([]string, []string, error) {
 	if !request.All {
+		declared := make(map[string]struct{}, len(files))
+		for _, file := range files {
+			declared[file.Path] = struct{}{}
+		}
 		selected := make([]string, 0, len(request.Paths))
+		skipped := make([]string, 0)
+		seen := make(map[string]struct{}, len(request.Paths))
 		for _, raw := range request.Paths {
 			path, err := input.TrackedPath(raw)
 			if err != nil {
 				return nil, nil, err
 			}
-			if slices.Contains(selected, path) {
+			if _, exists := seen[path]; exists {
 				continue
 			}
-			index := slices.IndexFunc(files, func(file documentpkg.TrackedFile) bool { return file.Path == path })
-			if request.Operation == Track && index >= 0 {
+			seen[path] = struct{}{}
+			_, tracked := declared[path]
+			if request.Operation == Track && tracked {
 				return nil, nil, fmt.Errorf("file %s is already tracked; use update", path)
 			}
-			if request.Operation != Track && index < 0 {
+			if request.Operation != Track && !tracked {
+				if request.Operation == Untrack {
+					skipped = append(skipped, path)
+					continue
+				}
 				return nil, nil, fmt.Errorf("file %s is not tracked", path)
 			}
 			selected = append(selected, path)
 		}
-		return selected, nil, nil
+		return selected, skipped, nil
 	}
 	selected, skipped := make([]string, 0, len(files)), make([]string, 0)
 	for _, file := range files {
