@@ -42,17 +42,19 @@ func expandFilePaths(root *os.Root, paths []string) (selected, skippedDirectorie
 			return nil, nil, err
 		}
 		if !hasPatternMeta(normalized) {
-			info, err := root.Lstat(normalized)
+			info, statErr := root.Lstat(normalized)
 			switch {
-			case errors.Is(err, os.ErrNotExist):
+			case statErr == nil:
+				add(normalized, info.IsDir())
+			case errors.Is(statErr, os.ErrNotExist):
 				add(normalized, false)
-			case err != nil:
-				return nil, nil, err
-			case info.IsDir():
-				add(normalized, true)
 			default:
-				add(normalized, false)
+				return nil, nil, statErr
 			}
+			continue
+		}
+		if info, statErr := root.Lstat(normalized); statErr == nil {
+			add(normalized, info.IsDir())
 			continue
 		}
 		pattern := globPattern(normalized)
@@ -213,6 +215,9 @@ func reservedDirectory(entry fs.DirEntry) bool {
 	}
 }
 
+// hasPatternMeta reports whether value is a candidate pattern rather than a
+// literal path. Callers resolve a path that names an existing entry literally
+// first, so names containing pattern characters remain addressable.
 func hasPatternMeta(value string) bool {
 	return strings.ContainsAny(value, "*?[")
 }
