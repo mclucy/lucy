@@ -2,11 +2,13 @@ package operation
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"maps"
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"sync"
 
 	"github.com/mclucy/lucy/artifact"
@@ -808,5 +810,7 @@ func (a *packageAdopter) warn(format string, args ...any) {
 	if a.observed == nil {
 		return
 	}
-	a.observed.Warnings = append(a.observed.Warnings, fmt.Errorf(format, args...))
+	message := fmt.Sprintf(format, args...)
+	message = strings.ReplaceAll(message, a.root+string(filepath.Separator), "")
+	a.observed.Warnings = append(a.observed.Warnings, errors.New(message))
 }
