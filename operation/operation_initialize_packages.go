@@ -13,6 +13,8 @@ import (
 	"github.com/mclucy/lucy/catalog"
 	documentpkg "github.com/mclucy/lucy/document"
 	"github.com/mclucy/lucy/install"
+	"github.com/mclucy/lucy/resolve"
+	serverpkg "github.com/mclucy/lucy/server"
 	"github.com/mclucy/lucy/upstream"
 	"github.com/mclucy/lucy/workspace"
 )
@@ -37,6 +39,24 @@ type packageAdopter struct {
 	index     map[string]int
 	claims    map[string]string
 	conflicts map[string]bool
+
+	target       resolve.Target
+	moduleClaims map[resolve.ModuleIdentity]moduleClaim
+	claimKeys    []string
+}
+
+// moduleClaim names the recorded package that answers one module identity.
+type moduleClaim struct {
+	index  int
+	module catalog.DescriptorModule
+}
+
+// moduleCollision pairs a proposed module with a claim on one of its
+// identities.
+type moduleCollision struct {
+	identity resolve.ModuleIdentity
+	module   catalog.DescriptorModule
+	prior    moduleClaim
 }
 
 // adoptionProposal is one file's probe result. Probing reads the file and its
@@ -52,6 +72,7 @@ type adoptionProposal struct {
 	mode      uint32
 	candidate upstream.Candidate
 	matched   bool
+	modules   []catalog.DescriptorModule
 	fatal     error
 	warnings  []error
 }
@@ -76,6 +97,10 @@ func (s *Service) adoptInstalledPackages(
 	if err != nil {
 		return nil, nil, 0, err
 	}
+	mcdrVersion := ""
+	if manifest.MCDR != nil {
+		mcdrVersion = string(manifest.MCDR.Version)
+	}
 	adopter := &packageAdopter{
 		service:   s,
 		root:      root,
@@ -86,6 +111,13 @@ func (s *Service) adoptInstalledPackages(
 		index:     map[string]int{},
 		claims:    map[string]string{},
 		conflicts: map[string]bool{},
+		target: resolve.Target{
+			Product:     manifest.Server.Core.Product,
+			Minecraft:   manifest.Server.Minecraft,
+			CoreVersion: manifest.Server.Core.ProductVersion,
+			MCDRVersion: mcdrVersion,
+		},
+		moduleClaims: map[resolve.ModuleIdentity]moduleClaim{},
 	}
 	var discovered []workspace.DiscoveredPackage
 	if observed != nil {
@@ -260,7 +292,7 @@ func (a *packageAdopter) probeDescriptor(
 		return
 	}
 	if ecosystem == catalog.EcosystemMCDR {
-		a.probeMCDR(ctx, proposal, modules[0].ID, ecosystem)
+		a.probeMCDR(ctx, proposal, modules, ecosystem)
 		return
 	}
 	proposal.warnings = append(proposal.warnings, fmt.Errorf(
@@ -272,10 +304,12 @@ func (a *packageAdopter) probeDescriptor(
 func (a *packageAdopter) probeMCDR(
 	ctx context.Context,
 	proposal *adoptionProposal,
-	moduleID string,
+	modules []catalog.DescriptorModule,
 	ecosystem catalog.Ecosystem,
 ) {
 	p := proposal.pkg
+	proposal.modules = modules
+	moduleID := modules[0].ID
 	if a.manifest.MCDR == nil {
 		proposal.warnings = append(proposal.warnings, fmt.Errorf(
 			"plugin %s left unmanaged: MCDReforged is not configured",
@@ -396,17 +430,20 @@ func (a *packageAdopter) probeMapped(
 			))
 			return true
 		}
+		modules, readErr := artifact.ReadModulesFor(
+			ctx,
+			p.Path,
+			ecosystem,
+			string(a.manifest.Server.Minecraft),
+		)
+		if readErr == nil {
+			proposal.modules = modules
+		}
 		if release.ClientOnly() {
 			// A client-required, server-optional project may still ship a
 			// server-visible module, and a server package may depend on it.
 			// The artifact decides.
-			modules, err := artifact.ReadModulesFor(
-				ctx,
-				p.Path,
-				ecosystem,
-				string(a.manifest.Server.Minecraft),
-			)
-			if err == nil && len(modules) == 0 {
+			if readErr == nil && len(modules) == 0 {
 				proposal.warnings = append(proposal.warnings, fmt.Errorf(
 					"package %s left unmanaged: its descriptor declares no server-side module",
 					p.Path,
@@ -537,6 +574,9 @@ func (a *packageAdopter) apply(proposal adoptionProposal) {
 		)
 		return
 	}
+	if len(proposal.modules) > 0 && a.resolveModuleCollisions(proposal) {
+		return
+	}
 	requirement := documentpkg.Requirement{
 		Selector: proposal.candidate.Version,
 	}
@@ -546,6 +586,142 @@ func (a *packageAdopter) apply(proposal adoptionProposal) {
 		a.requirePackageMap(proposal.ecosystem)[proposal.reference] = requirement
 	}
 	a.record(proposal)
+}
+
+// proposalEnvironment scopes a proposal's module identities like the
+// resolver's packages.
+func proposalEnvironment(proposal adoptionProposal) serverpkg.Environment {
+	if proposal.ecosystem == catalog.EcosystemMCDR {
+		return serverpkg.EnvironmentMCDR
+	}
+	return serverpkg.EnvironmentServer
+}
+
+// moduleCollisions lists the proposal's module identities another recorded
+// file already provides.
+func (a *packageAdopter) moduleCollisions(
+	proposal adoptionProposal,
+) []moduleCollision {
+	var collisions []moduleCollision
+	for _, module := range proposal.modules {
+		for _, identity := range a.target.ModuleIdentityKeys(
+			proposalEnvironment(proposal),
+			module.Ecosystem,
+			module,
+		) {
+			prior, claimed := a.moduleClaims[identity]
+			if !claimed {
+				continue
+			}
+			collisions = append(collisions, moduleCollision{
+				identity: identity,
+				module:   module,
+				prior:    prior,
+			})
+		}
+	}
+	return collisions
+}
+
+// resolveModuleCollisions keeps one file for each module identity. It reports
+// whether the proposal loses an identity and must stay unmanaged.
+func (a *packageAdopter) resolveModuleCollisions(
+	proposal adoptionProposal,
+) bool {
+	collisions := a.moduleCollisions(proposal)
+	if len(collisions) == 0 {
+		return false
+	}
+	for _, collision := range collisions {
+		if resolve.ModuleOrder(collision.prior.module, collision.module) >= 0 {
+			a.warnModuleCollision(
+				proposal.pkg.Path,
+				a.packages[collision.prior.index].Path,
+				collision.identity,
+				proposal.ecosystem,
+			)
+			return true
+		}
+	}
+	var displaced []moduleCollision
+	for _, collision := range collisions {
+		if slices.ContainsFunc(displaced, func(prior moduleCollision) bool {
+			return prior.prior.index == collision.prior.index
+		}) {
+			continue
+		}
+		displaced = append(displaced, collision)
+	}
+	paths := make([]string, len(displaced))
+	for i, collision := range displaced {
+		paths[i] = a.packages[collision.prior.index].Path
+	}
+	for _, collision := range displaced {
+		a.unclaim(collision.prior.index)
+	}
+	for i, collision := range displaced {
+		a.warnModuleCollision(
+			paths[i],
+			proposal.pkg.Path,
+			collision.identity,
+			proposal.ecosystem,
+		)
+	}
+	return false
+}
+
+// warnModuleCollision reports one file left unmanaged because another file
+// provides the same module identity.
+func (a *packageAdopter) warnModuleCollision(
+	loserPath string,
+	winnerPath string,
+	identity resolve.ModuleIdentity,
+	ecosystem catalog.Ecosystem,
+) {
+	impact := fmt.Sprintf("%s rejects duplicate module IDs", ecosystem)
+	if ecosystem == catalog.EcosystemMCDR {
+		impact = "MCDReforged loads both plugins under the same ID"
+	}
+	a.warn(
+		"package %s left unmanaged: it declares %s module %q, which %s already provides; %s. To keep it instead, remove %s and run `lucy add <file>`.",
+		loserPath,
+		ecosystem,
+		identity.ID,
+		winnerPath,
+		impact,
+		winnerPath,
+	)
+}
+
+// unclaim drops a recorded package, its module claims, and its requirement.
+func (a *packageAdopter) unclaim(index int) {
+	if index < 0 || index >= len(a.packages) {
+		return
+	}
+	path := a.packages[index].Path
+	a.packages[index] = install.AdoptedPackage{}
+	release := a.releases[index]
+	a.releases[index] = install.AdoptedRelease{}
+	if index < len(a.claimKeys) {
+		delete(a.index, a.claimKeys[index])
+		a.claimKeys[index] = ""
+	}
+	delete(a.claims, path)
+	if release.Ecosystem == catalog.EcosystemMCDR {
+		delete(a.manifest.MCDR.Packages, release.Reference)
+	} else {
+		delete(a.manifest.Server.Packages[release.Ecosystem], release.Reference)
+	}
+	a.dropModuleClaims(index)
+}
+
+// dropModuleClaims deletes the module claims recorded for one package.
+func (a *packageAdopter) dropModuleClaims(index int) {
+	for identity, claim := range a.moduleClaims {
+		if claim.index == index {
+			delete(a.moduleClaims, identity)
+		}
+	}
 }
 
 // markConflict invalidates a project key, removes its earlier claim, and
@@ -565,17 +741,23 @@ func (a *packageAdopter) markConflict(key string) string {
 	a.packages[index] = install.AdoptedPackage{}
 	release := a.releases[index]
 	a.releases[index] = install.AdoptedRelease{}
+	if index < len(a.claimKeys) {
+		a.claimKeys[index] = ""
+	}
 	if release.Ecosystem == catalog.EcosystemMCDR {
 		delete(a.manifest.MCDR.Packages, release.Reference)
 	} else {
 		delete(a.manifest.Server.Packages[release.Ecosystem], release.Reference)
 	}
+	a.dropModuleClaims(index)
 	return prior
 }
 
 func (a *packageAdopter) record(proposal adoptionProposal) {
-	a.index[proposal.key] = len(a.packages)
+	index := len(a.packages)
+	a.index[proposal.key] = index
 	a.claims[proposal.pkg.Path] = proposal.key
+	a.claimKeys = append(a.claimKeys, proposal.key)
 	a.packages = append(a.packages, install.AdoptedPackage{
 		Path:           proposal.pkg.Path,
 		PackageID:      proposal.packageID,
@@ -587,6 +769,15 @@ func (a *packageAdopter) record(proposal adoptionProposal) {
 		Ecosystem: proposal.ecosystem,
 		Candidate: proposal.candidate,
 	})
+	for _, module := range proposal.modules {
+		for _, identity := range a.target.ModuleIdentityKeys(
+			proposalEnvironment(proposal),
+			module.Ecosystem,
+			module,
+		) {
+			a.moduleClaims[identity] = moduleClaim{index: index, module: module}
+		}
+	}
 }
 
 func (a *packageAdopter) requirePackageMap(
