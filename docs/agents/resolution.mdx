@@ -5,7 +5,7 @@ description: "How lucy chooses artifacts, reuses pins, stages server files, and 
 
 ## From requirements to pins
 
-Manifest parsing decodes and normalizes the declaration before calculating its fingerprint. The lock records that fingerprint alongside the resolved server, optional MCDReforged runtime, flattened package artifacts, and tracked-file declarations. Package records retain bindings to direct requirements and dependency provenance. Lock validation requires concrete package versions, filenames, and SHA-256 hashes.
+Manifest parsing decodes and normalizes the declaration before calculating its fingerprint. The lock records that fingerprint alongside the resolved server, optional MCDReforged runtime, flattened package artifacts, and tracked-file declarations. Package records retain bindings to direct requirements, dependency provenance, and the declared relationships of the selected release. Lock validation requires concrete package versions, filenames, and SHA-256 hashes.
 
 Installation compares the declaration with the existing lock to decide whether it can replay the lock or must resolve. A lock can also be replayed without a manifest; that installation registers a lock-only entry in the server registry so artifact collection can discover its references. When resolution is needed, an existing compatible server or package pin can be reused; a changed declaration does not automatically mean every artifact is upgraded. Offline mode cannot perform fresh metadata resolution. An upgrade command can request a fresh resolution even if the lock matches the manifest.
 

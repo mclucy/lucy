@@ -179,7 +179,8 @@ func lockedFileID(
 // lockedCandidate rebuilds the candidate the lock accepted for this request.
 // An adopted release can carry a compatibility exception that ordinary
 // provider filtering drops, so the locked file stays selectable while its
-// runtime target is unchanged.
+// runtime target is unchanged. The candidate keeps the dependency metadata the
+// lock recorded, because the catalogue no longer supplies it.
 func lockedCandidate(
 	previous []document.Package,
 	r projectRequest,
@@ -195,9 +196,50 @@ func lockedCandidate(
 		locked := upstream.Candidate{Artifact: p.Artifact}
 		locked.PrimaryFile = true
 		locked.CompatibilityUnknown = true
+		locked.Dependencies = candidateDependencies(p.Dependencies)
+		locked.DependenciesUnknown = p.DependenciesUnknown
 		return locked, true
 	}
 	return upstream.Candidate{}, false
+}
+
+// releaseDependencies records a candidate's declared project relationships in
+// the lock.
+func releaseDependencies(
+	deps []upstream.ProjectDependency,
+) []document.PackageDependency {
+	if len(deps) == 0 {
+		return nil
+	}
+	out := make([]document.PackageDependency, len(deps))
+	for i, dep := range deps {
+		out[i] = document.PackageDependency{
+			Provider:  dep.Provider,
+			ProjectID: dep.ProjectID,
+			ReleaseID: dep.ReleaseID,
+			Kind:      dep.Kind,
+		}
+	}
+	return out
+}
+
+// candidateDependencies restores the relationships a lock recorded.
+func candidateDependencies(
+	deps []document.PackageDependency,
+) []upstream.ProjectDependency {
+	if len(deps) == 0 {
+		return nil
+	}
+	out := make([]upstream.ProjectDependency, len(deps))
+	for i, dep := range deps {
+		out[i] = upstream.ProjectDependency{
+			Provider:  dep.Provider,
+			ProjectID: dep.ProjectID,
+			ReleaseID: dep.ReleaseID,
+			Kind:      dep.Kind,
+		}
+	}
+	return out
 }
 
 // appendLockedCandidate adds the locked file when the catalogue did not
@@ -645,12 +687,14 @@ func Packages(request PackagesRequest) ([]document.Package, []error, error) {
 				dependencyOf = []catalog.Ref{r.dependencyOf}
 			}
 			pkg := document.Package{
-				Environment:  r.key.environment,
-				Ecosystem:    r.key.ecosystem,
-				Artifact:     a,
-				Requirements: requirements,
-				Dependency:   dependencyDemand,
-				DependencyOf: dependencyOf,
+				Environment:         r.key.environment,
+				Ecosystem:           r.key.ecosystem,
+				Artifact:            a,
+				Requirements:        requirements,
+				Dependency:          dependencyDemand,
+				DependencyOf:        dependencyOf,
+				Dependencies:        releaseDependencies(candidate.Dependencies),
+				DependenciesUnknown: candidate.DependenciesUnknown,
 			}
 			// A pure dependency demand binds to a selected package that
 			// answers every module identity of the candidate. The candidate
