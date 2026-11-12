@@ -595,6 +595,13 @@ func proposalEnvironment(proposal adoptionProposal) serverpkg.Environment {
 	return serverpkg.EnvironmentServer
 }
 
+// nativeModule reports whether the artifact itself declares the module. A
+// bundled module is a loader-selected library; several packages may ship the
+// same one, and resolution picks the version. It is not a file conflict.
+func nativeModule(module catalog.DescriptorModule) bool {
+	return module.NestedPath == ""
+}
+
 // moduleCollisions lists the proposal's module identities another recorded
 // file already provides.
 func (a *packageAdopter) moduleCollisions(
@@ -602,6 +609,9 @@ func (a *packageAdopter) moduleCollisions(
 ) []moduleCollision {
 	var collisions []moduleCollision
 	for _, module := range proposal.modules {
+		if !nativeModule(module) {
+			continue
+		}
 		for _, identity := range a.target.ModuleIdentityKeys(
 			proposalEnvironment(proposal),
 			module.Ecosystem,
@@ -768,6 +778,9 @@ func (a *packageAdopter) record(proposal adoptionProposal) {
 		Candidate: proposal.candidate,
 	})
 	for _, module := range proposal.modules {
+		if !nativeModule(module) {
+			continue
+		}
 		for _, identity := range a.target.ModuleIdentityKeys(
 			proposalEnvironment(proposal),
 			module.Ecosystem,
