@@ -475,7 +475,7 @@ func (s *Service) runTreeInstaller(
 	trace.ReportPhaseStarted(phase)
 	err = bootstrap.RunInstaller(
 		ctx,
-		stage,
+		importServerRoot(stage),
 		installer,
 		check.Executable(),
 		importProcessOutput(trace),
@@ -501,6 +501,20 @@ func unsupportedInstallerWarning(kind artifact.InstallerKind) error {
 			"its files were extracted without running it",
 		kind,
 	)
+}
+
+// importServerRoot returns the directory a bundled installer must provision.
+// MCDR moves the server into its configured working directory, and
+// initialization observes only that directory. A working directory outside the
+// staging tree is not trusted, so the stage root answers instead.
+func importServerRoot(stage string) string {
+	root := workspace.ServerDirectory(stage)
+	relative, err := filepath.Rel(stage, root)
+	if err != nil || relative == ".." ||
+		strings.HasPrefix(relative, ".."+string(filepath.Separator)) {
+		return stage
+	}
+	return root
 }
 
 // findImportInstallers lists the loader installers a tree ships. A pack may
