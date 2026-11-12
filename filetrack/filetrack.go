@@ -147,7 +147,18 @@ func (s *Service) Run(ctx context.Context, root string, request Request) (result
 	}
 	switch request.Operation {
 	case Track, Untrack:
-		request.Paths, result.SkippedDirectories, err = expandFilePaths(files, request.Paths)
+		var exact map[string]struct{}
+		if request.Operation == Untrack {
+			exact = make(map[string]struct{}, len(document.Files))
+			for _, file := range document.Files {
+				exact[file.Path] = struct{}{}
+			}
+		}
+		request.Paths, result.SkippedDirectories, err = expandFilePaths(
+			files,
+			request.Paths,
+			exact,
+		)
 		if err != nil {
 			return result, err
 		}

@@ -12,11 +12,13 @@ import (
 )
 
 // expandFilePaths resolves shell-style workspace patterns into the entries
-// they select. Literal paths pass through normalization. Directories are
-// reported separately because a tracked entry is always a regular file. A
-// pattern that matches neither a file nor a directory fails, so a typo cannot
-// silently select nothing.
-func expandFilePaths(root *os.Root, paths []string) (selected, skippedDirectories []string, resultErr error) {
+// they select. Literal paths pass through normalization. A path in exact
+// selects itself even when the workspace entry is gone, so a deleted
+// declaration stays addressable by name. Directories are reported separately
+// because a tracked entry is always a regular file. A pattern that matches
+// neither a file nor a directory fails, so a typo cannot silently select
+// nothing.
+func expandFilePaths(root *os.Root, paths []string, exact map[string]struct{}) (selected, skippedDirectories []string, resultErr error) {
 	selected = make([]string, 0, len(paths))
 	skippedDirectories = make([]string, 0)
 	seen := make(map[string]struct{}, len(paths))
@@ -40,6 +42,10 @@ func expandFilePaths(root *os.Root, paths []string) (selected, skippedDirectorie
 		normalized, err := input.TrackedPath(raw)
 		if err != nil {
 			return nil, nil, err
+		}
+		if _, ok := exact[normalized]; ok {
+			add(normalized, false)
+			continue
 		}
 		if !hasPatternMeta(normalized) {
 			info, statErr := root.Lstat(normalized)
