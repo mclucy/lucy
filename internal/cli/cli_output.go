@@ -255,7 +255,7 @@ func phaseLabel(name string) string {
 	case "download archive":
 		return "Downloading the archive"
 	case "files":
-		return "Writing server files"
+		return "Fetching server files"
 	default:
 		return style.Capitalize(name)
 	}
@@ -297,9 +297,9 @@ func phaseText(phase install.PhaseInfo) string {
 			return ""
 		}
 		if phase.Count == 1 {
-			return "Wrote 1 server file"
+			return "Fetched 1 server file"
 		}
-		return fmt.Sprintf("Wrote %d server files", phase.Count)
+		return fmt.Sprintf("Fetched %d server files", phase.Count)
 	case "install":
 		if phase.Count == 0 {
 			return ""
