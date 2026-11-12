@@ -211,6 +211,7 @@ func lockedCandidate(
 		}
 		locked := upstream.Candidate{Artifact: p.Artifact}
 		locked.PrimaryFile = true
+		locked.Channel = p.Channel
 		locked.CompatibilityUnknown = true
 		locked.Dependencies = candidateDependencies(p.Dependencies)
 		locked.DependenciesUnknown = p.DependenciesUnknown
@@ -747,6 +748,7 @@ func Packages(request PackagesRequest) ([]document.Package, []error, error) {
 				DependencyOf:        dependencyOf,
 				Dependencies:        releaseDependencies(candidate.Dependencies),
 				DependenciesUnknown: candidate.DependenciesUnknown,
+				Channel:             candidate.Channel,
 			}
 			// A pure dependency demand binds to a selected package that
 			// answers every module identity of the candidate. The candidate

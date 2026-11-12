@@ -6,6 +6,7 @@ import (
 
 	"github.com/mclucy/lucy/catalog"
 	"github.com/mclucy/lucy/server"
+	"github.com/mclucy/lucy/upstream"
 	"github.com/mclucy/lucy/version"
 )
 
@@ -43,6 +44,10 @@ type Package struct {
 	// DependenciesUnknown records that the provider could not supply the
 	// release's dependency metadata.
 	DependenciesUnknown bool `yaml:"dependencies_unknown,omitempty" json:"dependencies_unknown,omitempty"`
+	// Channel records the selected release's stability channel, which the
+	// artifact does not carry. A candidate restored from the lock must satisfy
+	// the same selector checks as the catalogue candidate it replaces.
+	Channel upstream.ReleaseChannel `yaml:"channel,omitempty" json:"channel,omitempty"`
 }
 
 // Enabled reports whether p is selected for installation. Dependency demand
