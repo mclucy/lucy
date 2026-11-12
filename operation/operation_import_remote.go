@@ -256,12 +256,19 @@ func downloadImportPack(
 		)
 	}
 
+	algorithm, digest := importPackDigest(pack.Hashes)
+	if digest == "" && strings.TrimSpace(sha256) == "" {
+		return "", "", nil, fmt.Errorf(
+			"import source %q: resolved pack publishes no checksum; pass --sha256 with the expected digest to verify the download",
+			source,
+		)
+	}
+
 	dir, err := os.MkdirTemp("", "lucy-import-pack-*")
 	if err != nil {
 		return "", "", nil, fmt.Errorf("create import download directory: %w", err)
 	}
 	release := func() { _ = os.RemoveAll(dir) }
-	algorithm, digest := importPackDigest(pack.Hashes)
 	download, err := network.CachedDownload(ctx, rawURL, dir, cache.DownloadOptions{
 		Kind:          cache.KindArtifact,
 		ExpectedHash:  digest,

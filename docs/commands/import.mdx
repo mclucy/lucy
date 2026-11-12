@@ -36,7 +36,7 @@ Without a pin, import uses the newest pack the provider lists. Pin a version or 
 
 CurseForge requires an API key. Set `curseforge.api_key` in your lucy configuration (see [`lucy config`](/commands/config)). Without it, a CurseForge source fails before any file is written.
 
-Import checks the hashes the provider publishes for the pack, preferring SHA-512 over SHA-1. `--sha256` checks the same downloaded file. Other `http` and `https` links are downloaded directly, as described above.
+Import checks the hashes the provider publishes for the pack, preferring SHA-512 over SHA-1. A resolved pack that publishes neither is rejected, so pass `--sha256` to supply the expected checksum yourself. Other `http` and `https` links are downloaded directly and are checked only by `--sha256`.
 
 ## Choose the target directory
 
@@ -48,7 +48,7 @@ The workspace name defaults to the target directory's name. Pass `--name` to sto
 
 ## Verify the download
 
-Pass `--sha256` with the expected checksum of the archive, as 64 hexadecimal characters. Import fails when the archive does not match it.
+Pass `--sha256` with the expected checksum of the archive, as 64 hexadecimal characters. Import fails when the archive does not match it. A remote modpack whose pack publishes no hash is rejected unless you pass this flag.
 
 ## What gets reported
 
