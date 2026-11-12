@@ -303,9 +303,8 @@ func checkDestPath(rel string) error {
 	if strings.EqualFold(first, fsutil.WorkspaceMarker) {
 		return fmt.Errorf("%w: %q targets reserved workspace metadata", ErrUnsafeEntry, rel)
 	}
-	if !strings.Contains(rel, "/") &&
-		(strings.EqualFold(rel, document.ManifestFilename) ||
-			strings.EqualFold(rel, document.LockFilename)) {
+	if strings.EqualFold(first, document.ManifestFilename) ||
+		strings.EqualFold(first, document.LockFilename) {
 		return fmt.Errorf(
 			"%w: %q is a Lucy workspace document; import the tree without it",
 			ErrUnsafeEntry,
