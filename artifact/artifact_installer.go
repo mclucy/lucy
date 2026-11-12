@@ -88,14 +88,59 @@ func ReadInstaller(filePath string) (inst Installer, found bool, err error) {
 }
 
 // installerProfile is an install_profile.json declaration. Spec 0 and spec 1
-// use the same field names.
+// keep the identifying fields at the top level. Installers that predate the
+// spec nest the same fields under install.
 type installerProfile struct {
-	Spec      int    `json:"spec"`
-	Profile   string `json:"profile"`
-	Version   string `json:"version"`
-	Minecraft string `json:"minecraft"`
-	JSON      string `json:"json"`
-	Path      string `json:"path"`
+	Spec      int                    `json:"spec"`
+	Profile   string                 `json:"profile"`
+	Version   string                 `json:"version"`
+	Minecraft string                 `json:"minecraft"`
+	JSON      string                 `json:"json"`
+	Path      string                 `json:"path"`
+	Install   installerLegacyInstall `json:"install"`
+}
+
+// installerLegacyInstall is the declaration that installers before the install
+// profile spec write. Upstream reads these fields in place of the top-level
+// ones.
+type installerLegacyInstall struct {
+	ProfileName string `json:"profileName"`
+	Version     string `json:"version"`
+	Minecraft   string `json:"minecraft"`
+	JSON        string `json:"json"`
+	Path        string `json:"path"`
+}
+
+// installerDeclaration is the identifying part of an install profile with
+// both declaration shapes unified.
+type installerDeclaration struct {
+	Product     string
+	Version     string
+	Minecraft   string
+	VersionJSON string
+	Path        string
+	legacy      bool
+}
+
+// declaration unifies the top-level declaration and the legacy nested one.
+func (profile installerProfile) declaration() installerDeclaration {
+	if profile.Install.ProfileName != "" {
+		return installerDeclaration{
+			Product:     profile.Install.ProfileName,
+			Version:     profile.Install.Version,
+			Minecraft:   profile.Install.Minecraft,
+			VersionJSON: profile.Install.JSON,
+			Path:        profile.Install.Path,
+			legacy:      true,
+		}
+	}
+	return installerDeclaration{
+		Product:     profile.Profile,
+		Version:     profile.Version,
+		Minecraft:   profile.Minecraft,
+		VersionJSON: profile.JSON,
+		Path:        profile.Path,
+	}
 }
 
 // installerVersionProfile is the launcher profile that an install profile
@@ -116,18 +161,22 @@ func readInstallerProfile(
 	if err := json.Unmarshal(raw, &profile); err != nil {
 		return Installer{}, false, fmt.Errorf("decode installer profile: %w", err)
 	}
-	// Forge uses spec 1 for the modern declaration and spec 0 for the legacy
-	// declaration.
-	if profile.Spec != 0 && profile.Spec != 1 {
+	declaration := profile.declaration()
+	// Forge uses spec 1 for the current declaration and spec 0 for the one
+	// before it. A legacy declaration carries no spec.
+	if !declaration.legacy && profile.Spec != 0 && profile.Spec != 1 {
 		return Installer{}, false, nil
 	}
-	product, ok := installerProduct(profile.Profile)
+	product, ok := installerProduct(declaration.Product)
 	if !ok {
 		return Installer{}, false, nil
 	}
 
-	minecraft := profile.Minecraft
-	versionProfile, err := readInstallerVersionProfile(zipRdr, profile.JSON)
+	minecraft := declaration.Minecraft
+	versionProfile, err := readInstallerVersionProfile(
+		zipRdr,
+		declaration.VersionJSON,
+	)
 	if err != nil {
 		return Installer{}, false, err
 	}
@@ -136,7 +185,7 @@ func readInstallerProfile(
 	}
 
 	loaderVersion := installerLoaderVersion(
-		profile,
+		declaration,
 		versionProfile,
 		minecraft,
 		product,
@@ -207,15 +256,15 @@ func readInstallerVersionProfile(
 // launch arguments, the declared profile version, then Maven coordinates. A
 // source that names no concrete version does not stop the search.
 func installerLoaderVersion(
-	profile installerProfile,
+	declaration installerDeclaration,
 	versionProfile *installerVersionProfile,
 	minecraft string,
 	product server.Product,
 ) version.Version {
 	candidates := []string{
 		installerArgumentValue(versionProfile, installerLoaderArgument(product)),
-		installerVersionFromDeclaration(profile.Version, product),
-		installerVersionFromCoordinates(profile.Path, minecraft, product),
+		installerVersionFromDeclaration(declaration.Version, product),
+		installerVersionFromCoordinates(declaration.Path, minecraft, product),
 	}
 	for _, candidate := range candidates {
 		if concrete := concreteInstallerVersion(candidate); concrete != "" {
