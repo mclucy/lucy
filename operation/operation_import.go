@@ -610,8 +610,9 @@ func publishImportStage(stage, target string) (*importPublication, error) {
 // removeClientOnlyMods deletes mod jars a dedicated server cannot use. The
 // provider's project labels decide first; descriptors answer files no provider
 // identifies. A client-required project that is merely server-optional is a
-// candidate, not a certainty: a server package may depend on it, so candidates
-// stay when a kept package names one of their modules.
+// candidate, not a certainty: a server package may depend on it through its
+// descriptor or its provider release, so candidates stay when a kept package
+// names one of their modules or projects.
 func (s *Service) removeClientOnlyMods(
 	ctx context.Context,
 	stage string,
@@ -664,24 +665,7 @@ func (s *Service) removeClientOnlyMods(
 		return nil, err
 	}
 
-	// Keep candidates a server package depends on. A promoted candidate can
-	// itself require another candidate, so repeat until nothing changes.
-	for {
-		required := requiredModuleIDs(files)
-		changed := false
-		for i := range files {
-			if files[i].kept || files[i].removable {
-				continue
-			}
-			if modulesProvide(files[i].modules, required) {
-				files[i].kept = true
-				changed = true
-			}
-		}
-		if !changed {
-			break
-		}
-	}
+	keepRequiredMods(files)
 
 	var removed []string
 	for _, file := range files {
@@ -729,42 +713,45 @@ func (s *Service) classifyImportMod(
 		modules: modules,
 		kept:    true,
 	}
-	switch sides, known := s.identifiedServerSide(
-		ctx,
-		path,
-		mappers,
-	); {
-	case known && sides != nil:
-		switch {
-		case sides.Server == upstream.ServerSideUnsupported:
-			file.reason = "project does not support a dedicated server"
-			file.removable, file.kept = true, false
-		case sides.ClientOnly():
-			file.reason = "project declares client-only support"
-			file.kept = false
-		}
-	default:
-		if reason, clientOnly := clientOnlyDescriptor(
-			ctx,
-			path,
-			ecosystem,
-			minecraft,
-		); clientOnly {
-			file.reason = reason
-			file.removable, file.kept = true, false
-		} else if project, found := s.catalogProjectSide(
-			ctx,
-			path,
-			mappers,
-		); found {
+	release, matched := s.identifiedRelease(ctx, path, mappers)
+	if matched {
+		file.project = projectKey(
+			release.Candidate.Provider,
+			release.Candidate.ProjectID,
+		)
+		file.dependencies = release.Candidate.Dependencies
+		if release.ServerSide != "" || release.ClientSide != "" {
 			switch {
-			case project.ServerSide == upstream.ServerSideUnsupported:
+			case release.ServerSide == upstream.ServerSideUnsupported:
 				file.reason = "project does not support a dedicated server"
 				file.removable, file.kept = true, false
-			case project.IsClientOnly():
+			case release.ClientOnly():
 				file.reason = "project declares client-only support"
 				file.kept = false
 			}
+			return file
+		}
+	}
+	if reason, clientOnly := clientOnlyDescriptor(
+		ctx,
+		path,
+		ecosystem,
+		minecraft,
+	); clientOnly {
+		file.reason = reason
+		file.removable, file.kept = true, false
+	} else if project, found := s.catalogProjectSide(
+		ctx,
+		path,
+		mappers,
+	); found {
+		switch {
+		case project.ServerSide == upstream.ServerSideUnsupported:
+			file.reason = "project does not support a dedicated server"
+			file.removable, file.kept = true, false
+		case project.IsClientOnly():
+			file.reason = "project declares client-only support"
+			file.kept = false
 		}
 	}
 	return file
@@ -772,11 +759,40 @@ func (s *Service) classifyImportMod(
 
 // importModFile is one imported mod archive and its classification.
 type importModFile struct {
-	path      string
-	modules   []catalog.DescriptorModule
-	reason    string
-	kept      bool
-	removable bool
+	path string
+	// project is the provider-qualified project the file was published as.
+	project string
+	// dependencies lists the project relationships the release declares.
+	dependencies []upstream.ProjectDependency
+	modules      []catalog.DescriptorModule
+	reason       string
+	kept         bool
+	removable    bool
+}
+
+// keepRequiredMods keeps candidates a server package depends on, whether the
+// dependency comes from a descriptor module or the provider's release
+// metadata. A promoted candidate can itself require another candidate, so the
+// pass repeats until nothing changes.
+func keepRequiredMods(files []importModFile) {
+	for {
+		requiredModules := requiredModuleIDs(files)
+		requiredProjectKeys := requiredProjectIDs(files)
+		changed := false
+		for i := range files {
+			if files[i].kept || files[i].removable {
+				continue
+			}
+			if modulesProvide(files[i].modules, requiredModules) ||
+				(files[i].project != "" && requiredProjectKeys[files[i].project]) {
+				files[i].kept = true
+				changed = true
+			}
+		}
+		if !changed {
+			return
+		}
+	}
 }
 
 // requiredModuleIDs lists every dependency a kept archive declares.
@@ -789,6 +805,25 @@ func requiredModuleIDs(files []importModFile) map[string]bool {
 		for _, module := range file.modules {
 			for _, dependency := range module.Dependencies {
 				addDependencyIDs(required, dependency)
+			}
+		}
+	}
+	return required
+}
+
+// requiredProjectIDs lists the provider projects that kept files require.
+func requiredProjectIDs(files []importModFile) map[string]bool {
+	required := make(map[string]bool)
+	for _, file := range files {
+		if !file.kept {
+			continue
+		}
+		for _, dependency := range file.dependencies {
+			if dependency.Kind != catalog.DependencyKindRequired {
+				continue
+			}
+			if key := projectKey(dependency.Provider, dependency.ProjectID); key != "" {
+				required[key] = true
 			}
 		}
 	}
@@ -1000,25 +1035,15 @@ func sameProjectTitle(left, right string) bool {
 	return a == b
 }
 
-// identifiedSide asks the release mappers whether a provider identifies the
-// file and reports its side labels. A match without labels still counts as
-// identified, so the caller can fall back to descriptors.
-type identifiedSide struct {
-	Server upstream.ServerSide
-	Client string
-}
-
-// ClientOnly reports whether the labels keep the project off a dedicated
-// server.
-func (s identifiedSide) ClientOnly() bool {
-	return upstream.ClientOnly(s.Server, s.Client)
-}
-
-func (s *Service) identifiedServerSide(
+// identifiedRelease asks the release mappers whether a provider identifies the
+// file's hash, and returns that provider's record: side labels, project
+// identity, and declared project dependencies. A miss for every mapper reports
+// false, which sends the caller to descriptors.
+func (s *Service) identifiedRelease(
 	ctx context.Context,
 	path string,
 	mappers []packageMapper,
-) (*identifiedSide, bool) {
+) (*upstream.Release, bool) {
 	for _, mapper := range mappers {
 		release, matched, err := mapper.release.ReleaseByHash(
 			ctx,
@@ -1036,15 +1061,21 @@ func (s *Service) identifiedServerSide(
 		if !matched {
 			continue
 		}
-		if release.ServerSide == "" && release.ClientSide == "" {
-			return nil, false
+		if release.Candidate.Provider == "" {
+			release.Candidate.Provider = mapper.provider
 		}
-		return &identifiedSide{
-			Server: release.ServerSide,
-			Client: release.ClientSide,
-		}, true
+		return &release, true
 	}
 	return nil, false
+}
+
+// projectKey identifies one provider project across the files of an import.
+// An empty provider or project has no identity to match.
+func projectKey(provider catalog.Provider, projectID string) string {
+	if provider == "" || projectID == "" {
+		return ""
+	}
+	return string(provider) + ":" + projectID
 }
 
 // relativeImportPaths reports files relative to root, slash-separated, so no

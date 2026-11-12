@@ -1120,3 +1120,51 @@ func TestImportReviewPropertyMetadata(t *testing.T) {
 		})
 	}
 }
+
+// TestKeepRequiredModsKeepsProviderRequirements checks that a candidate stays
+// when a kept file requires its project through provider metadata, that a
+// promoted candidate keeps its own requirement, and that an incompatible
+// relation keeps nothing.
+func TestKeepRequiredModsKeepsProviderRequirements(t *testing.T) {
+	dependency := func(id string, kind catalog.DependencyKind) upstream.ProjectDependency {
+		return upstream.ProjectDependency{
+			Provider:  catalog.ProviderModrinth,
+			ProjectID: id,
+			Kind:      kind,
+		}
+	}
+	clientMod := projectKey(catalog.ProviderModrinth, "client-mod")
+	files := []importModFile{
+		{
+			path:    "mods/server.jar",
+			kept:    true,
+			project: projectKey(catalog.ProviderModrinth, "server"),
+			dependencies: []upstream.ProjectDependency{
+				dependency("library", catalog.DependencyKindRequired),
+				dependency("client-mod", catalog.DependencyKindIncompatible),
+			},
+		},
+		{
+			path:    "mods/library.jar",
+			project: projectKey(catalog.ProviderModrinth, "library"),
+			dependencies: []upstream.ProjectDependency{
+				dependency("nested", catalog.DependencyKindRequired),
+			},
+		},
+		{
+			path:    "mods/nested.jar",
+			project: projectKey(catalog.ProviderModrinth, "nested"),
+		},
+		{
+			path:    "mods/client-mod.jar",
+			project: clientMod,
+		},
+	}
+	keepRequiredMods(files)
+	for _, file := range files {
+		want := file.project != clientMod
+		if file.kept != want {
+			t.Errorf("%s kept = %v, want %v", file.path, file.kept, want)
+		}
+	}
+}
