@@ -27,6 +27,7 @@ type fingerprintResponse struct {
 		ExactMatches []struct {
 			ID   uint32 `json:"id"`
 			File struct {
+				ID    int32 `json:"id"`
 				ModId int32 `json:"modId"`
 			} `json:"file"`
 		} `json:"exactMatches"`
@@ -139,7 +140,7 @@ func (p *Provider) fingerprintMatch(
 	m := result.Data.ExactMatches[0]
 	return fingerprintMatchResult{
 		ModId:  m.File.ModId,
-		FileId: int32(m.ID),
+		FileId: m.File.ID,
 	}, nil
 }
 

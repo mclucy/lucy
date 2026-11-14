@@ -353,6 +353,18 @@ func writeImportReport(
 	inv *Invocation,
 	result *operation.ImportResult,
 ) {
+	if !result.Initialized {
+		fmt.Fprintf(
+			w,
+			"Extracted %s into %s\n",
+			result.Name,
+			displayCreatePath(result.Workspace, inv.Directory),
+		)
+		fmt.Fprintln(w, "  Server: not detected")
+		fmt.Fprintf(w, "  Files: %s\n", importFileCount(result.ServerFiles))
+		writeImportFindings(w, result)
+		return
+	}
 	fmt.Fprintf(
 		w,
 		"Imported %s into %s\n",
@@ -367,6 +379,12 @@ func writeImportReport(
 		result.SkippedClient,
 	)
 	fmt.Fprintf(w, "  Managed: %s\n", packageCountLabel(result.ManagedPackages))
+	writeImportFindings(w, result)
+}
+
+// writeImportFindings reports the files lucy does not manage and the lines
+// that need attention. Both import outcomes share them.
+func writeImportFindings(w io.Writer, result *operation.ImportResult) {
 	if len(result.Unmanaged) > 0 {
 		fmt.Fprintf(w, "  Unmanaged: %d files\n", len(result.Unmanaged))
 		for _, file := range result.Unmanaged {
@@ -379,6 +397,13 @@ func writeImportReport(
 			fmt.Fprintf(w, "    %s\n", line)
 		}
 	}
+}
+
+func importFileCount(count int) string {
+	if count == 1 {
+		return "1 file"
+	}
+	return fmt.Sprintf("%d files", count)
 }
 
 func importServerLabel(result *operation.ImportResult) string {

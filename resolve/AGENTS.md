@@ -1,22 +1,27 @@
 # Package `resolve`
 
-`resolve` selects package builds and validates module descriptor graphs against target server runtimes.
+Resolves manifest and dependency requirements through candidate search, then validates the selected module graph against a target runtime.
 
 ## Responsibilities & Boundaries
 
-- Solves package dependency graphs through candidate search, hard filtering, and backtracking (`Packages`, `backtrack`).
-- Validates and finalizes descriptor modules (`DescriptorModule`, `finalizeModules`) against runtime-provided modules (`runtimeModules`).
-- **No network or routing ownership**: Callers inject candidate listing (`CandidateSource`) and artifact materialization callbacks (`Materialize`). `resolve` does not own or access the network cache, networks, or provider clients directly, though it provides optional session-scoped artifact analysis caching (`AnalysisCache`).
+- `Packages` runs candidate search, hard filtering, backtracking (`backtrack`), and module finalization (`finalizeModules`).
+- Callers inject candidate listing (`CandidateSource`) and artifact materialization (`Materialize`). The package performs no network access and does not own routing, the network cache, or provider clients.
+- `AnalysisCache` is optional and session-scoped, keyed by the candidate's provider, project ID, release ID, file ID, and URL, not by content digest.
 
-## Invariants & Behavior
+## Search
 
-- **Project Canonicalization**: Project slugs are canonicalized to upstream IDs during candidate search so each project appears at most once in the graph.
-- **Module Identity & Precedence**: Module identity is scoped by environment, module namespace, and normalized ID (`moduleKey`). The namespace and descriptor precedence come only from the catalog ecosystem table (`Ecosystem.Loads`, `ModuleNamespace`); never special-case one loader here. Native loader modules outrank bundled copies.
-- **Provider Substitution**: A pure dependency demand binds to a selected package of a preferred descriptor ecosystem that answers all its module identities. Substitutions and exact-release pins live in the branch-local selection state, so backtracking undoes them.
+- **Project Canonicalization**: A `<provider>:<slug>` request is rewritten to the provider's project ID, so a slug request and an ID request for one project share a selection key. The key is environment, ecosystem, provider, and project ID; at most one artifact is selected per key.
+- **Provider Substitution**: A pure dependency demand (no direct requirement, no release hint) binds to a selected package when that package ranks before the demanded package in the runtime's descriptor precedence, answers every module identity the demanded package exposes, and satisfies the module constraints of the selected graph. Substitutions and pins from release hints are branch-local, so backtracking undoes them.
 - **Demand Overrides Direct Bindings**: An active dependency demand overrides a disabled direct manifest requirement, forcing artifact selection and module validation.
-- **Search Limits & Hard Failures**: Total search attempts are bounded by `searchAttemptLimit` (`SearchLimitError`), and context cancellation aborts traversal. Operational failures (e.g. materialization, archive read, or candidate source errors) mark the search state so the final error surfaces the underlying operational cause directly rather than masking it behind candidate rejection summaries.
-- **Conflicted Graphs**: `AcceptPackageConflicts` relaxes only package-caused problems during the first search: package module problems and metadata-declared incompatibilities, checked in both directions, are accepted. Module warnings come from the final selected graph, and metadata-conflict warnings are deterministically ordered, deduplicated pairs from that graph. Runtime-answered module problems, hard filters, and materialization or archive failures remain fatal, and operational errors are never downgraded to warnings. It is a first-search mode, not a retry.
-- **Broken Graphs**: Retries with relaxed module checks only when `AcceptBroken` is set; otherwise rejects unsatisfied module graphs.
+- **Lock Replay**: `Previous` supplies the project identity and the locked file variant. `PreserveLocked` keeps that file selectable while the target is unchanged. A release may publish several files; only the primary answers an unconstrained requirement.
+- **Limits**: `searchAttemptLimit` bounds candidate combinations (`SearchLimitError`); context cancellation aborts traversal. Unrecovered operational failures are preserved in the final error; otherwise the rejection ledger supplies the summary.
+
+## Validation
+
+- **Module Identity**: Scoped by environment, module namespace, and normalized ID (`moduleKey`). Runtime modules (`runtimeModules`: Minecraft, loader, MCDR, `Target.CoreModules`) answer before package modules. Namespace and descriptor precedence come from the catalog (`Ecosystem.Loads`, `ModuleNamespace`); this package only applies them to the target.
+- **Precedence**: A native module (not nested) outranks a bundled copy. Bundled copies in one package are alternative variants; the one the target satisfies wins. Copies from different packages compare versions. Two native modules with one identity in different packages are an error.
+- **Conflicted Graphs**: `AcceptPackageConflicts` accepts package module problems and metadata conflicts declared in either direction during the first search, and reports them as warnings from the final graph; metadata-conflict warnings are deduplicated and deterministically ordered. Runtime-answered module problems, hard filters, materialization failures, and finalization errors remain fatal. An unreadable candidate descriptor rejects only that candidate. `AcceptPackageConflicts` is a first-search mode, not a retry.
+- **Broken Graphs**: `AcceptBroken` retries the search with module checks relaxed; otherwise an unsatisfied module graph is rejected.
 
 ## Targeted Tests
 

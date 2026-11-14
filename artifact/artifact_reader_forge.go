@@ -2,13 +2,13 @@ package artifact
 
 import (
 	"archive/zip"
+	"strings"
 
 	"github.com/mclucy/lucy/catalog"
 	"github.com/mclucy/lucy/input"
 	"github.com/mclucy/lucy/internal/fileschema"
 	"github.com/mclucy/lucy/internal/fsutil"
 	"github.com/mclucy/lucy/version"
-	"github.com/pelletier/go-toml/v2"
 )
 
 const forgeModsTomlPath = "META-INF/mods.toml"
@@ -46,8 +46,8 @@ func readModsToml(
 	if err != nil || raw == nil {
 		return nil, err
 	}
-	var identifier fileschema.FileModLoaderIdentifier
-	if err := toml.Unmarshal(raw, &identifier); err != nil {
+	identifier, err := fileschema.ParseFileModLoaderIdentifier(raw)
+	if err != nil {
 		return nil, err
 	}
 	return &decodedModsToml{Identifier: identifier, Path: name}, nil
@@ -199,7 +199,7 @@ func forgeDecodedDescriptor(
 			metadata = catalog.Metadata{
 				Title:       mod.DisplayName,
 				Description: mod.Description,
-				Authors:     []catalog.Person{{Name: mod.Authors}},
+				Authors:     forgeAuthors(mod.Authors),
 				License:     descriptor.Identifier.License,
 				URLs: []catalog.URL{
 					{
@@ -252,6 +252,18 @@ func forgeLoaderModID(ecosystem catalog.Ecosystem) string {
 // forgeDependencies translates one mod's dependency list into the resolver
 // view and, when requested, the reader view. Client-only entries do not
 // constrain a dedicated server.
+// forgeAuthors keeps every declared author. FML does not read the field, but
+// package metadata presents it.
+func forgeAuthors(authors fileschema.FileModLoaderAuthors) []catalog.Person {
+	people := make([]catalog.Person, 0, len(authors))
+	for _, author := range authors {
+		if name := strings.TrimSpace(author); name != "" {
+			people = append(people, catalog.Person{Name: name})
+		}
+	}
+	return people
+}
+
 func forgeDependencies(
 	identifier fileschema.FileModLoaderIdentifier,
 	modID string,

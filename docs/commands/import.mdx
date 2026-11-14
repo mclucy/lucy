@@ -3,7 +3,7 @@ title: "lucy import"
 description: "Create a workspace from a server archive or modpack"
 ---
 
-`lucy import` turns a server archive into a lucy workspace. It reads a local file or a direct `http` or `https` download link, unpacks the server into the target directory, and writes `lucy.yaml` and `lucy-lock.yaml`, the same files [`lucy init`](/commands/init) produces for a server that is already on disk.
+`lucy import` turns a server archive into a lucy workspace. It reads a local file or a direct `http` or `https` download link and unpacks the server into the target directory. When import identifies a server, it writes `lucy.yaml` and `lucy-lock.yaml`, the same files [`lucy init`](/commands/init) produces for a server that is already on disk. Otherwise import extracts the archive as-is and asks you to run `lucy init` once the modpack is set up.
 
 ```bash
 lucy import ~/Downloads/server-pack.zip
@@ -18,9 +18,21 @@ Import accepts two kinds of source:
 - A Modrinth modpack in `.mrpack` format. Import reads the declared Minecraft version and loader, installs that loader into the workspace, and records the modpack's server-side files.
 - A server directory packed as a `.zip` or `.tar.gz` archive. Import detects the server software the same way `lucy init` does.
 
+A server archive may contain a Forge or NeoForge installer. Import runs that installer to provision the server. Fabric and Quilt installers are recognized but not run yet. Import never takes a loader name from a filename; it identifies the loader from the archive contents.
+
 Sources are a local path, a direct link to the archive, or a remote modpack reference described below. Relative local paths resolve against the current directory.
 
 Client packs and launcher instances are not supported yet.
+
+## When no server is detected
+
+Some archives hold a modpack that is not set up yet. When import finds no server software, it extracts every file into the target directory, writes no workspace documents, and prints this warning:
+
+```text
+no server detected; the archive was extracted as-is. Run `lucy init` once the modpack is set up.
+```
+
+The directory then holds the unpacked files for you to set up and initialize later with [`lucy init`](/commands/init).
 
 ## Remote modpacks
 
@@ -52,9 +64,13 @@ Pass `--sha256` with the expected checksum of the archive, as 64 hexadecimal cha
 
 ## What gets reported
 
-After a successful import, lucy prints the workspace, the server product and Minecraft version, the number of server files written, the number of client-only files skipped, and the number of packages lucy manages. Files it does not recognize are listed as unmanaged, so you can decide whether to add them yourself. Review lines name anything that needs your attention. Warnings appear on stderr.
+After a successful import, lucy prints the workspace, the server product and Minecraft version, the number of server files written, the number of client-only files skipped, and the number of packages lucy manages. Files it does not recognize are listed as unmanaged, so you can decide whether to add them yourself. Review lines name anything that needs your attention.
+
+When import detects no server, the report states that no server was detected and gives the number of extracted files. It lists unmanaged files and review lines the same way, and omits the managed package count.
 
 Imported packages are managed from then on, the same as packages recorded by `lucy init`. See [`lucy install`](/commands/install) for how later changes take effect.
+
+Warnings appear on stderr and in the JSON result.
 
 ## Flags
 

@@ -432,33 +432,31 @@ func (a *packageAdopter) probeMapped(
 			))
 			return true
 		}
-		modules, readErr := artifact.ReadModulesFor(
+		// A mapped release becomes a locked requirement, so its descriptor
+		// must be readable and declare a server-visible module. A library
+		// archive is loaded by the loader but is not a package Lucy can
+		// resolve, so it stays unmanaged.
+		modules, err := artifact.ReadModulesFor(
 			ctx,
 			p.Path,
 			ecosystem,
 			string(a.manifest.Server.Minecraft),
 		)
-		if readErr == nil {
-			proposal.modules = modules
-		}
-		if readErr == nil && len(modules) == 0 {
+		if err != nil {
 			proposal.warnings = append(proposal.warnings, fmt.Errorf(
-				"package %s left unmanaged: its descriptor declares no %s module this server can load",
+				"package %s left unmanaged: read descriptor: %w",
 				p.Path,
-				ecosystem,
+				err,
 			))
 			return true
 		}
-		if !release.ClientOnly() && release.ServerSide == "" && release.ClientSide == "" {
-			if clientOnly, known := a.clientOnlyFile(ctx, p.Path, ecosystem); known &&
-				clientOnly {
-				proposal.warnings = append(proposal.warnings, fmt.Errorf(
-					"package %s left unmanaged: its descriptor declares no %s module this server can load",
-					p.Path,
-					ecosystem,
-				))
-				return true
-			}
+		proposal.modules = modules
+		if len(modules) == 0 {
+			proposal.warnings = append(proposal.warnings, fmt.Errorf(
+				"package %s left unmanaged: its descriptor declares no server-side module",
+				p.Path,
+			))
+			return true
 		}
 		if release.Candidate.ProjectID == "" {
 			proposal.warnings = append(proposal.warnings, fmt.Errorf(
@@ -503,27 +501,6 @@ func (a *packageAdopter) probeMapped(
 		return true
 	}
 	return false
-}
-
-// clientOnlyFile reports whether the file's descriptor for ecosystem keeps
-// every module it declares off a dedicated server. known is false when no
-// descriptor for ecosystem declares a module (a library or locator archive):
-// the hash identifies it, and resolution reads its nested modules.
-func (a *packageAdopter) clientOnlyFile(
-	ctx context.Context,
-	path string,
-	ecosystem catalog.Ecosystem,
-) (clientOnly, known bool) {
-	clientOnly, known, err := artifact.ReadClientOnly(
-		ctx,
-		path,
-		ecosystem,
-		string(a.manifest.Server.Minecraft),
-	)
-	if err != nil {
-		return false, false
-	}
-	return clientOnly, known
 }
 
 // releaseEcosystem selects the served ecosystem a release belongs to. The

@@ -40,6 +40,13 @@ func readMCDRConfig(path string) (*MCDRConfig, error) {
 	return config, nil
 }
 
+// ServerDirectory returns the directory that holds the server at anchor. Only
+// MCDR moves the server away from the anchor, and it uses its configured
+// working directory. A missing or unreadable configuration leaves the anchor.
+func ServerDirectory(anchor string) string {
+	return readMCDRWorkingDirectory(anchor)
+}
+
 // readMCDRWorkingDirectory resolves the server directory of an MCDR anchor
 // while decoding only working_directory. Activity checks must stay tolerant of
 // unrelated malformed configuration fields.

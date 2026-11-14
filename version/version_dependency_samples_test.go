@@ -11,7 +11,6 @@ import (
 	"github.com/mclucy/lucy/internal/fileschema"
 	"github.com/mclucy/lucy/internal/fn"
 	"github.com/mclucy/lucy/version"
-	"github.com/pelletier/go-toml/v2"
 )
 
 func TestMcdrDependencyParsingFromSample(t *testing.T) {
@@ -128,8 +127,8 @@ func TestForgeDependencyParsingFromSample(t *testing.T) {
 		"mods.toml",
 	)
 
-	var mod fileschema.FileModLoaderIdentifier
-	if err := toml.Unmarshal(mustReadFile(t, ae2MetaFile), &mod); err != nil {
+	mod, err := fileschema.ParseFileModLoaderIdentifier(mustReadFile(t, ae2MetaFile))
+	if err != nil {
 		t.Fatalf("unmarshal forge mods.toml: %v", err)
 	}
 
@@ -182,11 +181,8 @@ func TestForgeDependencyParsingFromSample(t *testing.T) {
 		"META-INF",
 		"mods.toml",
 	)
-	var yungs fileschema.FileModLoaderIdentifier
-	if err := toml.Unmarshal(
-		mustReadFile(t, yungsMetaFile),
-		&yungs,
-	); err != nil {
+	yungs, err := fileschema.ParseFileModLoaderIdentifier(mustReadFile(t, yungsMetaFile))
+	if err != nil {
 		t.Fatalf("unmarshal YUNG's Extras mods.toml: %v", err)
 	}
 
