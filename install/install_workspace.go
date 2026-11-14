@@ -55,7 +55,12 @@ type (
 		// catalogue dependencies. Adoption sets it because the workspace
 		// already holds a working set that resolution must not extend.
 		declaredOnly bool
-		publishLock  bool
+		// Adopted lists releases the workspace already holds. Resolution
+		// selects them for their reference without a catalogue query, so a
+		// locally valid artifact stays managed when upstream offers no release
+		// for the target server.
+		Adopted     []AdoptedRelease
+		publishLock bool
 		// SkipRegistration leaves the workspace unregistered. Staging callers
 		// set it because a staged tree is not yet a server; they register the
 		// workspace once its documents exist.

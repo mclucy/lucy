@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"strconv"
 
 	"github.com/mclucy/lucy/catalog"
 	"github.com/mclucy/lucy/internal/fn"
@@ -34,44 +33,51 @@ type fingerprintResponse struct {
 	} `json:"data"`
 }
 
-func (p *Provider) PackageByHash(
+// ReleaseByHash identifies the installed artifact by its MurmurHash
+// fingerprint and returns the release it was published as, in one lookup.
+// A fingerprint with no exact match is a miss, not an error.
+func (p *Provider) ReleaseByHash(
 	ctx context.Context,
-	hashable upstream.ArtifactFingerprint,
+	artifact upstream.ArtifactFingerprint,
 ) (
-	ref catalog.VersionedRef,
-	hash string,
-	ok bool,
-	err error,
+	upstream.Release,
+	bool,
+	error,
 ) {
-	fingerprint, err := hashable.MurmurHash()
+	fingerprint, err := artifact.MurmurHash()
 	if err != nil {
-		return ref, hash, false, err
+		return upstream.Release{}, false, err
 	}
-	hash = strconv.FormatUint(uint64(fingerprint), 10)
 	match, err := p.fingerprintMatch(ctx, fingerprint)
 	if err != nil {
 		if errors.Is(err, ErrProjectNotFound) {
-			return ref, hash, false, nil
+			return upstream.Release{}, false, nil
 		}
-		return ref, hash, false, err
+		return upstream.Release{}, false, err
 	}
 
 	mod, err := p.getModById(ctx, match.ModId)
 	if err != nil {
-		return ref, hash, false, err
+		return upstream.Release{}, false, err
 	}
 	file, err := p.getModFileById(ctx, match.ModId, match.FileId)
 	if err != nil {
-		return ref, hash, false, err
+		return upstream.Release{}, false, err
 	}
 
-	ref = catalog.VersionedRef{
-		Name:      catalog.Name(mod.Slug),
-		Provider:  p.Provider(),
-		Ecosystem: platformFromCurseForgeFile(mod, file),
-		Version:   version.Version(file.DisplayName),
+	gameVersions, loaders := splitGameVersions(file.GameVersions)
+	release := upstream.Release{
+		Ref: catalog.VersionedRef{
+			Name:      catalog.Name(mod.Slug),
+			Provider:  p.Provider(),
+			Ecosystem: platformFromCurseForgeFile(mod, file),
+			Version:   version.Version(file.DisplayName),
+		},
+		Candidate:         candidateFromCurseForgeFile(match.ModId, *file),
+		MinecraftVersions: gameVersions,
+		Loaders:           loaders,
 	}
-	return ref, hash, true, nil
+	return release, true, nil
 }
 
 type fingerprintMatchResult struct {

@@ -16,14 +16,68 @@ import (
 )
 
 // ReadModules keeps each descriptor identity and nested container location
-// intact.
+// intact. Without a server version it reads the descriptor an inventory reader
+// reports; callers that select for a server use ReadModulesFor.
 func ReadModules(ctx context.Context, filename string, loader catalog.Ecosystem) ([]catalog.DescriptorModule, error) {
-	if strings.EqualFold(filepath.Ext(filename), ".py") {
-		modules, err := inspectPython(ctx, filename)
-		if err != nil {
-			return nil, err
+	return ReadModulesFor(ctx, filename, loader, "")
+}
+
+// ReadModulesFor keeps each descriptor identity and nested container location
+// intact, selecting version-dependent descriptors for minecraft.
+func ReadModulesFor(
+	ctx context.Context,
+	filename string,
+	loader catalog.Ecosystem,
+	minecraft string,
+) ([]catalog.DescriptorModule, error) {
+	modules, err := readModulesFor(ctx, filename, loader, minecraft)
+	if err != nil {
+		return nil, err
+	}
+	return normalizeModules(modules), nil
+}
+
+// ReadClientOnly reports whether every module the loader's descriptor declares
+// stays off a dedicated server. known is false when no descriptor for loader
+// declares a module, because a jar the loader has no descriptor for is not
+// evidence of a client-only package. A module that declares no side answers
+// not-client-only, so another loader's client-only descriptor cannot remove a
+// jar this loader accepts. The traversal matches ReadModulesFor, so a
+// client-only descriptor does not contribute its bundled archives.
+func ReadClientOnly(
+	ctx context.Context,
+	filename string,
+	loader catalog.Ecosystem,
+	minecraft string,
+) (clientOnly, known bool, err error) {
+	modules, err := readModulesFor(ctx, filename, loader, minecraft)
+	if err != nil {
+		return false, false, err
+	}
+	if len(modules) == 0 {
+		return false, false, nil
+	}
+	for _, module := range modules {
+		if module.Side != catalog.SideClient {
+			// Forge and NeoForge descriptors carry no mod-level side, and a
+			// Fabric or Quilt parent without an environment stays server-side.
+			// A module without a client side is not evidence either way.
+			return false, true, nil
 		}
-		return normalizeModules(modules), nil
+	}
+	return true, true, nil
+}
+
+// readModulesFor reads every module the descriptor declares without filtering
+// client-only ones.
+func readModulesFor(
+	ctx context.Context,
+	filename string,
+	loader catalog.Ecosystem,
+	minecraft string,
+) ([]catalog.DescriptorModule, error) {
+	if strings.EqualFold(filepath.Ext(filename), ".py") {
+		return inspectPython(ctx, filename)
 	}
 	z, err := zip.OpenReader(filename)
 	if err != nil {
@@ -32,17 +86,13 @@ func ReadModules(ctx context.Context, filename string, loader catalog.Ecosystem)
 		// fall back to its static metadata when the extension is absent.
 		if loader == catalog.EcosystemMCDR {
 			if modules, pythonErr := inspectPython(ctx, filename); pythonErr == nil {
-				return normalizeModules(modules), nil
+				return modules, nil
 			}
 		}
 		return nil, err
 	}
 	defer z.Close()
-	modules, err := inspectArchive(&z.Reader, loader, "", 0)
-	if err != nil {
-		return nil, err
-	}
-	return normalizeModules(modules), nil
+	return inspectArchive(&z.Reader, loader, "", 0, minecraft)
 }
 
 // normalizeModules makes descriptor order independent of map iteration. The
@@ -180,34 +230,50 @@ func nativeEntry(z *zip.Reader, name string) ([]byte, error) {
 var descriptorDecoders = map[catalog.Ecosystem]func(
 	*zip.Reader,
 	string,
+	string,
 ) (*decodedDescriptor, error){
 	catalog.EcosystemQuilt: func(
 		z *zip.Reader,
-		member string,
+		member, _ string,
 	) (*decodedDescriptor, error) {
 		return decodeQuiltDescriptor(z, member, false)
 	},
 	catalog.EcosystemFabric: func(
 		z *zip.Reader,
-		member string,
+		member, _ string,
 	) (*decodedDescriptor, error) {
 		return decodeFabricDescriptor(z, member, false)
 	},
 	catalog.EcosystemForge: func(
 		z *zip.Reader,
-		member string,
+		member, _ string,
 	) (*decodedDescriptor, error) {
-		return decodeForgeDescriptor(z, member, false, false)
+		return decodeForgeDescriptor(z, member, false)
 	},
 	catalog.EcosystemNeoForge: func(
 		z *zip.Reader,
-		member string,
+		member, minecraft string,
 	) (*decodedDescriptor, error) {
-		return decodeNeoForgeDescriptor(z, member, false, false)
+		return decodeNeoForgeDescriptor(z, member, false, minecraft)
 	},
-	catalog.EcosystemBukkit: decodeBukkitDescriptor,
-	catalog.EcosystemPaper:  decodeBukkitDescriptor,
-	catalog.EcosystemMCDR:   decodeMCDRDescriptor,
+	catalog.EcosystemBukkit: func(
+		z *zip.Reader,
+		member, _ string,
+	) (*decodedDescriptor, error) {
+		return decodeBukkitDescriptor(z, member)
+	},
+	catalog.EcosystemPaper: func(
+		z *zip.Reader,
+		member, _ string,
+	) (*decodedDescriptor, error) {
+		return decodeBukkitDescriptor(z, member)
+	},
+	catalog.EcosystemMCDR: func(
+		z *zip.Reader,
+		member, _ string,
+	) (*decodedDescriptor, error) {
+		return decodeMCDRDescriptor(z, member)
+	},
 }
 
 // inspectArchive reads one archive with the descriptor precedence of loader
@@ -217,11 +283,12 @@ func inspectArchive(
 	loader catalog.Ecosystem,
 	member string,
 	depth int,
+	minecraft string,
 ) ([]catalog.DescriptorModule, error) {
 	if depth > 16 {
 		return nil, fmt.Errorf("nested archive depth exceeds 16")
 	}
-	decoded, err := decodeArchiveDescriptor(z, loader, member)
+	decoded, err := decodeArchiveDescriptor(z, loader, member, minecraft)
 	if err != nil {
 		return nil, err
 	}
@@ -249,7 +316,13 @@ func inspectArchive(
 		if member != "" {
 			path = member + "/" + path
 		}
-		nestedModules, err := inspectArchive(nested, loader, path, depth+1)
+		nestedModules, err := inspectArchive(
+			nested,
+			loader,
+			path,
+			depth+1,
+			minecraft,
+		)
 		if err != nil {
 			return nil, err
 		}
@@ -264,13 +337,14 @@ func decodeArchiveDescriptor(
 	z *zip.Reader,
 	loader catalog.Ecosystem,
 	member string,
+	minecraft string,
 ) (*decodedDescriptor, error) {
 	for _, ecosystem := range loader.Loads() {
 		decoder, ok := descriptorDecoders[ecosystem]
 		if !ok {
 			continue
 		}
-		decoded, err := decoder(z, member)
+		decoded, err := decoder(z, member, minecraft)
 		if err != nil {
 			return nil, err
 		}

@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/mclucy/lucy/artifactstore"
 	"github.com/mclucy/lucy/catalog"
@@ -83,6 +84,7 @@ func (s *Service) Initialize(ctx context.Context, root string, opts InitOptions)
 		return initResult(observed), err
 	}
 
+	adoptionStarted := time.Now()
 	var identificationErrors []error
 	observed, identificationErrors = identify.Packages(
 		ctx,
@@ -92,8 +94,16 @@ func (s *Service) Initialize(ctx context.Context, root string, opts InitOptions)
 	if err := ctx.Err(); err != nil {
 		return initResult(observed), err
 	}
-	if err := identificationFailure(identificationErrors); err != nil {
-		return initResult(observed), err
+	fatalIdentification, identificationWarnings := identificationOutcome(
+		identificationErrors,
+	)
+	if fatalIdentification != nil {
+		return initResult(observed), fatalIdentification
+	}
+	// A failed lookup leaves the file unidentified. Adoption reports it once
+	// when no provider identifies it, so the failure stays at debug level.
+	for _, warning := range identificationWarnings {
+		s.logger.Debug("package identification failed", "error", warning)
 	}
 	if err := s.applyDetectedVersions(manifest, opts, observed); err != nil {
 		return initResult(observed), err
@@ -101,15 +111,34 @@ func (s *Service) Initialize(ctx context.Context, root string, opts InitOptions)
 	if err := manifest.Normalize(); err != nil {
 		return initResult(observed), err
 	}
-	adoptedPackages, err := s.adoptInstalledPackages(ctx, root, manifest, observed)
+	adoptedPackages, adoptedReleases, inspected, err := s.adoptInstalledPackages(
+		ctx,
+		root,
+		manifest,
+		observed,
+	)
 	if err != nil {
 		return initResult(observed), err
 	}
+	opts.Trace.ReportPhase(install.PhaseInfo{
+		Name:    "adoption",
+		Elapsed: time.Since(adoptionStarted),
+		Count:   len(adoptedPackages),
+		Total:   inspected,
+	})
 	old, err := readExistingLock(root)
 	if err != nil {
 		return initResult(observed), err
 	}
-	resolved, err := s.resolveAdoptedLock(ctx, root, manifest, old, opts, observed)
+	resolved, err := s.resolveAdoptedLock(
+		ctx,
+		root,
+		manifest,
+		old,
+		opts,
+		observed,
+		adoptedReleases,
+	)
 	if err != nil {
 		return initResult(observed), err
 	}
@@ -284,17 +313,21 @@ func (s *Service) applyRuntimeIdentity(
 	return nil
 }
 
-// identificationFailure returns only a cancellation error, which aborts
-// initialization. Other identification failures do not abort it and are not
-// returned as warnings; their files stay unidentified.
-func identificationFailure(errs []error) error {
+// identificationOutcome separates a cancellation, which aborts
+// initialization, from identification failures. A failure leaves the file
+// unidentified and adoption reports it when no provider identifies it.
+func identificationOutcome(errs []error) (error, []error) {
+	var fatal error
+	warnings := make([]error, 0, len(errs))
 	for _, err := range errs {
 		if errors.Is(err, context.Canceled) ||
 			errors.Is(err, context.DeadlineExceeded) {
-			return err
+			fatal = err
+			continue
 		}
+		warnings = append(warnings, err)
 	}
-	return nil
+	return fatal, warnings
 }
 
 // applyDetectedVersions completes the server declaration from observation:
@@ -359,6 +392,7 @@ func (s *Service) resolveAdoptedLock(
 	old *documentpkg.Lock,
 	opts InitOptions,
 	observed *workspace.Workspace,
+	releases []install.AdoptedRelease,
 ) (*documentpkg.Lock, error) {
 	resolved, resolution, err := s.install.Resolve(
 		ctx,
@@ -369,6 +403,7 @@ func (s *Service) resolveAdoptedLock(
 			AcceptBroken: true,
 			Trace:        opts.Trace,
 			Materialize:  opts.Materialize,
+			Adopted:      releases,
 		},
 	)
 	if observed != nil && resolution != nil {

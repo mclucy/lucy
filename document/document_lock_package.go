@@ -6,6 +6,7 @@ import (
 
 	"github.com/mclucy/lucy/catalog"
 	"github.com/mclucy/lucy/server"
+	"github.com/mclucy/lucy/upstream"
 	"github.com/mclucy/lucy/version"
 )
 
@@ -18,6 +19,15 @@ type RequirementBinding struct {
 	Enabled     bool            `yaml:"enabled" json:"enabled"`
 }
 
+// PackageDependency is a relationship the selected release declares to
+// another project.
+type PackageDependency struct {
+	Provider  catalog.Provider       `yaml:"provider" json:"provider"`
+	ProjectID string                 `yaml:"project_id" json:"project_id"`
+	ReleaseID string                 `yaml:"release_id,omitempty" json:"release_id,omitempty"`
+	Kind      catalog.DependencyKind `yaml:"kind" json:"kind"`
+}
+
 // Package records an artifact pin and its requirement bindings, not installed state.
 type Package struct {
 	Environment      server.Environment `yaml:"environment" json:"environment"`
@@ -28,6 +38,16 @@ type Package struct {
 	Dependency bool `yaml:"dependency,omitempty" json:"dependency,omitzero"`
 	// DependencyOf keeps the required dependents that justify this pin.
 	DependencyOf []catalog.Ref `yaml:"dependency_of,omitempty" json:"dependency_of,omitempty"`
+	// Dependencies retains the release's declared project relationships, so a
+	// candidate restored from the lock keeps its demands and incompatibilities.
+	Dependencies []PackageDependency `yaml:"dependencies,omitempty" json:"dependencies,omitempty"`
+	// DependenciesUnknown records that the provider could not supply the
+	// release's dependency metadata.
+	DependenciesUnknown bool `yaml:"dependencies_unknown,omitempty" json:"dependencies_unknown,omitempty"`
+	// Channel records the selected release's stability channel, which the
+	// artifact does not carry. A candidate restored from the lock must satisfy
+	// the same selector checks as the catalogue candidate it replaces.
+	Channel upstream.ReleaseChannel `yaml:"channel,omitempty" json:"channel,omitempty"`
 }
 
 // Enabled reports whether p is selected for installation. Dependency demand

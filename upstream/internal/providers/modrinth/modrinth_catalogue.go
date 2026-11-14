@@ -35,44 +35,9 @@ func (p *Provider) Candidates(ctx context.Context, project, minecraft string, lo
 			if f.FileType != "" {
 				continue
 			}
-			hashes := map[string]string{}
-			if f.Hashes.Sha512 != "" {
-				hashes["sha512"] = f.Hashes.Sha512
-			}
-			if f.Hashes.Sha1 != "" {
-				hashes["sha1"] = f.Hashes.Sha1
-			}
-			c := upstream.Candidate{
-				Provider:     catalog.ProviderModrinth,
-				ProjectID:    v.ProjectId,
-				ReleaseID:    v.ID,
-				FileID:       f.ID,
-				Version:      version.Version(v.VersionNumber),
-				Filename:     f.Filename,
-				URL:          f.URL,
-				Hashes:       hashes,
-				Channel:      upstream.ParseReleaseChannel(v.VersionType),
-				PublishedAt:  v.DatePublished,
-				PrimaryFile:  f.IsPrimary || (unmarked && i == 0),
-				Dependencies: []upstream.ProjectDependency{},
-			}
-			for _, d := range v.Dependencies {
-				projectID := d.ProjectId
-				if projectID == "" && d.VersionId != "" {
-					pinned, e := p.getVersionById(ctx, d.VersionId)
-					if e != nil {
-						return nil, e
-					}
-					projectID = pinned.ProjectId
-				}
-				if projectID != "" {
-					c.Dependencies = append(c.Dependencies, upstream.ProjectDependency{
-						Provider:  catalog.ProviderModrinth,
-						ProjectID: projectID,
-						ReleaseID: d.VersionId,
-						Kind:      catalog.ParseDependencyKind(string(d.DependencyType)),
-					})
-				}
+			c, err := p.candidateFromVersion(ctx, v, f, f.IsPrimary || (unmarked && i == 0), false)
+			if err != nil {
+				return nil, err
 			}
 			out = append(out, c)
 		}
@@ -81,4 +46,71 @@ func (p *Provider) Candidates(ctx context.Context, project, minecraft string, lo
 		return nil, fmt.Errorf("modrinth project %s has no %s release for Minecraft %s", project, loader, minecraft)
 	}
 	return out, nil
+}
+
+// candidateFromVersion builds the candidate for one file of a version. The
+// caller owns the primary flag; the helper resolves a dependency whose
+// project is carried by its version through the version endpoint. A hash
+// identification keeps the matched release when that metadata is incomplete,
+// because the installed bytes already establish the release; a catalogue
+// listing treats the failure as fatal.
+func (p *Provider) candidateFromVersion(
+	ctx context.Context,
+	v *versionResponse,
+	f fileResponse,
+	primary bool,
+	tolerateIncompleteDependencies bool,
+) (upstream.Candidate, error) {
+	hashes := map[string]string{}
+	if f.Hashes.Sha512 != "" {
+		hashes["sha512"] = f.Hashes.Sha512
+	}
+	if f.Hashes.Sha1 != "" {
+		hashes["sha1"] = f.Hashes.Sha1
+	}
+	c := upstream.Candidate{
+		Provider:     catalog.ProviderModrinth,
+		ProjectID:    v.ProjectId,
+		ReleaseID:    v.ID,
+		FileID:       f.ID,
+		Version:      version.Version(v.VersionNumber),
+		Filename:     f.Filename,
+		URL:          f.URL,
+		Hashes:       hashes,
+		Channel:      upstream.ParseReleaseChannel(v.VersionType),
+		PublishedAt:  v.DatePublished,
+		PrimaryFile:  primary,
+		Dependencies: []upstream.ProjectDependency{},
+	}
+	for _, d := range v.Dependencies {
+		projectID := d.ProjectId
+		if projectID == "" && d.VersionId != "" {
+			pinned, e := p.getVersionById(ctx, d.VersionId)
+			if e != nil {
+				if ctx.Err() != nil {
+					return upstream.Candidate{}, ctx.Err()
+				}
+				if !tolerateIncompleteDependencies {
+					return upstream.Candidate{}, e
+				}
+				p.logger.Debug(
+					"modrinth: dependency metadata incomplete",
+					"version", d.VersionId,
+					"error", e,
+				)
+				c.DependenciesUnknown = true
+				continue
+			}
+			projectID = pinned.ProjectId
+		}
+		if projectID != "" {
+			c.Dependencies = append(c.Dependencies, upstream.ProjectDependency{
+				Provider:  catalog.ProviderModrinth,
+				ProjectID: projectID,
+				ReleaseID: d.VersionId,
+				Kind:      catalog.ParseDependencyKind(string(d.DependencyType)),
+			})
+		}
+	}
+	return c, nil
 }

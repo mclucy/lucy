@@ -67,7 +67,11 @@ func decideCandidate(
 			if !match {
 				reject(RejectionFilePattern, requirement.FilePattern)
 			}
-		} else if !candidate.PrimaryFile {
+		} else if !candidate.PrimaryFile && !keepsLockedFile(request, candidate) {
+			// Only the primary file answers an unconstrained requirement. The
+			// lock records the file an earlier resolution or adoption chose,
+			// and that variant must stay eligible so a later resolution does
+			// not silently swap in the release's primary file.
 			reject(RejectionPrimaryFile, "")
 		}
 	}
@@ -79,6 +83,16 @@ func decideCandidate(
 		reject(RejectionPrimaryFile, "")
 	}
 	return decision, nil
+}
+
+// keepsLockedFile reports whether the candidate is the file the lock selected
+// for the request's project. Providers without file identities answer false.
+func keepsLockedFile(
+	request projectRequest,
+	candidate upstream.Candidate,
+) bool {
+	return request.previousFileID != "" &&
+		candidate.FileID == request.previousFileID
 }
 
 // orderCandidates applies the cache order: newest publication first, then the

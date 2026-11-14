@@ -6,6 +6,7 @@ import (
 	"slices"
 	"time"
 
+	"github.com/mclucy/lucy/catalog"
 	"github.com/mclucy/lucy/document"
 	"github.com/mclucy/lucy/resolve"
 	"github.com/mclucy/lucy/server"
@@ -139,10 +140,15 @@ func (s *Service) resolveInstall(
 	if old != nil {
 		previousPackages = old.Packages
 	}
+	preserveLocked := old != nil &&
+		old.Server.Minecraft == resolved.Server.Minecraft &&
+		old.Server.Product == resolved.Server.Product &&
+		old.Server.CoreVersion == resolved.Server.CoreVersion
 	packageRequest := resolve.PackagesRequest{
-		Context:  ctx,
-		Manifest: d,
-		Previous: previousPackages,
+		Context:        ctx,
+		Manifest:       d,
+		Previous:       previousPackages,
+		PreserveLocked: preserveLocked,
 		Target: resolve.Target{
 			Product:      resolved.Server.Product,
 			Bootstrapper: resolved.Server.Bootstrapper,
@@ -158,8 +164,27 @@ func (s *Service) resolveInstall(
 		Logger:             s.logger,
 		Trace:              opts.Trace.resolveTrace(),
 	}
-	if s.source != nil {
-		packageRequest.Candidates = s.source.Candidates
+	if s.source != nil || len(opts.Adopted) > 0 {
+		packageRequest.Candidates = func(
+			ctx context.Context,
+			registry catalog.Registry,
+			project, minecraft string,
+			ecosystem catalog.Ecosystem,
+		) ([]upstream.Candidate, error) {
+			candidate, ok := adoptedCandidate(
+				opts.Adopted,
+				registry,
+				project,
+				ecosystem,
+			)
+			if ok {
+				return []upstream.Candidate{candidate}, nil
+			}
+			if s.source != nil {
+				return s.source.Candidates(ctx, registry, project, minecraft, ecosystem)
+			}
+			return nil, nil
+		}
 	}
 	packages, moduleWarnings, err := resolve.Packages(packageRequest)
 	if err != nil {

@@ -37,23 +37,6 @@ type InfoProvider interface {
 	Informer
 }
 
-type ArtifactMapProvider interface {
-	ProviderIdentifier
-	ArtifactMapper
-}
-
-type ArtifactMapper interface {
-	PackageByHash(
-		ctx context.Context,
-		artifact ArtifactFingerprint,
-	) (
-		ref catalog.VersionedRef,
-		hash string,
-		ok bool,
-		err error,
-	)
-}
-
 type ArtifactFingerprint interface {
 	SHA1() ([sha1.Size]byte, error)
 	MurmurHash() (uint32, error)

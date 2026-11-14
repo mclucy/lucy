@@ -152,6 +152,120 @@ func (s *selectionState) restoreAll(branches []selectionBranch) {
 	}
 }
 
+// lockedFileID returns the file the lock selected for a reference. A release
+// may publish several files of one version, and the recorded variant must stay
+// eligible so a later resolution does not swap in the release's primary file.
+func lockedFileID(
+	previous []document.Package,
+	environment serverpkg.Environment,
+	ecosystem catalog.Ecosystem,
+	provider catalog.Provider,
+	ref string,
+) string {
+	for _, p := range previous {
+		if p.Environment != environment || p.Ecosystem != ecosystem ||
+			p.Provider != provider {
+			continue
+		}
+		for _, requirement := range p.Requirements {
+			if requirement.Reference == ref {
+				return p.FileID
+			}
+		}
+	}
+	return ""
+}
+
+// lockedCandidate rebuilds the candidate the lock accepted for this request.
+// An adopted release can carry a compatibility exception that ordinary
+// provider filtering drops, so the locked file stays selectable while its
+// runtime target is unchanged. The candidate keeps the dependency metadata the
+// lock recorded, because the catalogue no longer supplies it.
+func lockedCandidate(
+	previous []document.Package,
+	r projectRequest,
+) (upstream.Candidate, bool) {
+	for _, p := range previous {
+		if p.Environment != r.key.environment ||
+			p.Ecosystem != r.key.ecosystem ||
+			p.Provider != r.key.provider ||
+			p.ProjectID != r.key.project ||
+			p.Filename == "" {
+			continue
+		}
+		locked := upstream.Candidate{Artifact: p.Artifact}
+		locked.PrimaryFile = true
+		locked.Channel = p.Channel
+		locked.CompatibilityUnknown = true
+		locked.Dependencies = candidateDependencies(p.Dependencies)
+		locked.DependenciesUnknown = p.DependenciesUnknown
+		return locked, true
+	}
+	return upstream.Candidate{}, false
+}
+
+// releaseDependencies records a candidate's declared project relationships in
+// the lock.
+func releaseDependencies(
+	deps []upstream.ProjectDependency,
+) []document.PackageDependency {
+	if len(deps) == 0 {
+		return nil
+	}
+	out := make([]document.PackageDependency, len(deps))
+	for i, dep := range deps {
+		out[i] = document.PackageDependency{
+			Provider:  dep.Provider,
+			ProjectID: dep.ProjectID,
+			ReleaseID: dep.ReleaseID,
+			Kind:      dep.Kind,
+		}
+	}
+	return out
+}
+
+// candidateDependencies restores the relationships a lock recorded.
+func candidateDependencies(
+	deps []document.PackageDependency,
+) []upstream.ProjectDependency {
+	if len(deps) == 0 {
+		return nil
+	}
+	out := make([]upstream.ProjectDependency, len(deps))
+	for i, dep := range deps {
+		out[i] = upstream.ProjectDependency{
+			Provider:  dep.Provider,
+			ProjectID: dep.ProjectID,
+			ReleaseID: dep.ReleaseID,
+			Kind:      dep.Kind,
+		}
+	}
+	return out
+}
+
+// appendLockedCandidate adds the locked file when the catalogue did not
+// publish a matching candidate.
+func appendLockedCandidate(
+	list []upstream.Candidate,
+	previous []document.Package,
+	r projectRequest,
+) []upstream.Candidate {
+	locked, ok := lockedCandidate(previous, r)
+	if !ok {
+		return list
+	}
+	if slices.ContainsFunc(list, func(candidate upstream.Candidate) bool {
+		if locked.FileID != "" && candidate.FileID != "" {
+			return candidate.FileID == locked.FileID
+		}
+		return candidate.Version == locked.Version &&
+			candidate.Filename == locked.Filename
+	}) {
+		return list
+	}
+	return append(list, locked)
+}
+
 func Packages(request PackagesRequest) ([]document.Package, []error, error) {
 	ctx := request.Context
 	logger := request.Logger
@@ -161,6 +275,7 @@ func Packages(request PackagesRequest) ([]document.Package, []error, error) {
 	}
 	d := request.Manifest
 	previous := request.Previous
+	preserveLocked := request.PreserveLocked
 	target := request.Target
 	materialize := request.Materialize
 	withOptional := request.WithOptional
@@ -195,6 +310,13 @@ func Packages(request PackagesRequest) ([]document.Package, []error, error) {
 			},
 			display: display,
 			origin:  originManifest,
+			previousFileID: lockedFileID(
+				previous,
+				environment,
+				ecosystem,
+				provider,
+				ref,
+			),
 			requirements: []document.RequirementBinding{
 				{
 					Reference:   ref,
@@ -405,7 +527,22 @@ func Packages(request PackagesRequest) ([]document.Package, []error, error) {
 			var err error
 			list, err = candidatesFor(ctx, catalogueRegistry(r.key.provider), r.key.project, string(target.Minecraft), r.key.ecosystem)
 			if err != nil {
-				return hardFail(err)
+				if !preserveLocked {
+					return hardFail(err)
+				}
+				locked, ok := lockedCandidate(previous, r)
+				if !ok {
+					return hardFail(err)
+				}
+				logger.Debug(
+					"resolve: catalogue failed; keeping locked file",
+					"provider", r.key.provider,
+					"project", r.key.project,
+					"reason", err,
+				)
+				list = []upstream.Candidate{locked}
+			} else if preserveLocked {
+				list = appendLockedCandidate(list, previous, r)
 			}
 			list = orderCandidates(list, previous, r)
 			candidates[r.key] = list
@@ -430,12 +567,13 @@ func Packages(request PackagesRequest) ([]document.Package, []error, error) {
 					"project", project,
 				)
 				return backtrack(append([]projectRequest{{
-					key:          canonicalKey,
-					display:      r.display,
-					origin:       r.origin,
-					requirements: r.requirements,
-					dependencyOf: r.dependencyOf,
-					releaseHints: r.releaseHints,
+					key:            canonicalKey,
+					display:        r.display,
+					origin:         r.origin,
+					requirements:   r.requirements,
+					dependencyOf:   r.dependencyOf,
+					previousFileID: r.previousFileID,
+					releaseHints:   r.releaseHints,
 				}}, rest...))
 			}
 		}
@@ -517,7 +655,12 @@ func Packages(request PackagesRequest) ([]document.Package, []error, error) {
 					return hardFail(err)
 				}
 				a.Hashes = materialized.Hashes
-				modules, err = artifact.ReadModules(ctx, materialized.Path, descriptorLoader)
+				modules, err = artifact.ReadModulesFor(
+					ctx,
+					materialized.Path,
+					descriptorLoader,
+					string(target.Minecraft),
+				)
 				if err != nil {
 					return hardFail(err)
 				}
@@ -545,12 +688,15 @@ func Packages(request PackagesRequest) ([]document.Package, []error, error) {
 				dependencyOf = []catalog.Ref{r.dependencyOf}
 			}
 			pkg := document.Package{
-				Environment:  r.key.environment,
-				Ecosystem:    r.key.ecosystem,
-				Artifact:     a,
-				Requirements: requirements,
-				Dependency:   dependencyDemand,
-				DependencyOf: dependencyOf,
+				Environment:         r.key.environment,
+				Ecosystem:           r.key.ecosystem,
+				Artifact:            a,
+				Requirements:        requirements,
+				Dependency:          dependencyDemand,
+				DependencyOf:        dependencyOf,
+				Dependencies:        releaseDependencies(candidate.Dependencies),
+				DependenciesUnknown: candidate.DependenciesUnknown,
+				Channel:             candidate.Channel,
 			}
 			// A pure dependency demand binds to a selected package that
 			// answers every module identity of the candidate. The candidate
