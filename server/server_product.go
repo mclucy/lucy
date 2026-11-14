@@ -1,6 +1,7 @@
 package server
 
 import (
+	"slices"
 	"strings"
 
 	"github.com/mclucy/lucy/catalog"
@@ -15,6 +16,7 @@ const (
 
 	ProductMinecraft        Product = "minecraft"
 	ProductFabric           Product = "fabric"
+	ProductQuilt            Product = "quilt"
 	ProductForge            Product = "forge"
 	ProductNeoForge         Product = "neoforge"
 	ProductMCDReforged      Product = "mcdreforged"
@@ -42,57 +44,69 @@ func (p Product) String() string {
 	return string(p)
 }
 
-func (p Product) Title() string {
-	switch p {
-	case ProductMinecraft:
-		return "Minecraft"
-	case ProductFabric:
-		return "Fabric"
-	case ProductForge:
-		return "Forge"
-	case ProductNeoForge:
-		return "NeoForge"
-	case ProductMCDReforged:
-		return "MCDReforged"
-	case ProductCraftBukkit:
-		return "CraftBukkit"
-	case ProductSpigot:
-		return "Spigot"
-	case ProductPaper:
-		return "Paper"
-	case ProductPurpur:
-		return "Purpur"
-	case ProductFolia:
-		return "Folia"
-	case ProductLeaves:
-		return "Leaves"
-	case ProductArclight:
-		return "Arclight"
-	case ProductArclightForge:
-		return "Arclight Forge"
-	case ProductArclightNeoForge:
-		return "Arclight NeoForge"
-	case ProductArclightFabric:
-		return "Arclight Fabric"
-	case ProductCatServer:
-		return "CatServer"
-	case ProductYouer:
-		return "Youer"
-	case ProductSpongeVanilla:
-		return "SpongeVanilla"
-	case ProductSpongeForge:
-		return "SpongeForge"
-	case ProductSpongeNeo:
-		return "SpongeNeo"
-	case ProductBungeeCord:
-		return "BungeeCord"
-	case ProductVelocity:
-		return "Velocity"
-	case ProductWaterfall:
-		return "Waterfall"
-	default:
-		return "Unknown"
+// Ecosystem returns the package ecosystem p natively serves, or
+// catalog.EcosystemUnspecified when p serves none on its own.
+func (p Product) Ecosystem() catalog.Ecosystem {
+	if definition, ok := productDefinitionOf(p); ok {
+		return definition.Ecosystem
 	}
+	return catalog.EcosystemUnspecified
+}
+
+// Title returns the presentation name of p.
+func (p Product) Title() string {
+	if definition, ok := productDefinitionOf(p); ok {
+		return definition.Title
+	}
+	return "Unknown"
+}
+
+// LoaderComponent returns the runtime component name p reports as a mod
+// loader, or an empty name when p is not a mod loader.
+func (p Product) LoaderComponent() catalog.Name {
+	if definition, ok := productDefinitionOf(p); ok {
+		return definition.Loader.Component
+	}
+	return ""
+}
+
+// LoaderEcosystem returns the ecosystem of the mod loader that spelling
+// names, or catalog.EcosystemUnspecified. Only loader component spellings
+// match; product aliases such as "paper" do not.
+func LoaderEcosystem(spelling string) catalog.Ecosystem {
+	name := catalog.Name(strings.ToLower(strings.TrimSpace(spelling)))
+	for _, definition := range productDefinitions {
+		if definition.Loader.recognizes(name) {
+			return definition.Ecosystem
+		}
+	}
+	return catalog.EcosystemUnspecified
+}
+
+// LoaderComponentName returns the component name that the mod loader of
+// ecosystem reports for spelling. The second result reports whether spelling
+// names that loader.
+func LoaderComponentName(
+	ecosystem catalog.Ecosystem,
+	spelling string,
+) (catalog.Name, bool) {
+	name := catalog.Name(strings.ToLower(strings.TrimSpace(spelling)))
+	for _, definition := range productDefinitions {
+		if definition.Ecosystem != ecosystem || !definition.Loader.recognizes(name) {
+			continue
+		}
+		return definition.Loader.Component, true
+	}
+	return "", false
+}
+
+func productDefinitionOf(p Product) (productDefinition, bool) {
+	for _, definition := range productDefinitions {
+		if definition.Product == p {
+			return definition, true
+		}
+	}
+	return productDefinition{}, false
 }
 
 type Match struct {
@@ -105,18 +119,40 @@ type productAlias struct {
 	Ecosystem catalog.Ecosystem
 }
 
+// loaderDefinition names the runtime component a mod loader reports.
+type loaderDefinition struct {
+	// Component is the component name the loader reports.
+	Component catalog.Name
+	// Spellings are the other accepted names of that component, such as the
+	// name without the hyphen.
+	Spellings []catalog.Name
+}
+
+func (l loaderDefinition) recognizes(name catalog.Name) bool {
+	if name == "" || l.Component == "" {
+		return false
+	}
+	return name == l.Component || slices.Contains(l.Spellings, name)
+}
+
 type productDefinition struct {
-	Product   Product
+	Product Product
+	Title   string
+	// Ecosystem is the package ecosystem the product serves on its own.
 	Ecosystem catalog.Ecosystem
-	Aliases   []productAlias
+	// Loader is set only on mod loader products.
+	Loader  loaderDefinition
+	Aliases []productAlias
 }
 
 // productDefinitions maps accepted product spellings to canonical
 // server products. Ecosystem disambiguates aliases such as Sponge's Forge
-// variant.
+// variant. The table is also the single source of product titles and loader
+// component names.
 var productDefinitions = []productDefinition{
 	{
 		Product:   ProductMinecraft,
+		Title:     "Minecraft",
 		Ecosystem: catalog.EcosystemMinecraft,
 		Aliases: []productAlias{
 			{"minecraft", catalog.EcosystemUnspecified},
@@ -129,7 +165,12 @@ var productDefinitions = []productDefinition{
 	},
 	{
 		Product:   ProductFabric,
+		Title:     "Fabric",
 		Ecosystem: catalog.EcosystemFabric,
+		Loader: loaderDefinition{
+			Component: "fabric-loader",
+			Spellings: []catalog.Name{"fabric", "fabricloader"},
+		},
 		Aliases: []productAlias{
 			{"fabric", catalog.EcosystemUnspecified},
 			{"fabric-loader", catalog.EcosystemUnspecified},
@@ -138,8 +179,27 @@ var productDefinitions = []productDefinition{
 		},
 	},
 	{
+		Product:   ProductQuilt,
+		Title:     "Quilt",
+		Ecosystem: catalog.EcosystemQuilt,
+		Loader: loaderDefinition{
+			Component: "quilt-loader",
+			Spellings: []catalog.Name{"quilt", "quiltloader"},
+		},
+		Aliases: []productAlias{
+			{"quilt", catalog.EcosystemUnspecified},
+			{"quilt-loader", catalog.EcosystemUnspecified},
+			{"quilt", catalog.EcosystemQuilt},
+			{"quilt-loader", catalog.EcosystemQuilt},
+		},
+	},
+	{
 		Product:   ProductForge,
+		Title:     "Forge",
 		Ecosystem: catalog.EcosystemForge,
+		Loader: loaderDefinition{
+			Component: "forge",
+		},
 		Aliases: []productAlias{
 			{"forge", catalog.EcosystemUnspecified},
 			{"forge", catalog.EcosystemForge},
@@ -147,7 +207,11 @@ var productDefinitions = []productDefinition{
 	},
 	{
 		Product:   ProductNeoForge,
+		Title:     "NeoForge",
 		Ecosystem: catalog.EcosystemNeoForge,
+		Loader: loaderDefinition{
+			Component: "neoforge",
+		},
 		Aliases: []productAlias{
 			{"neoforge", catalog.EcosystemUnspecified},
 			{"neoforge", catalog.EcosystemNeoForge},
@@ -155,6 +219,7 @@ var productDefinitions = []productDefinition{
 	},
 	{
 		Product:   ProductMCDReforged,
+		Title:     "MCDReforged",
 		Ecosystem: catalog.EcosystemMCDR,
 		Aliases: []productAlias{
 			{"mcdreforged", catalog.EcosystemUnspecified},
@@ -165,6 +230,7 @@ var productDefinitions = []productDefinition{
 	},
 	{
 		Product:   ProductCraftBukkit,
+		Title:     "CraftBukkit",
 		Ecosystem: catalog.EcosystemBukkit,
 		Aliases: []productAlias{
 			{"bukkit", catalog.EcosystemUnspecified},
@@ -175,6 +241,7 @@ var productDefinitions = []productDefinition{
 	},
 	{
 		Product:   ProductSpigot,
+		Title:     "Spigot",
 		Ecosystem: catalog.EcosystemBukkit,
 		Aliases: []productAlias{
 			{"spigot", catalog.EcosystemUnspecified},
@@ -183,6 +250,7 @@ var productDefinitions = []productDefinition{
 	},
 	{
 		Product:   ProductPaper,
+		Title:     "Paper",
 		Ecosystem: catalog.EcosystemPaper,
 		Aliases: []productAlias{
 			{"paper", catalog.EcosystemUnspecified},
@@ -191,6 +259,7 @@ var productDefinitions = []productDefinition{
 	},
 	{
 		Product:   ProductPurpur,
+		Title:     "Purpur",
 		Ecosystem: catalog.EcosystemPaper,
 		Aliases: []productAlias{
 			{"purpur", catalog.EcosystemUnspecified},
@@ -199,6 +268,7 @@ var productDefinitions = []productDefinition{
 	},
 	{
 		Product:   ProductFolia,
+		Title:     "Folia",
 		Ecosystem: catalog.EcosystemPaper,
 		Aliases: []productAlias{
 			{"folia", catalog.EcosystemUnspecified},
@@ -207,6 +277,7 @@ var productDefinitions = []productDefinition{
 	},
 	{
 		Product:   ProductLeaves,
+		Title:     "Leaves",
 		Ecosystem: catalog.EcosystemPaper,
 		Aliases: []productAlias{
 			{"leaves", catalog.EcosystemUnspecified},
@@ -215,14 +286,17 @@ var productDefinitions = []productDefinition{
 	},
 	{
 		Product: ProductArclight,
+		Title:   "Arclight",
 		Aliases: []productAlias{{"arclight", catalog.EcosystemUnspecified}},
 	},
 	{
 		Product: ProductArclightForge,
+		Title:   "Arclight Forge",
 		Aliases: []productAlias{{"arclight-forge", catalog.EcosystemUnspecified}},
 	},
 	{
 		Product: ProductArclightNeoForge,
+		Title:   "Arclight NeoForge",
 		Aliases: []productAlias{
 			{
 				"arclight-neoforge",
@@ -232,18 +306,22 @@ var productDefinitions = []productDefinition{
 	},
 	{
 		Product: ProductArclightFabric,
+		Title:   "Arclight Fabric",
 		Aliases: []productAlias{{"arclight-fabric", catalog.EcosystemUnspecified}},
 	},
 	{
 		Product: ProductCatServer,
+		Title:   "CatServer",
 		Aliases: []productAlias{{"catserver", catalog.EcosystemUnspecified}},
 	},
 	{
 		Product: ProductYouer,
+		Title:   "Youer",
 		Aliases: []productAlias{{"youer", catalog.EcosystemUnspecified}},
 	},
 	{
 		Product:   ProductSpongeVanilla,
+		Title:     "SpongeVanilla",
 		Ecosystem: catalog.EcosystemSponge,
 		Aliases: []productAlias{
 			{"sponge", catalog.EcosystemUnspecified},
@@ -257,6 +335,7 @@ var productDefinitions = []productDefinition{
 	},
 	{
 		Product:   ProductSpongeForge,
+		Title:     "SpongeForge",
 		Ecosystem: catalog.EcosystemSponge,
 		Aliases: []productAlias{
 			{"spongeforge", catalog.EcosystemUnspecified},
@@ -266,6 +345,7 @@ var productDefinitions = []productDefinition{
 	},
 	{
 		Product:   ProductSpongeNeo,
+		Title:     "SpongeNeo",
 		Ecosystem: catalog.EcosystemSponge,
 		Aliases: []productAlias{
 			{"spongeneo", catalog.EcosystemUnspecified},
@@ -276,6 +356,7 @@ var productDefinitions = []productDefinition{
 	},
 	{
 		Product:   ProductBungeeCord,
+		Title:     "BungeeCord",
 		Ecosystem: catalog.EcosystemBungeeCord,
 		Aliases: []productAlias{
 			{"bungeecord", catalog.EcosystemUnspecified},
@@ -284,6 +365,7 @@ var productDefinitions = []productDefinition{
 	},
 	{
 		Product:   ProductVelocity,
+		Title:     "Velocity",
 		Ecosystem: catalog.EcosystemVelocity,
 		Aliases: []productAlias{
 			{"velocity", catalog.EcosystemUnspecified},
@@ -292,6 +374,7 @@ var productDefinitions = []productDefinition{
 	},
 	{
 		Product:   ProductWaterfall,
+		Title:     "Waterfall",
 		Ecosystem: catalog.EcosystemBungeeCord,
 		Aliases: []productAlias{
 			{"waterfall", catalog.EcosystemUnspecified},

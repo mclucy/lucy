@@ -21,11 +21,19 @@ func (r *Router) LatestMinecraftVersion(
 	ctx context.Context,
 	product server.Product,
 ) (version.Version, error) {
+	if _, ok := loaderRuntimeFor(product); ok {
+		provider, ok := r.loaders[product]
+		if !ok {
+			return "", fmt.Errorf(
+				"server product %q publishes no Minecraft versions",
+				product,
+			)
+		}
+		return provider.LatestGameVersion(ctx)
+	}
 	switch product {
 	case server.ProductMinecraft:
 		return r.LatestMojangMinecraft(ctx, false)
-	case server.ProductFabric:
-		return r.fabric.LatestGameVersion(ctx)
 	case server.ProductForge:
 		return r.forge.LatestMinecraftVersion(ctx)
 	case server.ProductNeoForge:

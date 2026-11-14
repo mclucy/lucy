@@ -71,6 +71,8 @@ func PrepareLocked(ctx context.Context, stage string, server document.LockedServ
 		return preparePaperclip(ctx, root, corePath, java, output)
 	case serverpkg.BootstrapMethodFabric:
 		return prepareFabric(root, server, corePath)
+	case serverpkg.BootstrapMethodQuilt:
+		return prepareQuilt(root, server, corePath)
 	case serverpkg.BootstrapMethodForgeInstaller:
 		return prepareForgeInstaller(ctx, root, server, corePath, &installer.Reader, java, output)
 	default:

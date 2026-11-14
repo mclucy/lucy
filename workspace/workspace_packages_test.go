@@ -129,6 +129,54 @@ func TestObserveReportsPackagesOfSelectedRuntime(t *testing.T) {
 	}
 }
 
+// Package observation reports the descriptor of the selected runtime when one
+// artifact carries descriptors for several.
+func TestObserveSelectsDescriptorOfSelectedRuntime(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	writeObservationJar(
+		t,
+		filepath.Join(root, "fabric-server-mc.1.21.1-loader.0.19.5-launcher.1.1.2.jar"),
+		map[string]string{
+			"META-INF/MANIFEST.MF": "Manifest-Version: 1.0\nMain-Class: net.fabricmc.installer.ServerLauncher\n\n",
+			"install.properties":   "fabric-loader-version=0.19.5\ngame-version=1.21.1\n",
+		},
+	)
+	writeObservationJar(
+		t,
+		filepath.Join(root, "mods", "dual.jar"),
+		map[string]string{
+			"fabric.mod.json": `{"schemaVersion":1,"id":"dual-fabric","version":"2.0.0","depends":{"fabric-api":"*"}}`,
+			"quilt.mod.json":  `{"schema_version":1,"quilt_loader":{"group":"com.example","id":"dual-quilt","version":"9.0.0","depends":[{"id":"qsl","versions":"*"}]}}`,
+		},
+	)
+
+	observed := Observe(root, discovery.Request{})
+	if observed.Runtime() == nil {
+		t.Fatalf("no runtime selected: %v", observed.SelectionError())
+	}
+	if len(observed.Packages) != 1 {
+		t.Fatalf("packages = %v, want the one descriptor-backed package", observed.Packages)
+	}
+	pkg := observed.Packages[0]
+	if pkg.ID.Ecosystem != catalog.EcosystemFabric ||
+		pkg.ID.Name.String() != "dual-fabric" ||
+		pkg.ID.Version.String() != "2.0.0" {
+		t.Fatalf("package identity = %+v, want fabric:dual-fabric@2.0.0", pkg.ID)
+	}
+	dependencies := make([]string, 0, len(pkg.Dependencies))
+	for _, dependency := range pkg.Dependencies {
+		dependencies = append(dependencies, dependency.ID.Name.String())
+	}
+	if !slices.Equal(dependencies, []string{"fabric-api"}) {
+		t.Fatalf(
+			"package dependencies = %v, want [fabric-api]",
+			dependencies,
+		)
+	}
+}
+
 // packageTestSelection builds a selected runtime with launch evidence.
 func packageTestSelection(identity discovery.Identity) *discovery.Selection {
 	installation := discovery.NewInstallation(identity, "/server.jar")

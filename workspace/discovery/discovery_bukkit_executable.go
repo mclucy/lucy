@@ -22,26 +22,6 @@ const (
 
 var bukkitVersionPrefixPattern = regexp.MustCompile(`^(\d+\.\d+(?:\.\d+)?)`)
 
-// paperLineages must cover every lineage inferPaperObservationLineages can
-// attribute; the fork-lineage fixture test iterates this map.
-var paperLineages = map[string]bool{
-	"paper":  true,
-	"folia":  true,
-	"divine": true,
-	"purpur": true,
-	"leaf":   true,
-	"leaves": true,
-	"reaper": true,
-	"youer":  true,
-}
-
-// IsPaperLineage reports whether name is a paper-lineage runtime identity
-// this package can emit. Youer is included even though it is a NeoForge
-// hybrid; treat it separately before calling.
-func IsPaperLineage(name string) bool {
-	return paperLineages[name]
-}
-
 type bukkitManifestSignals struct {
 	mainClass            string
 	specificationTitle   string

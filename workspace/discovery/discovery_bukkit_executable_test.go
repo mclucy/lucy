@@ -81,6 +81,19 @@ func TestBukkitDetectorProjectsRuntime(t *testing.T) {
 	}
 }
 
+// paperLineages lists every lineage the detector can attribute. Each entry
+// names a fixture directory under paper_family.
+var paperLineages = map[string]bool{
+	"paper":  true,
+	"folia":  true,
+	"divine": true,
+	"purpur": true,
+	"leaf":   true,
+	"leaves": true,
+	"reaper": true,
+	"youer":  true,
+}
+
 func TestBukkitDetectorRecognizesForkLineages(t *testing.T) {
 	t.Parallel()
 

@@ -336,14 +336,5 @@ func (a *packageAdopter) warn(format string, args ...any) {
 }
 
 func supportsModrinthPackages(ecosystem catalog.Ecosystem) bool {
-	switch ecosystem {
-	case catalog.EcosystemFabric,
-		catalog.EcosystemForge,
-		catalog.EcosystemNeoForge,
-		catalog.EcosystemBukkit,
-		catalog.EcosystemPaper:
-		return true
-	default:
-		return false
-	}
+	return ecosystem.IsSearchable()
 }

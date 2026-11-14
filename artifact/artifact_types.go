@@ -30,10 +30,3 @@ type PackageInfo struct {
 	Metadata      catalog.Metadata
 	Compatibility Compatibility
 }
-
-func dependencyOriginForEmbedded(embedded bool) catalog.DependencyOrigin {
-	if embedded {
-		return catalog.DependencyEmbedded
-	}
-	return catalog.DependencyRegular
-}

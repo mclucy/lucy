@@ -19,8 +19,8 @@ const (
 	CacheLsShort    = "List cache entries"
 	CacheClearShort = "Clear all cache"
 
-	CompileShort = "Compile a Fabric, Forge, or NeoForge mod from a Git repository"
-	CompileLong  = "Clone a Git repository into a temporary directory and compile a Forge, NeoForge, or Fabric mod. Requires local Java toolchain. " +
+	CompileShort = "Compile a Fabric, Quilt, Forge, or NeoForge mod from a Git repository"
+	CompileLong  = "Clone a Git repository into a temporary directory and compile a Forge, NeoForge, Fabric, or Quilt mod. Requires local Java toolchain. " +
 		"Compilation executes repository build scripts and can download build " +
 		"dependencies. Run this command only on the repository you trust."
 

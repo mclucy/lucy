@@ -26,7 +26,7 @@ lucy add mcdr:synced --ecosystem mcdr
 
 Hangar references use Hangar's `owner/slug` coordinate, such as `hangar:HelpChat/PlaceholderAPI`. Spiget references use the numeric SpigotMC resource ID, such as `spiget:6245`. `lucy search --long` prints the reference for either source. For installation, a Spiget resource name works only when exactly one resource matches it; an ambiguous name fails with the matching IDs instead of choosing one.
 
-Both sources publish Bukkit-lineage plugins. Lucy installs them only on targets that load Bukkit or Paper plugins: Paper, Purpur, and Paperclip-based forks. Fabric, Forge, NeoForge, and proxy (BungeeCord, Waterfall, or Velocity) targets are rejected. Lucy installs only Hangar's Paper builds; Waterfall and Velocity projects are not package targets.
+Both sources publish Bukkit-lineage plugins. Lucy installs them only on targets that load Bukkit or Paper plugins: Paper, Purpur, and Paperclip-based forks. Fabric, Quilt, Forge, NeoForge, and proxy (BungeeCord, Waterfall, or Velocity) targets are rejected. Lucy installs only Hangar's Paper builds; Waterfall and Velocity projects are not package targets.
 
 Hangar versions are filtered against the Minecraft versions declared for the Paper platform. When a version declares no platform compatibility, lucy keeps the build but warns that compatibility is unverified. Spiget publishes no per-version Minecraft version or loader data, so lucy cannot verify Spiget compatibility and warns when it selects a Spiget version. Spiget also publishes no release channel, so `@stable` cannot be satisfied and a Spiget package on `stable` is not upgraded.
 
@@ -70,7 +70,7 @@ The package must be an enabled direct entry in `lucy.yaml`, and the lock must ma
 </ParamField>
 
 <ParamField query="--ecosystem" type="string">
-  Target mod or plugin type for the request: `fabric`, `forge`, `neoforge`, `bukkit`, `paper`, or `mcdr`. Hangar and Spiget packages resolve only on `bukkit` or `paper`; other package ecosystems fail.
+  Target mod or plugin type for the request: `fabric`, `quilt`, `forge`, `neoforge`, `bukkit`, `paper`, or `mcdr`. Hangar and Spiget packages resolve only on `bukkit` or `paper`; other package ecosystems fail. A Quilt server also accepts the `fabric` target because it loads Fabric mods.
 </ParamField>
 
 <ParamField query="--with-optional" type="boolean" default="false">

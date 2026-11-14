@@ -150,14 +150,10 @@ func platformFromCurseForgeFile(
 }
 
 func platformFromCurseForgeModLoader(loader int32) catalog.Ecosystem {
-	switch loader {
-	case 1:
-		return catalog.EcosystemForge
-	case 4:
-		return catalog.EcosystemFabric
-	case 6:
-		return catalog.EcosystemNeoForge
-	default:
-		return catalog.EcosystemUnspecified
+	for ecosystem, loaderType := range curseForgeLoaderTypes {
+		if int32(loaderType) == loader {
+			return ecosystem
+		}
 	}
+	return catalog.EcosystemUnspecified
 }

@@ -16,12 +16,14 @@ type Launch struct {
 }
 
 // LaunchFor reports the start command and log handler of a bootstrap method.
-// Methods that do not generate a launch script start the server JAR directly.
+// Methods that generate no launcher of their own start server.jar directly.
 func LaunchFor(method server.BootstrapMethod) Launch {
 	launch := Launch{Command: "java -jar server.jar nogui", Handler: "vanilla_handler"}
 	switch method {
 	case server.BootstrapMethodFabric:
 		launch.Command = "sh run.sh"
+	case server.BootstrapMethodQuilt:
+		launch.Command = "java -jar quilt-server-launch.jar nogui"
 	case server.BootstrapMethodForgeInstaller:
 		launch.Command = "sh run.sh"
 		launch.Handler = "forge_handler"

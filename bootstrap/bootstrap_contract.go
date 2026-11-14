@@ -146,6 +146,19 @@ func validateContract(locked document.LockedServer) (map[string]OutputSpec, []Ou
 		scopes = []OutputSpec{
 			{Scope: "libraries/", Policy: PolicyManaged, Role: RoleRuntime},
 		}
+	case serverpkg.BootstrapMethodQuilt:
+		loaderPath, err := quiltLoaderPath(locked.CoreVersion.String())
+		if err != nil {
+			return nil, nil, fmt.Errorf("resolving Quilt loader path: %w", err)
+		}
+		generated = []OutputSpec{
+			{Path: "quilt-server-launch.jar", Policy: PolicyManaged, Role: RoleRuntime, Origin: OriginGenerated},
+			{Path: "quilt-server-launcher.properties", Policy: PolicyManaged, Role: RoleRuntime, Origin: OriginGenerated},
+			{Path: loaderPath, Policy: PolicyManaged, Role: RoleRuntime, Origin: OriginGenerated},
+		}
+		scopes = []OutputSpec{
+			{Scope: "libraries/", Policy: PolicyManaged, Role: RoleRuntime},
+		}
 	case serverpkg.BootstrapMethodForgeInstaller:
 		generated = []OutputSpec{
 			{Path: "run.sh", Policy: PolicyManaged, Role: RoleRuntime, Origin: OriginGenerated},

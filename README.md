@@ -22,6 +22,7 @@ declarative workflows.
 We (are working to) support multiple ecosystems, and their combinations:
 
 - Fabric
+- Quilt
 - Forge
 - NeoForge
 - MCDReforged

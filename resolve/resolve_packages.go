@@ -34,33 +34,40 @@ func catalogueRegistry(provider catalog.Provider) catalog.Registry {
 }
 
 // selectionState owns the branch-local graph of the package search: the
-// chosen packages and the incompatibilities their metadata declares. An
-// artifact and its declarations form one selection, so the maps change
-// together. Canonical identities, candidate lists, and artifact analysis are
-// session-scoped caches and deliberately live outside this state.
+// chosen packages, the incompatibilities their metadata declares, and the
+// packages an exact release demand pins. An artifact and its declarations
+// form one selection, so the maps change together. Canonical identities,
+// candidate lists, and artifact analysis are session-scoped caches and
+// deliberately live outside this state.
 type selectionState struct {
 	chosen    map[projectKey]document.Package
 	conflicts map[projectKey][]upstream.ProjectDependency
+	pinned    map[projectKey]bool
 }
 
+// selectionBranch records the entry one change replaced, so restore can put
+// it back.
 type selectionBranch struct {
 	key          projectKey
 	previous     document.Package
 	hadPrevious  bool
 	conflicts    []upstream.ProjectDependency
 	hadConflicts bool
+	pinned       bool
 }
 
 func newSelectionState() selectionState {
 	return selectionState{
 		chosen:    map[projectKey]document.Package{},
 		conflicts: map[projectKey][]upstream.ProjectDependency{},
+		pinned:    map[projectKey]bool{},
 	}
 }
 
 func (s *selectionState) reset() {
 	clear(s.chosen)
 	clear(s.conflicts)
+	clear(s.pinned)
 }
 
 func (s *selectionState) selection(key projectKey) (document.Package, bool) {
@@ -68,29 +75,55 @@ func (s *selectionState) selection(key projectKey) (document.Package, bool) {
 	return p, ok
 }
 
-func (s *selectionState) extend(key projectKey, p document.Package) selectionBranch {
-	return s.install(key, p, s.conflicts[key])
+// extend merges a demand into a selected package. The selection keeps its
+// conflicts and pins; an incoming exact-release demand adds a pin.
+func (s *selectionState) extend(
+	key projectKey,
+	p document.Package,
+	pin bool,
+) selectionBranch {
+	return s.install(key, p, s.conflicts[key], s.pinned[key] || pin)
 }
 
 func (s *selectionState) install(
 	key projectKey,
 	p document.Package,
 	declared []upstream.ProjectDependency,
+	pinned bool,
 ) selectionBranch {
-	previous, hadPrevious := s.chosen[key]
-	conflicts, hadConflicts := s.conflicts[key]
+	branch := s.snapshot(key)
 	s.chosen[key] = p
 	if len(declared) > 0 {
 		s.conflicts[key] = declared
 	} else {
 		delete(s.conflicts, key)
 	}
+	if pinned {
+		s.pinned[key] = true
+	} else {
+		delete(s.pinned, key)
+	}
+	return branch
+}
+
+func (s *selectionState) remove(key projectKey) selectionBranch {
+	branch := s.snapshot(key)
+	delete(s.chosen, key)
+	delete(s.conflicts, key)
+	delete(s.pinned, key)
+	return branch
+}
+
+func (s *selectionState) snapshot(key projectKey) selectionBranch {
+	previous, hadPrevious := s.chosen[key]
+	conflicts, hadConflicts := s.conflicts[key]
 	return selectionBranch{
 		key:          key,
 		previous:     previous,
 		hadPrevious:  hadPrevious,
 		conflicts:    conflicts,
 		hadConflicts: hadConflicts,
+		pinned:       s.pinned[key],
 	}
 }
 
@@ -104,6 +137,18 @@ func (s *selectionState) restore(branch selectionBranch) {
 		s.conflicts[branch.key] = branch.conflicts
 	} else {
 		delete(s.conflicts, branch.key)
+	}
+	if branch.pinned {
+		s.pinned[branch.key] = true
+	} else {
+		delete(s.pinned, branch.key)
+	}
+}
+
+// restoreAll undoes branches in reverse order of their changes.
+func (s *selectionState) restoreAll(branches []selectionBranch) {
+	for i := len(branches) - 1; i >= 0; i-- {
+		s.restore(branches[i])
 	}
 }
 
@@ -311,7 +356,11 @@ func Packages(request PackagesRequest) ([]document.Package, []error, error) {
 			if dependencyDemand && !slices.Contains(previous.DependencyOf, r.dependencyOf) {
 				previous.DependencyOf = append(previous.DependencyOf, r.dependencyOf)
 			}
-			branch := state.extend(r.key, previous)
+			branch := state.extend(
+				r.key,
+				previous,
+				len(r.releaseHints) > 0,
+			)
 			if backtrack(rest) {
 				return true
 			}
@@ -332,7 +381,7 @@ func Packages(request PackagesRequest) ([]document.Package, []error, error) {
 				ProjectID:    r.key.project,
 				Requirements: r.requirements,
 			}
-			branch := state.install(r.key, p, nil)
+			branch := state.install(r.key, p, nil, false)
 			if backtrack(rest) {
 				return true
 			}
@@ -454,6 +503,7 @@ func Packages(request PackagesRequest) ([]document.Package, []error, error) {
 				}
 			}
 			var modules []catalog.DescriptorModule
+			descriptorLoader := target.descriptorLoader(r.key.ecosystem)
 			entry, cached := analysisEntry{}, false
 			if cache != nil {
 				entry, cached = cache.get(candidateAnalysisKey(candidate))
@@ -467,7 +517,7 @@ func Packages(request PackagesRequest) ([]document.Package, []error, error) {
 					return hardFail(err)
 				}
 				a.Hashes = materialized.Hashes
-				modules, err = artifact.ReadModules(ctx, materialized.Path, r.key.ecosystem)
+				modules, err = artifact.ReadModules(ctx, materialized.Path, descriptorLoader)
 				if err != nil {
 					return hardFail(err)
 				}
@@ -479,7 +529,7 @@ func Packages(request PackagesRequest) ([]document.Package, []error, error) {
 				}
 			}
 			if len(modules) == 0 {
-				message := fmt.Sprintf("artifact %s has no server-visible %s modules", a.Filename, r.key.ecosystem)
+				message := fmt.Sprintf("artifact %s has no server-visible %s modules", a.Filename, descriptorLoader)
 				lastErr = errors.New(message)
 				ledger.record(r.key, r.display, string(candidate.Version), message, RejectionModules)
 				trace.rejected(r.display, string(candidate.Version), message)
@@ -494,14 +544,46 @@ func Packages(request PackagesRequest) ([]document.Package, []error, error) {
 			if dependencyDemand {
 				dependencyOf = []catalog.Ref{r.dependencyOf}
 			}
-			branch := state.install(r.key, document.Package{
+			pkg := document.Package{
 				Environment:  r.key.environment,
 				Ecosystem:    r.key.ecosystem,
 				Artifact:     a,
 				Requirements: requirements,
 				Dependency:   dependencyDemand,
 				DependencyOf: dependencyOf,
-			}, conflictDependencies(candidate))
+			}
+			// A pure dependency demand binds to a selected package that
+			// answers every module identity of the candidate. The candidate
+			// installs only when that substitution leaves no settled graph.
+			if dependencyDemand && len(requirements) == 0 && len(r.releaseHints) == 0 {
+				if providerKey, ok := state.substitute(target, pkg); ok {
+					provider, _ := state.selection(providerKey)
+					branch := state.extend(
+						providerKey,
+						withDependents(provider, dependencyOf),
+						false,
+					)
+					logger.Debug(
+						"resolve: dependency answered by provider",
+						"provider", r.key.provider,
+						"project", r.key.project,
+						"answered-by", providerKey.project,
+					)
+					if backtrack(rest) {
+						return true
+					}
+					state.restore(branch)
+				}
+			}
+			branches := []selectionBranch{
+				state.install(
+					r.key,
+					pkg,
+					conflictDependencies(candidate),
+					len(r.releaseHints) > 0,
+				),
+			}
+			branches = append(branches, state.supersede(target, r.key)...)
 			logger.Debug(
 				"resolve: candidate selected",
 				"provider", r.key.provider,
@@ -551,7 +633,7 @@ func Packages(request PackagesRequest) ([]document.Package, []error, error) {
 			if backtrack(next) {
 				return true
 			}
-			state.restore(branch)
+			state.restoreAll(branches)
 			logger.Debug(
 				"resolve: backtracking candidate",
 				"provider", r.key.provider,

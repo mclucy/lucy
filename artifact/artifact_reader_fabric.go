@@ -23,51 +23,44 @@ func (r *fabricReader) Read(
 	zipRdr *zip.Reader,
 	filePath string,
 ) ([]PackageInfo, error) {
-	for _, f := range zipRdr.File {
-		if f.Name != "fabric.mod.json" {
-			continue
-		}
-
-		reader, err := f.Open()
-		if err != nil {
-			return nil, err
-		}
-
-		modInfo := &fileschema.FileFabricModIdentifier{}
-		decodeErr := json.UnmarshalRead(reader, modInfo)
-		closeErr := reader.Close()
-		if decodeErr != nil {
-			return nil, decodeErr
-		}
-		if closeErr != nil {
-			return nil, closeErr
-		}
-
-		info, err := translateFabricArtifact(zipRdr, modInfo, filePath)
-		if err != nil {
-			return nil, err
-		}
-
-		return []PackageInfo{info}, nil
+	decoded, err := decodeFabricDescriptor(zipRdr, "", true)
+	if err != nil {
+		return nil, err
 	}
-
-	return nil, nil
+	return packageInfosFromDecoded(filePath, decoded)
 }
 
-func translateFabricArtifact(
+// decodeFabricDescriptor reads fabric.mod.json and returns nil when the
+// archive does not carry it. packageView adds the metadata ReadInfo reports.
+func decodeFabricDescriptor(
 	zipRdr *zip.Reader,
-	modInfo *fileschema.FileFabricModIdentifier,
-	filePath string,
-) (PackageInfo, error) {
-	embeddedNames, err := fabricArtifactEmbeddedModNames(zipRdr, modInfo)
-	if err != nil {
-		return PackageInfo{}, err
+	member string,
+	packageView bool,
+) (*decodedDescriptor, error) {
+	modInfo, err := readFabricDescriptor(zipRdr)
+	if err != nil || modInfo == nil {
+		return nil, err
 	}
-	dependencies := make(
-		[]Dependency, 0,
-		len(modInfo.Depends)+len(modInfo.Recommends)+len(modInfo.Suggests)+
-			len(modInfo.Breaks)+len(modInfo.Conflicts),
-	)
+
+	module := catalog.DescriptorModule{
+		ID:             modInfo.ID,
+		Version:        version.Version(modInfo.Version),
+		Ecosystem:      catalog.EcosystemFabric,
+		VersionDialect: version.DialectFabric,
+		NestedPath:     member,
+		DescriptorPath: "fabric.mod.json",
+		Provides:       modInfo.Provides,
+		Side:           catalog.ParseSide(string(modInfo.Environment)),
+	}
+	var origins map[string]catalog.DependencyOrigin
+	var embeddedNames map[string]struct{}
+	if packageView {
+		embeddedNames, err = fabricEmbeddedModNames(zipRdr, modInfo)
+		if err != nil {
+			return nil, err
+		}
+		origins = make(map[string]catalog.DependencyOrigin)
+	}
 	for _, group := range []struct {
 		dependencies map[string]fn.SingleOrSlice[string]
 		kind         catalog.DependencyKind
@@ -78,82 +71,81 @@ func translateFabricArtifact(
 		{modInfo.Breaks, catalog.DependencyKindIncompatible},
 		{modInfo.Conflicts, catalog.DependencyKindConflict},
 	} {
-		translated, err := translateFabricArtifactDependencyMap(
-			group.dependencies,
-			group.kind,
-			embeddedNames,
-		)
-		if err != nil {
-			return PackageInfo{}, err
+		for id, ranges := range group.dependencies {
+			module.Dependencies = append(
+				module.Dependencies,
+				catalog.DescriptorDependency{
+					ID:         id,
+					Kind:       group.kind,
+					Constraint: strings.Join(ranges, " || "),
+				},
+			)
+			if packageView {
+				origins[id] = fabricDependencyOrigin(id, embeddedNames)
+			}
 		}
-		dependencies = append(dependencies, translated...)
 	}
 
-	return PackageInfo{
-		Ref: catalog.VersionedRef{
-			Ref: catalog.Ref{
-				Name:     input.ToProjectName(modInfo.ID),
-				Provider: catalog.ProviderUnknown,
-			},
-			Ecosystem: catalog.EcosystemFabric,
-			Version:   version.Version(modInfo.Version),
-		},
-		FilePath:     filePath,
-		Dependencies: dependencies,
-		Metadata: catalog.Metadata{
-			Title:       modInfo.Name,
-			Description: modInfo.Description,
-			License:     modInfo.License,
-			Authors:     fabricArtifactAuthors(modInfo.Authors),
-			URLs:        fabricArtifactURLs(modInfo.Contact),
-		},
+	nested := make([]string, 0, len(modInfo.Jars))
+	for _, jar := range modInfo.Jars {
+		nested = append(nested, jar.File)
+	}
+	decoded := decodedModule{
+		Module:  module,
+		Origins: origins,
+	}
+	if packageView {
+		decoded.Metadata = fabricArtifactMetadata(modInfo)
+		decoded.PackageEcosystem = catalog.EcosystemFabric
+	}
+	return &decodedDescriptor{
+		Modules:    []decodedModule{decoded},
+		Nested:     nested,
+		SkipNested: module.Side == catalog.SideClient,
 	}, nil
 }
 
-func translateFabricArtifactDependencyMap(
-	deps map[string]fn.SingleOrSlice[string],
-	kind catalog.DependencyKind,
-	embeddedNames map[string]struct{},
-) ([]Dependency, error) {
-	translated := make([]Dependency, 0, len(deps))
-	for id, ranges := range deps {
-		name := input.ToProjectName(id)
-		_, embedded := embeddedNames[string(name)]
-		constraint, err := parseFabricArtifactVersionRanges(ranges)
-		if err != nil {
-			return nil, err
-		}
-		dep := Dependency{
-			Ref: catalog.VersionedRef{
-				Ref: catalog.Ref{
-					Name:     name,
-					Provider: catalog.ProviderUnknown,
-				}, Ecosystem: catalog.EcosystemFabric,
-			},
-			Constraint: constraint,
-			Mandatory:  kind == catalog.DependencyKindRequired,
-			Kind:       kind,
-			Origin:     dependencyOriginForEmbedded(embedded),
-		}
-		switch id {
-		case "minecraft", "java", "fabricloader":
-			dep.Origin = catalog.DependencyServerProvided
-		}
-		if kind == catalog.DependencyKindIncompatible || kind == catalog.DependencyKindConflict {
-			dep.Constraint = dep.Constraint.Negate()
-		}
-		translated = append(translated, dep)
+func readFabricDescriptor(
+	zipRdr *zip.Reader,
+) (*fileschema.FileFabricModIdentifier, error) {
+	raw, err := readZipEntryBytes(zipRdr, "fabric.mod.json")
+	if err != nil || raw == nil {
+		return nil, err
 	}
-	return translated, nil
+	modInfo := &fileschema.FileFabricModIdentifier{}
+	if err := json.Unmarshal(raw, modInfo); err != nil {
+		return nil, err
+	}
+	return modInfo, nil
 }
 
-func parseFabricArtifactVersionRanges(
-	ranges fn.SingleOrSlice[string],
-) (version.Expr, error) {
-	return version.ParseConstraints(ranges, version.DialectFabric)
+func fabricDependencyOrigin(
+	id string,
+	embeddedNames map[string]struct{},
+) catalog.DependencyOrigin {
+	switch id {
+	case "minecraft", "java", "fabricloader":
+		return catalog.DependencyServerProvided
+	}
+	if _, embedded := embeddedNames[string(input.ToProjectName(id))]; embedded {
+		return catalog.DependencyEmbedded
+	}
+	return catalog.DependencyRegular
 }
 
-func fabricArtifactEmbeddedModNames(
+func fabricArtifactMetadata(
+	modInfo *fileschema.FileFabricModIdentifier,
+) catalog.Metadata {
+	return catalog.Metadata{
+		Title:       modInfo.Name,
+		Description: modInfo.Description,
+		License:     strings.Join(modInfo.License, ", "),
+		Authors:     fabricArtifactAuthors(modInfo.Authors),
+		URLs:        fabricArtifactURLs(modInfo.Contact),
+	}
+}
+
+func fabricEmbeddedModNames(
 	zipRdr *zip.Reader,
 	modInfo *fileschema.FileFabricModIdentifier,
 ) (map[string]struct{}, error) {
@@ -196,36 +188,18 @@ func fabricNestedModInfo(
 	filePath string,
 ) (*fileschema.FileFabricModIdentifier, error) {
 	raw, err := readZipEntryBytes(zipRdr, filePath)
-	if err != nil || raw == nil {
+	if err != nil {
 		return nil, err
+	}
+	if raw == nil {
+		return nil, nil
 	}
 
 	nestedZip, err := zip.NewReader(bytes.NewReader(raw), int64(len(raw)))
 	if err != nil {
 		return nil, err
 	}
-
-	for _, f := range nestedZip.File {
-		if f.Name != "fabric.mod.json" {
-			continue
-		}
-		reader, err := f.Open()
-		if err != nil {
-			return nil, err
-		}
-		modInfo := &fileschema.FileFabricModIdentifier{}
-		decodeErr := json.UnmarshalRead(reader, modInfo)
-		closeErr := reader.Close()
-		if decodeErr != nil {
-			return nil, decodeErr
-		}
-		if closeErr != nil {
-			return nil, closeErr
-		}
-		return modInfo, nil
-	}
-
-	return nil, nil
+	return readFabricDescriptor(nestedZip)
 }
 
 func fabricRecordEmbeddedName(names map[string]struct{}, id string) {
@@ -261,7 +235,8 @@ func fabricArtifactURLs(contact map[string]string) []catalog.URL {
 			continue
 		}
 		urls = append(
-			urls, catalog.URL{
+			urls,
+			catalog.URL{
 				Name: spec.name,
 				Type: spec.urlType,
 				URL:  url,
