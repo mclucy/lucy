@@ -58,18 +58,28 @@ func (s *Service) Initialize(ctx context.Context, root string, opts InitOptions)
 	if err != nil {
 		return nil, err
 	}
-	observed := workspace.Observe(root, discovery.Request{EntryPoint: opts.EntryPoint})
-	if err := promptRuntime(root, opts, observed); err != nil {
+	observed := workspace.Observe(
+		root,
+		discovery.Request{Expectation: opts.Expectation},
+	)
+	if err := promptRuntime(opts, observed); err != nil {
 		return initResult(observed), err
 	}
 	// Bind the selected runtime bytes before identification performs network
 	// work. Adoption may only record these bytes; the observation rejects a
 	// replaced runtime instead of adopting stale membership.
-	runtimeObserved, err := captureRuntimeObservation(observed.Runtime())
+	var runtimeInstallation *discovery.Installation
+	if selection := observed.Runtime(); selection != nil {
+		runtimeInstallation = selection.Installation
+	}
+	runtimeObserved, err := captureRuntimeObservation(runtimeInstallation)
 	if err != nil {
 		return initResult(observed), err
 	}
 	if err := s.applyRuntimeIdentity(ctx, root, manifest, observed); err != nil {
+		return initResult(observed), err
+	}
+	if err := verifyCoreVersionExpectation(opts.Expectation, manifest); err != nil {
 		return initResult(observed), err
 	}
 
@@ -117,6 +127,37 @@ func (s *Service) Initialize(ctx context.Context, root string, opts InitOptions)
 	)
 }
 
+// verifyCoreVersionExpectation confirms that the version identity assigned
+// after selection answers an exact core version filter. Selection accepts an
+// installation whose observed version is unknown; identification can then
+// reveal a different build, which must fail the invocation instead of
+// publishing a server the caller did not request.
+func verifyCoreVersionExpectation(
+	expectation *discovery.Expectation,
+	manifest *documentpkg.Manifest,
+) error {
+	if expectation == nil || !concreteVersion(expectation.CoreVersion) {
+		return nil
+	}
+	identified := manifest.Server.Core.ProductVersion
+	if identified == expectation.CoreVersion {
+		return nil
+	}
+	if !concreteVersion(identified) {
+		return fmt.Errorf(
+			"cannot identify the installed %s version, which the invocation requires to be %s",
+			manifest.Server.Core.Product,
+			expectation.CoreVersion,
+		)
+	}
+	return fmt.Errorf(
+		"installed %s version %s does not match the requested %s",
+		manifest.Server.Core.Product,
+		identified,
+		expectation.CoreVersion,
+	)
+}
+
 // initialManifest builds the declaration initialization will write, keeping
 // the name an existing declaration already chose when --force replaces it.
 func initialManifest(root string, opts InitOptions) (*documentpkg.Manifest, error) {
@@ -146,8 +187,8 @@ func initialManifest(root string, opts InitOptions) (*documentpkg.Manifest, erro
 
 // promptRuntime asks the caller to disambiguate several equally valid
 // runtimes and applies the selection to observed.
-func promptRuntime(root string, opts InitOptions, observed *workspace.Workspace) error {
-	if opts.EntryPoint != "" || observed.Runtime() != nil || opts.PromptRuntime == nil {
+func promptRuntime(opts InitOptions, observed *workspace.Workspace) error {
+	if opts.Expectation != nil || observed.Runtime() != nil || opts.PromptRuntime == nil {
 		return nil
 	}
 	var selectionErr *discovery.SelectionError
@@ -155,17 +196,14 @@ func promptRuntime(root string, opts InitOptions, observed *workspace.Workspace)
 		selectionErr.State != discovery.SelectionAmbiguous {
 		return nil
 	}
-	entryPoint, err := opts.PromptRuntime(observed.Discovery)
+	installation, err := opts.PromptRuntime(observed.Discovery)
 	if err != nil {
 		return err
 	}
-	if entryPoint == "" {
+	if installation == nil {
 		return nil
 	}
-	if !filepath.IsAbs(entryPoint) {
-		entryPoint = filepath.Join(root, entryPoint)
-	}
-	return observed.Select(discovery.Request{EntryPoint: entryPoint})
+	return observed.Select(discovery.Request{Installation: installation})
 }
 
 // applyRuntimeIdentity records the observed server's product, versions, and
@@ -181,8 +219,7 @@ func (s *Service) applyRuntimeIdentity(
 		if selectionErr := observed.SelectionError(); selectionErr != nil {
 			var typed *discovery.SelectionError
 			noServer := errors.As(selectionErr, &typed) &&
-				(typed.State == discovery.SelectionNone ||
-					(typed.State == discovery.SelectionInvalid && typed.Path == ""))
+				typed.State == discovery.SelectionNone
 			if !noServer {
 				return selectionErr
 			}
@@ -211,7 +248,7 @@ func (s *Service) applyRuntimeIdentity(
 		build, found, err := s.identifyInstalledCoreBuild(
 			ctx,
 			root,
-			selection,
+			selection.Installation,
 			manifest.Server.Core.Product,
 		)
 		if err != nil {
@@ -370,22 +407,22 @@ func (s *Service) publishInitialization(
 		return initResult(observed), err
 	}
 
-	var selection *discovery.Selection
-	if observed != nil {
-		selection = observed.Runtime()
-	}
+	var runtimeInstallation *discovery.Installation
 	if runtimeObserved != nil {
 		// Re-discover from disk instead of trusting the in-memory selection
 		// that may predate the ambiguity prompt or network identification.
-		fresh := workspace.Observe(
-			root,
-			discovery.Request{EntryPoint: runtimeObserved.entryPoint},
-		)
-		freshSelection := fresh.Runtime()
-		if err := runtimeObserved.verify(freshSelection); err != nil {
+		// Installation membership binds the same observed runtime without
+		// turning a member path into a selection key.
+		fresh := workspace.Observe(root, discovery.Request{})
+		freshInstallation := fresh.Discovery.FindInstallation(runtimeObserved.members)
+		if err := runtimeObserved.verify(freshInstallation); err != nil {
 			return initResult(observed), err
 		}
-		selection = freshSelection
+		runtimeInstallation = freshInstallation
+	} else if observed != nil {
+		if selection := observed.Runtime(); selection != nil {
+			runtimeInstallation = selection.Installation
+		}
 	}
 	var runtimeFiles []install.AdoptedRuntimeFile
 	if runtimeObserved != nil {
@@ -416,7 +453,7 @@ func (s *Service) publishInitialization(
 	adoptErr := install.AdoptExistingWorkspace(root, install.AdoptOptions{
 		Manifest:     manifest,
 		Lock:         resolved,
-		Runtime:      selection,
+		Runtime:      runtimeInstallation,
 		RuntimeFiles: runtimeFiles,
 		Packages:     adoptedPackages,
 		Logger:       s.logger,

@@ -35,7 +35,7 @@ type AdoptedRuntimeFile struct {
 type AdoptOptions struct {
 	Manifest     *document.Manifest
 	Lock         *document.Lock
-	Runtime      *discovery.Selection
+	Runtime      *discovery.Installation
 	RuntimeFiles []AdoptedRuntimeFile
 	Packages     []AdoptedPackage
 	Logger       *log.Logger

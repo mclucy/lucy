@@ -57,7 +57,7 @@ func TestInitialize(t *testing.T) {
 				home:   filepath.Join(t.TempDir(), "home"),
 			}
 			for _, command := range scenario.prepare {
-				args := withEntryPoint(command.args, root, command.selectEntryPoint)
+				args := command.args
 				stdout, stderr, err := runner.execute(t, root, args...)
 				if err != nil {
 					t.Fatalf(
@@ -74,8 +74,7 @@ func TestInitialize(t *testing.T) {
 			}
 			removePaths(t, root, scenario.removeBefore)
 
-			args := []string{"init", "--no-interactive"}
-			args = withEntryPoint(args, root, scenario.selectEntryPoint)
+			args := withSelection([]string{"init", "--no-interactive"}, scenario)
 			stdout, stderr, err := runner.execute(t, root, args...)
 			output := stdout + stderr
 			if scenario.expectFailure {
@@ -122,9 +121,7 @@ func requireFailure(
 	if err == nil {
 		t.Fatalf("init succeeded where it must refuse:\n%s", output)
 	}
-	for _, candidate := range scenario.guidance {
-		path := filepath.Join(root, filepath.FromSlash(candidate))
-		command := "lucy init --entry-point '" + path + "'"
+	for _, command := range scenario.guidance {
 		if !strings.Contains(output, command) {
 			t.Errorf("init failure does not name the selection command %q:\n%s", command, output)
 		}
@@ -313,10 +310,7 @@ func verifyStatus(
 			want.ecosystem, want.name, want.version,
 		)
 	}
-	if want.path != "" {
-		requireStatusPath(t, "entry_point", document.Server.EntryPoint, want.path)
-	}
-	requireStatusFindings(t, document.Warnings, root, want.warning)
+	requireStatusFindings(t, document.Warnings, want.warning)
 	for reference, version := range want.components {
 		ecosystem, name, found := strings.Cut(reference, ":")
 		if !found {
@@ -331,22 +325,11 @@ func verifyStatus(
 	}
 }
 
-// requireStatusPath compares the reported entry point with a workspace-relative
-// fixture path.
-func requireStatusPath(t *testing.T, label, got, want string) {
+func requireStatusFindings(t *testing.T, warnings []string, candidates []string) {
 	t.Helper()
-	expected := filepath.FromSlash(want)
-	if filepath.Clean(got) != filepath.Clean(expected) {
-		t.Errorf("live status %s = %q, want %q", label, got, expected)
-	}
-}
-
-func requireStatusFindings(t *testing.T, warnings []string, root string, paths []string) {
-	t.Helper()
-	for _, candidate := range paths {
-		absolute := filepath.Join(root, filepath.FromSlash(candidate))
+	for _, candidate := range candidates {
 		found := slices.ContainsFunc(warnings, func(message string) bool {
-			return strings.Contains(message, absolute) || strings.Contains(message, filepath.ToSlash(candidate))
+			return strings.Contains(message, candidate)
 		})
 		if !found {
 			t.Errorf("no status finding names %s:\n%v", candidate, warnings)
@@ -376,14 +359,16 @@ func readLock(t *testing.T, root string) documentpkg.Lock {
 	return *locked
 }
 
-func withEntryPoint(args []string, root, entryPoint string) []string {
+func withSelection(args []string, scenario initializeScenario) []string {
 	args = slices.Clone(args)
-	if entryPoint != "" {
-		args = append(
-			args,
-			"--entry-point",
-			filepath.Join(root, filepath.FromSlash(entryPoint)),
-		)
+	if scenario.selectCore != "" {
+		args = append(args, "--core", scenario.selectCore)
+	}
+	if scenario.selectCoreVersion != "" {
+		args = append(args, "--core-version", scenario.selectCoreVersion)
+	}
+	if scenario.selectMinecraft != "" {
+		args = append(args, "--minecraft", scenario.selectMinecraft)
 	}
 	return args
 }
@@ -515,7 +500,6 @@ func verifyUnchanged(t *testing.T, root string, paths []string, before map[strin
 type statusDocument struct {
 	Server *struct {
 		Product    statusRef   `json:"product"`
-		EntryPoint string      `json:"entry_point"`
 		Components []statusRef `json:"components"`
 	} `json:"server"`
 	Warnings []string `json:"warnings"`

@@ -12,7 +12,9 @@ import (
 	"github.com/mclucy/lucy/install"
 	"github.com/mclucy/lucy/internal/cli/help"
 	"github.com/mclucy/lucy/operation"
+	serverpkg "github.com/mclucy/lucy/server"
 	"github.com/mclucy/lucy/terminal/report"
+	versionpkg "github.com/mclucy/lucy/version"
 	"github.com/mclucy/lucy/workspace/discovery"
 	"github.com/spf13/cobra"
 )
@@ -21,7 +23,9 @@ const (
 	flagInitForceName       = "force"
 	flagInitNameName        = "name"
 	flagInitMCDRVersionName = "mcdr-version"
-	flagInitEntryPointName  = "entry-point"
+	flagInitCoreName        = "core"
+	flagInitCoreVersionName = "core-version"
+	flagInitMinecraftName   = "minecraft"
 	flagInitNoCommentsName  = "no-comments"
 )
 
@@ -55,8 +59,21 @@ func NewInitCommand(
 		"",
 		"MCDReforged version to record",
 	)
-	cmd.Flags().String(flagInitEntryPointName, "", "Server entry point to adopt when several runtimes are present")
-	_ = cmd.MarkFlagFilename(flagInitEntryPointName, "jar")
+	cmd.Flags().String(
+		flagInitCoreName,
+		"",
+		"Expect this server product; no match fails and lists the observed runtimes",
+	)
+	cmd.Flags().String(
+		flagInitCoreVersionName,
+		"",
+		"Expect this exact server product version",
+	)
+	cmd.Flags().String(
+		flagInitMinecraftName,
+		"",
+		"Expect this exact Minecraft version",
+	)
 	cmd.Flags().Bool(
 		flagInitNoCommentsName,
 		false,
@@ -89,10 +106,14 @@ func actionInit(
 			return fmt.Errorf("--%s: %w", flagInitNameName, err)
 		}
 	}
+	expectation, err := initExpectation(cmd)
+	if err != nil {
+		return err
+	}
 	opts := operation.InitOptions{
 		Name:        name,
 		MCDRVersion: flagStringInit(cmd, flagInitMCDRVersionName),
-		EntryPoint:  flagStringInit(cmd, flagInitEntryPointName),
+		Expectation: expectation,
 		Force:       flagBoolInit(cmd, flagInitForceName),
 		NoComments:  flagBoolInit(cmd, flagInitNoCommentsName),
 	}
@@ -113,7 +134,7 @@ func initializeWorkspace(
 	output := newInstallOutput(cmd, inv)
 	defer output.Close()
 	opts.Trace = output.Trace()
-	opts.PromptRuntime = func(observed discovery.Result) (string, error) {
+	opts.PromptRuntime = func(observed discovery.Result) (*discovery.Installation, error) {
 		output.Close()
 		return promptRuntime(ctx, cmd, inv, observed)
 	}
@@ -174,7 +195,7 @@ func writtenFilesLabel(paths []string) string {
 }
 
 // initializationFailure turns a typed selection failure into an actionable
-// report. The commands name installed entry points exactly.
+// report. The commands name observed installations by identity.
 func initializationFailure(err error, result *operation.InitResult) error {
 	var unreadable []string
 	if result != nil {
@@ -192,38 +213,109 @@ func initializationFailure(err error, result *operation.InitResult) error {
 		}
 	}
 	detail := &report.Detail{Cause: err}
+	var commands []string
 	switch selectionErr.State {
 	case discovery.SelectionAmbiguous:
 		detail.Title = "several server runtimes share this directory"
+		commands = installationCommands(selectionErr.Installations)
+	case discovery.SelectionUnmatched:
+		detail.Title = "no installed server matches the requested filters"
+		detail.Lines = observedInstallationLines(selectionErr.Installations)
 	case discovery.SelectionMissingDeclared:
 		detail.Title = "the declared server installation is missing"
 	case discovery.SelectionInvalid:
-		detail.Title = "the requested entry point is not a recognized server"
+		detail.Title = "no launchable server installation was found"
 	default:
 		return err
 	}
-	commands := entryPointCommands(selectionErr.Installations)
 	detail.Lines = append(detail.Lines, commands...)
 	detail.Lines = append(detail.Lines, unreadable...)
 	if len(commands) > 0 {
 		detail.Hint = "Run one of these commands to select the server to initialize."
+	} else if selectionErr.State == discovery.SelectionUnmatched {
+		detail.Hint = "Omit --core, --core-version, and --minecraft to choose interactively, or pass values that match an installed server."
 	}
 	return detail
 }
 
-func entryPointCommands(installations []discovery.Installation) []string {
+func installationCommands(installations []discovery.Installation) []string {
 	var commands []string
 	seen := map[string]bool{}
 	for i := range installations {
-		for file := range installations[i].EntryPoints() {
-			if file.Path == "" || seen[file.Path] {
-				continue
-			}
-			seen[file.Path] = true
-			commands = append(commands, "lucy init --entry-point '"+strings.ReplaceAll(file.Path, "'", "'\\''")+"'")
+		identity := installations[i].Identity
+		if !identity.IsValid() {
+			continue
 		}
+		command := identitySelectionCommand(identity)
+		if command == "" || seen[command] {
+			continue
+		}
+		seen[command] = true
+		commands = append(commands, command)
 	}
 	return commands
+}
+
+func observedInstallationLines(installations []discovery.Installation) []string {
+	lines := make([]string, 0, len(installations))
+	seen := map[string]bool{}
+	for i := range installations {
+		identity := installations[i].Identity
+		if !identity.IsValid() {
+			continue
+		}
+		label := installationIdentityLabel(identity)
+		if seen[label] {
+			continue
+		}
+		seen[label] = true
+		lines = append(lines, label)
+	}
+	return lines
+}
+
+// initExpectation builds the invocation filter from the selection flags. It
+// never supplies facts; discovery still has to observe a matching runtime.
+func initExpectation(cmd *cobra.Command) (*discovery.Expectation, error) {
+	core := strings.TrimSpace(flagStringInit(cmd, flagInitCoreName))
+	coreVersion, err := concreteInitVersion(cmd, flagInitCoreVersionName)
+	if err != nil {
+		return nil, err
+	}
+	minecraft, err := concreteInitVersion(cmd, flagInitMinecraftName)
+	if err != nil {
+		return nil, err
+	}
+	if core == "" && coreVersion == "" && minecraft == "" {
+		return nil, nil
+	}
+	if coreVersion != "" && core == "" {
+		return nil, fmt.Errorf("--%s needs --%s", flagInitCoreVersionName, flagInitCoreName)
+	}
+	product, known := serverpkg.ParseProduct(core)
+	if !known {
+		product = serverpkg.Product(strings.ToLower(core))
+	}
+	return &discovery.Expectation{
+		Product:     product,
+		Minecraft:   minecraft,
+		CoreVersion: coreVersion,
+	}, nil
+}
+
+func concreteInitVersion(
+	cmd *cobra.Command,
+	name string,
+) (versionpkg.Version, error) {
+	raw := strings.TrimSpace(flagStringInit(cmd, name))
+	if raw == "" {
+		return "", nil
+	}
+	value := versionpkg.Version(raw)
+	if value.IsInvalid() || value.CanInfer() {
+		return "", fmt.Errorf("--%s expects an exact version, got %q", name, raw)
+	}
+	return value, nil
 }
 
 func promptRuntime(
@@ -231,41 +323,39 @@ func promptRuntime(
 	cmd *cobra.Command,
 	inv *Invocation,
 	observed discovery.Result,
-) (string, error) {
+) (*discovery.Installation, error) {
 	// A closed gate returns no selection, so Initialize reports the typed
-	// ambiguous-selection error whose commands name --entry-point exactly.
+	// ambiguous-selection error whose commands name identities exactly.
 	if !NewPromptGate(cmd, inv).Available() {
-		return "", nil
+		return nil, nil
 	}
-	options := make([]huh.Option[string], 0, len(observed.Installations))
+	options := make([]huh.Option[int], 0, len(observed.Installations))
 	for i := range observed.Installations {
 		installation := &observed.Installations[i]
-		for file := range installation.EntryPoints() {
-			options = append(options, huh.NewOption(
-				fmt.Sprintf(
-					"%s %s / Minecraft %s (%s)",
-					installation.Identity.Product().Title(),
-					installation.Identity.Primary.Version,
-					installation.Identity.MinecraftVersion(),
-					file.Path,
-				),
-				file.Path,
-			))
+		if !installation.Identity.IsValid() {
+			continue
 		}
+		options = append(options, huh.NewOption(
+			installationIdentityLabel(installation.Identity),
+			i,
+		))
 	}
 	if len(options) == 0 {
-		return "", nil
+		return nil, nil
 	}
-	var selected string
-	form := huh.NewForm(huh.NewGroup(huh.NewSelect[string]().
+	selected := -1
+	form := huh.NewForm(huh.NewGroup(huh.NewSelect[int]().
 		Title("Select the server to initialize").
-		Description("Use --entry-point <entry-point> to make this selection without a prompt.").
+		Description("Use --core, --core-version, and --minecraft to make this selection without a prompt.").
 		Options(options...).Value(&selected))).
 		WithInput(cmd.InOrStdin()).WithOutput(cmd.ErrOrStderr())
 	if err := NormalizePromptError(ctx, form.RunWithContext(ctx)); err != nil {
-		return "", fmt.Errorf("server selection cancelled: %w", err)
+		return nil, fmt.Errorf("server selection cancelled: %w", err)
 	}
-	return selected, nil
+	if selected < 0 || selected >= len(observed.Installations) {
+		return nil, nil
+	}
+	return &observed.Installations[selected], nil
 }
 
 func flagStringInit(cmd *cobra.Command, name string) string {
