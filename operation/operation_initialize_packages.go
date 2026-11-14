@@ -21,19 +21,27 @@ import (
 // managed: the key would record only the last file while the receipt and
 // fingerprint claim both. Conflicting projects stay unmanaged.
 type packageAdopter struct {
-	service   *Service
-	root      string
-	manifest  *documentpkg.Manifest
-	observed  *workspace.Workspace
-	served    map[catalog.Ecosystem]struct{}
-	mapper    upstream.ArtifactMapProvider
-	hasMapper bool
+	service  *Service
+	root     string
+	manifest *documentpkg.Manifest
+	observed *workspace.Workspace
+	served   map[catalog.Ecosystem]struct{}
+	mappers  []packageMapper
 
 	recognized int
 	packages   []install.AdoptedPackage
 	index      map[string]int
 	references map[string]string
 	conflicts  map[string]bool
+}
+
+// packageMapper identifies installed packages by content hash for one
+// provider. registry is the catalogue that lists the matched project's
+// releases.
+type packageMapper struct {
+	provider catalog.Provider
+	registry catalog.Registry
+	mapper   upstream.ArtifactMapProvider
 }
 
 // adoptInstalledPackages adds requirements for the packages discovery
@@ -44,9 +52,7 @@ func (s *Service) adoptInstalledPackages(
 	manifest *documentpkg.Manifest,
 	observed *workspace.Workspace,
 ) ([]install.AdoptedPackage, error) {
-	mapper, hasMapper, err := s.source.GetArtifactMapper(
-		catalog.ProviderModrinth,
-	)
+	mappers, err := s.packageMappers()
 	if err != nil {
 		return nil, err
 	}
@@ -56,8 +62,7 @@ func (s *Service) adoptInstalledPackages(
 		manifest:   manifest,
 		observed:   observed,
 		served:     servedEcosystemSet(manifest, observed),
-		mapper:     mapper,
-		hasMapper:  hasMapper,
+		mappers:    mappers,
 		index:      map[string]int{},
 		references: map[string]string{},
 		conflicts:  map[string]bool{},
@@ -81,6 +86,39 @@ func (s *Service) adoptInstalledPackages(
 		"present", len(packages),
 	)
 	return adopter.packages, nil
+}
+
+// packageMapperProviders are the hash mappers that identify installed
+// packages, in trial order. A file that Modrinth identifies is managed under
+// Modrinth even when CurseForge also matches it.
+var packageMapperProviders = []catalog.Provider{
+	catalog.ProviderModrinth,
+	catalog.ProviderCurseForge,
+}
+
+// packageMappers returns the configured hash mappers in trial order. A
+// provider without a configured mapper is skipped, not an error.
+func (s *Service) packageMappers() ([]packageMapper, error) {
+	var mappers []packageMapper
+	for _, provider := range packageMapperProviders {
+		mapper, ok, err := s.source.GetArtifactMapper(provider)
+		if err != nil {
+			return nil, err
+		}
+		if !ok {
+			continue
+		}
+		registry, ok := provider.Registry()
+		if !ok {
+			continue
+		}
+		mappers = append(mappers, packageMapper{
+			provider: provider,
+			registry: registry,
+			mapper:   mapper,
+		})
+	}
+	return mappers, nil
 }
 
 func (a *packageAdopter) adopt(
@@ -110,7 +148,7 @@ func (a *packageAdopter) adopt(
 		}
 		return a.adoptMCDR(ctx, p, modules[0].ID, ecosystem)
 	}
-	return a.adoptModrinth(ctx, p, ecosystem)
+	return a.adoptMapped(ctx, p, ecosystem)
 }
 
 func (a *packageAdopter) adoptMCDR(
@@ -186,12 +224,15 @@ func (a *packageAdopter) claimMCDR(
 	return nil
 }
 
-func (a *packageAdopter) adoptModrinth(
+// adoptMapped identifies an installed package by content hash. Mappers are
+// tried in order: the first one that matches the file and selects its release
+// records the package under its provider.
+func (a *packageAdopter) adoptMapped(
 	ctx context.Context,
 	p workspace.DiscoveredPackage,
 	ecosystem catalog.Ecosystem,
 ) error {
-	if !supportsModrinthPackages(ecosystem) || !a.hasMapper {
+	if !supportsHashedPackages(ecosystem) || len(a.mappers) == 0 {
 		return nil
 	}
 	digests, err := install.DigestFile(p.Path, nil)
@@ -202,65 +243,85 @@ func (a *packageAdopter) adoptModrinth(
 	if err != nil {
 		return fmt.Errorf("inspect package %s: %w", p.Path, err)
 	}
-	ref, _, matched, err := a.mapper.PackageByHash(
-		ctx,
-		artifact.File{Path: p.Path},
-	)
-	if err != nil || !matched || ref.Name == "" {
-		return nil
-	}
-	// A manifest entry that resolution cannot select blocks every later
-	// command, so an installed package whose catalogue metadata offers no
-	// matching release for this server stays unmanaged.
-	release, err := a.modrinthRelease(ctx, ref, ecosystem)
-	if err != nil {
-		a.warn("package %s left unmanaged: %w", ref.Name, err)
-		return nil
-	}
-	if release.ProjectID == "" {
-		a.warn(
-			"package %s left unmanaged: matched release has no project ID",
-			ref.Name,
+	for _, mapper := range a.mappers {
+		ref, _, matched, err := mapper.mapper.PackageByHash(
+			ctx,
+			artifact.File{Path: p.Path},
 		)
+		if err != nil {
+			// A lookup error is an incomplete lookup, not an artifact miss, so
+			// the file's identification may be wrong or missing entirely.
+			a.warn(
+				"package %s: %s hash lookup failed; identification may be incomplete: %w",
+				p.Path,
+				mapper.provider,
+				err,
+			)
+			continue
+		}
+		if !matched || ref.Name == "" {
+			continue
+		}
+		// A manifest entry that resolution cannot select blocks every later
+		// command, so a match whose catalogue metadata offers no release for
+		// this server is skipped. The next mapper may still identify the file.
+		release, err := a.mappedRelease(ctx, mapper, ref, ecosystem)
+		if err != nil {
+			a.warn(
+				"package %s matched %s but no release could be selected: %w",
+				ref.Name, mapper.provider, err,
+			)
+			continue
+		}
+		if release.ProjectID == "" {
+			a.warn(
+				"package %s matched %s but its release has no project ID",
+				ref.Name, mapper.provider,
+			)
+			continue
+		}
+		provider := string(mapper.provider)
+		reference := provider + ":" + ref.Name.String()
+		packageID := provider + ":" + release.ProjectID
+		key := packageKey(ecosystem, packageID)
+		if a.conflicts[key] {
+			a.warn(
+				"package %s left unmanaged: several installed jars identify the same project",
+				ref.Name,
+			)
+			return nil
+		}
+		if _, exists := a.index[key]; exists {
+			prior := a.markConflict(key)
+			delete(a.manifest.Server.Packages[ecosystem], a.references[key])
+			delete(a.references, key)
+			a.warn(
+				"package %s left unmanaged: installed jars %s and %s identify the same project",
+				ref.Name, prior, p.Path,
+			)
+			return nil
+		}
+		a.requirePackageMap(ecosystem)[reference] = documentpkg.Requirement{
+			Selector: ref.Version,
+		}
+		a.references[key] = reference
+		a.record(key, p, packageID, digests["sha256"], uint32(info.Mode().Perm()))
 		return nil
 	}
-	reference := "modrinth:" + ref.Name.String()
-	packageID := "modrinth:" + release.ProjectID
-	key := packageKey(ecosystem, packageID)
-	if a.conflicts[key] {
-		a.warn(
-			"package %s left unmanaged: several installed jars identify the same project",
-			ref.Name,
-		)
-		return nil
-	}
-	if _, exists := a.index[key]; exists {
-		prior := a.markConflict(key)
-		delete(a.manifest.Server.Packages[ecosystem], a.references[key])
-		delete(a.references, key)
-		a.warn(
-			"package %s left unmanaged: installed jars %s and %s identify the same project",
-			ref.Name, prior, p.Path,
-		)
-		return nil
-	}
-	a.requirePackageMap(ecosystem)[reference] = documentpkg.Requirement{
-		Selector: ref.Version,
-	}
-	a.references[key] = reference
-	a.record(key, p, packageID, digests["sha256"], uint32(info.Mode().Perm()))
 	return nil
 }
 
-// modrinthRelease selects the catalogue release for the identified artifact.
-func (a *packageAdopter) modrinthRelease(
+// mappedRelease selects the release of the matched project that carries the
+// hash-matched version and a primary file.
+func (a *packageAdopter) mappedRelease(
 	ctx context.Context,
+	mapper packageMapper,
 	ref catalog.VersionedRef,
 	ecosystem catalog.Ecosystem,
 ) (upstream.Candidate, error) {
 	candidates, err := a.service.source.Candidates(
 		ctx,
-		catalog.RegistryModrinth,
+		mapper.registry,
 		ref.Name.String(),
 		string(a.manifest.Server.Minecraft),
 		ecosystem,
@@ -335,6 +396,16 @@ func (a *packageAdopter) warn(format string, args ...any) {
 	a.observed.Warnings = append(a.observed.Warnings, fmt.Errorf(format, args...))
 }
 
-func supportsModrinthPackages(ecosystem catalog.Ecosystem) bool {
-	return ecosystem.IsSearchable()
+func supportsHashedPackages(ecosystem catalog.Ecosystem) bool {
+	switch ecosystem {
+	case catalog.EcosystemFabric,
+		catalog.EcosystemQuilt,
+		catalog.EcosystemForge,
+		catalog.EcosystemNeoForge,
+		catalog.EcosystemBukkit,
+		catalog.EcosystemPaper:
+		return true
+	default:
+		return false
+	}
 }

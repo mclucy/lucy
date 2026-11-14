@@ -179,6 +179,7 @@ func NewRootCommand(contracts *cli.JSONContracts, invocation *cli.Invocation, de
 		cli.NewDeinitCommand(contracts, invocation, dependencies),
 		docs,
 		file.NewCommand(contracts, invocation, dependencies),
+		cli.NewImportCommand(contracts, invocation, dependencies),
 		cli.NewInitCommand(contracts, invocation, dependencies),
 		cli.NewInstallCommand(contracts, invocation, dependencies),
 		cli.NewJavaCommand(contracts, invocation, dependencies),
