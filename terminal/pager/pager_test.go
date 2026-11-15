@@ -579,3 +579,28 @@ func TestResizeKeepsContentOnRenderError(t *testing.T) {
 func lineVisible(target *viewport.Model, line int) bool {
 	return line >= target.YOffset() && line < target.YOffset()+target.Height()
 }
+
+func TestResizeKeepsScrollWhenMatchOffscreen(t *testing.T) {
+	t.Parallel()
+
+	text := "needle\n" + strings.Repeat("line\n", 100)
+	m := newModel(Options{
+		Text: text,
+		Render: func(int, int) (string, error) {
+			return text, nil
+		},
+		Terminal: style.Terminal{Width: 40, Height: 10},
+		Theme:    style.New(false),
+	})
+	m.Update(tea.WindowSizeMsg{Width: 40, Height: 10})
+	m.search.begin()
+	for _, letter := range "needle" {
+		m.handleSearchKey(tea.KeyPressMsg{Text: string(letter), Code: letter})
+	}
+	m.handleSearchKey(tea.KeyPressMsg{Code: tea.KeyEnter})
+	m.viewport.GotoBottom()
+	m.Update(tea.WindowSizeMsg{Width: 80, Height: 10})
+	if !m.viewport.AtBottom() {
+		t.Fatalf("resize jumped away from the bottom to offset %d", m.viewport.YOffset())
+	}
+}
