@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"charm.land/bubbletea/v2"
+	"github.com/charmbracelet/x/ansi"
 	"github.com/mclucy/lucy/terminal/style"
 	"golang.org/x/term"
 )
@@ -85,17 +86,22 @@ func shouldPage(options Options) bool {
 	if !isTerminal(options.Input) || !isTerminal(options.Output) {
 		return false
 	}
-	return needsPager(options.Mode, options.Text, options.Terminal.Height)
+	return needsPager(
+		options.Mode,
+		options.Text,
+		options.Terminal.Width,
+		options.Terminal.Height,
+	)
 }
 
-func needsPager(mode Mode, text string, terminalHeight int) bool {
+func needsPager(mode Mode, text string, width, terminalHeight int) bool {
 	if mode == Never || text == "" {
 		return false
 	}
 	if mode == Always {
 		return true
 	}
-	return lineCount(text) > contentHeight(terminalHeight)
+	return textRows(text, width) > contentHeight(terminalHeight)
 }
 
 func isTerminal(stream any) bool {
@@ -103,8 +109,13 @@ func isTerminal(stream any) bool {
 	return ok && term.IsTerminal(int(file.Fd()))
 }
 
-func lineCount(text string) int {
-	return strings.Count(text, "\n") + 1
+func textRows(text string, width int) int {
+	width = max(1, width)
+	rows := 0
+	for line := range strings.SplitSeq(text, "\n") {
+		rows += max(1, (ansi.StringWidth(line)+width-1)/width)
+	}
+	return rows
 }
 
 func contentHeight(terminalHeight int) int {
