@@ -214,7 +214,7 @@ func actionSearch(
 			if long {
 				sb.WriteString(renderSearchLong(res, inv.Theme, screen))
 			} else {
-				sb.WriteString(renderSearchCompact(res, inv.Theme))
+				sb.WriteString(renderSearchCompact(res, inv.Theme, screen))
 			}
 		}
 		if len(noResultSources) > 0 {
@@ -286,7 +286,11 @@ func searchResultReference(item upstream.SearchResult) string {
 	}.String()
 }
 
-func renderSearchCompact(res upstream.SearchResponse, theme style.Theme) string {
+func renderSearchCompact(
+	res upstream.SearchResponse,
+	theme style.Theme,
+	screen style.Terminal,
+) string {
 	var sb strings.Builder
 	sb.WriteString(searchSectionHeader(res, theme))
 
@@ -304,10 +308,12 @@ func renderSearchCompact(res upstream.SearchResponse, theme style.Theme) string 
 		BorderColumn(false).
 		BorderRow(false).
 		BorderHeader(false).
+		Width(max(20, screen.Width)).
+		Wrap(false).
 		StyleFunc(
 			func(row, col int) lipgloss.Style {
 				if col == 0 {
-					return lipgloss.NewStyle().Bold(true)
+					return lipgloss.NewStyle().Bold(true).PaddingRight(1)
 				}
 				return lipgloss.NewStyle().Faint(true)
 			},
