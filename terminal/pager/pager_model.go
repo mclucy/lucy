@@ -109,6 +109,9 @@ func (m *model) resize(width, height int) {
 	m.height = max(2, height)
 	m.viewport.SetWidth(m.width)
 	m.viewport.SetHeight(contentHeight(m.height))
+	// Dimension setters keep the old offset; resetting it clamps to the new
+	// wrapped height so a wider terminal cannot leave a blank view.
+	m.viewport.SetYOffset(m.viewport.YOffset())
 }
 
 func (m *model) footer() string {
