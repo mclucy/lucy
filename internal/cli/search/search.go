@@ -299,6 +299,14 @@ func renderSearchCompact(
 		return sb.String()
 	}
 
+	width := max(20, screen.Width)
+	nameWidth := 0
+	for _, item := range res.Items {
+		nameWidth = max(nameWidth, len("  "+searchResultReference(item)))
+	}
+	nameWidth = min(nameWidth, max(10, width/2))
+	descWidth := max(4, width-nameWidth-1)
+
 	t := table.New().
 		Border(lipgloss.HiddenBorder()).
 		BorderTop(false).
@@ -308,7 +316,6 @@ func renderSearchCompact(
 		BorderColumn(false).
 		BorderRow(false).
 		BorderHeader(false).
-		Width(max(20, screen.Width)).
 		Wrap(false).
 		StyleFunc(
 			func(row, col int) lipgloss.Style {
@@ -326,7 +333,10 @@ func renderSearchCompact(
 		if summary == "" && item.Title != "" && item.Title != item.ProjectName {
 			summary = item.Title
 		}
-		t.Row("  "+searchResultReference(item), truncateText(summary, 60))
+		t.Row(
+			truncateText("  "+searchResultReference(item), nameWidth),
+			truncateText(summary, descWidth),
+		)
 	}
 	sb.WriteString(t.String())
 	sb.WriteString("\n")
