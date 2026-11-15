@@ -18,20 +18,29 @@ func TestNeedsPager(t *testing.T) {
 		name           string
 		mode           Mode
 		text           string
+		width          int
 		terminalHeight int
 		want           bool
 	}{
-		{name: "never", mode: Never, text: strings.Repeat("line\n", 100), terminalHeight: 10},
-		{name: "empty", mode: Always, text: "", terminalHeight: 10},
-		{name: "always short", mode: Always, text: "one line", terminalHeight: 24, want: true},
-		{name: "auto fits exactly", mode: Auto, text: strings.Repeat("line\n", 8), terminalHeight: 10},
-		{name: "auto overflows", mode: Auto, text: strings.Repeat("line\n", 9), terminalHeight: 10, want: true},
-		{name: "auto tall terminal", mode: Auto, text: strings.Repeat("line\n", 40), terminalHeight: 80},
+		{name: "never", mode: Never, text: strings.Repeat("line\n", 100), width: 80, terminalHeight: 10},
+		{name: "empty", mode: Always, text: "", width: 80, terminalHeight: 10},
+		{name: "always short", mode: Always, text: "one line", width: 80, terminalHeight: 24, want: true},
+		{name: "auto fits exactly", mode: Auto, text: strings.Repeat("line\n", 8), width: 80, terminalHeight: 10},
+		{name: "auto overflows", mode: Auto, text: strings.Repeat("line\n", 9), width: 80, terminalHeight: 10, want: true},
+		{name: "auto tall terminal", mode: Auto, text: strings.Repeat("line\n", 40), width: 80, terminalHeight: 80},
+		{
+			name:           "auto wraps long lines",
+			mode:           Auto,
+			text:           strings.Repeat(strings.Repeat("x", 100)+"\n", 10),
+			width:          40,
+			terminalHeight: 24,
+			want:           true,
+		},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
-			if got := needsPager(test.mode, test.text, test.terminalHeight); got != test.want {
+			if got := needsPager(test.mode, test.text, test.width, test.terminalHeight); got != test.want {
 				t.Fatalf("needsPager() = %v, want %v", got, test.want)
 			}
 		})
