@@ -7,7 +7,7 @@ description: "Common output and diagnostic options"
 
 Use `--no-color` to disable colors, or `--no-interactive` to disable prompts and animated progress. If a command needs a choice, `--no-interactive` fails with the flag to use instead. `--no-style` combines both options.
 
-Long human output — `search`, `info`, `tree`, `leaves`, `server list`, `file list`, `file history`, `store list`, `cache ls`, `java list`, `config get`, and `docs` — opens in a pager when stdout is a terminal and the document does not fit. `status` always prints directly. Use `q` to quit, `/` to search, and `g`/`G` to jump to the top or bottom. `Esc` cancels a search; it does not quit. `--pager=never` disables paging, `--pager=always` pages every document, and bare `--pager` is the same as `--pager=always`. `--no-interactive` also disables the pager, and JSON and piped output never page.
+Long human output — `search`, `info`, `tree`, `leaves`, `server list`, `file list`, `file history`, `store list`, `cache ls`, `java list`, `config get`, and `docs` — opens in a pager when stdout is a terminal and the document does not fit. `status` always prints directly. Use `q` to quit, `/` to search, and `g`/`G` to jump to the top or bottom. `Esc` cancels a search; it does not quit. Search highlights matches, and `n`/`N` move between them. Resizing the terminal re-renders the document at the new width. `--pager=never` disables paging, `--pager=always` pages every document, and bare `--pager` is the same as `--pager=always`. `--no-interactive` also disables the pager, and JSON and piped output never page.
 
 Commands that support machine-readable output accept `--json` or `--json-compact`. For example:
 
