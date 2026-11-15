@@ -2251,3 +2251,20 @@
   args:
     - "--downgrade"
     - "spiget:34315"
+
+- id: add-fabric-unknown-project
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.21.4"
+      directory: server
+      core:
+        product: fabric
+        product_version: "0.16.10"
+      packages:
+        fabric:
+          modrinth:c2me-fabric: "any"
+          modrinth:lithium: "any"
+          modrinth:chunky: "any"
+  args:
+    - "modrinth:no-such-project-xyz"
