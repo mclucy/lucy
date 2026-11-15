@@ -2,13 +2,15 @@ package docs
 
 import (
 	"fmt"
+	"io"
 
 	docscontent "github.com/mclucy/lucy/docs"
+	"github.com/mclucy/lucy/internal/cli"
 	"github.com/mclucy/lucy/internal/cli/help"
 	"github.com/spf13/cobra"
 )
 
-func newListCommand() *cobra.Command {
+func newListCommand(inv *cli.Invocation) *cobra.Command {
 	return &cobra.Command{
 		Use:   "list",
 		Short: help.DocsListShort,
@@ -18,13 +20,14 @@ func newListCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			out := cmd.OutOrStdout()
-			for _, page := range pages {
-				if _, err := fmt.Fprintln(out, page.Slug); err != nil {
-					return err
+			return cli.PageDocument(cmd, inv, cmd.OutOrStdout(), func(out io.Writer) error {
+				for _, page := range pages {
+					if _, err := fmt.Fprintln(out, page.Slug); err != nil {
+						return err
+					}
 				}
-			}
-			return nil
+				return nil
+			})
 		},
 	}
 }

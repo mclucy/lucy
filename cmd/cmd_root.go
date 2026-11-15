@@ -166,9 +166,10 @@ func NewRootCommand(contracts *cli.JSONContracts, invocation *cli.Invocation, de
 		false,
 		"Same as --no-color --no-interactive",
 	)
+	cli.AddPagerFlag(root, invocation)
 
 	displayVersion, displayCommit := buildVersion()
-	docs := docscli.NewCommand()
+	docs := docscli.NewCommand(invocation)
 	contracts.Ignore(docs)
 	root.AddCommand(
 		cli.NewAddCommand(contracts, invocation, dependencies),

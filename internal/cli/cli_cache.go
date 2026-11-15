@@ -2,6 +2,7 @@ package cli
 
 import (
 	"fmt"
+	"io"
 	"slices"
 
 	"github.com/mclucy/lucy/cache"
@@ -90,11 +91,13 @@ func actionCacheLs(
 		})
 	}
 
-	_, err := fmt.Fprintln(
-		output.Human(),
-		terminal.RenderFacts(facts, inv.Stdout.Width, inv.Theme),
-	)
-	return err
+	return output.Document(func(out io.Writer) error {
+		_, err := fmt.Fprintln(
+			out,
+			terminal.RenderFacts(facts, inv.Stdout.Width, inv.Theme),
+		)
+		return err
+	})
 }
 
 func actionCacheClear(

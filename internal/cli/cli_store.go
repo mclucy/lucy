@@ -3,6 +3,7 @@ package cli
 import (
 	"cmp"
 	"fmt"
+	"io"
 	"slices"
 
 	"github.com/mclucy/lucy/artifactstore"
@@ -112,11 +113,13 @@ func actionStoreList(
 			Value: style.FormatBytesBinary(object.Size),
 		})
 	}
-	_, err = fmt.Fprintln(
-		output.Human(),
-		terminal.RenderFacts(facts, inv.Stdout.Width, inv.Theme),
-	)
-	return err
+	return output.Document(func(out io.Writer) error {
+		_, err := fmt.Fprintln(
+			out,
+			terminal.RenderFacts(facts, inv.Stdout.Width, inv.Theme),
+		)
+		return err
+	})
 }
 
 func actionStoreGC(

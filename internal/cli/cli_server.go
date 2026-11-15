@@ -110,7 +110,9 @@ func actionServerList(
 		}
 		return serverListJSON.Write(output, entries)
 	}
-	return writeServerList(output.Human(), entries, inv.Theme, inv.Stdout.Width)
+	return output.Document(func(out io.Writer) error {
+		return writeServerList(out, entries, inv.Theme, inv.Stdout.Width)
+	})
 }
 
 // writeServerList renders one aligned row per entry. A name column that is

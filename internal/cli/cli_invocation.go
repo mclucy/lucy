@@ -3,6 +3,7 @@ package cli
 import (
 	"github.com/mclucy/lucy/internal/telemetry"
 	"github.com/mclucy/lucy/log"
+	"github.com/mclucy/lucy/terminal/pager"
 	"github.com/mclucy/lucy/terminal/style"
 )
 
@@ -27,6 +28,8 @@ type Invocation struct {
 	Stderr style.Terminal
 	// Interactive reports whether prompts and animated output are allowed.
 	Interactive bool
+	// Pager selects when long human documents go through the pager.
+	Pager pager.Mode
 	// TelemetryEnabled permits projections of facts already observed by a command.
 	TelemetryEnabled bool
 	// TelemetryContexts holds only explicitly projected, bounded observations.
@@ -44,5 +47,6 @@ func NewInvocation(directory string, logger *log.Logger) *Invocation {
 		Stdout:      style.Terminal{Width: 80, Height: 24},
 		Stderr:      style.Terminal{Width: 80, Height: 24},
 		Interactive: false,
+		Pager:       pager.Auto,
 	}
 }

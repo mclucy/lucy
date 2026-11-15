@@ -2,6 +2,7 @@ package file
 
 import (
 	"fmt"
+	"io"
 
 	"github.com/mclucy/lucy/filetrack"
 	"github.com/mclucy/lucy/internal/cli"
@@ -64,30 +65,31 @@ func actionFileList(
 		})
 	}
 
-	out := output.Human()
-	if len(statuses) == 0 {
-		fmt.Fprintln(out, "No tracked files.")
-		return nil
-	}
+	return output.Document(func(out io.Writer) error {
+		if len(statuses) == 0 {
+			fmt.Fprintln(out, "No tracked files.")
+			return nil
+		}
 
-	pathWidth, stateWidth := 0, 0
-	for _, status := range statuses {
-		pathWidth = max(pathWidth, len(status.Path))
-		stateWidth = max(stateWidth, len(status.State))
-	}
-	for _, status := range statuses {
-		fmt.Fprintf(
-			out,
-			"%-*s  %-9s  %-*s  %s\n",
-			pathWidth,
-			status.Path,
-			statusPolicy(status.Immutable),
-			stateWidth,
-			status.State,
-			statusDetail(status),
-		)
-	}
-	return nil
+		pathWidth, stateWidth := 0, 0
+		for _, status := range statuses {
+			pathWidth = max(pathWidth, len(status.Path))
+			stateWidth = max(stateWidth, len(status.State))
+		}
+		for _, status := range statuses {
+			fmt.Fprintf(
+				out,
+				"%-*s  %-9s  %-*s  %s\n",
+				pathWidth,
+				status.Path,
+				statusPolicy(status.Immutable),
+				stateWidth,
+				status.State,
+				statusDetail(status),
+			)
+		}
+		return nil
+	})
 }
 
 func statusPolicy(immutable bool) string {

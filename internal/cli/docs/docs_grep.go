@@ -3,6 +3,7 @@ package docs
 import (
 	"errors"
 	"fmt"
+	"io"
 	"strings"
 
 	docscontent "github.com/mclucy/lucy/docs"
@@ -30,7 +31,7 @@ type grepOptions struct {
 	quiet             bool
 }
 
-func newGrepCommand() *cobra.Command {
+func newGrepCommand(inv *cli.Invocation) *cobra.Command {
 	var opts grepOptions
 	cmd := &cobra.Command{
 		Use:   "grep <pattern> [page...]",
@@ -43,7 +44,7 @@ func newGrepCommand() *cobra.Command {
 			return nil
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runGrep(cmd, args, &opts)
+			return runGrep(cmd, inv, args, &opts)
 		},
 	}
 	cmd.SetFlagErrorFunc(func(_ *cobra.Command, err error) error {
@@ -166,7 +167,7 @@ func newGrepCommand() *cobra.Command {
 	return cmd
 }
 
-func runGrep(cmd *cobra.Command, args []string, opts *grepOptions) error {
+func runGrep(cmd *cobra.Command, inv *cli.Invocation, args []string, opts *grepOptions) error {
 	if opts.filesWithMatches && opts.filesWithoutMatch {
 		return cli.ExitWith(2, errors.New("-l and -L are mutually exclusive"))
 	}
@@ -204,65 +205,70 @@ func runGrep(cmd *cobra.Command, args []string, opts *grepOptions) error {
 	}
 	showFilename := opts.withFilename ||
 		(!opts.noFilename && len(selected) > 1)
-	out := cmd.OutOrStdout()
 	success := false
-	for _, selectedPage := range selected {
-		lines := splitLines(selectedPage.Content)
-		matched := make([]bool, len(lines))
-		anyMatch := false
-		for index, line := range lines {
-			hit := match(line)
-			if opts.invert {
-				hit = !hit
-			}
-			matched[index] = hit
-			if hit {
-				anyMatch = true
-			}
-		}
-		if opts.quiet {
-			if anyMatch {
-				return nil
-			}
-			continue
-		}
-		switch {
-		case opts.filesWithMatches:
-			if anyMatch {
-				success = true
-				if _, err := fmt.Fprintln(out, selectedPage.Slug); err != nil {
-					return err
+	if err := cli.PageDocument(cmd, inv, cmd.OutOrStdout(), func(out io.Writer) error {
+		for _, selectedPage := range selected {
+			lines := splitLines(selectedPage.Content)
+			matched := make([]bool, len(lines))
+			anyMatch := false
+			for index, line := range lines {
+				hit := match(line)
+				if opts.invert {
+					hit = !hit
+				}
+				matched[index] = hit
+				if hit {
+					anyMatch = true
 				}
 			}
-		case opts.filesWithoutMatch:
-			if !anyMatch {
-				success = true
-				if _, err := fmt.Fprintln(out, selectedPage.Slug); err != nil {
+			if opts.quiet {
+				if anyMatch {
+					success = true
+					return nil
+				}
+				continue
+			}
+			switch {
+			case opts.filesWithMatches:
+				if anyMatch {
+					success = true
+					if _, err := fmt.Fprintln(out, selectedPage.Slug); err != nil {
+						return err
+					}
+				}
+			case opts.filesWithoutMatch:
+				if !anyMatch {
+					success = true
+					if _, err := fmt.Fprintln(out, selectedPage.Slug); err != nil {
+						return err
+					}
+				}
+			case opts.count:
+				if anyMatch {
+					success = true
+				}
+				if err := writeCount(out, selectedPage.Slug, matched, showFilename); err != nil {
 					return err
 				}
-			}
-		case opts.count:
-			if anyMatch {
-				success = true
-			}
-			if err := writeCount(out, selectedPage.Slug, matched, showFilename); err != nil {
-				return err
-			}
-		default:
-			if anyMatch {
-				success = true
-				if err := writeMatches(
-					out,
-					selectedPage.Slug,
-					lines,
-					matched,
-					opts,
-					showFilename,
-				); err != nil {
-					return err
+			default:
+				if anyMatch {
+					success = true
+					if err := writeMatches(
+						out,
+						selectedPage.Slug,
+						lines,
+						matched,
+						opts,
+						showFilename,
+					); err != nil {
+						return err
+					}
 				}
 			}
 		}
+		return nil
+	}); err != nil {
+		return err
 	}
 	if success {
 		return nil
