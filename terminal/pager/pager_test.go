@@ -202,6 +202,50 @@ func TestSearchFindsEveryOccurrenceOnOneLine(t *testing.T) {
 	}
 }
 
+func TestResizeClampsScrollOffset(t *testing.T) {
+	t.Parallel()
+
+	lines := make([]string, 100)
+	for index := range lines {
+		lines[index] = strings.Repeat("x", 100)
+	}
+	m := newModel(Options{
+		Text:     strings.Join(lines, "\n"),
+		Terminal: style.Terminal{Width: 40, Height: 10},
+		Theme:    style.New(false),
+	})
+	m.Update(tea.WindowSizeMsg{Width: 40, Height: 10})
+	m.viewport.GotoBottom()
+	m.resize(120, 10)
+	if m.viewport.PastBottom() {
+		t.Fatalf("resize left offset %d past the document", m.viewport.YOffset())
+	}
+}
+
+func TestSearchAcceptsSingleLinePaste(t *testing.T) {
+	t.Parallel()
+
+	m := newModel(Options{
+		Text:     "a needle here",
+		Terminal: style.Terminal{Width: 40, Height: 5},
+		Theme:    style.New(false),
+	})
+	m.Update(tea.WindowSizeMsg{Width: 40, Height: 5})
+	m.search.begin()
+	m.Update(tea.PasteMsg{Content: "needle\r\n"})
+	if m.search.query != "needle" {
+		t.Fatalf("query = %q, want needle", m.search.query)
+	}
+	m.Update(tea.PasteMsg{Content: "two\nlines"})
+	if m.search.query != "needle" {
+		t.Fatalf("multi-line paste changed query to %q", m.search.query)
+	}
+	m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	if len(m.search.matches) != 1 {
+		t.Fatalf("pasted search matched %d lines, want 1", len(m.search.matches))
+	}
+}
+
 func TestModelQuits(t *testing.T) {
 	t.Parallel()
 
