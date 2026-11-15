@@ -2,13 +2,15 @@ package docs
 
 import (
 	"fmt"
+	"io"
 
 	docscontent "github.com/mclucy/lucy/docs"
+	"github.com/mclucy/lucy/internal/cli"
 	"github.com/mclucy/lucy/internal/cli/help"
 	"github.com/spf13/cobra"
 )
 
-func newReadCommand() *cobra.Command {
+func newReadCommand(inv *cli.Invocation) *cobra.Command {
 	return &cobra.Command{
 		Use:   "read <page> [page...]",
 		Short: help.DocsReadShort,
@@ -35,28 +37,29 @@ func newReadCommand() *cobra.Command {
 				}
 				selected = append(selected, found)
 			}
-			out := cmd.OutOrStdout()
-			for _, current := range selected {
-				if len(selected) > 1 {
-					if _, err := fmt.Fprintf(out, "===== %s =====\n", current.Slug); err != nil {
+			return cli.PageDocument(cmd, inv, cmd.OutOrStdout(), func(out io.Writer) error {
+				for _, current := range selected {
+					if len(selected) > 1 {
+						if _, err := fmt.Fprintf(out, "===== %s =====\n", current.Slug); err != nil {
+							return err
+						}
+					}
+					if _, err := out.Write(current.Content); err != nil {
 						return err
 					}
-				}
-				if _, err := out.Write(current.Content); err != nil {
-					return err
-				}
-				if len(current.Content) > 0 && current.Content[len(current.Content)-1] != '\n' {
-					if _, err := fmt.Fprintln(out); err != nil {
-						return err
+					if len(current.Content) > 0 && current.Content[len(current.Content)-1] != '\n' {
+						if _, err := fmt.Fprintln(out); err != nil {
+							return err
+						}
+					}
+					if len(selected) > 1 {
+						if _, err := fmt.Fprintln(out); err != nil {
+							return err
+						}
 					}
 				}
-				if len(selected) > 1 {
-					if _, err := fmt.Fprintln(out); err != nil {
-						return err
-					}
-				}
-			}
-			return nil
+				return nil
+			})
 		},
 	}
 }

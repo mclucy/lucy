@@ -132,25 +132,29 @@ func actionJavaList(
 	if output.JSON() {
 		return javaListJSON.Write(output, view)
 	}
-	out := output.Human()
-	if requirement == nil {
-		fmt.Fprintf(
-			out,
-			"No %s; run lucy install to resolve the Java the server asks for.\n",
-			document.LockFilename,
-		)
-	} else {
-		writeJavaRequirement(out, requirement, inv.Theme)
-	}
-	if view.Selection != nil && view.Selection.Source == javaruntime.SourceConfigured {
-		fmt.Fprintf(out, "%s selects %s\n", view.Selection.ConfigPath, view.Selection.ConfiguredHome)
-	}
-	fmt.Fprintln(out)
-	if len(view.Runtimes) == 0 {
-		fmt.Fprintln(out, "No Java runtime found.")
-	}
-	for _, entry := range view.Runtimes {
-		writeJavaRuntime(out, entry, requirement != nil, inv.Theme)
+	if err := output.Document(func(out io.Writer) error {
+		if requirement == nil {
+			fmt.Fprintf(
+				out,
+				"No %s; run lucy install to resolve the Java the server asks for.\n",
+				document.LockFilename,
+			)
+		} else {
+			writeJavaRequirement(out, requirement, inv.Theme)
+		}
+		if view.Selection != nil && view.Selection.Source == javaruntime.SourceConfigured {
+			fmt.Fprintf(out, "%s selects %s\n", view.Selection.ConfigPath, view.Selection.ConfiguredHome)
+		}
+		fmt.Fprintln(out)
+		if len(view.Runtimes) == 0 {
+			fmt.Fprintln(out, "No Java runtime found.")
+		}
+		for _, entry := range view.Runtimes {
+			writeJavaRuntime(out, entry, requirement != nil, inv.Theme)
+		}
+		return nil
+	}); err != nil {
+		return err
 	}
 	if view.Selection != nil {
 		reporter := report.New(cmd.ErrOrStderr(), inv.Theme)

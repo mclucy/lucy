@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 
 	"github.com/mclucy/lucy/internal/cli"
 	"github.com/mclucy/lucy/terminal/report"
@@ -92,10 +93,12 @@ func infoWriteDocument(
 	if rendered == "" {
 		return nil
 	}
-	if _, err := fmt.Fprintln(output.Human(), rendered); err != nil {
-		return infoWriteFailure(err)
-	}
-	return nil
+	return output.Document(func(out io.Writer) error {
+		if _, err := fmt.Fprintln(out, rendered); err != nil {
+			return infoWriteFailure(err)
+		}
+		return nil
+	})
 }
 
 func infoWriteFailure(err error) *report.Detail {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 
 	documentpkg "github.com/mclucy/lucy/document"
@@ -227,12 +228,14 @@ func writeStatusDocument(
 	if output.JSON() {
 		return statusJSON.Write(output, document)
 	}
-	_, err := fmt.Fprintln(
-		output.Human(),
-		renderStatus(document, long, logoMode, inv.Stdout, inv.Theme),
-	)
-	if err != nil {
-		return fmt.Errorf("write status: %w", err)
-	}
-	return nil
+	return output.Document(func(out io.Writer) error {
+		_, err := fmt.Fprintln(
+			out,
+			renderStatus(document, long, logoMode, inv.Stdout, inv.Theme),
+		)
+		if err != nil {
+			return fmt.Errorf("write status: %w", err)
+		}
+		return nil
+	})
 }

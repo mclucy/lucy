@@ -2,6 +2,7 @@ package cli
 
 import (
 	"fmt"
+	"io"
 
 	"github.com/mclucy/lucy/internal/cli/help"
 	"github.com/mclucy/lucy/internal/depgraph"
@@ -58,20 +59,21 @@ func actionLeaves(
 		return leavesJSON.Write(output, leavesDocument(graph, origin, output.Warnings()))
 	}
 
-	human := output.Human()
-	fmt.Fprintf(human, "Using data from: %s\n\n", origin.String())
+	return output.Document(func(out io.Writer) error {
+		fmt.Fprintf(out, "Using data from: %s\n\n", origin.String())
 
-	leaves := graph.Leaves()
-	if len(leaves) == 0 {
-		fmt.Fprintln(human, "No leaf packages found")
-	} else {
-		for _, leaf := range leaves {
-			fmt.Fprintln(human, nodeLabel(leaf))
+		leaves := graph.Leaves()
+		if len(leaves) == 0 {
+			fmt.Fprintln(out, "No leaf packages found")
+		} else {
+			for _, leaf := range leaves {
+				fmt.Fprintln(out, nodeLabel(leaf))
+			}
 		}
-	}
 
-	fmt.Fprintf(human, "\n(from %s)\n", origin.String())
-	return nil
+		fmt.Fprintf(out, "\n(from %s)\n", origin.String())
+		return nil
+	})
 }
 
 type leafNode struct {

@@ -7,7 +7,7 @@ import (
 )
 
 // NewCommand returns the hidden documentation command.
-func NewCommand() *cobra.Command {
+func NewCommand(inv *cli.Invocation) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:    "docs",
 		Short:  help.DocsShort,
@@ -19,9 +19,9 @@ func NewCommand() *cobra.Command {
 	}
 	cli.MarkHelpOnly(cmd)
 	cmd.AddCommand(
-		newListCommand(),
-		newGrepCommand(),
-		newReadCommand(),
+		newListCommand(inv),
+		newGrepCommand(inv),
+		newReadCommand(inv),
 	)
 	return cmd
 }

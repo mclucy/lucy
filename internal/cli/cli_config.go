@@ -115,7 +115,9 @@ func actionConfigGet(
 	if output.JSON() {
 		return writeConfigJSON(output, value)
 	}
-	return writeConfigValue(output.Human(), key, value)
+	return output.Document(func(out io.Writer) error {
+		return writeConfigValue(out, key, value)
+	})
 }
 
 // writeConfigJSON writes the shape the selected key produced.

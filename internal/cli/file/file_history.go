@@ -51,25 +51,26 @@ func actionFileHistory(
 		return historyJSON.Write(output, events)
 	}
 
-	out := output.Human()
-	if len(events) == 0 {
-		fmt.Fprintln(out, "No file tracking history.")
-		return nil
-	}
-
-	for _, event := range events {
-		fmt.Fprintf(
-			out,
-			"#%d  %s  %s\n",
-			event.Sequence,
-			event.Time.UTC().Format(time.RFC3339),
-			event.Operation,
-		)
-		for _, change := range event.Changes {
-			writeHistoryChange(out, change)
+	return output.Document(func(out io.Writer) error {
+		if len(events) == 0 {
+			fmt.Fprintln(out, "No file tracking history.")
+			return nil
 		}
-	}
-	return nil
+
+		for _, event := range events {
+			fmt.Fprintf(
+				out,
+				"#%d  %s  %s\n",
+				event.Sequence,
+				event.Time.UTC().Format(time.RFC3339),
+				event.Operation,
+			)
+			for _, change := range event.Changes {
+				writeHistoryChange(out, change)
+			}
+		}
+		return nil
+	})
 }
 
 func writeHistoryChange(out io.Writer, change filetrack.Change) {

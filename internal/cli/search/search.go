@@ -3,6 +3,7 @@ package search
 import (
 	"errors"
 	"fmt"
+	"io"
 	"strconv"
 	"strings"
 	"time"
@@ -222,8 +223,10 @@ func actionSearch(
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	fmt.Fprint(output.Human(), sb.String())
-	return nil
+	return output.Document(func(out io.Writer) error {
+		_, err := io.WriteString(out, sb.String())
+		return err
+	})
 }
 
 func searchEcosystem(value string) (catalog.Ecosystem, error) {

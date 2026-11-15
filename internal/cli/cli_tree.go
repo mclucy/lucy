@@ -66,16 +66,17 @@ func actionTree(
 	}
 
 	maxDepth, _ := cmd.Flags().GetInt("depth")
-	human := output.Human()
-	fmt.Fprintf(human, "Using data from: %s\n\n", origin.String())
+	return output.Document(func(out io.Writer) error {
+		fmt.Fprintf(out, "Using data from: %s\n\n", origin.String())
 
-	roots := graph.Roots
-	for i, root := range roots {
-		printTree(human, root, 0, i == len(roots)-1, "", make(map[string]bool), maxDepth)
-	}
+		roots := graph.Roots
+		for i, root := range roots {
+			printTree(out, root, 0, i == len(roots)-1, "", make(map[string]bool), maxDepth)
+		}
 
-	fmt.Fprintf(human, "\n(from %s)\n", origin.String())
-	return nil
+		fmt.Fprintf(out, "\n(from %s)\n", origin.String())
+		return nil
+	})
 }
 
 // nodeLabel renders one graph node. Node identity is always an explicit
