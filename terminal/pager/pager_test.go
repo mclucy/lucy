@@ -270,6 +270,54 @@ func TestSearchAcceptsSingleLinePaste(t *testing.T) {
 	}
 }
 
+func TestSearchHighlightsMatches(t *testing.T) {
+	t.Parallel()
+
+	m := newModel(Options{
+		Text:     "a needle here and needle there",
+		Terminal: style.Terminal{Width: 60, Height: 5},
+		Theme:    style.New(false),
+	})
+	m.Update(tea.WindowSizeMsg{Width: 60, Height: 5})
+	m.search.begin()
+	for _, letter := range "needle" {
+		m.handleSearchKey(tea.KeyPressMsg{Text: string(letter), Code: letter})
+	}
+	m.handleSearchKey(tea.KeyPressMsg{Code: tea.KeyEnter})
+	content := m.viewport.GetContent()
+	if ansi.Strip(content) != m.text {
+		t.Fatalf("highlighting changed visible content: %q", ansi.Strip(content))
+	}
+	if content == m.text {
+		t.Fatal("search left the content unhighlighted")
+	}
+	if len(m.search.matches) != 2 {
+		t.Fatalf("matched %d occurrences, want 2", len(m.search.matches))
+	}
+	first := m.search.matches[0]
+	if first.end-first.column != 6 {
+		t.Fatalf("match width = %d, want 6", first.end-first.column)
+	}
+}
+
+func TestHighlightMatchesPreservesStyles(t *testing.T) {
+	t.Parallel()
+
+	text := "\x1b[2mneedle still dim\x1b[0m"
+	matches := []searchMatch{{line: 0, column: 0, end: 6}}
+	highlighted := highlightMatches(text, matches, 0, style.New(false))
+	if ansi.Strip(highlighted) != ansi.Strip(text) {
+		t.Fatalf("visible text changed: %q", ansi.Strip(highlighted))
+	}
+	if !strings.Contains(highlighted, "\x1b[2m") {
+		t.Fatalf("existing dim style was lost: %q", highlighted)
+	}
+	other := highlightMatches(text, matches, 1, style.New(false))
+	if highlighted == other {
+		t.Fatal("selected match does not use a distinct style")
+	}
+}
+
 func TestModelQuits(t *testing.T) {
 	t.Parallel()
 
