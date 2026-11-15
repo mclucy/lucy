@@ -24,7 +24,7 @@ lucy add mcdr:synced --ecosystem mcdr
 
 ## Hangar and Spiget
 
-Hangar references use Hangar's `owner/slug` coordinate, such as `hangar:HelpChat/PlaceholderAPI`. Spiget references use the numeric SpigotMC resource ID, such as `spiget:6245`. `lucy search --long` prints the reference for either source. For installation, a Spiget resource name works only when exactly one resource matches it; an ambiguous name fails with the matching IDs instead of choosing one.
+Hangar references use Hangar's `owner/slug` coordinate, such as `hangar:HelpChat/PlaceholderAPI`. Spiget references use the numeric SpigotMC resource ID, such as `spiget:6245`. `lucy search` prints the reference for either source. For installation, a Spiget resource name works only when exactly one resource matches it; an ambiguous name fails with the matching IDs instead of choosing one.
 
 Both sources publish Bukkit-lineage plugins. Lucy installs them only on targets that load Bukkit or Paper plugins: Paper, Purpur, and Paperclip-based forks. Fabric, Forge, NeoForge, and proxy (BungeeCord, Waterfall, or Velocity) targets are rejected. Lucy installs only Hangar's Paper builds; Waterfall and Velocity projects are not package targets.
 

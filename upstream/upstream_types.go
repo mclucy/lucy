@@ -3,7 +3,6 @@ package upstream
 import (
 	"context"
 	"crypto/sha1"
-	"strings"
 	"time"
 
 	"github.com/mclucy/lucy/catalog"
@@ -100,14 +99,4 @@ type SearchResult struct {
 	Description string    `json:"description,omitempty"`
 	Downloads   int64     `json:"downloads,omitempty"`
 	LastUpdated time.Time `json:"last_updated,omitzero"`
-}
-
-func (r SearchResult) DisplayName() string {
-	if r.Title != "" {
-		return r.Title
-	}
-	if r.Provider == catalog.ProviderMCDR {
-		return strings.ReplaceAll(r.ProjectName, "_", "-")
-	}
-	return r.ProjectName
 }

@@ -274,6 +274,15 @@ func isNoResultsError(err error) bool {
 	return err != nil && strings.HasPrefix(err.Error(), "no projects found")
 }
 
+// searchResultReference is the source-qualified identity package commands
+// accept. Search shows it so a row is installable without another lookup.
+func searchResultReference(item upstream.SearchResult) string {
+	return catalog.Ref{
+		Name:     catalog.Name(item.ProjectName),
+		Provider: item.Provider,
+	}.String()
+}
+
 func renderSearchCompact(res upstream.SearchResponse, theme style.Theme) string {
 	var sb strings.Builder
 	sb.WriteString(searchSectionHeader(res, theme))
@@ -302,9 +311,13 @@ func renderSearchCompact(res upstream.SearchResponse, theme style.Theme) string 
 		)
 
 	for _, item := range res.Items {
-		// DisplayName already prefers a human title when one is present, so an
-		// empty description stays empty rather than repeating the row label.
-		t.Row("  "+item.DisplayName(), truncateText(item.Description, 60))
+		// The row label is the installable project name. A title only fills an
+		// absent description, because search exists to discover that name.
+		summary := item.Description
+		if summary == "" && item.Title != "" && item.Title != item.ProjectName {
+			summary = item.Title
+		}
+		t.Row("  "+searchResultReference(item), truncateText(summary, 60))
 	}
 	sb.WriteString(t.String())
 	sb.WriteString("\n")
@@ -328,8 +341,8 @@ func renderSearchLong(
 		if i > 0 {
 			sb.WriteString("\n")
 		}
-		displayName := item.DisplayName()
-		if item.Title != "" && item.Title != item.ProjectName {
+		displayName := item.ProjectName
+		if item.Title != "" {
 			displayName = item.Title
 		}
 		sb.WriteString("  " + theme.Accent(displayName) + "\n")
@@ -349,7 +362,7 @@ func renderSearchLong(
 			sb.WriteString("  " + theme.Muted(stats) + "\n")
 		}
 
-		installID := item.Provider.String() + ":" + item.ProjectName
+		installID := searchResultReference(item)
 		sb.WriteString("  " + theme.Muted(installID) + "\n")
 	}
 	return sb.String()
