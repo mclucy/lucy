@@ -132,7 +132,7 @@ func actionJavaList(
 	if output.JSON() {
 		return javaListJSON.Write(output, view)
 	}
-	if err := output.Document(func(out io.Writer) error {
+	if err := output.Document(func(out io.Writer, _ style.Terminal) error {
 		if requirement == nil {
 			fmt.Fprintf(
 				out,

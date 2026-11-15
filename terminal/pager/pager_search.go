@@ -68,16 +68,32 @@ func (s *searchState) backspace() {
 func (s *searchState) submit(target *viewport.Model, text string, width int) {
 	s.active = false
 	s.term = strings.TrimSpace(s.query)
-	s.matches = nil
 	s.index = 0
 	if s.term == "" {
+		s.matches = nil
 		return
 	}
-	caseSensitive := hasUpper(s.term)
+	s.find(s.term, text, width)
+	if len(s.matches) == 0 {
+		return
+	}
+	top := target.YOffset()
+	for i, match := range s.matches {
+		if match.row >= top {
+			s.index = i
+			break
+		}
+	}
+}
+
+// find replaces the match list for term at the given width.
+func (s *searchState) find(term, text string, width int) {
+	s.matches = nil
+	caseSensitive := hasUpper(term)
 	lineNumber := 0
 	row := 0
 	for line := range strings.SplitSeq(text, "\n") {
-		for _, span := range matchSpans(line, s.term, caseSensitive) {
+		for _, span := range matchSpans(line, term, caseSensitive) {
 			s.matches = append(s.matches, searchMatch{
 				line:      lineNumber,
 				column:    span.start,
@@ -90,16 +106,23 @@ func (s *searchState) submit(target *viewport.Model, text string, width int) {
 		row += wrappedRows(line, width)
 		lineNumber++
 	}
-	if len(s.matches) == 0 {
+}
+
+// recompute rebuilds matches after the document re-renders, keeping the
+// selected match ordinal where possible.
+func (s *searchState) recompute(text string, width int) {
+	if s.term == "" {
+		s.matches = nil
+		s.index = 0
 		return
 	}
-	top := target.YOffset()
-	for i, match := range s.matches {
-		if match.row >= top {
-			s.index = i
-			break
-		}
+	selected := s.index
+	s.find(s.term, text, width)
+	if len(s.matches) == 0 {
+		s.index = 0
+		return
 	}
+	s.index = min(max(selected, 0), len(s.matches)-1)
 }
 
 func (s *searchState) next(step int) {

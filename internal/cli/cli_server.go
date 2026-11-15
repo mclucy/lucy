@@ -110,8 +110,8 @@ func actionServerList(
 		}
 		return serverListJSON.Write(output, entries)
 	}
-	return output.Document(func(out io.Writer) error {
-		return writeServerList(out, entries, inv.Theme, inv.Stdout.Width)
+	return output.Document(func(out io.Writer, screen style.Terminal) error {
+		return writeServerList(out, entries, inv.Theme, screen.Width)
 	})
 }
 

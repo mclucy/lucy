@@ -8,6 +8,7 @@ import (
 
 	"github.com/mclucy/lucy/internal/cli"
 	"github.com/mclucy/lucy/terminal/report"
+	"github.com/mclucy/lucy/terminal/style"
 )
 
 // infoOperationFailure converts an interruption into the shared cancelled
@@ -84,16 +85,16 @@ func infoWriteDocument(
 		}
 		return nil
 	}
-	rendered := renderInfoDocument(
-		document,
-		long,
-		inv.Directory,
-		infoRenderContext{theme: inv.Theme, terminal: inv.Stdout},
-	)
-	if rendered == "" {
-		return nil
-	}
-	return output.Document(func(out io.Writer) error {
+	return output.Document(func(out io.Writer, screen style.Terminal) error {
+		rendered := renderInfoDocument(
+			document,
+			long,
+			inv.Directory,
+			infoRenderContext{theme: inv.Theme, terminal: screen},
+		)
+		if rendered == "" {
+			return nil
+		}
 		if _, err := fmt.Fprintln(out, rendered); err != nil {
 			return infoWriteFailure(err)
 		}

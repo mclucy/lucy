@@ -7,6 +7,7 @@ import (
 
 	"github.com/mclucy/lucy/filetrack"
 	"github.com/mclucy/lucy/internal/cli"
+	"github.com/mclucy/lucy/terminal/style"
 
 	"github.com/spf13/cobra"
 )
@@ -51,7 +52,7 @@ func actionFileHistory(
 		return historyJSON.Write(output, events)
 	}
 
-	return output.Document(func(out io.Writer) error {
+	return output.Document(func(out io.Writer, _ style.Terminal) error {
 		if len(events) == 0 {
 			fmt.Fprintln(out, "No file tracking history.")
 			return nil

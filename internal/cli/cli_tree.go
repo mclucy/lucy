@@ -7,6 +7,7 @@ import (
 	"github.com/mclucy/lucy/catalog"
 	"github.com/mclucy/lucy/internal/cli/help"
 	"github.com/mclucy/lucy/internal/depgraph"
+	"github.com/mclucy/lucy/terminal/style"
 	"github.com/spf13/cobra"
 )
 
@@ -66,7 +67,7 @@ func actionTree(
 	}
 
 	maxDepth, _ := cmd.Flags().GetInt("depth")
-	return output.Document(func(out io.Writer) error {
+	return output.Document(func(out io.Writer, _ style.Terminal) error {
 		fmt.Fprintf(out, "Using data from: %s\n\n", origin.String())
 
 		roots := graph.Roots

@@ -6,6 +6,7 @@ import (
 
 	"github.com/mclucy/lucy/internal/cli/help"
 	"github.com/mclucy/lucy/internal/depgraph"
+	"github.com/mclucy/lucy/terminal/style"
 	"github.com/spf13/cobra"
 )
 
@@ -59,7 +60,7 @@ func actionLeaves(
 		return leavesJSON.Write(output, leavesDocument(graph, origin, output.Warnings()))
 	}
 
-	return output.Document(func(out io.Writer) error {
+	return output.Document(func(out io.Writer, _ style.Terminal) error {
 		fmt.Fprintf(out, "Using data from: %s\n\n", origin.String())
 
 		leaves := graph.Leaves()

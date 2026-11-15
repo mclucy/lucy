@@ -202,28 +202,28 @@ func actionSearch(
 		return searchJSON.Write(output, newSearchResultDocuments(results))
 	}
 
-	var sb strings.Builder
-	for i, res := range results {
-		if i > 0 {
-			sb.WriteString("\n")
-		}
-		if long {
-			sb.WriteString(renderSearchLong(res, inv.Theme, inv.Stdout))
-		} else {
-			sb.WriteString(renderSearchCompact(res, inv.Theme))
-		}
-	}
-	if len(noResultSources) > 0 {
-		sb.WriteString(
-			inv.Theme.Muted(
-				"No results from "+strings.Join(noResultSources, ", "),
-			) + "\n",
-		)
-	}
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	return output.Document(func(out io.Writer) error {
+	return output.Document(func(out io.Writer, screen style.Terminal) error {
+		var sb strings.Builder
+		for i, res := range results {
+			if i > 0 {
+				sb.WriteString("\n")
+			}
+			if long {
+				sb.WriteString(renderSearchLong(res, inv.Theme, screen))
+			} else {
+				sb.WriteString(renderSearchCompact(res, inv.Theme))
+			}
+		}
+		if len(noResultSources) > 0 {
+			sb.WriteString(
+				inv.Theme.Muted(
+					"No results from "+strings.Join(noResultSources, ", "),
+				) + "\n",
+			)
+		}
 		_, err := io.WriteString(out, sb.String())
 		return err
 	})

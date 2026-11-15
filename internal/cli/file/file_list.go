@@ -6,6 +6,7 @@ import (
 
 	"github.com/mclucy/lucy/filetrack"
 	"github.com/mclucy/lucy/internal/cli"
+	"github.com/mclucy/lucy/terminal/style"
 
 	"github.com/spf13/cobra"
 )
@@ -65,7 +66,7 @@ func actionFileList(
 		})
 	}
 
-	return output.Document(func(out io.Writer) error {
+	return output.Document(func(out io.Writer, _ style.Terminal) error {
 		if len(statuses) == 0 {
 			fmt.Fprintln(out, "No tracked files.")
 			return nil
