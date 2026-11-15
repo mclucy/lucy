@@ -50,6 +50,11 @@ func (m *model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case tea.KeyPressMsg:
 		return m, m.handleKey(message)
+	case tea.PasteMsg:
+		if m.search.active {
+			m.search.paste(message.Content)
+		}
+		return m, nil
 	}
 	return m, nil
 }

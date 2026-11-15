@@ -40,6 +40,16 @@ func (s *searchState) typeText(text string) {
 	s.query += text
 }
 
+// paste accepts one pasted line; an embedded newline marks a multi-line
+// paste, which would not fit a single-line search prompt.
+func (s *searchState) paste(text string) {
+	text = strings.TrimRight(text, "\r\n")
+	if text == "" || strings.ContainsAny(text, "\r\n") {
+		return
+	}
+	s.typeText(text)
+}
+
 func (s *searchState) backspace() {
 	runes := []rune(s.query)
 	if len(runes) == 0 {
