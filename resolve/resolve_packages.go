@@ -43,6 +43,22 @@ type selectionState struct {
 	conflicts map[projectKey][]upstream.ProjectDependency
 }
 
+// searchOutcome reports how exploring one branch of the search ended. A
+// failure only this branch reaches leaves the enclosing requests free to try
+// another candidate; a failure that holds in every branch stops the search.
+type searchOutcome uint8
+
+const (
+	// branchFailed means the explored branch cannot settle. The enclosing
+	// request may still try its next candidate.
+	branchFailed searchOutcome = iota
+	// graphSettled means the explored branch produced a complete selection.
+	graphSettled
+	// searchStopped means the search ended before it settled. Backtracking
+	// would only repeat work no candidate choice changes.
+	searchStopped
+)
+
 type selectionBranch struct {
 	key          projectKey
 	previous     document.Package
@@ -214,22 +230,35 @@ func Packages(request PackagesRequest) ([]document.Package, []error, error) {
 		"resolve: resolving package requirements",
 		"requests", len(requests),
 	)
-	// A hard failure is an error that no candidate rejection explains, such as
+	// operational marks a failure that no candidate rejection explains, such as
 	// a network, checksum, or archive error. It outranks the rejection summary.
 	operational := false
-	hardFail := func(err error) bool {
+	// hardFail records a failure scoped to the branch being explored. Another
+	// candidate of an enclosing request may still settle a graph.
+	hardFail := func(err error) searchOutcome {
 		lastErr = err
 		operational = true
-		return false
+		return branchFailed
 	}
-	var backtrack func([]projectRequest) bool
-	backtrack = func(pending []projectRequest) bool {
+	// stop ends the search because no remaining candidate reaches a different
+	// answer. Only a failure that holds in every branch qualifies: a cancelled
+	// context, an exhausted search budget, or a manifest requirement that no
+	// catalogue answer can satisfy. A dependency requirement exists only
+	// because one parent candidate selected it, and another candidate of that
+	// parent may not need the project at all, so its failures stay local.
+	stop := func(err error) searchOutcome {
+		lastErr = err
+		operational = true
+		return searchStopped
+	}
+	var backtrack func([]projectRequest) searchOutcome
+	backtrack = func(pending []projectRequest) searchOutcome {
 		if err := ctx.Err(); err != nil {
-			return hardFail(err)
+			return stop(err)
 		}
 		attempts++
 		if attempts > searchAttemptLimit {
-			return hardFail(&SearchLimitError{Attempts: searchAttemptLimit})
+			return stop(&SearchLimitError{Attempts: searchAttemptLimit})
 		}
 		trace.state(len(state.chosen), len(pending))
 		if len(pending) == 0 {
@@ -254,7 +283,7 @@ func Packages(request PackagesRequest) ([]document.Package, []error, error) {
 					fatal = serverModuleProblems(problems)
 				}
 				if len(fatal) == 0 {
-					return true
+					return graphSettled
 				}
 				logger.Debug(
 					"resolve: settled graph rejected",
@@ -285,12 +314,20 @@ func Packages(request PackagesRequest) ([]document.Package, []error, error) {
 					)
 					ledger.markFailed(key)
 				}
-				return false
+				return branchFailed
 			}
-			return true
+			return graphSettled
 		}
 		r := pending[0]
 		rest := pending[1:]
+		// giveUp records the request-level failure that explains why this
+		// branch cannot settle.
+		giveUp := func() {
+			if lastErr == nil {
+				lastErr = fmt.Errorf("no candidate satisfies %s:%s", r.key.provider, r.key.project)
+			}
+			ledger.markFailed(r.key)
+		}
 		if canonicalKey, ok := canonical[r.key]; ok {
 			r.key = canonicalKey
 		}
@@ -312,8 +349,8 @@ func Packages(request PackagesRequest) ([]document.Package, []error, error) {
 				previous.DependencyOf = append(previous.DependencyOf, r.dependencyOf)
 			}
 			branch := state.extend(r.key, previous)
-			if backtrack(rest) {
-				return true
+			if outcome := backtrack(rest); outcome != branchFailed {
+				return outcome
 			}
 			state.restore(branch)
 			logger.Debug(
@@ -322,7 +359,7 @@ func Packages(request PackagesRequest) ([]document.Package, []error, error) {
 				"project", r.key.project,
 				"reason", "remaining requests failed after merge",
 			)
-			return false
+			return branchFailed
 		}
 		if !active {
 			p := document.Package{
@@ -333,11 +370,11 @@ func Packages(request PackagesRequest) ([]document.Package, []error, error) {
 				Requirements: r.requirements,
 			}
 			branch := state.install(r.key, p, nil)
-			if backtrack(rest) {
-				return true
+			if outcome := backtrack(rest); outcome != branchFailed {
+				return outcome
 			}
 			state.restore(branch)
-			return false
+			return branchFailed
 		}
 		// A disabled direct binding may already hold an artifact-less entry
 		// here, because a real demand outranks it. Selecting a file replaces
@@ -351,11 +388,17 @@ func Packages(request PackagesRequest) ([]document.Package, []error, error) {
 		list, ok := candidates[r.key]
 		if !ok {
 			if candidatesFor == nil {
-				return hardFail(errors.New("resolution requires a candidate source"))
+				return stop(errors.New("resolution requires a candidate source"))
 			}
 			var err error
 			list, err = candidatesFor(ctx, catalogueRegistry(r.key.provider), r.key.project, string(target.Minecraft), r.key.ecosystem)
 			if err != nil {
+				// A manifest requirement holds in every branch, so a catalogue
+				// that cannot list it ends the search. A dependency requirement
+				// can still be avoided by another candidate of its parent.
+				if r.origin == originManifest {
+					return stop(err)
+				}
 				return hardFail(err)
 			}
 			list = orderCandidates(list, previous, r)
@@ -392,6 +435,13 @@ func Packages(request PackagesRequest) ([]document.Package, []error, error) {
 		}
 		if len(list) == 0 {
 			ledger.record(r.key, r.display, "", "no published builds match this server", RejectionEmpty)
+			giveUp()
+			if r.origin == originManifest {
+				// Nothing this project published satisfies a requirement that
+				// holds in every branch.
+				return searchStopped
+			}
+			return branchFailed
 		}
 		list = preferReleaseBuilds(list, r.requirements)
 		list = preferReleaseHints(list, r.releaseHints)
@@ -548,8 +598,8 @@ func Packages(request PackagesRequest) ([]document.Package, []error, error) {
 					}
 				}
 			}
-			if backtrack(next) {
-				return true
+			if outcome := backtrack(next); outcome != branchFailed {
+				return outcome
 			}
 			state.restore(branch)
 			logger.Debug(
@@ -567,13 +617,10 @@ func Packages(request PackagesRequest) ([]document.Package, []error, error) {
 				RejectionNested,
 			)
 		}
-		if lastErr == nil {
-			lastErr = fmt.Errorf("no candidate satisfies %s:%s", r.key.provider, r.key.project)
-		}
-		ledger.markFailed(r.key)
-		return false
+		giveUp()
+		return branchFailed
 	}
-	search := func(allowBroken bool) bool {
+	search := func(allowBroken bool) searchOutcome {
 		state.reset()
 		attempts = 0
 		strict = !allowBroken
@@ -603,17 +650,18 @@ func Packages(request PackagesRequest) ([]document.Package, []error, error) {
 		}
 		return resolutionFailure(ledger.summary(target.Minecraft, lastErr), lastErr)
 	}
-	if !search(false) {
-		if !acceptBroken {
-			return nil, nil, finalFailure()
-		}
+	// A stopped search cannot be relaxed: no candidate choice changes a
+	// cancelled context, an exhausted budget, or a missing catalogue answer.
+	outcome := search(false)
+	if outcome == branchFailed && acceptBroken {
 		logger.Debug(
 			"resolve: retrying with broken graphs",
 			"reason", lastErr,
 		)
-		if !search(true) {
-			return nil, nil, finalFailure()
-		}
+		outcome = search(true)
+	}
+	if outcome != graphSettled {
+		return nil, nil, finalFailure()
 	}
 	var out []document.Package
 	for _, p := range state.chosen {
