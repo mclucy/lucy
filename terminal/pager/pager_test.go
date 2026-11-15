@@ -107,8 +107,8 @@ func TestModelNavigationAndSearch(t *testing.T) {
 	if len(m.search.matches) != 2 {
 		t.Fatalf("search matched %d lines, want 2", len(m.search.matches))
 	}
-	if m.search.matches[0] != 60 || m.search.matches[1] != 75 {
-		t.Fatalf("search matches = %v, want [60 75]", m.search.matches)
+	if m.search.matches[0].line != 60 || m.search.matches[1].line != 75 {
+		t.Fatalf("search matches = %v, want lines [60 75]", m.search.matches)
 	}
 	if !lineVisible(&m.viewport, 60) {
 		t.Fatalf("first match is outside the viewport at offset %d", m.viewport.YOffset())
@@ -139,8 +139,8 @@ func TestSearchSkipsWrappedRows(t *testing.T) {
 		m.handleSearchKey(tea.KeyPressMsg{Text: string(letter), Code: letter})
 	}
 	m.handleSearchKey(tea.KeyPressMsg{Code: tea.KeyEnter})
-	if len(m.search.matches) != 1 || m.search.matches[0] != 20 {
-		t.Fatalf("matches = %v, want [20]", m.search.matches)
+	if len(m.search.matches) != 1 || m.search.matches[0].line != 20 {
+		t.Fatalf("matches = %v, want line 20", m.search.matches)
 	}
 	wantOffset := screenLine(text, 20, 40)
 	if wantOffset != 60 {
@@ -148,6 +148,57 @@ func TestSearchSkipsWrappedRows(t *testing.T) {
 	}
 	if m.viewport.YOffset() != wantOffset {
 		t.Fatalf("search scrolled to row %d, want %d", m.viewport.YOffset(), wantOffset)
+	}
+}
+
+func TestSearchScrollsToMatchInsideWrappedLine(t *testing.T) {
+	t.Parallel()
+
+	text := strings.Repeat("x", 800) + "needle" + strings.Repeat("\ntail", 20)
+	m := newModel(Options{
+		Text:     text,
+		Terminal: style.Terminal{Width: 40, Height: 10},
+		Theme:    style.New(false),
+	})
+	m.Update(tea.WindowSizeMsg{Width: 40, Height: 10})
+	m.search.begin()
+	for _, letter := range "needle" {
+		m.handleSearchKey(tea.KeyPressMsg{Text: string(letter), Code: letter})
+	}
+	m.handleSearchKey(tea.KeyPressMsg{Code: tea.KeyEnter})
+	if len(m.search.matches) != 1 || m.search.matches[0].column != 800 {
+		t.Fatalf("matches = %v, want column 800", m.search.matches)
+	}
+	wantOffset := screenRow(text, m.search.matches[0], 40)
+	if wantOffset != 20 {
+		t.Fatalf("screenRow = %d, want 20", wantOffset)
+	}
+	if m.viewport.YOffset() != wantOffset {
+		t.Fatalf("search scrolled to row %d, want %d", m.viewport.YOffset(), wantOffset)
+	}
+}
+
+func TestSearchFindsEveryOccurrenceOnOneLine(t *testing.T) {
+	t.Parallel()
+
+	m := newModel(Options{
+		Text:     "needle and needle and needle",
+		Terminal: style.Terminal{Width: 40, Height: 5},
+		Theme:    style.New(false),
+	})
+	m.Update(tea.WindowSizeMsg{Width: 40, Height: 5})
+	m.search.begin()
+	for _, letter := range "needle" {
+		m.handleSearchKey(tea.KeyPressMsg{Text: string(letter), Code: letter})
+	}
+	m.handleSearchKey(tea.KeyPressMsg{Code: tea.KeyEnter})
+	if len(m.search.matches) != 3 {
+		t.Fatalf("matched %d occurrences, want 3", len(m.search.matches))
+	}
+	for i := 1; i < len(m.search.matches); i++ {
+		if m.search.matches[i].column <= m.search.matches[i-1].column {
+			t.Fatalf("columns are not increasing: %v", m.search.matches)
+		}
 	}
 }
 
