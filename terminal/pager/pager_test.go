@@ -1,6 +1,8 @@
 package pager
 
 import (
+	"errors"
+	"fmt"
 	"strings"
 	"testing"
 	"unicode/utf8"
@@ -468,6 +470,109 @@ func TestFitLineKeepsWidth(t *testing.T) {
 		if got := ansi.StringWidth(line); got > width {
 			t.Fatalf("width %d produced %d cells: %q", width, got, line)
 		}
+	}
+}
+
+func TestResizeRerendersDocument(t *testing.T) {
+	t.Parallel()
+
+	var gotWidth, gotHeight int
+	m := newModel(Options{
+		Text: "old",
+		Render: func(width, height int) (string, error) {
+			gotWidth, gotHeight = width, height
+			return fmt.Sprintf("new %dx%d", width, height), nil
+		},
+		Terminal: style.Terminal{Width: 40, Height: 10},
+		Theme:    style.New(false),
+	})
+	m.Update(tea.WindowSizeMsg{Width: 80, Height: 20})
+	if gotWidth != 80 || gotHeight != 20 {
+		t.Fatalf("renderer got %dx%d, want 80x20", gotWidth, gotHeight)
+	}
+	if content := ansi.Strip(m.viewport.GetContent()); content != "new 80x20" {
+		t.Fatalf("content = %q, want new 80x20", content)
+	}
+}
+
+func TestResizePreservesScroll(t *testing.T) {
+	t.Parallel()
+
+	long := strings.Repeat("line\n", 100)
+	m := newModel(Options{
+		Text: long,
+		Render: func(int, int) (string, error) {
+			return long, nil
+		},
+		Terminal: style.Terminal{Width: 40, Height: 10},
+		Theme:    style.New(false),
+	})
+	m.Update(tea.WindowSizeMsg{Width: 40, Height: 10})
+	m.viewport.GotoBottom()
+	m.Update(tea.WindowSizeMsg{Width: 80, Height: 10})
+	if !m.viewport.AtBottom() {
+		t.Fatalf("resize lost bottom position at offset %d", m.viewport.YOffset())
+	}
+
+	short := newModel(Options{
+		Text: "short",
+		Render: func(int, int) (string, error) {
+			return long, nil
+		},
+		Terminal: style.Terminal{Width: 40, Height: 10},
+		Theme:    style.New(false),
+	})
+	short.Update(tea.WindowSizeMsg{Width: 80, Height: 10})
+	if short.viewport.YOffset() != 0 {
+		t.Fatalf("a document that fit before resizing scrolled to %d", short.viewport.YOffset())
+	}
+}
+
+func TestResizeRecomputesSearch(t *testing.T) {
+	t.Parallel()
+
+	m := newModel(Options{
+		Text: "needle one\nneedle two",
+		Render: func(int, int) (string, error) {
+			return "prefix needle one\nneedle two", nil
+		},
+		Terminal: style.Terminal{Width: 40, Height: 10},
+		Theme:    style.New(false),
+	})
+	m.Update(tea.WindowSizeMsg{Width: 40, Height: 10})
+	m.search.begin()
+	for _, letter := range "needle" {
+		m.handleSearchKey(tea.KeyPressMsg{Text: string(letter), Code: letter})
+	}
+	m.handleSearchKey(tea.KeyPressMsg{Code: tea.KeyEnter})
+	m.handleKey(tea.KeyPressMsg{Text: "n", Code: 'n'})
+	m.Update(tea.WindowSizeMsg{Width: 80, Height: 10})
+	if len(m.search.matches) != 2 || m.search.index != 1 {
+		t.Fatalf("matches = %d index = %d, want 2 and 1", len(m.search.matches), m.search.index)
+	}
+	want := "prefix needle one\nneedle two"
+	if content := ansi.Strip(m.viewport.GetContent()); content != want {
+		t.Fatalf("content = %q, want %q", content, want)
+	}
+	if !strings.Contains(m.viewport.GetContent(), "\x1b[") {
+		t.Fatal("resize dropped search highlights")
+	}
+}
+
+func TestResizeKeepsContentOnRenderError(t *testing.T) {
+	t.Parallel()
+
+	m := newModel(Options{
+		Text: "stable",
+		Render: func(int, int) (string, error) {
+			return "", errors.New("render failed")
+		},
+		Terminal: style.Terminal{Width: 40, Height: 10},
+		Theme:    style.New(false),
+	})
+	m.Update(tea.WindowSizeMsg{Width: 80, Height: 20})
+	if content := ansi.Strip(m.viewport.GetContent()); content != "stable" {
+		t.Fatalf("content = %q, want stable", content)
 	}
 }
 

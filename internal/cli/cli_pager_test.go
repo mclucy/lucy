@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/mclucy/lucy/terminal/pager"
+	"github.com/mclucy/lucy/terminal/style"
 	"github.com/spf13/cobra"
 )
 
@@ -48,5 +49,32 @@ func TestPagerFlag(t *testing.T) {
 				t.Fatalf("pager mode = %v, want %v", invocation.Pager, test.want)
 			}
 		})
+	}
+}
+
+func TestPageDocumentPassesGeometry(t *testing.T) {
+	t.Parallel()
+
+	invocation := &Invocation{
+		Pager:       pager.Never,
+		Interactive: false,
+		Stdout:      style.Terminal{Width: 123, Height: 45},
+	}
+	cmd := &cobra.Command{Use: "lucy"}
+	var got style.Terminal
+	err := PageDocument(
+		cmd,
+		invocation,
+		io.Discard,
+		func(_ io.Writer, screen style.Terminal) error {
+			got = screen
+			return nil
+		},
+	)
+	if err != nil {
+		t.Fatalf("PageDocument: %v", err)
+	}
+	if got.Width != 123 || got.Height != 45 {
+		t.Fatalf("geometry = %dx%d, want 123x45", got.Width, got.Height)
 	}
 }
