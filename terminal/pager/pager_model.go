@@ -2,6 +2,7 @@ package pager
 
 import (
 	"fmt"
+	"math"
 	"strings"
 
 	"charm.land/bubbles/v2/viewport"
@@ -15,6 +16,7 @@ type model struct {
 	viewport viewport.Model
 	title    string
 	text     string
+	render   func(width, height int) (string, error)
 	theme    style.Theme
 	width    int
 	height   int
@@ -28,6 +30,7 @@ func newModel(options Options) *model {
 	m := &model{
 		title:  options.Title,
 		text:   options.Text,
+		render: options.Render,
 		theme:  options.Theme,
 		width:  width,
 		height: height,
@@ -132,14 +135,49 @@ func (m *model) refreshSearch() {
 }
 
 func (m *model) resize(width, height int) {
+	oldPercent := 0.0
+	if total := m.viewport.TotalLineCount(); total > m.viewport.Height() {
+		oldPercent = float64(m.viewport.YOffset()) / float64(total-m.viewport.Height())
+	}
+	keepMatch := m.selectedMatchVisible()
 	m.width = max(1, width)
 	m.height = max(2, height)
 	m.viewport.SetWidth(m.width)
 	m.viewport.SetHeight(contentHeight(m.height))
-	m.search.rewrap(m.text, m.width)
-	// Dimension setters keep the old offset; resetting it clamps to the new
-	// wrapped height so a wider terminal cannot leave a blank view.
-	m.viewport.SetYOffset(m.viewport.YOffset())
+	m.reflow(oldPercent, keepMatch)
+}
+
+func (m *model) selectedMatchVisible() bool {
+	if len(m.search.matches) == 0 || m.search.index >= len(m.search.matches) {
+		return false
+	}
+	row := m.search.matches[m.search.index].row
+	return row >= m.viewport.YOffset() &&
+		row < m.viewport.YOffset()+m.viewport.Height()
+}
+
+// reflow rebuilds the document at the current geometry, then restores the
+// selected search match when it was on screen or the previous scroll position.
+func (m *model) reflow(oldPercent float64, keepMatch bool) {
+	if m.render != nil {
+		if text, err := m.render(m.width, m.height); err == nil {
+			m.text = text
+			m.search.recompute(m.text, m.width)
+			m.viewport.SetContent(
+				highlightMatches(m.text, m.search.matches, m.search.index, m.theme),
+			)
+		} else {
+			m.search.rewrap(m.text, m.width)
+		}
+	} else {
+		m.search.rewrap(m.text, m.width)
+	}
+	if keepMatch && len(m.search.matches) > 0 {
+		showMatch(&m.viewport, m.search.matches[m.search.index])
+		return
+	}
+	maxOffset := max(0, m.viewport.TotalLineCount()-m.viewport.Height())
+	m.viewport.SetYOffset(int(math.Round(oldPercent * float64(maxOffset))))
 }
 
 func (m *model) footer() string {

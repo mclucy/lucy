@@ -6,6 +6,7 @@ import (
 
 	"github.com/mclucy/lucy/config"
 	"github.com/mclucy/lucy/internal/cli/help"
+	"github.com/mclucy/lucy/terminal/style"
 	"github.com/spf13/cobra"
 	"go.yaml.in/yaml/v4"
 )
@@ -115,7 +116,7 @@ func actionConfigGet(
 	if output.JSON() {
 		return writeConfigJSON(output, value)
 	}
-	return output.Document(func(out io.Writer) error {
+	return output.Document(func(out io.Writer, _ style.Terminal) error {
 		return writeConfigValue(out, key, value)
 	})
 }

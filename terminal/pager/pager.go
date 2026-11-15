@@ -52,10 +52,14 @@ func (m Mode) String() string {
 
 // Options describes one document and the streams that present it.
 type Options struct {
-	Title    string
-	Text     string
-	Input    io.Reader
-	Output   io.Writer
+	Title  string
+	Text   string
+	Input  io.Reader
+	Output io.Writer
+	// Render re-renders the document for a new terminal geometry. It must be
+	// side-effect-free and cheap enough to run during a resize. Text is the
+	// initial render; a nil Render only reflows the existing text.
+	Render   func(width, height int) (string, error)
 	Terminal style.Terminal
 	Theme    style.Theme
 	Mode     Mode

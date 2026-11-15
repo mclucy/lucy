@@ -202,28 +202,28 @@ func actionSearch(
 		return searchJSON.Write(output, newSearchResultDocuments(results))
 	}
 
-	var sb strings.Builder
-	for i, res := range results {
-		if i > 0 {
-			sb.WriteString("\n")
-		}
-		if long {
-			sb.WriteString(renderSearchLong(res, inv.Theme, inv.Stdout))
-		} else {
-			sb.WriteString(renderSearchCompact(res, inv.Theme))
-		}
-	}
-	if len(noResultSources) > 0 {
-		sb.WriteString(
-			inv.Theme.Muted(
-				"No results from "+strings.Join(noResultSources, ", "),
-			) + "\n",
-		)
-	}
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	return output.Document(func(out io.Writer) error {
+	return output.Document(func(out io.Writer, screen style.Terminal) error {
+		var sb strings.Builder
+		for i, res := range results {
+			if i > 0 {
+				sb.WriteString("\n")
+			}
+			if long {
+				sb.WriteString(renderSearchLong(res, inv.Theme, screen))
+			} else {
+				sb.WriteString(renderSearchCompact(res, inv.Theme, screen))
+			}
+		}
+		if len(noResultSources) > 0 {
+			sb.WriteString(
+				inv.Theme.Muted(
+					"No results from "+strings.Join(noResultSources, ", "),
+				) + "\n",
+			)
+		}
 		_, err := io.WriteString(out, sb.String())
 		return err
 	})
@@ -286,7 +286,11 @@ func searchResultReference(item upstream.SearchResult) string {
 	}.String()
 }
 
-func renderSearchCompact(res upstream.SearchResponse, theme style.Theme) string {
+func renderSearchCompact(
+	res upstream.SearchResponse,
+	theme style.Theme,
+	screen style.Terminal,
+) string {
 	var sb strings.Builder
 	sb.WriteString(searchSectionHeader(res, theme))
 
@@ -294,6 +298,14 @@ func renderSearchCompact(res upstream.SearchResponse, theme style.Theme) string 
 		sb.WriteString(theme.Muted("  (no results)") + "\n")
 		return sb.String()
 	}
+
+	width := max(20, screen.Width)
+	nameWidth := 0
+	for _, item := range res.Items {
+		nameWidth = max(nameWidth, len("  "+searchResultReference(item)))
+	}
+	nameWidth = min(nameWidth, max(10, width/2))
+	descWidth := max(4, width-nameWidth-1)
 
 	t := table.New().
 		Border(lipgloss.HiddenBorder()).
@@ -304,10 +316,11 @@ func renderSearchCompact(res upstream.SearchResponse, theme style.Theme) string 
 		BorderColumn(false).
 		BorderRow(false).
 		BorderHeader(false).
+		Wrap(false).
 		StyleFunc(
 			func(row, col int) lipgloss.Style {
 				if col == 0 {
-					return lipgloss.NewStyle().Bold(true)
+					return lipgloss.NewStyle().Bold(true).PaddingRight(1)
 				}
 				return lipgloss.NewStyle().Faint(true)
 			},
@@ -320,7 +333,10 @@ func renderSearchCompact(res upstream.SearchResponse, theme style.Theme) string 
 		if summary == "" && item.Title != "" && item.Title != item.ProjectName {
 			summary = item.Title
 		}
-		t.Row("  "+searchResultReference(item), truncateText(summary, 60))
+		t.Row(
+			truncateText("  "+searchResultReference(item), nameWidth),
+			truncateText(summary, descWidth),
+		)
 	}
 	sb.WriteString(t.String())
 	sb.WriteString("\n")

@@ -9,6 +9,7 @@ import (
 	docscontent "github.com/mclucy/lucy/docs"
 	"github.com/mclucy/lucy/internal/cli"
 	"github.com/mclucy/lucy/internal/cli/help"
+	"github.com/mclucy/lucy/terminal/style"
 	"github.com/spf13/cobra"
 )
 
@@ -206,7 +207,7 @@ func runGrep(cmd *cobra.Command, inv *cli.Invocation, args []string, opts *grepO
 	showFilename := opts.withFilename ||
 		(!opts.noFilename && len(selected) > 1)
 	success := false
-	if err := cli.PageDocument(cmd, inv, cmd.OutOrStdout(), func(out io.Writer) error {
+	if err := cli.PageDocument(cmd, inv, cmd.OutOrStdout(), func(out io.Writer, _ style.Terminal) error {
 		for _, selectedPage := range selected {
 			lines := splitLines(selectedPage.Content)
 			matched := make([]bool, len(lines))

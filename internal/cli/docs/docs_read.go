@@ -7,6 +7,7 @@ import (
 	docscontent "github.com/mclucy/lucy/docs"
 	"github.com/mclucy/lucy/internal/cli"
 	"github.com/mclucy/lucy/internal/cli/help"
+	"github.com/mclucy/lucy/terminal/style"
 	"github.com/spf13/cobra"
 )
 
@@ -37,7 +38,7 @@ func newReadCommand(inv *cli.Invocation) *cobra.Command {
 				}
 				selected = append(selected, found)
 			}
-			return cli.PageDocument(cmd, inv, cmd.OutOrStdout(), func(out io.Writer) error {
+			return cli.PageDocument(cmd, inv, cmd.OutOrStdout(), func(out io.Writer, _ style.Terminal) error {
 				for _, current := range selected {
 					if len(selected) > 1 {
 						if _, err := fmt.Fprintf(out, "===== %s =====\n", current.Slug); err != nil {

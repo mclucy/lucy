@@ -113,10 +113,10 @@ func actionStoreList(
 			Value: style.FormatBytesBinary(object.Size),
 		})
 	}
-	return output.Document(func(out io.Writer) error {
+	return output.Document(func(out io.Writer, screen style.Terminal) error {
 		_, err := fmt.Fprintln(
 			out,
-			terminal.RenderFacts(facts, inv.Stdout.Width, inv.Theme),
+			terminal.RenderFacts(facts, screen.Width, inv.Theme),
 		)
 		return err
 	})
