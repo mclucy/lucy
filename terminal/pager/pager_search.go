@@ -119,12 +119,26 @@ type matchSpan struct {
 
 // matchSpans returns every non-overlapping occurrence in one line, ignoring
 // escape sequences in the visible text. Widths accumulate across disjoint
-// segments so each line is measured once.
+// segments so each line is measured once. Case-insensitive matches map back to
+// original byte offsets, because lowercasing can change UTF-8 length.
 func matchSpans(line, term string, caseSensitive bool) []matchSpan {
-	haystack := ansi.Strip(line)
+	original := ansi.Strip(line)
+	haystack := original
 	needle := term
+	var loweredToOriginal []int
 	if !caseSensitive {
-		haystack = strings.ToLower(haystack)
+		var lowered strings.Builder
+		lowered.Grow(len(original))
+		loweredToOriginal = make([]int, 0, len(original)+1)
+		for i, r := range original {
+			mapped := strings.ToLower(string(r))
+			for range len(mapped) {
+				loweredToOriginal = append(loweredToOriginal, i)
+			}
+			lowered.WriteString(mapped)
+		}
+		loweredToOriginal = append(loweredToOriginal, len(original))
+		haystack = lowered.String()
 		needle = strings.ToLower(needle)
 	}
 	if needle == "" {
@@ -139,16 +153,21 @@ func matchSpans(line, term string, caseSensitive bool) []matchSpan {
 		}
 		start := offset + index
 		end := start + len(needle)
-		lastColumn += ansi.StringWidth(haystack[lastByte:start])
+		startByte, endByte := start, end
+		if loweredToOriginal != nil {
+			startByte = loweredToOriginal[start]
+			endByte = loweredToOriginal[end]
+		}
+		lastColumn += ansi.StringWidth(original[lastByte:startByte])
 		startColumn := lastColumn
-		lastColumn += ansi.StringWidth(haystack[start:end])
+		lastColumn += ansi.StringWidth(original[startByte:endByte])
 		spans = append(spans, matchSpan{
 			start:     startColumn,
 			end:       lastColumn,
-			startByte: start,
-			endByte:   end,
+			startByte: startByte,
+			endByte:   endByte,
 		})
-		lastByte = end
+		lastByte = endByte
 		offset = end
 	}
 	return spans
