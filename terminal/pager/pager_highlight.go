@@ -44,15 +44,19 @@ func highlightMatches(
 	return output.String()
 }
 
-// matchHighlightStyles keeps attributes when color is off and uses a yellow
-// search block when the theme allows color.
+// matchHighlightStyles keeps attributes when color is off and uses distinct
+// backgrounds for ordinary and selected matches when the theme allows color.
 func matchHighlightStyles(theme style.Theme) (lipgloss.Style, lipgloss.Style) {
 	if theme.Colors() {
 		match := lipgloss.NewStyle().
 			Background(lipgloss.Yellow).
 			Foreground(lipgloss.Black)
-		return match, match.Bold(true).Underline(true)
+		selected := lipgloss.NewStyle().
+			Background(lipgloss.Magenta).
+			Foreground(lipgloss.White).
+			Bold(true)
+		return match, selected
 	}
 	return lipgloss.NewStyle().Reverse(true),
-		lipgloss.NewStyle().Reverse(true).Bold(true).Underline(true)
+		lipgloss.NewStyle().Reverse(true).Bold(true)
 }
