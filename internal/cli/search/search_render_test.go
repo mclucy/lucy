@@ -46,3 +46,31 @@ func TestRenderSearchCompactFitsWidth(t *testing.T) {
 		}
 	}
 }
+
+func TestRenderSearchCompactExpandsDescription(t *testing.T) {
+	t.Parallel()
+
+	response := upstream.SearchResponse{
+		Provider: catalog.ProviderModrinth,
+		Items: []upstream.SearchResult{
+			{
+				ProjectName: "carpet",
+				Provider:    catalog.ProviderModrinth,
+				Description: strings.Repeat("word ", 40),
+			},
+		},
+	}
+	narrow := ansi.Strip(renderSearchCompact(
+		response,
+		style.New(false),
+		style.Terminal{Width: 60},
+	))
+	wide := ansi.Strip(renderSearchCompact(
+		response,
+		style.New(false),
+		style.Terminal{Width: 140},
+	))
+	if strings.Count(wide, "word") <= strings.Count(narrow, "word") {
+		t.Fatalf("wide layout did not show more description:\nnarrow=%q\nwide=%q", narrow, wide)
+	}
+}
