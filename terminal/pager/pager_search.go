@@ -21,10 +21,12 @@ type searchState struct {
 // searchMatch locates one occurrence by content line and display columns, and
 // records the wrapped screen row at the width used for the search.
 type searchMatch struct {
-	line   int
-	column int
-	end    int
-	row    int
+	line      int
+	column    int
+	end       int
+	startByte int
+	endByte   int
+	row       int
 }
 
 func (s *searchState) begin() {
@@ -77,10 +79,12 @@ func (s *searchState) submit(target *viewport.Model, text string, width int) {
 	for line := range strings.SplitSeq(text, "\n") {
 		for _, span := range matchSpans(line, s.term, caseSensitive) {
 			s.matches = append(s.matches, searchMatch{
-				line:   lineNumber,
-				column: span.start,
-				end:    span.end,
-				row:    row + span.start/max(1, width),
+				line:      lineNumber,
+				column:    span.start,
+				end:       span.end,
+				startByte: span.startByte,
+				endByte:   span.endByte,
+				row:       row + span.start/max(1, width),
 			})
 		}
 		row += wrappedRows(line, width)
@@ -105,14 +109,17 @@ func (s *searchState) next(step int) {
 	s.index = (s.index + step + len(s.matches)) % len(s.matches)
 }
 
-// matchSpan is the display-column range of one occurrence.
+// matchSpan is one occurrence's display-column and visible-byte range.
 type matchSpan struct {
-	start int
-	end   int
+	start     int
+	end       int
+	startByte int
+	endByte   int
 }
 
 // matchSpans returns every non-overlapping occurrence in one line, ignoring
-// escape sequences in the visible text.
+// escape sequences in the visible text. Widths accumulate across disjoint
+// segments so each line is measured once.
 func matchSpans(line, term string, caseSensitive bool) []matchSpan {
 	haystack := ansi.Strip(line)
 	needle := term
@@ -124,6 +131,7 @@ func matchSpans(line, term string, caseSensitive bool) []matchSpan {
 		return nil
 	}
 	var spans []matchSpan
+	lastByte, lastColumn := 0, 0
 	for offset := 0; offset < len(haystack); {
 		index := strings.Index(haystack[offset:], needle)
 		if index < 0 {
@@ -131,10 +139,16 @@ func matchSpans(line, term string, caseSensitive bool) []matchSpan {
 		}
 		start := offset + index
 		end := start + len(needle)
+		lastColumn += ansi.StringWidth(haystack[lastByte:start])
+		startColumn := lastColumn
+		lastColumn += ansi.StringWidth(haystack[start:end])
 		spans = append(spans, matchSpan{
-			start: ansi.StringWidth(haystack[:start]),
-			end:   ansi.StringWidth(haystack[:end]),
+			start:     startColumn,
+			end:       lastColumn,
+			startByte: start,
+			endByte:   end,
 		})
+		lastByte = end
 		offset = end
 	}
 	return spans
