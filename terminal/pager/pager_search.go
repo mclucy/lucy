@@ -18,11 +18,12 @@ type searchState struct {
 	index   int
 }
 
-// searchMatch locates one occurrence by content line and display column, and
+// searchMatch locates one occurrence by content line and display columns, and
 // records the wrapped screen row at the width used for the search.
 type searchMatch struct {
 	line   int
 	column int
+	end    int
 	row    int
 }
 
@@ -74,11 +75,12 @@ func (s *searchState) submit(target *viewport.Model, text string, width int) {
 	lineNumber := 0
 	row := 0
 	for line := range strings.SplitSeq(text, "\n") {
-		for _, column := range matchColumns(line, s.term, caseSensitive) {
+		for _, span := range matchSpans(line, s.term, caseSensitive) {
 			s.matches = append(s.matches, searchMatch{
 				line:   lineNumber,
-				column: column,
-				row:    row + column/max(1, width),
+				column: span.start,
+				end:    span.end,
+				row:    row + span.start/max(1, width),
 			})
 		}
 		row += wrappedRows(line, width)
@@ -94,20 +96,24 @@ func (s *searchState) submit(target *viewport.Model, text string, width int) {
 			break
 		}
 	}
-	showMatch(target, s.matches[s.index])
 }
 
-func (s *searchState) next(target *viewport.Model, step int) {
+func (s *searchState) next(step int) {
 	if len(s.matches) == 0 {
 		return
 	}
 	s.index = (s.index + step + len(s.matches)) % len(s.matches)
-	showMatch(target, s.matches[s.index])
 }
 
-// matchColumns returns the display column of every non-overlapping
-// occurrence in one line, ignoring escape sequences in the visible text.
-func matchColumns(line, term string, caseSensitive bool) []int {
+// matchSpan is the display-column range of one occurrence.
+type matchSpan struct {
+	start int
+	end   int
+}
+
+// matchSpans returns every non-overlapping occurrence in one line, ignoring
+// escape sequences in the visible text.
+func matchSpans(line, term string, caseSensitive bool) []matchSpan {
 	haystack := ansi.Strip(line)
 	needle := term
 	if !caseSensitive {
@@ -117,17 +123,21 @@ func matchColumns(line, term string, caseSensitive bool) []int {
 	if needle == "" {
 		return nil
 	}
-	var columns []int
+	var spans []matchSpan
 	for offset := 0; offset < len(haystack); {
 		index := strings.Index(haystack[offset:], needle)
 		if index < 0 {
 			break
 		}
 		start := offset + index
-		columns = append(columns, ansi.StringWidth(haystack[:start]))
-		offset = start + len(needle)
+		end := start + len(needle)
+		spans = append(spans, matchSpan{
+			start: ansi.StringWidth(haystack[:start]),
+			end:   ansi.StringWidth(haystack[:end]),
+		})
+		offset = end
 	}
-	return columns
+	return spans
 }
 
 // showMatch scrolls to the wrapped row that holds the match.

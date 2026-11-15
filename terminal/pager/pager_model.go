@@ -82,10 +82,12 @@ func (m *model) handleKey(key tea.KeyPressMsg) tea.Cmd {
 		m.search.begin()
 		return nil
 	case "n":
-		m.search.next(&m.viewport, 1)
+		m.search.next(1)
+		m.refreshSearch()
 		return nil
 	case "N":
-		m.search.next(&m.viewport, -1)
+		m.search.next(-1)
+		m.refreshSearch()
 		return nil
 	}
 	var command tea.Cmd
@@ -99,6 +101,7 @@ func (m *model) handleSearchKey(key tea.KeyPressMsg) tea.Cmd {
 		m.search.cancel()
 	case "enter":
 		m.search.submit(&m.viewport, m.text, m.width)
+		m.refreshSearch()
 	case "backspace":
 		m.search.backspace()
 	case "ctrl+u":
@@ -107,6 +110,17 @@ func (m *model) handleSearchKey(key tea.KeyPressMsg) tea.Cmd {
 		m.search.typeText(key.Text)
 	}
 	return nil
+}
+
+// refreshSearch applies the committed matches to the viewport and reveals the
+// selected match.
+func (m *model) refreshSearch() {
+	m.viewport.SetContent(
+		highlightMatches(m.text, m.search.matches, m.search.index, m.theme),
+	)
+	if len(m.search.matches) > 0 {
+		showMatch(&m.viewport, m.search.matches[m.search.index])
+	}
 }
 
 func (m *model) resize(width, height int) {
