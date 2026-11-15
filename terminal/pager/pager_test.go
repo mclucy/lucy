@@ -300,6 +300,45 @@ func TestSearchHighlightsMatches(t *testing.T) {
 	}
 }
 
+func TestMatchSpansTrackOffsets(t *testing.T) {
+	t.Parallel()
+
+	spans := matchSpans("\x1b[2m界needle\x1b[0m and needle", "needle", true)
+	if len(spans) != 2 {
+		t.Fatalf("spans = %d, want 2", len(spans))
+	}
+	first := spans[0]
+	if first.startByte != len("界") || first.endByte != len("界needle") {
+		t.Fatalf("first bytes = %d..%d", first.startByte, first.endByte)
+	}
+	if first.start != 2 || first.end != 8 {
+		t.Fatalf("first columns = %d..%d, want 2..8", first.start, first.end)
+	}
+}
+
+func TestHighlightDenseMatchesPreservesText(t *testing.T) {
+	t.Parallel()
+
+	line := strings.Repeat("x", 200)
+	spans := matchSpans(line, "x", true)
+	matches := make([]searchMatch, len(spans))
+	for i, span := range spans {
+		matches[i] = searchMatch{
+			column:    span.start,
+			end:       span.end,
+			startByte: span.startByte,
+			endByte:   span.endByte,
+		}
+	}
+	highlighted := highlightMatches(line, matches, 0, style.New(false))
+	if ansi.Strip(highlighted) != line {
+		t.Fatalf("dense highlighting changed visible text")
+	}
+	if len(matches) != len(line) {
+		t.Fatalf("spans = %d, want %d", len(matches), len(line))
+	}
+}
+
 func TestHighlightMatchesPreservesStyles(t *testing.T) {
 	t.Parallel()
 
@@ -315,6 +354,56 @@ func TestHighlightMatchesPreservesStyles(t *testing.T) {
 	other := highlightMatches(text, matches, 1, style.New(false))
 	if highlighted == other {
 		t.Fatal("selected match does not use a distinct style")
+	}
+}
+
+func TestEscapeDoesNotQuit(t *testing.T) {
+	t.Parallel()
+
+	m := newModel(Options{
+		Text:     "content",
+		Terminal: style.Terminal{Width: 40, Height: 10},
+		Theme:    style.New(false),
+	})
+	command := m.handleKey(tea.KeyPressMsg{Code: tea.KeyEscape})
+	if command != nil {
+		t.Fatal("escape returned a quit command")
+	}
+	if m.hint != "press q to quit" {
+		t.Fatalf("hint = %q, want press q to quit", m.hint)
+	}
+	if !strings.Contains(ansi.Strip(m.footer()), "press q to quit") {
+		t.Fatalf("footer lacks quit hint: %q", ansi.Strip(m.footer()))
+	}
+
+	command = m.handleKey(tea.KeyPressMsg{Text: "q", Code: 'q'})
+	if command == nil {
+		t.Fatal("q returned no command")
+	}
+	if _, ok := command().(tea.QuitMsg); !ok {
+		t.Fatalf("q produced %T, want tea.QuitMsg", command())
+	}
+}
+
+func TestEscapeCancelsSearch(t *testing.T) {
+	t.Parallel()
+
+	m := newModel(Options{
+		Text:     "needle",
+		Terminal: style.Terminal{Width: 40, Height: 10},
+		Theme:    style.New(false),
+	})
+	m.search.begin()
+	m.search.typeText("needle")
+	command := m.handleKey(tea.KeyPressMsg{Code: tea.KeyEscape})
+	if command != nil {
+		t.Fatal("escape returned a quit command while searching")
+	}
+	if m.search.active {
+		t.Fatal("escape did not cancel the search prompt")
+	}
+	if m.hint != "" {
+		t.Fatalf("canceled search left hint %q", m.hint)
 	}
 }
 
