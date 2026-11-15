@@ -59,7 +59,7 @@ func PageDocument(
 	writer io.Writer,
 	render func(io.Writer) error,
 ) error {
-	if !inv.Interactive {
+	if !inv.Interactive || inv.Pager == pager.Never {
 		return render(writer)
 	}
 	var document bytes.Buffer
