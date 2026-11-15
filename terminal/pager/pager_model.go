@@ -139,16 +139,26 @@ func (m *model) resize(width, height int) {
 	if total := m.viewport.TotalLineCount(); total > m.viewport.Height() {
 		oldPercent = float64(m.viewport.YOffset()) / float64(total-m.viewport.Height())
 	}
+	keepMatch := m.selectedMatchVisible()
 	m.width = max(1, width)
 	m.height = max(2, height)
 	m.viewport.SetWidth(m.width)
 	m.viewport.SetHeight(contentHeight(m.height))
-	m.reflow(oldPercent)
+	m.reflow(oldPercent, keepMatch)
+}
+
+func (m *model) selectedMatchVisible() bool {
+	if len(m.search.matches) == 0 || m.search.index >= len(m.search.matches) {
+		return false
+	}
+	row := m.search.matches[m.search.index].row
+	return row >= m.viewport.YOffset() &&
+		row < m.viewport.YOffset()+m.viewport.Height()
 }
 
 // reflow rebuilds the document at the current geometry, then restores the
-// selected search match or the previous scroll position.
-func (m *model) reflow(oldPercent float64) {
+// selected search match when it was on screen or the previous scroll position.
+func (m *model) reflow(oldPercent float64, keepMatch bool) {
 	if m.render != nil {
 		if text, err := m.render(m.width, m.height); err == nil {
 			m.text = text
@@ -162,7 +172,7 @@ func (m *model) reflow(oldPercent float64) {
 	} else {
 		m.search.rewrap(m.text, m.width)
 	}
-	if len(m.search.matches) > 0 {
+	if keepMatch && len(m.search.matches) > 0 {
 		showMatch(&m.viewport, m.search.matches[m.search.index])
 		return
 	}
