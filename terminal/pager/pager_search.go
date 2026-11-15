@@ -14,8 +14,14 @@ type searchState struct {
 	active  bool
 	query   string
 	term    string
-	matches []int
+	matches []searchMatch
 	index   int
+}
+
+// searchMatch locates one occurrence by content line and display column.
+type searchMatch struct {
+	line   int
+	column int
 }
 
 func (s *searchState) begin() {
@@ -52,18 +58,11 @@ func (s *searchState) submit(target *viewport.Model, text string, width int) {
 	if s.term == "" {
 		return
 	}
-	needle := s.term
-	if !hasUpper(s.term) {
-		needle = strings.ToLower(needle)
-	}
+	caseSensitive := hasUpper(s.term)
 	lineNumber := 0
 	for line := range strings.SplitSeq(text, "\n") {
-		haystack := ansi.Strip(line)
-		if !hasUpper(s.term) {
-			haystack = strings.ToLower(haystack)
-		}
-		if strings.Contains(haystack, needle) {
-			s.matches = append(s.matches, lineNumber)
+		for _, column := range matchColumns(line, s.term, caseSensitive) {
+			s.matches = append(s.matches, searchMatch{line: lineNumber, column: column})
 		}
 		lineNumber++
 	}
@@ -71,13 +70,13 @@ func (s *searchState) submit(target *viewport.Model, text string, width int) {
 		return
 	}
 	top := target.YOffset()
-	for i, line := range s.matches {
-		if screenLine(text, line, width) >= top {
+	for i, match := range s.matches {
+		if screenRow(text, match, width) >= top {
 			s.index = i
 			break
 		}
 	}
-	showLine(target, text, s.matches[s.index], width)
+	showMatch(target, text, s.matches[s.index], width)
 }
 
 func (s *searchState) next(target *viewport.Model, text string, width, step int) {
@@ -85,13 +84,42 @@ func (s *searchState) next(target *viewport.Model, text string, width, step int)
 		return
 	}
 	s.index = (s.index + step + len(s.matches)) % len(s.matches)
-	showLine(target, text, s.matches[s.index], width)
+	showMatch(target, text, s.matches[s.index], width)
 }
 
-// showLine scrolls to a content line, converting it to the wrapped screen
-// line index that the viewport's offset uses.
-func showLine(target *viewport.Model, text string, line, width int) {
-	target.EnsureVisible(screenLine(text, line, width), 0, 0)
+// matchColumns returns the display column of every non-overlapping
+// occurrence in one line, ignoring escape sequences in the visible text.
+func matchColumns(line, term string, caseSensitive bool) []int {
+	haystack := ansi.Strip(line)
+	needle := term
+	if !caseSensitive {
+		haystack = strings.ToLower(haystack)
+		needle = strings.ToLower(needle)
+	}
+	if needle == "" {
+		return nil
+	}
+	var columns []int
+	for offset := 0; offset < len(haystack); {
+		index := strings.Index(haystack[offset:], needle)
+		if index < 0 {
+			break
+		}
+		start := offset + index
+		columns = append(columns, ansi.StringWidth(haystack[:start]))
+		offset = start + len(needle)
+	}
+	return columns
+}
+
+// showMatch scrolls to the wrapped row that holds the match.
+func showMatch(target *viewport.Model, text string, match searchMatch, width int) {
+	target.EnsureVisible(screenRow(text, match, width), 0, 0)
+}
+
+// screenRow converts a content line and column to a wrapped screen row.
+func screenRow(text string, match searchMatch, width int) int {
+	return screenLine(text, match.line, width) + match.column/max(1, width)
 }
 
 // screenLine counts wrapped rows before line at the given content width.
