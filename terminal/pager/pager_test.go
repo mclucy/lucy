@@ -142,9 +142,9 @@ func TestSearchSkipsWrappedRows(t *testing.T) {
 	if len(m.search.matches) != 1 || m.search.matches[0].line != 20 {
 		t.Fatalf("matches = %v, want line 20", m.search.matches)
 	}
-	wantOffset := screenLine(text, 20, 40)
+	wantOffset := m.search.matches[0].row
 	if wantOffset != 60 {
-		t.Fatalf("screenLine = %d, want 60", wantOffset)
+		t.Fatalf("match row = %d, want 60", wantOffset)
 	}
 	if m.viewport.YOffset() != wantOffset {
 		t.Fatalf("search scrolled to row %d, want %d", m.viewport.YOffset(), wantOffset)
@@ -169,9 +169,9 @@ func TestSearchScrollsToMatchInsideWrappedLine(t *testing.T) {
 	if len(m.search.matches) != 1 || m.search.matches[0].column != 800 {
 		t.Fatalf("matches = %v, want column 800", m.search.matches)
 	}
-	wantOffset := screenRow(text, m.search.matches[0], 40)
+	wantOffset := m.search.matches[0].row
 	if wantOffset != 20 {
-		t.Fatalf("screenRow = %d, want 20", wantOffset)
+		t.Fatalf("match row = %d, want 20", wantOffset)
 	}
 	if m.viewport.YOffset() != wantOffset {
 		t.Fatalf("search scrolled to row %d, want %d", m.viewport.YOffset(), wantOffset)
@@ -219,6 +219,30 @@ func TestResizeClampsScrollOffset(t *testing.T) {
 	m.resize(120, 10)
 	if m.viewport.PastBottom() {
 		t.Fatalf("resize left offset %d past the document", m.viewport.YOffset())
+	}
+}
+
+func TestResizeRewrapsSearchMatches(t *testing.T) {
+	t.Parallel()
+
+	text := strings.Repeat(strings.Repeat("x", 100)+"\n", 20) + "needle"
+	m := newModel(Options{
+		Text:     text,
+		Terminal: style.Terminal{Width: 40, Height: 10},
+		Theme:    style.New(false),
+	})
+	m.Update(tea.WindowSizeMsg{Width: 40, Height: 10})
+	m.search.begin()
+	for _, letter := range "needle" {
+		m.handleSearchKey(tea.KeyPressMsg{Text: string(letter), Code: letter})
+	}
+	m.handleSearchKey(tea.KeyPressMsg{Code: tea.KeyEnter})
+	if len(m.search.matches) != 1 || m.search.matches[0].row != 60 {
+		t.Fatalf("match row = %v, want 60", m.search.matches)
+	}
+	m.resize(120, 10)
+	if m.search.matches[0].row != 20 {
+		t.Fatalf("rewrapped row = %d, want 20", m.search.matches[0].row)
 	}
 }
 
