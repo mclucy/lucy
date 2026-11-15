@@ -82,10 +82,10 @@ func (m *model) handleKey(key tea.KeyPressMsg) tea.Cmd {
 		m.search.begin()
 		return nil
 	case "n":
-		m.search.next(&m.viewport, m.text, m.width, 1)
+		m.search.next(&m.viewport, 1)
 		return nil
 	case "N":
-		m.search.next(&m.viewport, m.text, m.width, -1)
+		m.search.next(&m.viewport, -1)
 		return nil
 	}
 	var command tea.Cmd
@@ -114,6 +114,7 @@ func (m *model) resize(width, height int) {
 	m.height = max(2, height)
 	m.viewport.SetWidth(m.width)
 	m.viewport.SetHeight(contentHeight(m.height))
+	m.search.rewrap(m.text, m.width)
 	// Dimension setters keep the old offset; resetting it clamps to the new
 	// wrapped height so a wider terminal cannot leave a blank view.
 	m.viewport.SetYOffset(m.viewport.YOffset())

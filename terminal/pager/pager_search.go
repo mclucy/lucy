@@ -18,10 +18,12 @@ type searchState struct {
 	index   int
 }
 
-// searchMatch locates one occurrence by content line and display column.
+// searchMatch locates one occurrence by content line and display column, and
+// records the wrapped screen row at the width used for the search.
 type searchMatch struct {
 	line   int
 	column int
+	row    int
 }
 
 func (s *searchState) begin() {
@@ -70,10 +72,16 @@ func (s *searchState) submit(target *viewport.Model, text string, width int) {
 	}
 	caseSensitive := hasUpper(s.term)
 	lineNumber := 0
+	row := 0
 	for line := range strings.SplitSeq(text, "\n") {
 		for _, column := range matchColumns(line, s.term, caseSensitive) {
-			s.matches = append(s.matches, searchMatch{line: lineNumber, column: column})
+			s.matches = append(s.matches, searchMatch{
+				line:   lineNumber,
+				column: column,
+				row:    row + column/max(1, width),
+			})
 		}
+		row += wrappedRows(line, width)
 		lineNumber++
 	}
 	if len(s.matches) == 0 {
@@ -81,20 +89,20 @@ func (s *searchState) submit(target *viewport.Model, text string, width int) {
 	}
 	top := target.YOffset()
 	for i, match := range s.matches {
-		if screenRow(text, match, width) >= top {
+		if match.row >= top {
 			s.index = i
 			break
 		}
 	}
-	showMatch(target, text, s.matches[s.index], width)
+	showMatch(target, s.matches[s.index])
 }
 
-func (s *searchState) next(target *viewport.Model, text string, width, step int) {
+func (s *searchState) next(target *viewport.Model, step int) {
 	if len(s.matches) == 0 {
 		return
 	}
 	s.index = (s.index + step + len(s.matches)) % len(s.matches)
-	showMatch(target, text, s.matches[s.index], width)
+	showMatch(target, s.matches[s.index])
 }
 
 // matchColumns returns the display column of every non-overlapping
@@ -123,28 +131,32 @@ func matchColumns(line, term string, caseSensitive bool) []int {
 }
 
 // showMatch scrolls to the wrapped row that holds the match.
-func showMatch(target *viewport.Model, text string, match searchMatch, width int) {
-	target.EnsureVisible(screenRow(text, match, width), 0, 0)
+func showMatch(target *viewport.Model, match searchMatch) {
+	target.EnsureVisible(match.row, 0, 0)
 }
 
-// screenRow converts a content line and column to a wrapped screen row.
-func screenRow(text string, match searchMatch, width int) int {
-	return screenLine(text, match.line, width) + match.column/max(1, width)
-}
-
-// screenLine counts wrapped rows before line at the given content width.
-func screenLine(text string, line, width int) int {
+// wrappedRows counts the screen rows one content line occupies.
+func wrappedRows(line string, width int) int {
 	width = max(1, width)
-	offset := 0
-	current := 0
-	for content := range strings.SplitSeq(text, "\n") {
-		if current == line {
-			return offset
-		}
-		offset += max(1, (ansi.StringWidth(content)+width-1)/width)
-		current++
+	return max(1, (ansi.StringWidth(line)+width-1)/width)
+}
+
+// rewrap updates stored rows after the terminal width changes.
+func (s *searchState) rewrap(text string, width int) {
+	if len(s.matches) == 0 {
+		return
 	}
-	return offset
+	row := 0
+	lineNumber := 0
+	matchIndex := 0
+	for line := range strings.SplitSeq(text, "\n") {
+		for matchIndex < len(s.matches) && s.matches[matchIndex].line == lineNumber {
+			s.matches[matchIndex].row = row + s.matches[matchIndex].column/max(1, width)
+			matchIndex++
+		}
+		row += wrappedRows(line, width)
+		lineNumber++
+	}
 }
 
 func (s *searchState) label() string {
