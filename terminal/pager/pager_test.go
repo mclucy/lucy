@@ -3,6 +3,7 @@ package pager
 import (
 	"strings"
 	"testing"
+	"unicode/utf8"
 
 	"charm.land/bubbles/v2/viewport"
 	"charm.land/bubbletea/v2"
@@ -313,6 +314,41 @@ func TestMatchSpansTrackOffsets(t *testing.T) {
 	}
 	if first.start != 2 || first.end != 8 {
 		t.Fatalf("first columns = %d..%d, want 2..8", first.start, first.end)
+	}
+}
+
+func TestMatchSpansMapLoweredOffsets(t *testing.T) {
+	t.Parallel()
+
+	line := "İneedle"
+	spans := matchSpans(line, "needle", false)
+	if len(spans) != 1 {
+		t.Fatalf("spans = %d, want 1", len(spans))
+	}
+	match := spans[0]
+	if match.startByte != len("İ") || match.endByte != len(line) {
+		t.Fatalf("bytes = %d..%d, want %d..%d", match.startByte, match.endByte, len("İ"), len(line))
+	}
+	if match.start != 1 || match.end != 7 {
+		t.Fatalf("columns = %d..%d, want 1..7", match.start, match.end)
+	}
+	highlighted := highlightMatches(
+		line,
+		[]searchMatch{{
+			line:      0,
+			column:    match.start,
+			end:       match.end,
+			startByte: match.startByte,
+			endByte:   match.endByte,
+		}},
+		0,
+		style.New(false),
+	)
+	if !utf8.ValidString(highlighted) {
+		t.Fatalf("highlight produced invalid UTF-8: %q", highlighted)
+	}
+	if ansi.Strip(highlighted) != line {
+		t.Fatalf("visible text = %q, want %q", ansi.Strip(highlighted), line)
 	}
 }
 
