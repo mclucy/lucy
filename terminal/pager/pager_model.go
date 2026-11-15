@@ -19,6 +19,7 @@ type model struct {
 	width    int
 	height   int
 	search   searchState
+	hint     string
 }
 
 func newModel(options Options) *model {
@@ -67,11 +68,18 @@ func (m *model) View() tea.View {
 
 func (m *model) handleKey(key tea.KeyPressMsg) tea.Cmd {
 	if m.search.active {
+		m.hint = ""
 		return m.handleSearchKey(key)
 	}
+	if key.String() != "esc" {
+		m.hint = ""
+	}
 	switch key.String() {
-	case "q", "ctrl+c", "esc":
+	case "q", "ctrl+c":
 		return tea.Quit
+	case "esc":
+		m.hint = "press q to quit"
+		return nil
 	case "g", "home":
 		m.viewport.GotoTop()
 		return nil
@@ -139,6 +147,13 @@ func (m *model) footer() string {
 		return fitStatus(
 			m.theme.Accent("/"+m.search.query+"\u258f"),
 			[]string{m.theme.Muted("enter search  esc cancel")},
+			m.width,
+		)
+	}
+	if m.hint != "" {
+		return fitStatus(
+			m.theme.Accent(m.title),
+			[]string{m.theme.Warning(m.hint)},
 			m.width,
 		)
 	}
