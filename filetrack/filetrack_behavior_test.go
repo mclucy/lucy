@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"sync"
 	"testing"
 
@@ -223,6 +224,255 @@ func TestFileTrackPublishesAcceptedRevision(t *testing.T) {
 	if len(events) != 1 || events[0].Sequence != 1 {
 		t.Fatalf("history holds %+v", events)
 	}
+}
+
+func TestFileUntrackSkipsUntrackedFilesAndDirectories(t *testing.T) {
+	root := behaviorWorkspace(t)
+	behaviorWrite(t, root, "config/a.json", []byte("{}\n"), 0o644)
+	behaviorWrite(t, root, "config/b.json", []byte("{}\n"), 0o644)
+	behaviorWrite(t, root, "config/untracked.json", []byte("{}\n"), 0o644)
+	if err := os.MkdirAll(filepath.Join(root, "config/sub"), 0o755); err != nil {
+		t.Fatalf("create config/sub: %v", err)
+	}
+	behaviorRun(t, root, Request{
+		Operation: Track,
+		Paths:     []string{"config/a.json", "config/b.json"},
+	})
+
+	result := behaviorRun(t, root, Request{
+		Operation: Untrack,
+		Paths:     []string{"config/*"},
+	})
+
+	if result.Event.Operation != Untrack || len(result.Event.Changes) != 2 {
+		t.Fatalf("unexpected untrack result %+v", result)
+	}
+	for _, change := range result.Event.Changes {
+		if change.After != nil {
+			t.Fatalf("untrack kept declaration %+v", change)
+		}
+	}
+	if len(result.Skipped) != 1 || result.Skipped[0] != "config/untracked.json" {
+		t.Fatalf("skipped files = %v, want the untracked file", result.Skipped)
+	}
+	if len(result.SkippedDirectories) != 1 || result.SkippedDirectories[0] != "config/sub" {
+		t.Fatalf("skipped directories = %v, want the directory", result.SkippedDirectories)
+	}
+	if declared := behaviorDeclared(t, root); len(declared) != 0 {
+		t.Fatalf("untrack left declarations %+v", declared)
+	}
+	behaviorRequireBytes(t, filepath.Join(root, "config/untracked.json"), []byte("{}\n"))
+}
+
+func TestFileTrackRequiresExplicitDotForHiddenEntries(t *testing.T) {
+	root := behaviorWorkspace(t)
+	behaviorWrite(t, root, ".env", []byte("secret\n"), 0o644)
+	behaviorWrite(t, root, ".config/secret.json", []byte("{}\n"), 0o644)
+
+	behaviorRunErr(t, root, Request{Operation: Track, Paths: []string{"[!a]*"}})
+	behaviorRunErr(t, root, Request{Operation: Track, Paths: []string{"[!a]*/*.json"}})
+	behaviorRunErr(t, root, Request{Operation: Track, Paths: []string{"[^a]*"}})
+	behaviorRunErr(t, root, Request{Operation: Track, Paths: []string{"[!a-]*"}})
+	if declared := behaviorDeclared(t, root); len(declared) != 0 {
+		t.Fatalf("wildcards tracked hidden files: %+v", declared)
+	}
+
+	behaviorRun(t, root, Request{Operation: Track, Paths: []string{"[.]env"}})
+	behaviorRun(t, root, Request{Operation: Track, Paths: []string{"[.]config/*.json"}})
+	declared := behaviorDeclared(t, root)
+	if len(declared) != 2 ||
+		declared[0].Path != ".config/secret.json" ||
+		declared[1].Path != ".env" {
+		t.Fatalf("explicit dot patterns declared %+v", declared)
+	}
+}
+
+func TestFileUpdateExpandsDeclaredPatterns(t *testing.T) {
+	root := behaviorWorkspace(t)
+	visible := []string{
+		"config/a.json",
+		"config/deep/b.json",
+		"other.txt",
+	}
+	hidden := []string{
+		"config/.hidden.json",
+		"config/.hidden/c.json",
+	}
+	for _, path := range append(visible, hidden...) {
+		behaviorWrite(t, root, path, []byte("old\n"), 0o644)
+	}
+	behaviorRun(t, root, Request{
+		Operation: Track,
+		Paths:     append(append([]string{}, visible...), hidden...),
+	})
+	for _, path := range append(visible, hidden...) {
+		behaviorWrite(t, root, path, []byte("new\n"), 0o644)
+	}
+	behaviorWrite(t, root, "config/untracked.json", []byte("untracked\n"), 0o644)
+
+	result := behaviorRun(t, root, Request{
+		Operation: Update,
+		Paths:     []string{"config/**/*.json"},
+	})
+
+	if len(result.Event.Changes) != 2 {
+		t.Fatalf("updated changes = %+v, want two", result.Event.Changes)
+	}
+	updated := make(map[string]struct{}, len(result.Event.Changes))
+	for _, change := range result.Event.Changes {
+		updated[change.Path] = struct{}{}
+	}
+	if _, exists := updated["config/a.json"]; !exists {
+		t.Fatalf("pattern did not update config/a.json: %+v", updated)
+	}
+	if _, exists := updated["config/deep/b.json"]; !exists {
+		t.Fatalf("pattern did not update config/deep/b.json: %+v", updated)
+	}
+	declared := make(map[string]string, len(visible)+len(hidden))
+	for _, file := range behaviorDeclared(t, root) {
+		declared[file.Path] = file.Hash
+	}
+	if declared["config/a.json"] != behaviorDigest([]byte("new\n")) ||
+		declared["config/deep/b.json"] != behaviorDigest([]byte("new\n")) {
+		t.Fatalf("pattern did not accept current contents: %+v", declared)
+	}
+	if declared["other.txt"] == behaviorDigest([]byte("new\n")) {
+		t.Fatalf("pattern updated an unmatched file: %+v", declared)
+	}
+	for _, path := range hidden {
+		if declared[path] != behaviorDigest([]byte("old\n")) {
+			t.Fatalf("pattern updated hidden file %s: %+v", path, declared)
+		}
+	}
+	behaviorRunErr(t, root, Request{
+		Operation: Update,
+		Paths:     []string{"config/*.yaml"},
+	})
+}
+
+func TestFileRecoverExpandsDeclaredPatterns(t *testing.T) {
+	root := behaviorWorkspace(t)
+	visible := map[string][]byte{
+		"config/a.json":      []byte("a accepted\n"),
+		"config/deep/b.json": []byte("b accepted\n"),
+	}
+	hidden := map[string][]byte{
+		"config/.hidden.json":   []byte("hidden accepted\n"),
+		"config/.hidden/c.json": []byte("nested hidden accepted\n"),
+	}
+	accepted := make(map[string][]byte, len(visible)+len(hidden))
+	for path, content := range visible {
+		accepted[path] = content
+	}
+	for path, content := range hidden {
+		accepted[path] = content
+	}
+	for path, content := range accepted {
+		behaviorWrite(t, root, path, content, 0o644)
+		behaviorRun(t, root, Request{Operation: Track, Paths: []string{path}})
+	}
+	behaviorWrite(t, root, "config/present.bin", []byte("presence\n"), 0o644)
+	behaviorRun(t, root, Request{
+		Operation: Track,
+		Paths:     []string{"config/present.bin"},
+		NoHash:    true,
+	})
+	for path := range accepted {
+		if err := os.Remove(filepath.Join(root, path)); err != nil {
+			t.Fatalf("remove %s: %v", path, err)
+		}
+	}
+
+	result := behaviorRun(t, root, Request{
+		Operation: Recover,
+		Paths:     []string{"config/**"},
+	})
+
+	if len(result.Event.Changes) != 2 {
+		t.Fatalf("recovered changes = %+v, want two", result.Event.Changes)
+	}
+	if len(result.Skipped) != 1 || result.Skipped[0] != "config/present.bin" {
+		t.Fatalf("skipped = %v, want the presence-only entry", result.Skipped)
+	}
+	for path, content := range visible {
+		behaviorRequireBytes(t, filepath.Join(root, path), content)
+	}
+	for path := range hidden {
+		behaviorRequireAbsent(t, root, path)
+	}
+
+	behaviorRun(t, root, Request{
+		Operation: Recover,
+		Paths:     []string{"config/.hidden*"},
+	})
+	behaviorRequireBytes(
+		t,
+		filepath.Join(root, "config/.hidden.json"),
+		hidden["config/.hidden.json"],
+	)
+	behaviorRequireAbsent(t, root, "config/.hidden/c.json")
+
+	presenceOnly := behaviorRun(t, root, Request{
+		Operation: Recover,
+		Paths:     []string{"config/*.bin"},
+	})
+	if len(presenceOnly.Event.Changes) != 0 ||
+		len(presenceOnly.Skipped) != 1 ||
+		presenceOnly.Skipped[0] != "config/present.bin" {
+		t.Fatalf("presence-only pattern recovered %+v", presenceOnly)
+	}
+	behaviorRunErr(t, root, Request{
+		Operation: Recover,
+		Paths:     []string{"config/*.yaml"},
+	})
+}
+
+func TestFileLiteralPathsContainingPatternCharactersSelectExactly(t *testing.T) {
+	root := behaviorWorkspace(t)
+	accepted := []byte("accepted\n")
+	behaviorWrite(t, root, "mods/[Forge]Mod.jar", accepted, 0o644)
+	behaviorWrite(t, root, "mods/FMod.jar", []byte("decoy\n"), 0o644)
+
+	result := behaviorRun(t, root, Request{
+		Operation: Track,
+		Paths:     []string{"mods/[Forge]Mod.jar"},
+	})
+	if change := behaviorSoleChange(t, result); change.Path != "mods/[Forge]Mod.jar" {
+		t.Fatalf("literal path tracked %+v", change)
+	}
+	if declared := behaviorDeclared(t, root); len(declared) != 1 ||
+		declared[0].Path != "mods/[Forge]Mod.jar" {
+		t.Fatalf("literal path declared %+v", declared)
+	}
+
+	updated := []byte("updated\n")
+	behaviorWrite(t, root, "mods/[Forge]Mod.jar", updated, 0o644)
+	result = behaviorRun(t, root, Request{
+		Operation: Update,
+		Paths:     []string{"mods/[Forge]Mod.jar"},
+	})
+	if change := behaviorSoleChange(t, result); change.Path != "mods/[Forge]Mod.jar" ||
+		change.After == nil || change.After.Hash != behaviorDigest(updated) {
+		t.Fatalf("literal path updated %+v", change)
+	}
+
+	if err := os.Remove(filepath.Join(root, "mods/[Forge]Mod.jar")); err != nil {
+		t.Fatalf("remove literal path: %v", err)
+	}
+	behaviorRun(t, root, Request{
+		Operation: Recover,
+		Paths:     []string{"mods/[Forge]Mod.jar"},
+	})
+	behaviorRequireBytes(t, filepath.Join(root, "mods/[Forge]Mod.jar"), updated)
+
+	behaviorRun(t, root, Request{
+		Operation: Untrack,
+		Paths:     []string{"mods/[Forge]Mod.jar"},
+	})
+	if declared := behaviorDeclared(t, root); len(declared) != 0 {
+		t.Fatalf("literal path untracked %+v", declared)
+	}
+	behaviorRequireBytes(t, filepath.Join(root, "mods/FMod.jar"), []byte("decoy\n"))
 }
 
 func TestFileTrackRejectsAlreadyTrackedPathAtomically(t *testing.T) {
@@ -753,7 +1003,7 @@ func TestFileUpdateAllFromSourceSkipsEntriesWithoutURL(t *testing.T) {
 	}
 }
 
-func TestFileTrackRejectsForbiddenAndNonRegularPaths(t *testing.T) {
+func TestFileTrackRejectsForbiddenPaths(t *testing.T) {
 	outside := filepath.Join(t.TempDir(), "outside.txt")
 	if err := behaviorWriteFile(outside, []byte("outside the workspace\n"), 0o644); err != nil {
 		t.Fatalf("write outside file: %v", err)
@@ -768,7 +1018,6 @@ func TestFileTrackRejectsForbiddenAndNonRegularPaths(t *testing.T) {
 		{"manifest descendant", documentpkg.ManifestFilename + "/config.txt"},
 		{"lock descendant", documentpkg.LockFilename + "/config.txt"},
 		{"root directory", "."},
-		{"directory", "server"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			root := behaviorWorkspace(t)
@@ -785,7 +1034,41 @@ func TestFileTrackRejectsForbiddenAndNonRegularPaths(t *testing.T) {
 	}
 }
 
-func TestFileTrackRejectsTraversalToExistingFile(t *testing.T) {
+func TestFileTrackSkipsDirectories(t *testing.T) {
+	root := behaviorWorkspace(t)
+	rules := []byte("rules\n")
+	behaviorWrite(t, root, "config/rules.json", rules, 0o644)
+	behaviorWrite(t, root, "config/sub/nested.json", []byte("{}\n"), 0o644)
+	for _, directory := range []string{"server", "config/sub"} {
+		if err := os.MkdirAll(filepath.Join(root, directory), 0o755); err != nil {
+			t.Fatalf("create directory %s: %v", directory, err)
+		}
+	}
+
+	result := behaviorRun(t, root, Request{
+		Operation: Track,
+		Paths:     []string{"server", "config/*"},
+	})
+
+	change := behaviorSoleChange(t, result)
+	if change.Path != "config/rules.json" || !change.Accepted {
+		t.Fatalf("unexpected tracked change %+v", change)
+	}
+	if len(result.SkippedDirectories) != 2 ||
+		result.SkippedDirectories[0] != "server" ||
+		result.SkippedDirectories[1] != "config/sub" {
+		t.Fatalf("skipped directories = %v, want the two directories", result.SkippedDirectories)
+	}
+	if len(result.Skipped) != 0 {
+		t.Fatalf("skipped files = %v, want none", result.Skipped)
+	}
+	if declared := behaviorDeclared(t, root); len(declared) != 1 ||
+		declared[0].Path != "config/rules.json" {
+		t.Fatalf("manifest declares %+v", declared)
+	}
+}
+
+func TestFileOperationsRejectPathsOutsideWorkspace(t *testing.T) {
 	root := behaviorWorkspace(t)
 	outside := []byte("outside the workspace\n")
 	sibling := filepath.Join(filepath.Dir(root), "outside.txt")
@@ -794,7 +1077,21 @@ func TestFileTrackRejectsTraversalToExistingFile(t *testing.T) {
 	}
 	before := behaviorRead(t, root, documentpkg.ManifestFilename)
 
-	behaviorRunErr(t, root, Request{Operation: Track, Paths: []string{"../outside.txt"}})
+	for _, operation := range []Operation{Track, Untrack, Update, Recover} {
+		for _, path := range []string{
+			"../outside.txt",
+			"../*",
+			sibling,
+			filepath.Dir(sibling) + "/*",
+			".lucy/*",
+		} {
+			err := behaviorRunErr(t, root, Request{Operation: operation, Paths: []string{path}})
+			if !strings.Contains(err.Error(), "workspace") &&
+				!strings.Contains(err.Error(), "reserved state") {
+				t.Fatalf("%s %q error = %v", operation, path, err)
+			}
+		}
+	}
 
 	behaviorRequireBytes(t, sibling, outside)
 	behaviorRequireBytes(t, filepath.Join(root, documentpkg.ManifestFilename), before)

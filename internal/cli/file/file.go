@@ -41,30 +41,45 @@ const (
 
 	TrackLong = "Snapshot the current contents of existing regular files " +
 		"into the local content store and declare them in lucy.yaml. One " +
-		"invocation accepts every path atomically. By default each entry " +
+		"invocation accepts every path atomically. Paths accept " +
+		"shell-style patterns relative to the workspace: * and ? match " +
+		"within one path component, [abc], [a-z], and [!abc] match one " +
+		"character, and ** matches any number of directories, including " +
+		"none. Directories are reported as skipped. A pattern that " +
+		"matches no file or directory fails. " +
+		"Hidden files require an explicit leading dot, and .lucy and .git " +
+		"are never selected. By default each entry " +
 		"is mutable with an accepted hash; --immutable requires an " +
 		"accepted hash and raises warnings on deviation, --no-hash tracks " +
 		"presence only, and --recover-url records an explicit recovery " +
 		"source. An already tracked path fails rather than being " +
 		"implicitly updated."
 
-	UntrackLong = "Remove the declarations from lucy.yaml. Working content " +
-		"and historical backups are preserved."
+	UntrackLong = "Remove the declarations from lucy.yaml. Paths accept " +
+		"shell-style patterns relative to the workspace. Working content " +
+		"and historical backups are preserved. Directories are reported " +
+		"as skipped, and files that are not currently tracked are skipped " +
+		"with a warning. A pattern that matches no file or directory fails."
 
 	UpdateLong = "Snapshot and accept current bytes for one or more tracked " +
-		"files, or accept every tracked file at once with --all. The " +
-		"change policy and recover_url stay unchanged. --from-source " +
-		"fetches fresh bytes from recover_url, preserves the displaced " +
-		"working bytes, and accepts the new digest without requiring a " +
-		"match on the old one."
+		"files, or accept every tracked file at once with --all. Paths " +
+		"accept shell-style patterns matched against tracked declarations " +
+		"rather than the working tree; hidden tracked paths need an " +
+		"explicit leading dot. The change policy " +
+		"and recover_url stay unchanged. --from-source fetches fresh bytes " +
+		"from recover_url, preserves the displaced working bytes, and " +
+		"accepts the new digest without requiring a match on the old one."
 
 	RecoverLong = "Restore one or more tracked files to their accepted " +
-		"digests without accepting a new revision. Local content-addressed blobs are " +
-		"verified first; when none is available the recover_url is " +
+		"digests without accepting a new revision. Paths accept " +
+		"shell-style patterns matched against tracked declarations, so a " +
+		"deleted working file still matches; hidden tracked paths need an " +
+		"explicit leading dot. Local content-addressed blobs " +
+		"are verified first; when none is available the recover_url is " +
 		"fetched directly and checked against the accepted digest. " +
 		"Displaced working bytes are preserved without being accepted. " +
-		"--all restores every entry with an accepted hash and reports " +
-		"presence-only entries as skipped."
+		"Presence-only entries are reported as skipped when selected by a " +
+		"pattern or by --all."
 
 	RevertLong = "Restore and accept a backed-up historical revision of a " +
 		"tracked file. Without a target the accepted revision's parent is " +
@@ -72,12 +87,17 @@ const (
 		"toggling. A hash selects a digest, --revision selects one exact " +
 		"historical sequence."
 
-	LockLong = "Snapshot and accept the current bytes of one or more files, " +
-		"then warn about any future deviation without restoring or " +
-		"replacing them."
+	LockLong = "Snapshot and accept the current bytes of one or more tracked " +
+		"files, then warn about any future deviation without restoring or " +
+		"replacing them. Paths accept shell-style patterns matched against " +
+		"tracked declarations; hidden tracked paths need an explicit leading " +
+		"dot. A matched declaration with no working file is reported as " +
+		"skipped."
 
 	UnlockLong = "Accept the existing hashes and recover_urls but stop " +
-		"warning about deviation."
+		"warning about deviation. Paths accept shell-style patterns matched " +
+		"against tracked declarations; hidden tracked paths need an explicit " +
+		"leading dot."
 
 	ListLong = "Read-only inspection of every tracked file. Mutable files " +
 		"may deviate without warning; immutable files warn during " +
