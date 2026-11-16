@@ -294,7 +294,6 @@ func (a *packageAdopter) probeDescriptor(
 		))
 		return
 	}
-	proposal.modules = modules
 	if len(modules) == 0 {
 		proposal.warnings = append(proposal.warnings, a.importWarning(
 			importWarningNoServerModule,
@@ -304,6 +303,15 @@ func (a *packageAdopter) probeDescriptor(
 		))
 		return
 	}
+	if modulesAreClientOnly(modules) {
+		proposal.warnings = append(proposal.warnings, fmt.Errorf(
+			"package %s left unmanaged: client-only %s",
+			p.Path,
+			ecosystem,
+		))
+		return
+	}
+	proposal.modules = modules
 	if ecosystem == catalog.EcosystemMCDR {
 		a.probeMCDR(ctx, proposal, modules, ecosystem)
 		return
@@ -948,6 +956,19 @@ func (a *packageAdopter) requirePackageMap(
 
 func packageKey(ecosystem catalog.Ecosystem, packageID string) string {
 	return string(ecosystem) + "\x00" + packageID
+}
+
+// modulesAreClientOnly reports whether every module serves the client only.
+func modulesAreClientOnly(modules []catalog.DescriptorModule) bool {
+	if len(modules) == 0 {
+		return false
+	}
+	for _, module := range modules {
+		if module.Side != catalog.SideClient {
+			return false
+		}
+	}
+	return true
 }
 
 // reportMissingModules warns about required descriptor modules that no

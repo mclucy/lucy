@@ -195,7 +195,10 @@ func forgeDecodedDescriptor(
 			VersionDialect: version.DialectMaven,
 			NestedPath:     member,
 			DescriptorPath: descriptor.Path,
-			Dependencies:   []catalog.DescriptorDependency{},
+			Side: forgeModuleSide(
+				descriptor.Identifier.ClientSideOnly || mod.ClientSideOnly,
+			),
+			Dependencies: []catalog.DescriptorDependency{},
 		}
 		var metadata catalog.Metadata
 		if packageView {
@@ -250,6 +253,15 @@ func forgeLoaderModID(ecosystem catalog.Ecosystem) string {
 		return "neoforge"
 	}
 	return "forge"
+}
+
+// forgeModuleSide maps a descriptor's clientSideOnly flag. Forge skips a
+// client-only mod on a dedicated server, so its dependencies do not apply.
+func forgeModuleSide(clientSideOnly bool) catalog.Side {
+	if clientSideOnly {
+		return catalog.SideClient
+	}
+	return catalog.SideUnknown
 }
 
 // forgeDependencies translates one mod's dependency list into the resolver
