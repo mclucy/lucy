@@ -12,6 +12,7 @@ import (
 	"github.com/mclucy/lucy/document"
 	"github.com/mclucy/lucy/log"
 	"github.com/mclucy/lucy/receipt"
+	"github.com/mclucy/lucy/resolve"
 )
 
 func validateUnmanagedArtifacts(ctx context.Context, root string, d *document.Lock, overwrite bool, logger *log.Logger) error {
@@ -24,6 +25,10 @@ func validateUnmanagedArtifacts(ctx context.Context, root string, d *document.Lo
 	} else if !errors.Is(err, os.ErrNotExist) {
 		return err
 	}
+	runtime, hasRuntime := (resolve.Target{
+		Product:      d.Server.Product,
+		Bootstrapper: d.Server.Bootstrapper,
+	}).PackageRuntime()
 	seenDirectories := map[string]bool{}
 	for index := range d.Packages {
 		planned := &d.Packages[index]
@@ -57,7 +62,15 @@ func validateUnmanagedArtifacts(ctx context.Context, root string, d *document.Lo
 			if owned[filepath.ToSlash(filename)] {
 				continue
 			}
-			mods, err := artifact.ReadModules(ctx, filepath.Join(root, filename), planned.Ecosystem)
+			loader := planned.Ecosystem
+			if hasRuntime {
+				loader = runtime.ModuleNamespace(planned.Ecosystem)
+			}
+			mods, err := artifact.ReadModules(
+				ctx,
+				filepath.Join(root, filename),
+				loader,
+			)
 			if err != nil {
 				continue
 			}
