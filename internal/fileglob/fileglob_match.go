@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
-	"strings"
 
 	"github.com/bmatcuk/doublestar/v4"
 )
@@ -30,19 +29,17 @@ var ErrInvalidPattern = errors.New("invalid pattern")
 // directories are never returned.
 func Match(fsys fs.FS, pattern string) ([]Entry, error) {
 	matcher := globPattern(pattern)
+	pruned := &prunedFS{FS: fsys, dots: newDotPolicy(matcher)}
 	entries := make([]Entry, 0)
 	err := doublestar.GlobWalk(
-		fsys,
+		pruned,
 		matcher,
 		func(name string, entry fs.DirEntry) error {
-			if !explicitlySelectsHidden(matcher, name) {
+			if reservedPath(name) || !explicitlySelectsHidden(matcher, name) {
 				return nil
 			}
 			switch {
 			case entry.IsDir():
-				if reservedDirectory(entry) {
-					return doublestar.SkipDir
-				}
 				entries = append(entries, Entry{Path: name, Dir: true})
 			case entry.Type().IsRegular():
 				entries = append(entries, Entry{Path: name})
@@ -72,21 +69,10 @@ func MatchPaths(pattern string, paths []string) ([]string, error) {
 	}
 	matched := make([]string, 0, len(paths))
 	for _, path := range paths {
-		if !explicitlySelectsHidden(matcher, path) {
+		if reservedPath(path) || !explicitlySelectsHidden(matcher, path) {
 			continue
 		}
 		matched = append(matched, path)
 	}
 	return matched, nil
-}
-
-// reservedDirectory reports whether the directory holds Lucy or version
-// control state. A pattern never selects it.
-func reservedDirectory(entry fs.DirEntry) bool {
-	switch strings.ToLower(entry.Name()) {
-	case ".lucy", ".git":
-		return true
-	default:
-		return false
-	}
 }
