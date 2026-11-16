@@ -22,6 +22,8 @@ var pluginEcosystems = []struct {
 	{id: "net.fabricmc.fabric-loom", ecos: []catalogpkg.Ecosystem{catalogpkg.EcosystemFabric}},
 	{id: "net.fabricmc.fabric-loom-remap", ecos: []catalogpkg.Ecosystem{catalogpkg.EcosystemFabric}},
 	{id: "fabric-loom", ecos: []catalogpkg.Ecosystem{catalogpkg.EcosystemFabric}},
+	{id: "org.quiltmc.quilt-loom", ecos: []catalogpkg.Ecosystem{catalogpkg.EcosystemQuilt}},
+	{id: "quilt-loom", ecos: []catalogpkg.Ecosystem{catalogpkg.EcosystemQuilt}},
 	{id: "net.minecraftforge.gradle", ecos: []catalogpkg.Ecosystem{catalogpkg.EcosystemForge}},
 	{id: "net.neoforged.moddev.legacyforge", ecos: []catalogpkg.Ecosystem{catalogpkg.EcosystemForge}},
 	{id: "net.neoforged.moddev", ecos: []catalogpkg.Ecosystem{catalogpkg.EcosystemNeoForge}},

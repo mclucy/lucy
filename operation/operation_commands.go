@@ -17,7 +17,6 @@ import (
 	"github.com/mclucy/lucy/internal/workspacewrite"
 	"github.com/mclucy/lucy/log"
 	"github.com/mclucy/lucy/resolve"
-	serverpkg "github.com/mclucy/lucy/server"
 	"github.com/mclucy/lucy/version"
 	"github.com/mclucy/lucy/workspace"
 	"github.com/mclucy/lucy/workspace/discovery"
@@ -101,15 +100,9 @@ func selectedEcosystem(d *documentpkg.Manifest, requested catalog.Ecosystem) cat
 	if requested != catalog.EcosystemUnspecified {
 		return requested
 	}
-	switch d.Server.Core.Product {
-	case serverpkg.ProductFabric:
-		return catalog.EcosystemFabric
-	case serverpkg.ProductForge:
-		return catalog.EcosystemForge
-	case serverpkg.ProductNeoForge:
-		return catalog.EcosystemNeoForge
-	case serverpkg.ProductPaper, serverpkg.ProductPurpur:
-		return catalog.EcosystemPaper
+	target := resolve.Target{Product: d.Server.Core.Product}
+	if runtime, ok := target.PackageRuntime(); ok {
+		return runtime
 	}
 	if d.Server.Core.Repository != "" {
 		return catalog.EcosystemPaper

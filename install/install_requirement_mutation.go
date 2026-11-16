@@ -196,6 +196,22 @@ func retainDeclared(
 		}
 	}
 	indices := make(map[identity]int, len(packages))
+
+	// dependents lists the packages a DependencyOf reference of p names. The
+	// reference carries no ecosystem, so the named dependent may be recorded
+	// under any ecosystem that can share p's module namespace.
+	dependents := func(p *document.Package, source catalog.Ref) []int {
+		key := identityOf(p)
+		key.reference = source
+		var parents []int
+		for _, ecosystem := range p.Ecosystem.LoadedAlongside() {
+			key.ecosystem = ecosystem
+			if parent, ok := indices[key]; ok {
+				parents = append(parents, parent)
+			}
+		}
+		return parents
+	}
 	retained := make([]bool, len(packages))
 	enabled := make([]bool, len(packages))
 	for i := range packages {
@@ -217,10 +233,8 @@ func retainDeclared(
 	children := make([][]int, len(packages))
 	for i := range packages {
 		p := &packages[i]
-		key := identityOf(p)
 		for _, source := range p.DependencyOf {
-			key.reference = source
-			if parent, ok := indices[key]; ok {
+			for _, parent := range dependents(p, source) {
 				children[parent] = append(children[parent], i)
 			}
 		}
@@ -251,12 +265,16 @@ func retainDeclared(
 		}
 		p.Dependency = false
 		sources := p.DependencyOf[:0]
-		key := identityOf(&p)
 		for _, source := range p.DependencyOf {
-			key.reference = source
-			if parent, ok := indices[key]; ok && retained[parent] {
+			kept := false
+			for _, parent := range dependents(&p, source) {
+				if retained[parent] {
+					kept = true
+					p.Dependency = p.Dependency || enabled[parent]
+				}
+			}
+			if kept {
 				sources = append(sources, source)
-				p.Dependency = p.Dependency || enabled[parent]
 			}
 		}
 		p.DependencyOf = sources

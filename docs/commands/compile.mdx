@@ -3,7 +3,7 @@ title: "lucy compile"
 description: "Build a mod from a Git repository"
 ---
 
-Build a Fabric, Forge, or NeoForge mod from a GitHub repository or Git URL:
+Build a Fabric, Quilt, Forge, or NeoForge mod from a GitHub repository or Git URL:
 
 ```bash
 lucy compile owner/repo
@@ -24,7 +24,7 @@ Use `--branch` or `--tag` to select a revision. If the repository contains multi
 lucy compile owner/multi-platform-mod -o ./dist --build-dir fabric --project :fabric
 ```
 
-`--ecosystem` accepts `fabric`, `forge`, or `neoforge`. For detailed Git and Gradle logs, add `--log-level=debug --print-logs`.
+`--ecosystem` accepts `fabric`, `quilt`, `forge`, or `neoforge`. For detailed Git and Gradle logs, add `--log-level=debug --print-logs`.
 
 ## Flags
 
@@ -39,7 +39,7 @@ lucy compile owner/multi-platform-mod -o ./dist --build-dir fabric --project :fa
 </ParamField>
 
 <ParamField query="--ecosystem" type="string">
-  Restrict project selection to one mod type. Accepted values: `fabric`, `forge`, `neoforge`.
+  Restrict project selection to one mod type. Accepted values: `fabric`, `quilt`, `forge`, `neoforge`.
 </ParamField>
 
 <ParamField query="--build-dir" type="string">

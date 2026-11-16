@@ -221,34 +221,18 @@ func (i Identity) Ecosystem() catalog.Ecosystem {
 	if !i.IsValid() {
 		return catalog.EcosystemUnspecified
 	}
-	name := strings.ToLower(i.Primary.Name.String())
-	switch {
-	case name == "fabric" || name == "fabric-loader":
-		if i.Primary.Ecosystem == catalog.EcosystemFabric ||
-			i.Primary.Ecosystem == catalog.EcosystemUnspecified {
-			return catalog.EcosystemFabric
-		}
-	case name == "forge":
-		if i.Primary.Ecosystem == catalog.EcosystemForge ||
-			i.Primary.Ecosystem == catalog.EcosystemUnspecified {
-			return catalog.EcosystemForge
-		}
-	case name == "neoforge":
-		if i.Primary.Ecosystem == catalog.EcosystemNeoForge ||
-			i.Primary.Ecosystem == catalog.EcosystemUnspecified {
-			return catalog.EcosystemNeoForge
-		}
+	ecosystem := server.LoaderEcosystem(i.Primary.Name.String())
+	if ecosystem != catalog.EcosystemUnspecified &&
+		(i.Primary.Ecosystem == ecosystem ||
+			i.Primary.Ecosystem == catalog.EcosystemUnspecified) {
+		return ecosystem
 	}
 	for _, component := range i.Components {
-		name := strings.ToLower(component.Name.String())
-		switch {
-		case component.Ecosystem == catalog.EcosystemFabric &&
-			(name == "fabric-loader" || name == "fabricloader"):
-			return catalog.EcosystemFabric
-		case component.Ecosystem == catalog.EcosystemForge && name == "forge":
-			return catalog.EcosystemForge
-		case component.Ecosystem == catalog.EcosystemNeoForge && name == "neoforge":
-			return catalog.EcosystemNeoForge
+		if _, ok := server.LoaderComponentName(
+			component.Ecosystem,
+			component.Name.String(),
+		); ok {
+			return component.Ecosystem
 		}
 	}
 	return catalog.EcosystemMinecraft
@@ -343,34 +327,21 @@ func canonicalComponent(ref catalog.VersionedRef) (catalog.VersionedRef, bool) {
 	if name == "" || (!concreteVersion(ref.Version) && ref.Version != versionpkg.Unknown) {
 		return catalog.VersionedRef{}, false
 	}
-	switch ref.Ecosystem {
-	case catalog.EcosystemMinecraft:
-		if name != "minecraft" {
-			return catalog.VersionedRef{}, false
-		}
-		name = "minecraft"
-	case catalog.EcosystemFabric:
-		switch name {
-		case "fabric", "fabric-loader", "fabricloader":
-			name = "fabric-loader"
-		case "fabric-api":
-			name = "fabric-api"
-		default:
-			return catalog.VersionedRef{}, false
-		}
-	case catalog.EcosystemForge:
-		if name != "forge" {
-			return catalog.VersionedRef{}, false
-		}
-	case catalog.EcosystemNeoForge:
-		if name != "neoforge" {
-			return catalog.VersionedRef{}, false
-		}
+	component := catalog.Name(name)
+	switch {
+	case ref.Ecosystem == catalog.EcosystemMinecraft && name == "minecraft":
+		// The game is not a loader component.
+	case ref.Ecosystem == catalog.EcosystemFabric && name == "fabric-api":
+		// Fabric API is a mod that every Fabric runtime carries.
 	default:
-		return catalog.VersionedRef{}, false
+		loader, ok := server.LoaderComponentName(ref.Ecosystem, name)
+		if !ok {
+			return catalog.VersionedRef{}, false
+		}
+		component = loader
 	}
 	ref.Provider = catalog.ProviderUnspecified
-	ref.Name = catalog.Name(name)
+	ref.Name = component
 	return ref, true
 }
 

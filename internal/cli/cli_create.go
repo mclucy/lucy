@@ -395,6 +395,7 @@ func createProductSupported(product serverpkg.Product) bool {
 		serverpkg.ProductPaper,
 		serverpkg.ProductPurpur,
 		serverpkg.ProductFabric,
+		serverpkg.ProductQuilt,
 		serverpkg.ProductForge,
 		serverpkg.ProductNeoForge:
 		return true
@@ -456,13 +457,13 @@ func validateCreateMinecraft(value string, product serverpkg.Product) error {
 }
 
 // productFollowsMinecraftReleases reports whether the product publishes builds
-// as Minecraft versions ship. Vanilla always does, and Fabric tracks both
-// releases and snapshots. Forge, NeoForge, Paper, and Purpur build releases
-// only and lag behind them, so a channel keyword would name a version they do
-// not serve yet.
+// as Minecraft versions ship. Vanilla always does, and Fabric and Quilt track
+// both releases and snapshots. Forge, NeoForge, Paper, and Purpur build
+// releases only and lag behind them, so a channel keyword would name a version
+// they do not serve yet.
 func productFollowsMinecraftReleases(product serverpkg.Product) bool {
 	switch product {
-	case serverpkg.ProductMinecraft, serverpkg.ProductFabric:
+	case serverpkg.ProductMinecraft, serverpkg.ProductFabric, serverpkg.ProductQuilt:
 		return true
 	default:
 		return false

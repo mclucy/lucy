@@ -249,24 +249,16 @@ func RuntimeComponents(
 			Name:      "minecraft",
 			Version:   primary.Version,
 		})
-	case "fabric", "fabric-loader":
-		components = ensureRuntimeComponent(components, catalog.VersionedRef{
-			Ecosystem: catalog.EcosystemFabric,
-			Name:      "fabric-loader",
-			Version:   primary.Version,
-		})
-	case "forge":
-		components = ensureRuntimeComponent(components, catalog.VersionedRef{
-			Ecosystem: catalog.EcosystemForge,
-			Name:      "forge",
-			Version:   primary.Version,
-		})
-	case "neoforge":
-		components = ensureRuntimeComponent(components, catalog.VersionedRef{
-			Ecosystem: catalog.EcosystemNeoForge,
-			Name:      "neoforge",
-			Version:   primary.Version,
-		})
+	default:
+		if product, ok := serverpkg.ParseProduct(primary.Name.String()); ok {
+			if component := product.LoaderComponent(); component != "" {
+				components = ensureRuntimeComponent(components, catalog.VersionedRef{
+					Ecosystem: product.Ecosystem(),
+					Name:      component,
+					Version:   primary.Version,
+				})
+			}
+		}
 	}
 	if !hasRuntimeComponent(components, catalog.EcosystemMinecraft, "minecraft") {
 		components = ensureRuntimeComponent(components, catalog.VersionedRef{

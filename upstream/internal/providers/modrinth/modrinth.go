@@ -40,20 +40,7 @@ func (p *Provider) Search(ctx context.Context, q upstream.Query) (
 	err error,
 ) {
 	var facets []facetItems
-	switch q.FilterEcosystem {
-	case catalog.EcosystemForge:
-		facets = append(facets, facetForgeOnly)
-	case catalog.EcosystemFabric:
-		facets = append(facets, facetFabricOnly)
-	case catalog.EcosystemNeoForge:
-		facets = append(facets, facetNeoforgeOnly)
-	case catalog.EcosystemBukkit:
-		facets = append(facets, facetBukkitOnly)
-	case catalog.EcosystemUnspecified:
-		fallthrough
-	default:
-		facets = append(facets, facetAllLoaders)
-	}
+	facets = append(facets, loaderFacets(q.FilterEcosystem))
 
 	if !q.IncludeClient {
 		facets = append(facets, facetServerSupported)

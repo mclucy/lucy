@@ -11,8 +11,49 @@ import (
 	versionpkg "github.com/mclucy/lucy/version"
 )
 
+// clientOnlyIdentities collects module identities that only client-only
+// declarations answer. A loader filters those candidates out of a dedicated
+// server, so requirements they alone would answer are not failures. Each
+// identity is scoped like module resolution, by the environment of the
+// declaring package and the target's module namespace, so it exempts only
+// requirements in that namespace.
+func clientOnlyIdentities(
+	packages []document.Package,
+	target Target,
+) map[moduleKey]struct{} {
+	identities := map[moduleKey]struct{}{}
+	add := func(
+		environment serverpkg.Environment,
+		module catalog.DescriptorModule,
+	) {
+		for _, name := range module.ClientOnly {
+			id := normalizeModuleID(module.Ecosystem, name)
+			if id != "" {
+				identities[moduleKey{
+					environment,
+					target.moduleNamespace(module.Ecosystem),
+					id,
+				}] = struct{}{}
+			}
+		}
+	}
+	for pi := range packages {
+		p := &packages[pi]
+		if !p.Enabled() {
+			continue
+		}
+		for _, module := range p.Modules {
+			add(p.Environment, module)
+		}
+	}
+	for _, module := range target.CoreModules {
+		add(serverpkg.EnvironmentServer, module)
+	}
+	return identities
+}
+
 // moduleKey scopes a module identity so identically named modules in
-// different environments or ecosystems stay distinct.
+// different environments or module namespaces stay distinct.
 type moduleKey struct {
 	environment serverpkg.Environment
 	ecosystem   catalog.Ecosystem
@@ -49,6 +90,7 @@ type moduleProvider struct {
 // identity is an error.
 func finalizeModules(packages []document.Package, target Target) ([]ModuleProblem, error) {
 	runtime := runtimeModules(target)
+	clientOnly := clientOnlyIdentities(packages, target)
 	index, err := buildModuleIndex(packages, target, runtime)
 	if err != nil {
 		return nil, err
@@ -64,7 +106,7 @@ func finalizeModules(packages []document.Package, target Target) ([]ModuleProble
 			m := p.Modules[mi]
 			key := moduleKey{
 				p.Environment,
-				p.Ecosystem,
+				target.moduleNamespace(m.Ecosystem),
 				normalizeModuleID(m.Ecosystem, m.ID),
 			}
 			if owner, ok := index[key]; !ok || !owner.source.owns(pi, mi) {
@@ -72,7 +114,15 @@ func finalizeModules(packages []document.Package, target Target) ([]ModuleProble
 			}
 			problems = append(
 				problems,
-				checkModuleDependencies(p, m, target, index, runtime)...,
+				checkModuleDependencies(p, m, moduleScope{
+					target:      target,
+					environment: p.Environment,
+					ecosystem:   m.Ecosystem,
+					dialect:     m.VersionDialect,
+					runtime:     runtime,
+					index:       index,
+					clientOnly:  clientOnly,
+				})...,
 			)
 			surviving[pi] = append(surviving[pi], m)
 		}
@@ -86,6 +136,18 @@ func finalizeModules(packages []document.Package, target Target) ([]ModuleProble
 		packages[pi].Modules = surviving[pi]
 	}
 	return problems, nil
+}
+
+// moduleIdentities lists every identity a module answers: its ID, the
+// identities it provides, and its group-qualified ID.
+func moduleIdentities(m catalog.DescriptorModule) []string {
+	names := make([]string, 0, len(m.Provides)+2)
+	names = append(names, m.ID)
+	names = append(names, m.Provides...)
+	if m.Group != "" {
+		names = append(names, m.Group+":"+m.ID)
+	}
+	return names
 }
 
 // buildModuleIndex resolves every module identity to the declaration that
@@ -106,17 +168,23 @@ func buildModuleIndex(
 			continue
 		}
 		for mi, m := range p.Modules {
-			candidate := moduleProvider{
-				source:    moduleSource{packageIndex: pi, moduleIndex: mi},
-				module:    m,
-				provider:  p.Provider,
-				projectID: p.ProjectID,
-			}
-			names := append([]string{m.ID}, m.Provides...)
-			for _, name := range names {
+			for _, name := range moduleIdentities(m) {
+				module := m
+				if name != m.ID {
+					module.Version = m.ProvidedVersion(name)
+				}
+				candidate := moduleProvider{
+					source: moduleSource{
+						packageIndex: pi,
+						moduleIndex:  mi,
+					},
+					module:    module,
+					provider:  p.Provider,
+					projectID: p.ProjectID,
+				}
 				key := moduleKey{
 					p.Environment,
-					p.Ecosystem,
+					target.moduleNamespace(m.Ecosystem),
 					normalizeModuleID(m.Ecosystem, name),
 				}
 				previous, ok := index[key]
@@ -220,31 +288,22 @@ func servesTarget(
 	target Target,
 	runtime map[string]catalog.DescriptorModule,
 ) (bool, bool) {
+	scope := moduleScope{
+		target:    target,
+		ecosystem: m.Ecosystem,
+		dialect:   m.VersionDialect,
+		runtime:   runtime,
+	}
 	for di := range m.Dependencies {
 		dep := &m.Dependencies[di]
 		if dep.Kind != catalog.DependencyKindRequired || dep.ID == "java" {
 			continue
 		}
-		provided, ok := runtime[normalizeModuleID(m.Ecosystem, dep.ID)]
-		if !ok || dep.Constraint == "" {
-			continue
+		outcome, err := scope.evaluate(dep, false)
+		if err != nil {
+			return false, false
 		}
-		matched := fmlLoader(target) && provided.Version == "0.0NONE"
-		if !matched {
-			var err error
-			matched, err = versionpkg.Match(dep.Constraint, provided.Version, m.VersionDialect)
-			if err != nil {
-				return false, false
-			}
-		}
-		if !matched {
-			var err error
-			matched, err = matchesLoaderCompatibility(dep.Constraint, dep.ID, target, m.VersionDialect)
-			if err != nil {
-				return false, false
-			}
-		}
-		if !matched {
+		if outcome.present && !outcome.matched {
 			return false, true
 		}
 	}
@@ -258,13 +317,38 @@ func runtimeModules(target Target) map[string]catalog.DescriptorModule {
 	modules := map[string]catalog.DescriptorModule{}
 	add := func(module catalog.DescriptorModule) {
 		id := normalizeModuleID(module.Ecosystem, module.ID)
-		if id == "" {
-			return
+		if id != "" {
+			if _, ok := modules[id]; !ok {
+				modules[id] = module
+			}
 		}
-		if _, ok := modules[id]; ok {
-			return
+		if module.Group != "" && id != "" {
+			groupID := module.Group + ":" + id
+			if _, ok := modules[groupID]; !ok {
+				alias := module
+				alias.ID = groupID
+				alias.Provides = nil
+				alias.ProvidedVersions = nil
+				modules[groupID] = alias
+			}
 		}
-		modules[id] = module
+		for _, name := range module.Provides {
+			key := normalizeModuleID(module.Ecosystem, name)
+			if key == "" {
+				continue
+			}
+			if _, ok := modules[key]; ok {
+				continue
+			}
+			alias := module
+			alias.ID = name
+			alias.Version = module.ProvidedVersion(name)
+			alias.Group = ""
+			alias.Provides = nil
+			alias.ProvidedVersions = nil
+			alias.Dependencies = nil
+			modules[key] = alias
+		}
 	}
 	add(catalog.DescriptorModule{
 		ID:        "minecraft",
@@ -277,6 +361,12 @@ func runtimeModules(target Target) map[string]catalog.DescriptorModule {
 			ID:        "fabricloader",
 			Version:   target.CoreVersion,
 			Ecosystem: catalog.EcosystemFabric,
+		})
+	case serverpkg.ProductQuilt:
+		add(catalog.DescriptorModule{
+			ID:        "quilt_loader",
+			Version:   target.CoreVersion,
+			Ecosystem: catalog.EcosystemQuilt,
 		})
 	case serverpkg.ProductForge:
 		add(catalog.DescriptorModule{
@@ -309,92 +399,4 @@ func normalizeModuleID(ecosystem catalog.Ecosystem, id string) string {
 		return strings.ToLower(id)
 	}
 	return id
-}
-
-func checkModuleDependencies(
-	p *document.Package,
-	m catalog.DescriptorModule,
-	target Target,
-	index map[moduleKey]moduleProvider,
-	runtime map[string]catalog.DescriptorModule,
-) []ModuleProblem {
-	var problems []ModuleProblem
-	for di := range m.Dependencies {
-		dep := &m.Dependencies[di]
-		// A Java requirement is checked against the Java runtime that runs
-		// the server, and only warns.
-		if dep.Kind == catalog.DependencyKindPython || dep.ID == "java" {
-			continue
-		}
-		value := ""
-		var owner *moduleProvider
-		if module, ok := runtime[normalizeModuleID(p.Ecosystem, dep.ID)]; ok {
-			value = string(module.Version)
-		} else {
-			key := moduleKey{
-				p.Environment,
-				p.Ecosystem,
-				normalizeModuleID(p.Ecosystem, dep.ID),
-			}
-			if provider, ok := index[key]; ok {
-				owner = &provider
-				value = string(provider.module.Version)
-			}
-		}
-		// serverProvided marks a requirement the target satisfies from its own
-		// modules. No candidate can change such a value.
-		serverProvided := owner == nil && value != ""
-		matched := value != ""
-		invalid := false
-		if fmlLoader(target) && value == "0.0NONE" {
-			// FMLLoader treats the 0.0NONE sentinel as satisfying every range.
-			matched = true
-		} else if matched && dep.Constraint != "" {
-			var err error
-			matched, err = versionpkg.Match(
-				dep.Constraint,
-				versionpkg.Version(value),
-				m.VersionDialect,
-			)
-			if err != nil {
-				problems = append(problems, moduleProblem(p, m.ID, *dep, value, serverProvided, fmt.Sprintf("module %s requires %s %s: %v", m.ID, dep.ID, dep.Constraint, err)))
-				invalid = true
-			}
-		}
-		if !invalid && dep.Constraint != "" && !matched {
-			compatible, err := matchesLoaderCompatibility(
-				dep.Constraint,
-				dep.ID,
-				target,
-				m.VersionDialect,
-			)
-			if err != nil {
-				problems = append(problems, moduleProblem(p, m.ID, *dep, value, serverProvided, fmt.Sprintf("module %s requires %s %s: %v", m.ID, dep.ID, dep.Constraint, err)))
-				invalid = true
-			} else {
-				matched = compatible
-			}
-		}
-		requirement := strings.TrimSpace(dep.ID + " " + dep.Constraint)
-		if !invalid && dep.Kind == catalog.DependencyKindRequired && !matched {
-			if value == "" {
-				problems = append(problems, moduleProblem(p, m.ID, *dep, "", false, fmt.Sprintf("module %s requires %s, which no selected package provides", m.ID, requirement)))
-			} else {
-				problems = append(problems, moduleProblem(p, m.ID, *dep, value, serverProvided, fmt.Sprintf("module %s requires %s (selected %s)", m.ID, requirement, value)))
-			}
-		}
-		if !invalid && dep.Kind == catalog.DependencyKindIncompatible && matched {
-			problems = append(problems, moduleProblem(p, m.ID, *dep, value, serverProvided, fmt.Sprintf("module %s breaks %s %s", m.ID, dep.ID, value)))
-		}
-		if matched {
-			if owner != nil && !owner.source.runtime() {
-				dep.Provider = owner.provider
-				dep.ProjectID = owner.projectID
-				dep.ModuleID = owner.module.ID
-			} else {
-				dep.ModuleID = dep.ID
-			}
-		}
-	}
-	return problems
 }

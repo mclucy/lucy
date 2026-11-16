@@ -2,15 +2,18 @@ package artifact
 
 import (
 	"archive/zip"
+	"encoding/json/jsontext"
 	"encoding/json/v2"
+	"strings"
 
 	"github.com/mclucy/lucy/catalog"
-	"github.com/mclucy/lucy/input"
-	"github.com/mclucy/lucy/internal/fileschema"
+	"github.com/mclucy/lucy/internal/fn"
 	"github.com/mclucy/lucy/version"
 )
 
 type mcdrReader struct{}
+
+var _ Reader = (*mcdrReader)(nil)
 
 func newMcdrReader() Reader {
 	return &mcdrReader{}
@@ -20,76 +23,176 @@ func (r *mcdrReader) Read(
 	zipRdr *zip.Reader,
 	filePath string,
 ) ([]PackageInfo, error) {
-	for _, f := range zipRdr.File {
-		if f.Name != "mcdreforged.plugin.json" {
-			continue
-		}
+	decoded, err := decodeMCDRDescriptor(zipRdr, "")
+	if err != nil {
+		return nil, err
+	}
+	return packageInfosFromDecoded(filePath, decoded)
+}
 
-		rc, err := f.Open()
+func decodeMCDRDescriptor(
+	zipRdr *zip.Reader,
+	member string,
+) (*decodedDescriptor, error) {
+	raw, err := readZipEntryBytes(zipRdr, "mcdreforged.plugin.json")
+	if err != nil || raw == nil {
+		return nil, err
+	}
+	return mcdrDecodedDescriptor(zipRdr, raw, member)
+}
+
+// mcdrDescription is the plugin description. MCDR accepts one string or a map
+// from language to text.
+type mcdrDescription struct {
+	EnUs string
+	ZhCn string
+}
+
+func (d *mcdrDescription) UnmarshalJSON(data []byte) error {
+	var text string
+	if err := json.Unmarshal(data, &text); err == nil {
+		d.EnUs = text
+		return nil
+	}
+	var localized map[string]string
+	if err := json.Unmarshal(data, &localized); err != nil {
+		// The loader ignores a description it cannot read.
+		return nil
+	}
+	d.EnUs = localized["en_us"]
+	d.ZhCn = localized["zh_cn"]
+	return nil
+}
+
+type mcdrPluginFile struct {
+	ID               string                   `json:"id"`
+	Version          string                   `json:"version"`
+	Name             string                   `json:"name"`
+	Description      mcdrDescription          `json:"description"`
+	Author           fn.SingleOrSlice[string] `json:"author"`
+	Link             string                   `json:"link"`
+	Dependencies     map[string]string        `json:"dependencies"`
+	Requirements     []string                 `json:"requirements"`
+	RequirementsFile jsontext.Value           `json:"requirements_file"`
+}
+
+func mcdrDecodedDescriptor(
+	zipRdr *zip.Reader,
+	raw []byte,
+	member string,
+) (*decodedDescriptor, error) {
+	descriptor := &mcdrPluginFile{}
+	if err := json.Unmarshal(raw, descriptor); err != nil {
+		return nil, err
+	}
+	module := catalog.DescriptorModule{
+		ID:             descriptor.ID,
+		Version:        version.Version(descriptor.Version),
+		Ecosystem:      catalog.EcosystemMCDR,
+		VersionDialect: version.DialectMCDR,
+		NestedPath:     member,
+		DescriptorPath: "mcdreforged.plugin.json",
+		Dependencies:   []catalog.DescriptorDependency{},
+	}
+	for id, rangeText := range descriptor.Dependencies {
+		module.Dependencies = append(module.Dependencies, catalog.DescriptorDependency{
+			ID:         id,
+			Kind:       catalog.DependencyKindRequired,
+			Constraint: rangeText,
+		})
+	}
+	for _, requirement := range descriptor.Requirements {
+		module.Dependencies = append(module.Dependencies, catalog.DescriptorDependency{
+			ID:   requirement,
+			Kind: catalog.DependencyKindPython,
+		})
+	}
+	if zipRdr != nil {
+		files, err := mcdrRequirementFiles(descriptor.RequirementsFile)
 		if err != nil {
 			return nil, err
 		}
-
-		pluginInfo := &fileschema.FileMcdrPluginIdentifier{}
-		decodeErr := json.UnmarshalRead(rc, pluginInfo)
-		closeErr := rc.Close()
-		if decodeErr != nil {
-			return nil, decodeErr
+		if len(files) == 0 {
+			files = []string{"requirements.txt"}
 		}
-		if closeErr != nil {
-			return nil, closeErr
-		}
-
-		authors := make([]catalog.Person, len(pluginInfo.Author))
-		for i, author := range pluginInfo.Author {
-			authors[i] = catalog.Person{Name: author}
-		}
-
-		urls := make([]catalog.URL, 0, 1)
-		if pluginInfo.Link != "" {
-			urls = append(
-				urls, catalog.URL{
-					Name: "Link",
-					Type: catalog.URLSource,
-					URL:  pluginInfo.Link,
-				},
-			)
-		}
-
-		info := PackageInfo{
-			Ref:      catalog.VersionedRef{Ref: catalog.Ref{Name: input.ToProjectName(pluginInfo.ID), Provider: catalog.ProviderUnknown}, Ecosystem: catalog.EcosystemMCDR, Version: version.Version(pluginInfo.Version)},
-			FilePath: filePath,
-			Metadata: catalog.Metadata{
-				Title:       pluginInfo.Name,
-				Description: pluginInfo.Description.EnUs,
-				Authors:     authors,
-				URLs:        urls,
-			},
-		}
-
-		if len(pluginInfo.Dependencies) > 0 {
-			deps := make([]Dependency, 0, len(pluginInfo.Dependencies))
-			for key, value := range pluginInfo.Dependencies {
-				constraint, err := version.ParseConstraint(
-					value,
-					version.DialectMCDR,
-				)
-				if err != nil {
-					return nil, err
-				}
-				deps = append(
-					deps, Dependency{
-						Ref:        catalog.VersionedRef{Ref: catalog.Ref{Name: input.ToProjectName(key), Provider: catalog.ProviderUnknown}, Ecosystem: catalog.EcosystemMCDR},
-						Constraint: constraint,
-						Mandatory:  true,
+		for _, name := range files {
+			content, err := readZipEntryBytes(zipRdr, name)
+			if err != nil {
+				return nil, err
+			}
+			if content == nil {
+				continue
+			}
+			for _, requirement := range mcdrRequirements(content) {
+				module.Dependencies = append(
+					module.Dependencies,
+					catalog.DescriptorDependency{
+						ID:   requirement,
+						Kind: catalog.DependencyKindPython,
 					},
 				)
 			}
-			info.Dependencies = deps
 		}
-
-		return []PackageInfo{info}, nil
 	}
 
-	return nil, nil
+	decoded := decodedModule{
+		Module:           module,
+		PackageEcosystem: catalog.EcosystemMCDR,
+		Metadata:         mcdrMetadata(descriptor),
+	}
+	return &decodedDescriptor{Modules: []decodedModule{decoded}}, nil
+}
+
+func mcdrMetadata(descriptor *mcdrPluginFile) catalog.Metadata {
+	authors := make([]catalog.Person, len(descriptor.Author))
+	for i, author := range descriptor.Author {
+		authors[i] = catalog.Person{Name: author}
+	}
+	urls := make([]catalog.URL, 0, 1)
+	if descriptor.Link != "" {
+		urls = append(
+			urls,
+			catalog.URL{
+				Name: "Link",
+				Type: catalog.URLSource,
+				URL:  descriptor.Link,
+			},
+		)
+	}
+	return catalog.Metadata{
+		Title:       descriptor.Name,
+		Description: descriptor.Description.EnUs,
+		Authors:     authors,
+		URLs:        urls,
+	}
+}
+
+func mcdrRequirementFiles(raw jsontext.Value) ([]string, error) {
+	if len(raw) == 0 {
+		return nil, nil
+	}
+	var one string
+	if err := json.Unmarshal(raw, &one); err == nil {
+		if one == "" {
+			return nil, nil
+		}
+		return []string{one}, nil
+	}
+	var many []string
+	if err := json.Unmarshal(raw, &many); err != nil {
+		return nil, err
+	}
+	return many, nil
+}
+
+func mcdrRequirements(content []byte) []string {
+	var requirements []string
+	for line := range strings.SplitSeq(string(content), "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "#") || strings.HasPrefix(line, "-") {
+			continue
+		}
+		requirements = append(requirements, line)
+	}
+	return requirements
 }
