@@ -1,0 +1,93 @@
+---
+title: "lucy import"
+description: "Create a workspace from a server archive or modpack"
+---
+
+`lucy import` turns a server archive into a lucy workspace. It reads a local file or a direct `http` or `https` download link, unpacks the server into the target directory, and writes `lucy.yaml` and `lucy-lock.yaml`, the same files [`lucy init`](/commands/init) produces for a server that is already on disk.
+
+```bash
+lucy import ~/Downloads/server-pack.zip
+lucy import https://example.com/packs/all-the-mods.mrpack --directory mods
+lucy import modrinth:all-the-mods@1.2.0
+```
+
+## Supported sources
+
+Import accepts two kinds of source:
+
+- A Modrinth modpack in `.mrpack` format. Import reads the declared Minecraft version and loader, installs that loader into the workspace, and records the modpack's server-side files.
+- A server directory packed as a `.zip` or `.tar.gz` archive. Import detects the server software the same way `lucy init` does.
+
+Sources are a local path, a direct link to the archive, or a remote modpack reference described below. Relative local paths resolve against the current directory.
+
+Client packs and launcher instances are not supported yet.
+
+## Remote modpacks
+
+Instead of a file, pass a modpack identifier or a modpack page URL. Lucy asks the provider which pack file the modpack publishes, downloads that file, and imports it the same way:
+
+- `modrinth:<slug>` or `https://modrinth.com/modpack/<slug>` imports a Modrinth modpack.
+- `curseforge:<slug-or-id>` or `https://www.curseforge.com/minecraft/modpacks/<slug>` imports a CurseForge modpack.
+
+Without a pin, import uses the newest pack the provider lists. Pin a version or file with `@` or with a version or file page:
+
+- `modrinth:all-the-mods@1.2.0` or `https://modrinth.com/modpack/all-the-mods/version/1.2.0` pins a Modrinth version, given by its version number or version ID.
+- `curseforge:all-the-mods@4567890` or `https://www.curseforge.com/minecraft/modpacks/all-the-mods/files/4567890` pins a CurseForge file, given by its numeric file ID.
+
+CurseForge requires an API key. Set `curseforge.api_key` in your lucy configuration (see [`lucy config`](/commands/config)). Without it, a CurseForge source fails before any file is written.
+
+Import checks the hashes the provider publishes for the pack, preferring SHA-512 over SHA-1. A resolved pack that publishes neither is rejected, so pass `--sha256` to supply the expected checksum yourself. Other `http` and `https` links are downloaded directly and are checked only by `--sha256`.
+
+## Choose the target directory
+
+By default, import uses the current directory when it is empty or does not exist. When the current directory has files in it, import creates a new directory named after the archive. For example, `All The Mods.mrpack` becomes `all-the-mods`. For a remote modpack, the new directory is named after the project, so `modrinth:all-the-mods` becomes `all-the-mods`.
+
+Pass `--directory` to choose the target yourself. A relative path resolves against the current directory. Import never writes into a non-empty directory you name, and it fails rather than overwriting an existing workspace.
+
+The workspace name defaults to the target directory's name. Pass `--name` to store a different one.
+
+## Verify the download
+
+Pass `--sha256` with the expected checksum of the archive, as 64 hexadecimal characters. Import fails when the archive does not match it. A remote modpack whose pack publishes no hash is rejected unless you pass this flag.
+
+## What gets reported
+
+After a successful import, lucy prints the workspace, the server product and Minecraft version, the number of server files written, the number of client-only files skipped, and the number of packages lucy manages. Files it does not recognize are listed as unmanaged, so you can decide whether to add them yourself. Review lines name anything that needs your attention. Warnings appear on stderr.
+
+Imported packages are managed from then on, the same as packages recorded by `lucy init`. See [`lucy install`](/commands/install) for how later changes take effect.
+
+## Flags
+
+<ParamField query="--directory, -d" type="string">
+  Directory to create the workspace in. Resolves against the current directory. Defaults to the current directory when it is empty or absent, and otherwise to a new directory named after the source.
+</ParamField>
+
+<ParamField query="--name" type="string">
+  Server name stored as the top-level `name` in `lucy.yaml`. Defaults to the target directory's name. The name is trimmed and must be non-empty and printable.
+</ParamField>
+
+<ParamField query="--mcdr-version" type="string">
+  Record MCDReforged at this version as the server wrapper.
+</ParamField>
+
+<ParamField query="--sha256" type="string">
+  Expected SHA-256 checksum of the source archive, as 64 hexadecimal characters.
+</ParamField>
+
+<ParamField query="--core" type="string">
+  Expect this server product. No match fails and lists the products found.
+</ParamField>
+
+<ParamField query="--core-version" type="string">
+  Expect this exact server product version. Requires `--core`.
+</ParamField>
+
+<ParamField query="--minecraft" type="string">
+  Expect this exact Minecraft version.
+</ParamField>
+
+<ParamField query="--no-comments" type="boolean" default="false">
+  Omit generated comments and examples from `lucy.yaml`.
+</ParamField>
+
+See also [Global Flags](/commands/global-flags), [`lucy init`](/commands/init), and [`lucy create`](/commands/create).

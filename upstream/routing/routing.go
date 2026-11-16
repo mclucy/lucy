@@ -14,6 +14,7 @@
 package routing
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"strings"
@@ -46,6 +47,7 @@ type providerCatalog struct {
 	infoProviders   map[catalogpkg.Provider]upstream.InfoProvider
 	artifactMappers map[catalogpkg.Provider]upstream.ArtifactMapProvider
 	catalogues      map[catalogpkg.Provider]upstream.PackageCatalogue
+	importPacks     map[catalogpkg.Provider]upstream.ImportPackResolver
 }
 
 // Router binds configured provider instances to their capabilities and applies
@@ -113,6 +115,9 @@ func New(
 		artifactMappers: map[catalogpkg.Provider]upstream.ArtifactMapProvider{
 			catalogpkg.ProviderModrinth: modrinthProvider,
 		},
+		importPacks: map[catalogpkg.Provider]upstream.ImportPackResolver{
+			catalogpkg.ProviderModrinth: modrinthProvider,
+		},
 	}
 	if key := strings.TrimSpace(curseforgeAPIKey); key != "" {
 		curseforgeProvider := curseforge.New(network, logger, key)
@@ -120,6 +125,7 @@ func New(
 		router.providers.infoProviders[catalogpkg.ProviderCurseForge] = curseforgeProvider
 		router.providers.catalogues[catalogpkg.ProviderCurseForge] = curseforgeProvider
 		router.providers.artifactMappers[catalogpkg.ProviderCurseForge] = curseforgeProvider
+		router.providers.importPacks[catalogpkg.ProviderCurseForge] = curseforgeProvider
 	}
 	return router
 }
@@ -330,4 +336,31 @@ func (r *Router) informersFromKeys(keys []catalogpkg.Provider) (
 		capabilities = append(capabilities, capability)
 	}
 	return capabilities, nil
+}
+
+// ResolveImportPack resolves a registry project and optional version selector
+// to a server pack downloadable from provider. An empty version selects the
+// provider's newest suitable release.
+func (r *Router) ResolveImportPack(
+	ctx context.Context,
+	provider catalogpkg.Provider,
+	project, version string,
+) (upstream.ImportPack, error) {
+	// ProviderUnspecified has no ecosystem to infer from, so it cannot resolve.
+	if provider == catalogpkg.ProviderUnknown || provider == catalogpkg.ProviderUnspecified {
+		return upstream.ImportPack{}, ErrUnknownProvider
+	}
+	resolver, ok := r.providers.importPacks[provider]
+	if !ok {
+		if provider == catalogpkg.ProviderCurseForge {
+			return upstream.ImportPack{}, curseforge.ErrNoApiKey
+		}
+		r.logger.Debug(
+			"routing: import pack rejected",
+			"provider", provider,
+			"reason", "provider has no import pack capability",
+		)
+		return upstream.ImportPack{}, fmt.Errorf("%w: %s", ErrUnsupportedProvider, provider)
+	}
+	return resolver.ResolveImportPack(ctx, project, version)
 }

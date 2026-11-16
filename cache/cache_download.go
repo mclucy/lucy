@@ -34,7 +34,13 @@ type DownloadOptions struct {
 	OnResolvedFilename func(string)
 	TTL                time.Duration
 	FileMode           os.FileMode
+	// MaxBytes rejects content larger than this many bytes on a download or a
+	// cache hit. Zero accepts any size.
+	MaxBytes int64
 }
+
+// ErrDownloadTooLarge reports content beyond a download's MaxBytes limit.
+var ErrDownloadTooLarge = errors.New("download exceeds size limit")
 
 type BytesRequestOptions struct {
 	Kind          EntryKind
@@ -148,7 +154,12 @@ func copyCachedFile(
 			resolvedName,
 		)
 	}
-	destFile, err := copyFileContext(ctx, reader, destPath, opts.FileMode)
+	destFile, err := copyFileContext(
+		ctx,
+		limitDownloadReader(reader, opts.MaxBytes),
+		destPath,
+		opts.FileMode,
+	)
 	if err != nil {
 		return nil, fmt.Errorf(
 			"failed to copy cached file to destination: %w",
@@ -166,6 +177,65 @@ func copyCachedFile(
 		CacheHit: true,
 		Verified: false,
 	}, nil
+}
+
+// limitDownloadReader fails once a stream produces more than limit bytes.
+// A non-positive limit leaves the reader unbounded.
+func limitDownloadReader(reader io.Reader, limit int64) io.Reader {
+	if limit <= 0 {
+		return reader
+	}
+	return &limitedDownloadReader{reader: reader, limit: limit}
+}
+
+type limitedDownloadReader struct {
+	reader io.Reader
+	limit  int64
+	total  int64
+}
+
+func (r *limitedDownloadReader) Read(p []byte) (int, error) {
+	n, err := r.reader.Read(p)
+	r.total += int64(n)
+	if r.total > r.limit {
+		return n, fmt.Errorf(
+			"%w: %d bytes exceeds %d",
+			ErrDownloadTooLarge,
+			r.total,
+			r.limit,
+		)
+	}
+	return n, err
+}
+
+// ProgressReader reports the cumulative bytes read from reader. It is the
+// counting half of a DownloadOptions.WrapReader, whose size argument is the
+// transfer total the response announced.
+func ProgressReader(
+	reader io.Reader,
+	total int64,
+	report func(read, total int64),
+) io.Reader {
+	if report == nil {
+		return reader
+	}
+	return &progressReader{reader: reader, total: total, report: report}
+}
+
+type progressReader struct {
+	reader io.Reader
+	total  int64
+	read   int64
+	report func(read, total int64)
+}
+
+func (r *progressReader) Read(p []byte) (int, error) {
+	n, err := r.reader.Read(p)
+	r.read += int64(n)
+	if n > 0 {
+		r.report(r.read, r.total)
+	}
+	return n, err
 }
 
 type contextReader struct {
@@ -423,6 +493,15 @@ func (c *Client) downloadAndCache(
 	if opts.WrapReader != nil {
 		reader = opts.WrapReader(reader, resp.ContentLength)
 	}
+	if opts.MaxBytes > 0 && resp.ContentLength > opts.MaxBytes {
+		return nil, fmt.Errorf(
+			"%w: %d bytes exceeds %d",
+			ErrDownloadTooLarge,
+			resp.ContentLength,
+			opts.MaxBytes,
+		)
+	}
+	reader = limitDownloadReader(reader, opts.MaxBytes)
 
 	if _, err := io.Copy(io.MultiWriter(writers...), contextReader{ctx, reader}); err != nil {
 		return nil, fmt.Errorf("download stream failed: %w", err)

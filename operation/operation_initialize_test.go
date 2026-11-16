@@ -113,10 +113,18 @@ func (initializeInstallSource) ResolveServerProduct(
 	return resolution, nil
 }
 
-// newInitializeTestService builds the operation service over an isolated home:
-// initialization acquires the per-user artifact store and registers the
-// workspace, so neither may reach the developer's real data directory.
+// newInitializeTestService builds the operation service with the default
+// source, which identifies no package.
 func newInitializeTestService(t *testing.T) *Service {
+	t.Helper()
+	return newInitializeTestServiceWithSource(t, initializeTestSource{})
+}
+
+// newInitializeTestServiceWithSource builds the operation service over an
+// isolated home: initialization acquires the per-user artifact store and
+// registers the workspace, so neither may reach the developer's real data
+// directory.
+func newInitializeTestServiceWithSource(t *testing.T, source Source) *Service {
 	t.Helper()
 	isolateOperationHome(t)
 	registry := operationTestRegistry(t)
@@ -140,7 +148,7 @@ func newInitializeTestService(t *testing.T) *Service {
 	)
 	return NewService(
 		installer,
-		initializeTestSource{},
+		source,
 		registry,
 		logger,
 	)
