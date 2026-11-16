@@ -88,16 +88,23 @@ type packageMapper struct {
 
 // adoptInstalledPackages adds requirements for the packages discovery
 // identified and returns the ownership claims installation must record,
-// together with the releases resolution selects for them.
+// together with the releases resolution selects for them and the absent
+// modules the adoption report already named.
 func (s *Service) adoptInstalledPackages(
 	ctx context.Context,
 	root string,
 	manifest *documentpkg.Manifest,
 	observed *workspace.Workspace,
-) (packages []install.AdoptedPackage, releases []install.AdoptedRelease, inspected int, err error) {
+) (
+	packages []install.AdoptedPackage,
+	releases []install.AdoptedRelease,
+	reportedMissing map[string]struct{},
+	inspected int,
+	err error,
+) {
 	mappers, err := s.packageMappers()
 	if err != nil {
-		return nil, nil, 0, err
+		return nil, nil, nil, 0, err
 	}
 	mcdrVersion := ""
 	if manifest.MCDR != nil {
@@ -138,14 +145,15 @@ func (s *Service) adoptInstalledPackages(
 	}
 	wg.Wait()
 	if err := ctx.Err(); err != nil {
-		return nil, nil, 0, err
+		return nil, nil, nil, 0, err
 	}
 	for _, proposal := range proposals {
 		if proposal.fatal != nil {
-			return nil, nil, 0, proposal.fatal
+			return nil, nil, nil, 0, proposal.fatal
 		}
 		adopter.apply(proposal)
 	}
+	reportedMissing = adopter.reportMissingModules(proposals)
 	packages = slices.DeleteFunc(
 		adopter.packages,
 		func(pkg install.AdoptedPackage) bool { return pkg.Path == "" },
@@ -159,7 +167,7 @@ func (s *Service) adoptInstalledPackages(
 		"count", len(packages),
 		"present", len(discovered),
 	)
-	return packages, releases, len(unique), nil
+	return packages, releases, reportedMissing, len(unique), nil
 }
 
 // uniquePackages keeps one entry per file, preferring an ecosystem the server
@@ -286,8 +294,11 @@ func (a *packageAdopter) probeDescriptor(
 		))
 		return
 	}
+	proposal.modules = modules
 	if len(modules) == 0 {
-		proposal.warnings = append(proposal.warnings, fmt.Errorf(
+		proposal.warnings = append(proposal.warnings, a.importWarning(
+			importWarningNoServerModule,
+			p.Path,
 			"package %s left unmanaged: its descriptor declares no server-side module",
 			p.Path,
 		))
@@ -297,7 +308,9 @@ func (a *packageAdopter) probeDescriptor(
 		a.probeMCDR(ctx, proposal, modules, ecosystem)
 		return
 	}
-	proposal.warnings = append(proposal.warnings, fmt.Errorf(
+	proposal.warnings = append(proposal.warnings, a.importWarning(
+		importWarningNoProvider,
+		p.Path,
 		"package %s left unmanaged: no configured provider identifies its hash",
 		p.Path,
 	))
@@ -376,9 +389,11 @@ func (a *packageAdopter) probeMCDR(
 
 // probeMapped identifies an installed package by content hash. Mappers are
 // tried in order: the first one that identifies the file records the package
-// under its provider. The release names the ecosystem that serves it; the
-// installed bytes are evidence that the server holds the artifact, so a
-// release whose compatibility labels miss the target stays installable.
+// under its provider. The file's own descriptor decides whether a dedicated
+// server can load it; the release only supplies identity, a download URL, and
+// advisory labels, so a remote side label never excludes an installed file
+// the descriptor accepts. A loader mismatch is reported but does not by itself
+// prevent adoption.
 func (a *packageAdopter) probeMapped(
 	ctx context.Context,
 	proposal *adoptionProposal,
@@ -416,21 +431,52 @@ func (a *packageAdopter) probeMapped(
 		if !matched || release.Ref.Name == "" {
 			continue
 		}
-		ecosystem, ok := a.releaseEcosystem(p, release)
-		if !ok {
+		ecosystem, local := a.descriptorEcosystem(ctx, p)
+		if !local {
+			served, ok := a.releaseEcosystem(p, release)
+			if !ok {
+				a.warnLoaderMismatch(
+					proposal,
+					mapper.provider,
+					release,
+					a.serverEcosystem(),
+				)
+				return true
+			}
+			ecosystem = served
+		}
+		clientOnly, known, sideEcosystem, sideErr := a.descriptorSide(
+			ctx,
+			p.Path,
+			ecosystem,
+			p.ID.Ecosystem,
+		)
+		loaderMismatch := !release.SupportsLoader(ecosystem)
+		if sideErr != nil {
+			if loaderMismatch {
+				a.warnLoaderMismatch(proposal, mapper.provider, release, ecosystem)
+			} else {
+				proposal.warnings = append(proposal.warnings, fmt.Errorf(
+					"package %s left unmanaged: read descriptor: %w",
+					p.Path,
+					sideErr,
+				))
+			}
+			return true
+		}
+		if known && clientOnly {
 			proposal.warnings = append(proposal.warnings, fmt.Errorf(
-				"package %s matched %s but its release lists no loader this server runs",
+				"package %s left unmanaged: client-only %s",
 				p.Path,
-				mapper.provider,
+				sideEcosystem,
 			))
 			return true
 		}
-		if release.ServerSide == upstream.ServerSideUnsupported {
-			proposal.warnings = append(proposal.warnings, fmt.Errorf(
-				"package %s left unmanaged: its release does not support a dedicated server",
-				p.Path,
-			))
-			return true
+		if loaderMismatch {
+			a.warnLoaderMismatch(proposal, mapper.provider, release, ecosystem)
+			if !known {
+				return true
+			}
 		}
 		modules, readErr := artifact.ReadModulesFor(
 			ctx,
@@ -438,24 +484,40 @@ func (a *packageAdopter) probeMapped(
 			ecosystem,
 			string(a.manifest.Server.Minecraft),
 		)
-		if readErr == nil {
-			proposal.modules = modules
-		}
-		if readErr == nil && len(modules) == 0 {
+		if readErr != nil {
 			proposal.warnings = append(proposal.warnings, fmt.Errorf(
-				"package %s left unmanaged: its descriptor declares no %s module this server can load",
+				"package %s left unmanaged: read descriptor: %w",
 				p.Path,
-				ecosystem,
+				readErr,
 			))
 			return true
 		}
-		if !release.ClientOnly() && release.ServerSide == "" && release.ClientSide == "" {
-			if clientOnly, known := a.clientOnlyFile(ctx, p.Path, ecosystem); known &&
-				clientOnly {
-				proposal.warnings = append(proposal.warnings, fmt.Errorf(
-					"package %s left unmanaged: its descriptor declares no %s module this server can load",
+		if len(modules) == 0 {
+			// A descriptor without a server module is not evidence the server
+			// can load the file; resolution cannot satisfy the locked build.
+			proposal.warnings = append(proposal.warnings, fmt.Errorf(
+				"package %s left unmanaged: its descriptor declares no server-side module",
+				p.Path,
+			))
+			return true
+		}
+		proposal.modules = modules
+		if !known {
+			switch {
+			case release.ServerSide == upstream.ServerSideUnsupported:
+				proposal.warnings = append(proposal.warnings, a.importWarning(
+					importWarningRemoteSide,
 					p.Path,
-					ecosystem,
+					"package %s left unmanaged: its release does not support a dedicated server",
+					p.Path,
+				))
+				return true
+			case release.ClientOnly():
+				proposal.warnings = append(proposal.warnings, a.importWarning(
+					importWarningRemoteSide,
+					p.Path,
+					"package %s left unmanaged: its release declares client-only support",
+					p.Path,
 				))
 				return true
 			}
@@ -483,12 +545,14 @@ func (a *packageAdopter) probeMapped(
 			string(a.manifest.Server.Minecraft),
 			ecosystem,
 		) {
-			proposal.warnings = append(proposal.warnings, fmt.Errorf(
-				"package %s: %s lists release %s for another server; adopting the installed file",
-				p.Path,
-				mapper.provider,
-				release.Ref.Version,
-			))
+			if !loaderMismatch {
+				proposal.warnings = append(proposal.warnings, fmt.Errorf(
+					"package %s: %s lists release %s for another server; adopting the installed file",
+					p.Path,
+					mapper.provider,
+					release.Ref.Version,
+				))
+			}
 			candidate.CompatibilityUnknown = true
 		}
 		provider := string(mapper.provider)
@@ -505,25 +569,98 @@ func (a *packageAdopter) probeMapped(
 	return false
 }
 
-// clientOnlyFile reports whether the file's descriptor for ecosystem keeps
-// every module it declares off a dedicated server. known is false when no
-// descriptor for ecosystem declares a module (a library or locator archive):
-// the hash identifies it, and resolution reads its nested modules.
-func (a *packageAdopter) clientOnlyFile(
+// descriptorSide reads the file's side evidence. The served loader decides
+// first; a file it has no descriptor for (a Fabric jar bridged by Connector)
+// is checked with the descriptor the file carries, so a client-only bridge
+// cannot slip onto the server.
+func (a *packageAdopter) descriptorSide(
 	ctx context.Context,
 	path string,
 	ecosystem catalog.Ecosystem,
-) (clientOnly, known bool) {
-	clientOnly, known, err := artifact.ReadClientOnly(
+	fileEcosystem catalog.Ecosystem,
+) (clientOnly, known bool, sideEcosystem catalog.Ecosystem, err error) {
+	minecraft := string(a.manifest.Server.Minecraft)
+	clientOnly, known, err = artifact.ReadClientOnly(
 		ctx,
 		path,
 		ecosystem,
+		minecraft,
+	)
+	if err != nil || known || fileEcosystem == ecosystem ||
+		fileEcosystem == catalog.EcosystemUnspecified ||
+		fileEcosystem == catalog.EcosystemMCDR {
+		return clientOnly, known, ecosystem, err
+	}
+	if _, served := a.served[fileEcosystem]; !served {
+		return clientOnly, known, ecosystem, err
+	}
+	bridgedOnly, bridgedKnown, bridgedErr := artifact.ReadClientOnly(
+		ctx,
+		path,
+		fileEcosystem,
+		minecraft,
+	)
+	if bridgedErr == nil && bridgedKnown {
+		return bridgedOnly, true, fileEcosystem, nil
+	}
+	return clientOnly, known, ecosystem, err
+}
+
+// descriptorEcosystem reports the served loader whose descriptor the file
+// carries. The file's own descriptor ecosystem wins; a file the server has no
+// descriptor for (a bridged Fabric jar) is tried with each served loader.
+func (a *packageAdopter) descriptorEcosystem(
+	ctx context.Context,
+	p workspace.DiscoveredPackage,
+) (catalog.Ecosystem, bool) {
+	if _, served := a.served[p.ID.Ecosystem]; served &&
+		p.ID.Ecosystem != catalog.EcosystemMCDR {
+		return p.ID.Ecosystem, true
+	}
+	return servedEcosystemForFile(
+		ctx,
+		p.Path,
+		a.served,
 		string(a.manifest.Server.Minecraft),
 	)
-	if err != nil {
-		return false, false
+}
+
+// serverEcosystem names the loader a warning should attribute the server to.
+func (a *packageAdopter) serverEcosystem() catalog.Ecosystem {
+	product := catalog.Ecosystem(a.manifest.Server.Core.Product)
+	if product != catalog.EcosystemUnspecified &&
+		product != catalog.EcosystemMinecraft {
+		return product
 	}
-	return clientOnly, known
+	for _, ecosystem := range slices.Sorted(maps.Keys(a.served)) {
+		if ecosystem != catalog.EcosystemMCDR {
+			return ecosystem
+		}
+	}
+	if product != catalog.EcosystemUnspecified {
+		return product
+	}
+	return catalog.EcosystemMinecraft
+}
+
+// warnLoaderMismatch reports a release whose loader labels do not include the
+// loader the server runs. The message is reporting only: a local descriptor
+// that proves the file loads still lets adoption manage it.
+func (a *packageAdopter) warnLoaderMismatch(
+	proposal *adoptionProposal,
+	provider catalog.Provider,
+	release upstream.Release,
+	ecosystem catalog.Ecosystem,
+) {
+	proposal.warnings = append(proposal.warnings, a.importWarning(
+		importWarningLoaderMismatch,
+		proposal.pkg.Path,
+		"package %s matched %s but its release targets %s while the server runs %s",
+		proposal.pkg.Path,
+		provider,
+		strings.Join(release.Loaders, ", "),
+		ecosystem,
+	))
 }
 
 // releaseEcosystem selects the served ecosystem a release belongs to. The
@@ -551,6 +688,13 @@ func (a *packageAdopter) releaseEcosystem(
 
 func (a *packageAdopter) apply(proposal adoptionProposal) {
 	for _, warning := range proposal.warnings {
+		var importWarn *importWarning
+		if errors.As(warning, &importWarn) {
+			if a.observed != nil {
+				a.observed.Warnings = append(a.observed.Warnings, importWarn)
+			}
+			continue
+		}
 		a.warn("%v", warning)
 	}
 	if !proposal.matched {
@@ -804,6 +948,169 @@ func (a *packageAdopter) requirePackageMap(
 
 func packageKey(ecosystem catalog.Ecosystem, packageID string) string {
 	return string(ecosystem) + "\x00" + packageID
+}
+
+// reportMissingModules warns about required descriptor modules that no
+// installed file provides and returns the identities it reported. It reads only
+// the descriptors the probes already parsed, so it adds no provider lookups.
+func (a *packageAdopter) reportMissingModules(
+	proposals []adoptionProposal,
+) map[string]struct{} {
+	if a.observed == nil {
+		return nil
+	}
+	provided := map[string]struct{}{}
+	clientOnly := map[string]struct{}{}
+	for _, proposal := range proposals {
+		for _, module := range proposal.modules {
+			addProvidedIdentity(provided, module)
+			for _, id := range module.ClientOnly {
+				clientOnly[id] = struct{}{}
+			}
+		}
+	}
+	required := map[string][]string{}
+	for _, proposal := range proposals {
+		path := a.displayPath(proposal.pkg.Path)
+		for _, module := range proposal.modules {
+			for _, dependency := range module.Dependencies {
+				if dependency.Kind != catalog.DependencyKindRequired {
+					continue
+				}
+				id := dependency.ID
+				if id == "" || runtimeModuleIdentity(id) {
+					continue
+				}
+				if _, skip := clientOnly[id]; skip {
+					continue
+				}
+				if _, ok := provided[id]; ok {
+					continue
+				}
+				required[id] = appendUniqueString(required[id], path)
+			}
+		}
+	}
+	reported := make(map[string]struct{}, len(required))
+	for _, id := range slices.Sorted(maps.Keys(required)) {
+		paths := required[id]
+		reported[id] = struct{}{}
+		a.warn(
+			"module %s is required by %d installed files but no installed file provides it (%s)",
+			id,
+			len(paths),
+			strings.Join(firstExamples(paths, 3), ", "),
+		)
+	}
+	return reported
+}
+
+// addProvidedIdentity records every module identity an installed file
+// provides to the server.
+func addProvidedIdentity(
+	provided map[string]struct{},
+	module catalog.DescriptorModule,
+) {
+	add := func(id string) {
+		if id != "" {
+			provided[id] = struct{}{}
+		}
+	}
+	add(module.ID)
+	if module.Group != "" {
+		add(module.Group + ":" + module.ID)
+	}
+	for _, id := range module.Provides {
+		add(id)
+		if module.Group != "" {
+			add(module.Group + ":" + id)
+		}
+	}
+}
+
+// runtimeModuleIdentity reports a module the server loader itself provides, so
+// an installed file is not expected to ship it.
+func runtimeModuleIdentity(id string) bool {
+	switch strings.ToLower(id) {
+	case "minecraft",
+		"java",
+		"forge",
+		"neoforge",
+		"fml",
+		"fabric",
+		"fabricloader",
+		"fabric-loader",
+		"quilt",
+		"quilt_loader",
+		"quilt-loader",
+		"bukkit",
+		"paper",
+		"spigot",
+		"bungeecord",
+		"velocity",
+		"sponge",
+		"mcdr":
+		return true
+	default:
+		return false
+	}
+}
+
+func appendUniqueString(values []string, value string) []string {
+	if slices.Contains(values, value) {
+		return values
+	}
+	return append(values, value)
+}
+
+// firstExamples keeps at most limit distinct paths for a summarized warning.
+func firstExamples(paths []string, limit int) []string {
+	examples := make([]string, 0, limit)
+	for _, path := range paths {
+		if slices.Contains(examples, path) {
+			continue
+		}
+		if len(examples) == limit {
+			break
+		}
+		examples = append(examples, path)
+	}
+	return examples
+}
+
+// displayPath reports a path relative to the workspace, so warnings never leak
+// the staging directory.
+func (a *packageAdopter) displayPath(path string) string {
+	if path == "" {
+		return ""
+	}
+	relative, err := filepath.Rel(a.root, path)
+	if err != nil {
+		return filepath.ToSlash(path)
+	}
+	return filepath.ToSlash(relative)
+}
+
+// importWarning builds a warning whose message and example path are relative
+// to the workspace.
+func (a *packageAdopter) importWarning(
+	cause importWarningCause,
+	path, format string,
+	args ...any,
+) *importWarning {
+	message := fmt.Sprintf(format, args...)
+	if a.root != "" {
+		message = strings.ReplaceAll(
+			message,
+			a.root+string(filepath.Separator),
+			"",
+		)
+	}
+	return &importWarning{
+		cause:   cause,
+		path:    a.displayPath(path),
+		message: message,
+	}
 }
 
 func (a *packageAdopter) warn(format string, args ...any) {

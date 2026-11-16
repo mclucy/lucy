@@ -223,15 +223,17 @@ func checkModuleDependencies(
 			))
 			continue
 		}
-		if message := dependencyProblemMessage(m.ID, dep, outcome); message != "" {
-			problems = append(problems, moduleProblem(
+		if problem := dependencyProblem(m.ID, dep, outcome); problem != nil {
+			entry := moduleProblem(
 				p,
 				m.ID,
 				*dep,
 				outcome.value,
 				outcome.owner == nil && outcome.value != "",
-				message,
-			))
+				problem.Error(),
+			)
+			entry.cause = problem
+			problems = append(problems, entry)
 		}
 		if !outcome.matched || outcome.waived {
 			continue
@@ -250,14 +252,37 @@ func checkModuleDependencies(
 	return problems
 }
 
-// dependencyProblemMessage describes the problem an evaluated dependency
-// causes, or returns "" when it causes none. An optional dependency outside
-// an any-of group is checked only when a module answers it.
-func dependencyProblemMessage(
+// MissingModuleError reports a module requirement that no selected package
+// provides. Required names the module identity alone, without its constraint,
+// so callers can compare it with the modules adoption reports.
+type MissingModuleError struct {
+	Requiring string
+	Required  string
+	// requirement is the text shown for the requirement: the identity with its
+	// constraint, or the alternatives of an any-of group.
+	requirement string
+}
+
+func (e *MissingModuleError) Error() string {
+	requirement := e.requirement
+	if requirement == "" {
+		requirement = e.Required
+	}
+	return fmt.Sprintf(
+		"module %s requires %s, which no selected package provides",
+		e.Requiring,
+		requirement,
+	)
+}
+
+// dependencyProblem describes the problem an evaluated dependency causes, or
+// returns nil when it causes none. An optional dependency outside an any-of
+// group is checked only when a module answers it.
+func dependencyProblem(
 	requiredBy string,
 	dep *catalog.DescriptorDependency,
 	outcome requirementOutcome,
-) string {
+) error {
 	requirement := dependencyRequirementText(dep)
 	switch {
 	case dep.Kind == catalog.DependencyKindIncompatible:
@@ -266,7 +291,7 @@ func dependencyProblemMessage(
 			if outcome.matchedID != "" {
 				breaks = outcome.matchedID
 			}
-			return fmt.Sprintf(
+			return fmt.Errorf(
 				"module %s breaks %s %s",
 				requiredBy,
 				breaks,
@@ -276,16 +301,16 @@ func dependencyProblemMessage(
 	case dep.Kind == catalog.DependencyKindRequired ||
 		(dep.Kind == catalog.DependencyKindOptional && len(dep.AnyOf) > 0):
 		if outcome.matched {
-			return ""
+			return nil
 		}
 		if outcome.value == "" {
-			return fmt.Sprintf(
-				"module %s requires %s, which no selected package provides",
-				requiredBy,
-				requirement,
-			)
+			return &MissingModuleError{
+				Requiring:   requiredBy,
+				Required:    dep.ID,
+				requirement: requirement,
+			}
 		}
-		return fmt.Sprintf(
+		return fmt.Errorf(
 			"module %s requires %s (selected %s)",
 			requiredBy,
 			requirement,
@@ -293,7 +318,7 @@ func dependencyProblemMessage(
 		)
 	case dep.Kind == catalog.DependencyKindOptional:
 		if outcome.present && !outcome.matched {
-			return fmt.Sprintf(
+			return fmt.Errorf(
 				"module %s optionally requires %s (selected %s)",
 				requiredBy,
 				requirement,
@@ -301,7 +326,7 @@ func dependencyProblemMessage(
 			)
 		}
 	}
-	return ""
+	return nil
 }
 
 func dependencyRequirementText(dep *catalog.DescriptorDependency) string {

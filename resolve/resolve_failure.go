@@ -31,9 +31,15 @@ type ModuleProblem struct {
 	// change it, so it explains the failure better than any package rejection.
 	Server  bool
 	Message string
+	// cause keeps the typed cause, so callers can tell an absent module from
+	// a version mismatch without reading Message.
+	cause error
 }
 
 func (p ModuleProblem) Error() string { return p.Message }
+
+// Unwrap exposes the typed cause of the problem.
+func (p ModuleProblem) Unwrap() error { return p.cause }
 
 func moduleProblem(
 	owner *document.Package,
