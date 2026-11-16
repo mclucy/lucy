@@ -486,6 +486,10 @@ func (a *packageAdopter) probeMapped(
 				return true
 			}
 		}
+		// A mapped release becomes a locked requirement, so its descriptor
+		// must be readable and declare a server-visible module. A library
+		// archive is loaded by the loader but is not a package Lucy can
+		// resolve, so it stays unmanaged.
 		modules, readErr := artifact.ReadModulesFor(
 			ctx,
 			p.Path,

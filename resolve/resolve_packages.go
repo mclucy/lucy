@@ -398,7 +398,7 @@ func Packages(request PackagesRequest) ([]document.Package, []error, error) {
 		"requests", len(requests),
 	)
 	// operational marks a failure that no candidate rejection explains, such as
-	// a network, checksum, or archive error. It outranks the rejection summary.
+	// a network or checksum error. It outranks the rejection summary.
 	operational := false
 	// hardFail records a failure scoped to the branch being explored. Another
 	// candidate of an enclosing request may still settle a graph.
@@ -714,7 +714,19 @@ func Packages(request PackagesRequest) ([]document.Package, []error, error) {
 					string(target.Minecraft),
 				)
 				if err != nil {
-					return hardFail(err)
+					// A descriptor the reader cannot interpret rejects this
+					// candidate. It is content evidence, not an operational
+					// failure of the whole search.
+					message := fmt.Sprintf(
+						"artifact %s has an unreadable %s descriptor: %v",
+						a.Filename,
+						descriptorLoader,
+						err,
+					)
+					lastErr = err
+					ledger.record(r.key, r.display, string(candidate.Version), message, RejectionModules)
+					trace.rejected(r.display, string(candidate.Version), message)
+					continue
 				}
 				if cache != nil && len(modules) > 0 {
 					cache.put(candidateAnalysisKey(candidate), analysisEntry{
