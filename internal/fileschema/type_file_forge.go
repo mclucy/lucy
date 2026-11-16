@@ -1,6 +1,11 @@
 package fileschema
 
-import "github.com/pelletier/go-toml/v2"
+import (
+	"fmt"
+	"strings"
+
+	"github.com/pelletier/go-toml/v2"
+)
 
 // FileModLoaderAuthors accepts the documented string form and the array form
 // some published jars use. Normalization converts a string to a one-element
@@ -51,27 +56,37 @@ func normalizeForgeDescriptor(data []byte) ([]byte, error) {
 	normalized := map[string]any{}
 	copyForgeStrings(normalized, document,
 		"modLoader", "loaderVersion", "issueTrackerURL", "logoFile", "license")
-	mods := normalizeForgeMods(document)
+	mods, err := normalizeForgeMods(document)
+	if err != nil {
+		return nil, err
+	}
 	if len(mods) == 0 {
 		return toml.Marshal(normalized)
 	}
 	normalized["mods"] = mods
-	if dependencies := normalizeForgeDependencies(document, mods); len(dependencies) > 0 {
+	dependencies, err := normalizeForgeDependencies(document, mods)
+	if err != nil {
+		return nil, err
+	}
+	if len(dependencies) > 0 {
 		normalized["dependencies"] = dependencies
 	}
 	return toml.Marshal(normalized)
 }
 
 // configList mirrors NightConfigWrapper.getConfigList: the path resolves
-// through tables and its final value must be a list. A non-list final value is
-// a malformed descriptor; the projection drops it.
-func configList(document map[string]any, path ...string) ([]any, bool) {
+// through tables and its final value must be a list. Forge rejects a present
+// non-list value, so report it instead of dropping it.
+func configList(document map[string]any, path ...string) ([]any, bool, error) {
 	value, ok := configPath(document, path...)
 	if !ok {
-		return nil, false
+		return nil, false, nil
 	}
 	list, ok := value.([]any)
-	return list, ok
+	if !ok {
+		return nil, true, fmt.Errorf("configuration path %v is invalid: expecting a collection", strings.Join(path, "."))
+	}
+	return list, true, nil
 }
 
 // configPath mirrors NightConfig's path lookup. A list at an intermediate
@@ -92,10 +107,13 @@ func configPath(document map[string]any, path ...string) (any, bool) {
 	return current, true
 }
 
-func normalizeForgeMods(document map[string]any) []any {
-	entries, ok := configList(document, "mods")
-	if !ok {
-		return nil
+func normalizeForgeMods(document map[string]any) ([]any, error) {
+	entries, exists, err := configList(document, "mods")
+	if err != nil {
+		return nil, err
+	}
+	if !exists {
+		return nil, nil
 	}
 	mods := make([]any, 0, len(entries))
 	for _, entry := range entries {
@@ -114,7 +132,7 @@ func normalizeForgeMods(document map[string]any) []any {
 			mods = append(mods, mod)
 		}
 	}
-	return mods
+	return mods, nil
 }
 
 // normalizeForgeAuthors accepts the documented string form and the array form
@@ -139,8 +157,9 @@ func normalizeForgeAuthors(value any) []any {
 
 // normalizeForgeDependencies reads dependencies.<modId> for every declared mod,
 // matching ModInfo's getConfigList call. An ownerless dependencies list, or any
-// other non-table dependencies value, yields no path and contributes nothing.
-func normalizeForgeDependencies(document map[string]any, mods []any) map[string]any {
+// other non-table dependencies value, yields no path and contributes nothing;
+// a present non-list dependency value is a Forge-rejected malformed descriptor.
+func normalizeForgeDependencies(document map[string]any, mods []any) (map[string]any, error) {
 	dependencies := map[string]any{}
 	for _, entry := range mods {
 		mod, ok := entry.(map[string]any)
@@ -151,24 +170,37 @@ func normalizeForgeDependencies(document map[string]any, mods []any) map[string]
 		if !ok || modID == "" {
 			continue
 		}
-		entries, ok := configList(document, "dependencies", modID)
-		if !ok {
+		entries, exists, err := configList(document, "dependencies", modID)
+		if err != nil {
+			return nil, err
+		}
+		if !exists {
 			continue
 		}
-		normalized := normalizeForgeDependencyEntries(entries)
+		normalized, err := normalizeForgeDependencyEntries(entries)
+		if err != nil {
+			return nil, err
+		}
 		if len(normalized) > 0 {
 			dependencies[modID] = normalized
 		}
 	}
-	return dependencies
+	return dependencies, nil
 }
 
-func normalizeForgeDependencyEntries(entries []any) []any {
+func normalizeForgeDependencyEntries(entries []any) ([]any, error) {
 	normalized := make([]any, 0, len(entries))
 	for _, entry := range entries {
 		table, ok := entry.(map[string]any)
 		if !ok {
 			continue
+		}
+		modID, _ := table["modId"].(string)
+		// Forge reads mandatory as a Boolean, so a string must not become false.
+		if value, ok := table["mandatory"]; ok {
+			if _, ok := value.(bool); !ok {
+				return nil, fmt.Errorf("dependency %v: mandatory must be a boolean", modID)
+			}
 		}
 		dependency := map[string]any{}
 		copyForgeStrings(dependency, table,
@@ -180,7 +212,7 @@ func normalizeForgeDependencyEntries(entries []any) []any {
 			normalized = append(normalized, dependency)
 		}
 	}
-	return normalized
+	return normalized, nil
 }
 
 func copyForgeStrings(destination, source map[string]any, keys ...string) {
