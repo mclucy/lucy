@@ -57,9 +57,13 @@ func expandFilePaths(root *os.Root, paths []string, exact map[string]struct{}) (
 			}
 			continue
 		}
-		if info, statErr := root.Lstat(normalized); statErr == nil {
+		info, statErr := root.Lstat(normalized)
+		if statErr == nil {
 			add(normalized, info.IsDir())
 			continue
+		}
+		if !errors.Is(statErr, os.ErrNotExist) {
+			return nil, nil, statErr
 		}
 		entries, matchErr := fileglob.Match(root.FS(), normalized)
 		if errors.Is(matchErr, fileglob.ErrInvalidPattern) {
