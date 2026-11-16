@@ -32,6 +32,7 @@ const (
 	paperManifestYouerToken    = "Youer"
 	paperMainClassYouerToken   = "youer"
 	paperLibraryPaperToken     = "io.papermc.paper:paper-api:"
+	paperLibraryMojangAPIToken = "com.destroystokyo.paper:paper-mojangapi:"
 	paperLibraryFoliaToken     = "dev.folia:folia-api:"
 	paperLibraryDivineToken    = "org.bxteam.divinemc:divinemc-api:"
 	paperLibraryPurpurToken    = "org.purpurmc.purpur:purpur-api:"
