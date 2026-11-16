@@ -4,6 +4,7 @@ import (
 	"archive/zip"
 	"bytes"
 	"encoding/json/v2"
+	"fmt"
 
 	"github.com/mclucy/lucy/catalog"
 	"github.com/mclucy/lucy/input"
@@ -15,17 +16,22 @@ import (
 const jarjarMetadataPath = "META-INF/jarjar/metadata.json"
 
 // readJarjarMetadata parses the JarJar metadata shared by Forge and NeoForge.
-func readJarjarMetadata(zipRdr *zip.Reader) *fileschema.FileJarjar {
+// Module analysis must reject malformed metadata, because the loaders refuse
+// the archive and its bundled identities never load. A missing file is valid.
+func readJarjarMetadata(zipRdr *zip.Reader) (*fileschema.FileJarjar, error) {
 	raw, err := readZipEntryBytes(zipRdr, jarjarMetadataPath)
-	if err != nil || raw == nil {
-		return nil
+	if err != nil {
+		return nil, err
+	}
+	if raw == nil {
+		return nil, nil
 	}
 
 	var meta fileschema.FileJarjar
 	if err := json.Unmarshal(raw, &meta); err != nil {
-		return nil
+		return nil, fmt.Errorf("decode JarJar metadata: %w", err)
 	}
-	return &meta
+	return &meta, nil
 }
 
 // jarjarNestedPaths lists the archives JarJar adds to the loader's module

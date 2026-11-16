@@ -68,7 +68,10 @@ func decodeForgeDescriptor(
 	if err != nil {
 		return nil, err
 	}
-	jarjarMeta := readJarjarMetadata(zipRdr)
+	jarjarMeta, err := readJarjarMetadata(zipRdr)
+	if err != nil {
+		return nil, err
+	}
 	nested := jarjarNestedPaths(jarjarMeta)
 	attributes, err := readManifestAttributes(
 		zipRdr,
