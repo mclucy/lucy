@@ -25,10 +25,6 @@ func compatWorkspace(
 		Source:       discovery.SourceInferred,
 		Installation: &installations[0],
 	}
-	for file := range installations[0].EntryPoints() {
-		selection.EntryPoint = file
-		break
-	}
 	return &Workspace{
 		Discovery: discovery.Result{
 			Installations: installations,

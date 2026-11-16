@@ -23,7 +23,6 @@ import (
 // regular-file bytes observed before identification performs network work.
 // Adoption may only publish these bytes.
 type runtimeObservation struct {
-	entryPoint  string
 	product     serverpkg.Product
 	minecraft   version.Version
 	coreVersion version.Version
@@ -32,60 +31,50 @@ type runtimeObservation struct {
 }
 
 func captureRuntimeObservation(
-	selection *discovery.Selection,
+	installation *discovery.Installation,
 ) (*runtimeObservation, error) {
-	if selection == nil || selection.Installation == nil {
+	if installation == nil {
 		return nil, nil
 	}
-	files, err := adoptedRuntimeFiles(selection)
+	files, err := adoptedRuntimeFiles(installation)
 	if err != nil {
 		return nil, err
 	}
-	members := make(map[string]discovery.FileRole, len(selection.Installation.Files))
-	for _, file := range selection.Installation.Files {
+	members := make(map[string]discovery.FileRole, len(installation.Files))
+	for _, file := range installation.Files {
 		members[file.Path] = file.Role
 	}
-	entryPoint := ""
-	if selection.EntryPoint != nil {
-		entryPoint = selection.EntryPoint.Path
-	}
 	return &runtimeObservation{
-		entryPoint:  entryPoint,
-		product:     selection.Product(),
-		minecraft:   selection.MinecraftVersion(),
-		coreVersion: selection.Installation.Identity.Primary.Version,
+		product:     installation.Identity.Product(),
+		minecraft:   installation.Identity.MinecraftVersion(),
+		coreVersion: installation.Identity.Primary.Version,
 		members:     members,
 		files:       files,
 	}, nil
 }
 
 // verify rejects a runtime that changed after observation. The caller passes a
-// fresh discovery result, and verify rechecks the selected entry point,
-// identity, membership roles, and every observed file's digest and mode, so
+// freshly discovered installation, and verify rechecks its identity,
+// membership roles, and every observed file's digest and mode, so
 // inconclusive adoption cannot record ownership of a replacement using stale
 // membership.
-func (o *runtimeObservation) verify(selection *discovery.Selection) error {
+func (o *runtimeObservation) verify(installation *discovery.Installation) error {
 	if o == nil {
-		if selection != nil {
+		if installation != nil {
 			return errors.New("a runtime appeared after observation; rerun lucy init")
 		}
 		return nil
 	}
-	if selection == nil || selection.Installation == nil {
+	if installation == nil {
 		return errors.New("the observed runtime disappeared during initialization")
 	}
-	entryPoint := ""
-	if selection.EntryPoint != nil {
-		entryPoint = selection.EntryPoint.Path
+	if installation.Identity.Product() != o.product ||
+		installation.Identity.MinecraftVersion() != o.minecraft ||
+		installation.Identity.Primary.Version != o.coreVersion {
+		return errors.New("the observed runtime identity changed during initialization")
 	}
-	if entryPoint != o.entryPoint ||
-		selection.Product() != o.product ||
-		selection.MinecraftVersion() != o.minecraft ||
-		selection.Installation.Identity.Primary.Version != o.coreVersion {
-		return errors.New("the selected runtime identity changed during initialization")
-	}
-	if !o.sameMembership(selection.Installation.Files) {
-		return errors.New("the selected runtime membership changed during initialization")
+	if !o.sameMembership(installation.Files) {
+		return errors.New("the observed runtime membership changed during initialization")
 	}
 	for _, observed := range o.files {
 		if err := verifyRuntimeFileBaseline(observed); err != nil {
@@ -139,13 +128,13 @@ func verifyRuntimeFileBaseline(observed install.AdoptedRuntimeFile) error {
 // unreadable or replaced file fails initialization instead of being adopted
 // without evidence.
 func adoptedRuntimeFiles(
-	selection *discovery.Selection,
+	installation *discovery.Installation,
 ) ([]install.AdoptedRuntimeFile, error) {
-	if selection == nil || selection.Installation == nil {
+	if installation == nil {
 		return nil, nil
 	}
-	files := make([]install.AdoptedRuntimeFile, 0, len(selection.Installation.Files))
-	for _, f := range selection.Installation.Files {
+	files := make([]install.AdoptedRuntimeFile, 0, len(installation.Files))
+	for _, f := range installation.Files {
 		info, err := os.Lstat(f.Path)
 		if err != nil {
 			return nil, fmt.Errorf("inspect runtime file %s: %w", f.Path, err)
@@ -202,18 +191,17 @@ func paperLineageProduct(product serverpkg.Product) bool {
 func (s *Service) identifyInstalledCoreBuild(
 	ctx context.Context,
 	root string,
-	selection *discovery.Selection,
+	installation *discovery.Installation,
 	product serverpkg.Product,
 ) (version.Version, bool, error) {
-	if selection == nil || selection.EntryPoint == nil ||
-		selection.EntryPoint.Path == "" {
+	if installation == nil || installation.CorePath == "" {
 		return "", false, nil
 	}
 	hasher, flavor, err := buildDigest(product)
 	if err != nil {
 		return "", false, err
 	}
-	path := selection.EntryPoint.Path
+	path := installation.CorePath
 	if !filepath.IsAbs(path) {
 		path = filepath.Join(root, path)
 	}
@@ -226,14 +214,14 @@ func (s *Service) identifyInstalledCoreBuild(
 	if product == serverpkg.ProductPurpur {
 		build, found, err = s.source.IdentifyPurpurBuild(
 			ctx,
-			selection.MinecraftVersion(),
+			installation.Identity.MinecraftVersion(),
 			digest,
 		)
 	} else {
 		build, found, err = s.source.IdentifyFillBuild(
 			ctx,
 			flavor,
-			selection.MinecraftVersion(),
+			installation.Identity.MinecraftVersion(),
 			digest,
 		)
 	}

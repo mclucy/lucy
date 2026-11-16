@@ -7,7 +7,7 @@ description: "How lucy discovers installations, identifies packages, and tracks 
 
 Installation discovery scans a server directory and reconciles recognizer results into installations. An installation has an identity and a collection of members with roles such as entry point or payload. A server JAR used as another installation's payload is not necessarily an independent server. Equivalent identities and overlapping claims are reconciled before selection; diagnostics retain conflicts and unreadable or unknown artifacts.
 
-Discovery and selection are separate. Discovery does not choose a runtime or read workspace declarations. Selection uses an explicit entry point when supplied, otherwise a declaration when available, otherwise an inference policy. A missing declared installation and an ambiguous selection are distinct outcomes; neither proves that the directory has no server files.
+Discovery and selection are separate. Discovery does not choose a runtime or read workspace declarations. Selection uses a directly chosen installation when supplied, otherwise an identity expectation, otherwise a persisted declaration, otherwise an inference policy. Entry-point members prove launchability but never become the selection result. A missing declared installation and an ambiguous selection are distinct outcomes; neither proves that the directory has no server files.
 
 Workspace observation assembles local observations of installations, environment wrappers, declarations, and package files. Reselection refreshes package observations; upstream identification must be repeated afterward.
 

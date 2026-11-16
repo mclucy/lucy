@@ -9,6 +9,7 @@ import (
 	"github.com/mclucy/lucy/catalog"
 	"github.com/mclucy/lucy/document"
 	serverpkg "github.com/mclucy/lucy/server"
+	"github.com/mclucy/lucy/version"
 )
 
 // requirementKey names one manifest declaration. A reference alone does not
@@ -58,7 +59,11 @@ func declaredRequirements(d *document.Manifest) map[requirementKey]document.Requ
 	return declared
 }
 
-// lockPackageFor reports whether a reference names one locked package.
+// lockPackageFor reports whether a reference names one locked package. The
+// binding a previous resolution recorded is authoritative once the provider
+// matches: providers such as Modrinth name a project by an opaque ID and a
+// jar's module ID need not match the project slug (ferrite-core is provided by
+// ferritecore), so identity matching alone cannot recover the declaration.
 func lockPackageFor(ref string, p document.Package) bool {
 	provider, name, err := document.ParseReference(ref)
 	if err != nil {
@@ -66,6 +71,11 @@ func lockPackageFor(ref string, p document.Package) bool {
 	}
 	if p.Provider != provider {
 		return false
+	}
+	for _, binding := range p.Requirements {
+		if binding.Reference == ref {
+			return true
+		}
 	}
 	if p.ProjectID == name {
 		return true
@@ -76,6 +86,24 @@ func lockPackageFor(ref string, p document.Package) bool {
 		}
 	}
 	return false
+}
+
+// lockedSelectorSatisfied reports whether a pinned artifact answers a
+// requirement selector. A locked mutation never resolves, so a selector the
+// pin cannot satisfy would publish a lock that contradicts its manifest.
+func lockedSelectorSatisfied(
+	selector version.Version,
+	p document.Package,
+) bool {
+	switch selector {
+	case "", version.Any, version.Beta, version.Stable:
+		// Stable records a release-channel preference the lock does not keep.
+		return true
+	}
+	return p.Version == selector ||
+		p.ReleaseID == string(selector) ||
+		p.FileID == string(selector) ||
+		p.Filename == string(selector)
 }
 
 // bindRequirement records the manifest's current state of one requirement on
@@ -123,6 +151,17 @@ func rebindRequirements(d *document.Manifest, resolved *document.Lock) error {
 			}
 			if !lockPackageFor(key.reference, *p) {
 				continue
+			}
+			// A disabled declaration keeps its dormant pin without
+			// constraining resolution, so that pin need not answer the
+			// manifest's current selector.
+			if requirement.IsEnabled() && !lockedSelectorSatisfied(requirement.Selector, *p) {
+				return fmt.Errorf(
+					"lucy-lock.yaml pins %s %s, which does not satisfy selector %s; install it without --locked first",
+					key.reference,
+					p.Version,
+					requirement.Selector,
+				)
 			}
 			pinned = true
 			bindRequirement(p, key.reference, requirement)

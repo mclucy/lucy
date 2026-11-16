@@ -91,9 +91,9 @@ func entryPointPaths(installation Installation) []string {
 	return paths
 }
 
-// An explicit entry point decides between competing installations and records
-// the request rather than a preference.
-func TestSelectExplicitChoosesRequestedRuntime(t *testing.T) {
+// A direct installation choice decides between competing installations and is
+// recorded as explicit. Member paths never enter the selection.
+func TestSelectDirectChoosesRequestedRuntime(t *testing.T) {
 	t.Parallel()
 
 	root := t.TempDir()
@@ -104,8 +104,9 @@ func TestSelectExplicitChoosesRequestedRuntime(t *testing.T) {
 		NewInstallation(vanillaIdentity("1.21.1"), vanillaPath),
 	}}
 
-	if err := result.Select(Request{EntryPoint: vanillaPath}); err != nil {
-		t.Fatalf("Select explicit entry point: %v", err)
+	chosen := &result.Installations[1]
+	if err := result.Select(Request{Installation: chosen}); err != nil {
+		t.Fatalf("Select installation: %v", err)
 	}
 	selection := result.Selection
 	if selection.State != SelectionSelected || selection.Source != SourceExplicit {
@@ -115,55 +116,50 @@ func TestSelectExplicitChoosesRequestedRuntime(t *testing.T) {
 			selection.Source,
 		)
 	}
+	if selection.Installation != chosen {
+		t.Fatalf("selected installation = %p, want %p", selection.Installation, chosen)
+	}
 	if got := selection.Product(); got != server.ProductMinecraft {
 		t.Fatalf("selected product = %q, want minecraft", got)
-	}
-	if selection.EntryPoint == nil || selection.EntryPoint.Path != vanillaPath {
-		t.Fatalf("selected entry point = %+v, want %s", selection.EntryPoint, vanillaPath)
 	}
 	if got := selection.Ecosystem(); got != catalog.EcosystemMinecraft {
 		t.Fatalf("selected ecosystem = %q, want minecraft", got)
 	}
 }
 
-// An unrecognized explicit entry point fails closed and still reports every
-// selectable installation so the caller can name the real choices.
-func TestSelectExplicitRejectsUnrecognizedEntryPoint(t *testing.T) {
+// A direct choice that does not belong to the observed result fails closed and
+// still reports every installation so the caller can name the real choices.
+func TestSelectDirectRejectsForeignInstallation(t *testing.T) {
 	t.Parallel()
 
 	root := t.TempDir()
 	fabricPath := filepath.Join(root, "fabric-server-launch.jar")
 	vanillaPath := filepath.Join(root, "server.jar")
-	missingPath := filepath.Join(root, "absent.jar")
 	result := Result{Installations: []Installation{
 		NewInstallation(fabricIdentity("0.19.5", "1.21.1"), fabricPath),
 		NewInstallation(vanillaIdentity("1.21.1"), vanillaPath),
 	}}
+	foreign := NewInstallation(vanillaIdentity("26.2"), filepath.Join(root, "other.jar"))
 
-	err := result.Select(Request{EntryPoint: missingPath})
+	err := result.Select(Request{Installation: &foreign})
 	selectionErr := requireSelectionError(t, err, SelectionInvalid)
-	if selectionErr.Path != missingPath {
-		t.Fatalf("selection error path = %q, want %q", selectionErr.Path, missingPath)
-	}
 	if result.Selection.State != SelectionInvalid {
 		t.Fatalf("selection state = %q, want invalid", result.Selection.State)
 	}
 	if result.Selected() != nil {
 		t.Fatalf("invalid selection must not report a selected runtime")
 	}
-	var paths []string
-	for _, installation := range selectionErr.Installations {
-		paths = append(paths, entryPointPaths(installation)...)
-	}
-	slices.Sort(paths)
-	want := []string{fabricPath, vanillaPath}
-	if !slices.Equal(paths, want) {
-		t.Fatalf("guidance entry points = %v, want %v", paths, want)
+	if len(selectionErr.Installations) != len(result.Installations) {
+		t.Fatalf(
+			"guidance installations = %d, want %d",
+			len(selectionErr.Installations),
+			len(result.Installations),
+		)
 	}
 }
 
 // A readable declaration selects the installation whose observed identity
-// agrees with it, and prefers the entry point the receipt manages.
+// agrees with it.
 func TestSelectDeclaredMatchesObservedIdentity(t *testing.T) {
 	t.Parallel()
 
@@ -193,31 +189,12 @@ func TestSelectDeclaredMatchesObservedIdentity(t *testing.T) {
 			selection.Source,
 		)
 	}
-	if selection.EntryPoint == nil || selection.EntryPoint.Path != shimPath {
-		t.Fatalf(
-			"selected entry point = %+v, want the managed shim %s",
-			selection.EntryPoint,
-			shimPath,
-		)
+	if selection.Installation == nil || !selection.Installation.Identity.Equal(fabric.Identity) {
+		t.Fatalf("selected installation = %+v, want the Fabric runtime", selection.Installation)
 	}
 	if got := selection.MinecraftVersion().String(); got != "1.21.1" {
 		t.Fatalf("selected Minecraft version = %q, want 1.21.1", got)
 	}
-
-	for finding := range result.Findings() {
-		if finding.Kind != FindingAlternativeEntryPoint {
-			continue
-		}
-		if finding.Path != launcherPath {
-			t.Fatalf(
-				"alternative entry point = %q, want the unmanaged launcher %s",
-				finding.Path,
-				launcherPath,
-			)
-		}
-		return
-	}
-	t.Fatalf("no alternative-entry-point finding for the preserved launcher")
 }
 
 // Ownership labels never decide which installation a declaration selects: a
@@ -243,11 +220,12 @@ func TestSelectDeclaredIgnoresOwnershipLabels(t *testing.T) {
 	if result.Selection.Source != SourceDeclared {
 		t.Fatalf("selection source = %q, want declared", result.Selection.Source)
 	}
-	if result.Selection.EntryPoint == nil ||
-		result.Selection.EntryPoint.Ownership != OwnershipModified {
+	if result.Selection.Installation == nil ||
+		len(result.Selection.Installation.Files) != 1 ||
+		result.Selection.Installation.Files[0].Ownership != OwnershipModified {
 		t.Fatalf(
-			"selected entry point = %+v, want the modified shim unchanged",
-			result.Selection.EntryPoint,
+			"selected installation = %+v, want the modified shim unchanged",
+			result.Selection.Installation,
 		)
 	}
 }
@@ -283,8 +261,12 @@ func TestSelectDeclaredMatchesUnknownObservedVersion(t *testing.T) {
 	if err := result.Select(Request{Declared: declaration}); err != nil {
 		t.Fatalf("Select declared installation: %v", err)
 	}
-	if result.Selection.EntryPoint == nil || result.Selection.EntryPoint.Path != shimPath {
-		t.Fatalf("selected entry point = %+v, want %s", result.Selection.EntryPoint, shimPath)
+	if result.Selection.Installation == nil ||
+		!result.Selection.Installation.Identity.Equal(identity) {
+		t.Fatalf(
+			"selected installation = %+v, want the observed identity",
+			result.Selection.Installation,
+		)
 	}
 }
 
@@ -355,16 +337,15 @@ func TestSelectPreferenceOrderChoosesDeterministically(t *testing.T) {
 	t.Parallel()
 
 	root := t.TempDir()
-	hybridPath := filepath.Join(root, "arclight.jar")
 	loaderPath := filepath.Join(root, "fabric-server-launch.jar")
 	vanillaPath := filepath.Join(root, "server.jar")
+	hybrid := hybridIdentity(
+		"catserver", "1.21.1", "fabric-loader", catalog.EcosystemFabric, "0.16.9",
+	)
 	result := Result{Installations: []Installation{
 		NewInstallation(vanillaIdentity("1.21.1"), vanillaPath),
 		NewInstallation(fabricIdentity("0.16.9", "1.21.1"), loaderPath),
-		NewInstallation(
-			hybridIdentity("catserver", "1.21.1", "fabric-loader", catalog.EcosystemFabric, "0.16.9"),
-			hybridPath,
-		),
+		NewInstallation(hybrid, filepath.Join(root, "arclight.jar")),
 	}}
 
 	if err := result.Select(Request{Policy: PolicyPreferModified}); err != nil {
@@ -374,11 +355,11 @@ func TestSelectPreferenceOrderChoosesDeterministically(t *testing.T) {
 	if selection.Source != SourcePreferred {
 		t.Fatalf("selection source = %q, want preferred", selection.Source)
 	}
-	if selection.EntryPoint == nil || selection.EntryPoint.Path != hybridPath {
+	if selection.Installation == nil ||
+		!selection.Installation.Identity.Equal(hybrid) {
 		t.Fatalf(
-			"selected entry point = %+v, want the hybrid %s",
-			selection.EntryPoint,
-			hybridPath,
+			"selected installation = %+v, want the hybrid identity",
+			selection.Installation,
 		)
 	}
 
@@ -393,12 +374,11 @@ func TestSelectPreferenceOrderChoosesDeterministically(t *testing.T) {
 	if automatic == nil {
 		t.Fatalf("no automatic-selection finding")
 	}
-	if automatic.Path != hybridPath {
-		t.Fatalf("automatic selection path = %q, want %q", automatic.Path, hybridPath)
+	if !automatic.Identity.Equal(hybrid) {
+		t.Fatalf("automatic selection identity = %+v, want the hybrid", automatic.Identity)
 	}
-	wantCompeting := []string{loaderPath, vanillaPath}
-	if !slices.Equal(automatic.Paths, wantCompeting) {
-		t.Fatalf("competing entry points = %v, want %v", automatic.Paths, wantCompeting)
+	if len(automatic.Identities) != 2 {
+		t.Fatalf("competing identities = %d, want 2", len(automatic.Identities))
 	}
 }
 
@@ -410,8 +390,10 @@ func TestSelectPreferenceBreaksLoaderTiesDeterministically(t *testing.T) {
 	root := t.TempDir()
 	newerPath := filepath.Join(root, "fabric-server-mc.26.2-loader.0.19.3-launcher.1.1.2.jar")
 	olderPath := filepath.Join(root, "fabric-server-mc.1.21.4-loader.0.16.9-launcher.1.0.1.jar")
-	newer := NewInstallation(fabricIdentity("0.19.3", "26.2"), newerPath)
-	older := NewInstallation(fabricIdentity("0.16.9", "1.21.4"), olderPath)
+	newerIdentity := fabricIdentity("0.19.3", "26.2")
+	olderIdentity := fabricIdentity("0.16.9", "1.21.4")
+	newer := NewInstallation(newerIdentity, newerPath)
+	older := NewInstallation(olderIdentity, olderPath)
 
 	for _, installations := range [][]Installation{
 		{newer, older},
@@ -421,40 +403,40 @@ func TestSelectPreferenceBreaksLoaderTiesDeterministically(t *testing.T) {
 		if err := result.Select(Request{Policy: PolicyPreferModified}); err != nil {
 			t.Fatalf("Select preferred installation: %v", err)
 		}
-		if result.Selection.EntryPoint == nil ||
-			result.Selection.EntryPoint.Path != olderPath {
+		if result.Selection.Installation == nil ||
+			!result.Selection.Installation.Identity.Equal(olderIdentity) {
 			t.Fatalf(
-				"selected entry point = %+v, want the lexical loader identity %s",
-				result.Selection.EntryPoint,
-				olderPath,
+				"selected installation = %+v, want the lexical loader identity %s",
+				result.Selection.Installation,
+				olderIdentity,
 			)
 		}
 	}
 }
 
-// A receipt-managed entry point outranks the lexical first entry point of the
-// same installation, while an unmanaged installation still prefers a managed
-// sibling.
-func TestSelectPrefersManagedEntryPointWithinTier(t *testing.T) {
+// A receipt-managed launch target outranks an unmanaged sibling when live
+// status resolves a tie.
+func TestSelectPrefersManagedLaunchTargetWithinTier(t *testing.T) {
 	t.Parallel()
 
 	root := t.TempDir()
 	unmanagedPath := filepath.Join(root, "a-fabric-launcher.jar")
 	managedPath := filepath.Join(root, "b-fabric-launcher.jar")
-	unmanaged := NewInstallation(fabricIdentity("0.16.9", "1.21.4"), unmanagedPath)
-	managed := NewInstallation(fabricIdentity("0.19.3", "26.2"), managedPath)
+	unmanagedIdentity := fabricIdentity("0.16.9", "1.21.4")
+	managedIdentity := fabricIdentity("0.19.3", "26.2")
+	unmanaged := NewInstallation(unmanagedIdentity, unmanagedPath)
+	managed := NewInstallation(managedIdentity, managedPath)
 	markManaged(&managed, managedPath)
 	result := Result{Installations: []Installation{unmanaged, managed}}
 
 	if err := result.Select(Request{Policy: PolicyPreferModified}); err != nil {
 		t.Fatalf("Select preferred installation: %v", err)
 	}
-	if result.Selection.EntryPoint == nil ||
-		result.Selection.EntryPoint.Path != managedPath {
+	if result.Selection.Installation == nil ||
+		!result.Selection.Installation.Identity.Equal(managedIdentity) {
 		t.Fatalf(
-			"selected entry point = %+v, want the managed %s",
-			result.Selection.EntryPoint,
-			managedPath,
+			"selected installation = %+v, want the managed identity",
+			result.Selection.Installation,
 		)
 	}
 }
@@ -496,15 +478,14 @@ func TestSelectStrictReportsAmbiguity(t *testing.T) {
 			len(selectionErr.Installations),
 		)
 	}
-	var paths []string
+	var identities []Identity
 	for finding := range result.Findings() {
 		if finding.Kind == FindingAmbiguousInstallations {
-			paths = finding.Paths
+			identities = finding.Identities
 		}
 	}
-	want := []string{fabricPath, vanillaPath}
-	if !slices.Equal(paths, want) {
-		t.Fatalf("ambiguous finding paths = %v, want %v", paths, want)
+	if len(identities) != 2 {
+		t.Fatalf("ambiguous finding identities = %d, want 2", len(identities))
 	}
 }
 

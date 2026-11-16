@@ -129,6 +129,15 @@ func TestObserveReportsPackagesOfSelectedRuntime(t *testing.T) {
 	}
 }
 
+// packageTestSelection builds a selected runtime with launch evidence.
+func packageTestSelection(identity discovery.Identity) *discovery.Selection {
+	installation := discovery.NewInstallation(identity, "/server.jar")
+	return &discovery.Selection{
+		State:        discovery.SelectionSelected,
+		Installation: &installation,
+	}
+}
+
 // The package directory list is part of the reported status: loader runtimes
 // observe mods/, Bukkit-family runtimes observe plugins/, and an unidentified
 // runtime observes neither.
@@ -136,51 +145,36 @@ func TestPackageSearchPathsFollowSelectedRuntime(t *testing.T) {
 	t.Parallel()
 
 	root := t.TempDir()
-	fabricPath := filepath.Join(root, "fabric-server-launch.jar")
-	paperPath := filepath.Join(root, "paper.jar")
-	vanillaPath := filepath.Join(root, "server.jar")
 	tests := []struct {
 		name      string
 		selection *discovery.Selection
 		want      []string
 	}{
 		{
-			name: "fabric runtime observes mods",
-			selection: &discovery.Selection{
-				State:        discovery.SelectionSelected,
-				Installation: &discovery.Installation{Identity: fabricObservationIdentity("1.21.1", "0.19.5")},
-				EntryPoint:   &discovery.File{Path: fabricPath, Role: discovery.RoleEntryPoint},
-			},
-			want: []string{filepath.Join(root, "mods")},
+			name:      "fabric runtime observes mods",
+			selection: packageTestSelection(fabricObservationIdentity("1.21.1", "0.19.5")),
+			want:      []string{filepath.Join(root, "mods")},
 		},
 		{
 			name: "paper runtime observes plugins",
-			selection: &discovery.Selection{
-				State: discovery.SelectionSelected,
-				Installation: &discovery.Installation{Identity: discovery.Identity{
-					Primary: catalog.VersionedRef{
-						Ecosystem: catalog.EcosystemPaper,
-						Name:      catalog.Name("paper"),
-						Version:   versionpkg.Version("130"),
-					},
-				}},
-				EntryPoint: &discovery.File{Path: paperPath, Role: discovery.RoleEntryPoint},
-			},
+			selection: packageTestSelection(discovery.Identity{
+				Primary: catalog.VersionedRef{
+					Ecosystem: catalog.EcosystemPaper,
+					Name:      catalog.Name("paper"),
+					Version:   versionpkg.Version("130"),
+				},
+			}),
 			want: []string{filepath.Join(root, "plugins")},
 		},
 		{
 			name: "vanilla runtime observes no content directory",
-			selection: &discovery.Selection{
-				State: discovery.SelectionSelected,
-				Installation: &discovery.Installation{Identity: discovery.Identity{
-					Primary: catalog.VersionedRef{
-						Ecosystem: catalog.EcosystemMinecraft,
-						Name:      catalog.Name("minecraft"),
-						Version:   versionpkg.Version("1.21.1"),
-					},
-				}},
-				EntryPoint: &discovery.File{Path: vanillaPath, Role: discovery.RoleEntryPoint},
-			},
+			selection: packageTestSelection(discovery.Identity{
+				Primary: catalog.VersionedRef{
+					Ecosystem: catalog.EcosystemMinecraft,
+					Name:      catalog.Name("minecraft"),
+					Version:   versionpkg.Version("1.21.1"),
+				},
+			}),
 		},
 		{
 			name: "unselected runtime observes no content directory",

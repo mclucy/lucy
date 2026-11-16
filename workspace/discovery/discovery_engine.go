@@ -145,6 +145,9 @@ func mergeIdenticalInstallations(installations []Installation) []Installation {
 			key := identityKey(candidate.Identity)
 			if existing, ok := indexes[key]; ok &&
 				out[existing].Identity.Equal(candidate.Identity) {
+				if out[existing].CorePath == "" {
+					out[existing].CorePath = candidate.CorePath
+				}
 				for _, file := range candidate.Files {
 					out[existing].addFile(file)
 				}

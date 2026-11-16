@@ -410,7 +410,7 @@ func newPaperInstallation(
 	components []catalog.VersionedRef,
 	filePath string,
 ) Installation {
-	return NewInstallation(
+	installation := NewInstallation(
 		Identity{
 			Primary: catalog.VersionedRef{
 				Ecosystem: paperLineageEcosystem(lineage),
@@ -421,6 +421,8 @@ func newPaperInstallation(
 		},
 		filePath,
 	)
+	installation.SetCore(filePath)
+	return installation
 }
 
 // paperBuildFromFilename recovers the build number that the paperclip jar
