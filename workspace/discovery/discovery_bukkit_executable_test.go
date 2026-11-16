@@ -24,6 +24,32 @@ func TestBukkitDetectorClassifiesPaper(t *testing.T) {
 	}
 }
 
+func TestBukkitDetectorClassifiesPaperclip(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	writeBukkitExecutableFixtureFile(
+		t,
+		filepath.Join(root, "paperclip", "META-INF", "MANIFEST.MF"),
+		[]byte("Manifest-Version: 1.0\nMain-Class: org.bukkit.craftbukkit.Main\n\n"),
+	)
+	// Paperclip lists the Mojang API artifact and no paper-api artifact.
+	writeBukkitExecutableFixtureFile(
+		t,
+		filepath.Join(root, "paperclip", "META-INF", "libraries.list"),
+		[]byte("b8df\tcom.destroystokyo.paper:paper-mojangapi:1.21.1-R0.1-SNAPSHOT\tcom/destroystokyo/paper/paper-mojangapi/1.21.1-R0.1-SNAPSHOT/paper-mojangapi-1.21.1-R0.1-SNAPSHOT.jar\n"),
+	)
+
+	installations, _ := discoverBukkit(productFixtureScan(t, root))
+	installation := singleProductInstallation(t, installations)
+	if installation.Identity.Primary.Name.String() != "paper" {
+		t.Fatalf(
+			"expected primary runtime paper, got %+v",
+			installation.Identity.Primary,
+		)
+	}
+}
+
 func TestBukkitDetectorProjectsRuntime(t *testing.T) {
 	t.Parallel()
 

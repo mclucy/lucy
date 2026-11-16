@@ -217,6 +217,9 @@ func inferPaperObservationLineages(obs paperObservations) []string {
 	if observationLinesContain(
 		obs.librariesListEntries,
 		paperLibraryPaperToken,
+	) || observationLinesContain(
+		obs.librariesListEntries,
+		paperLibraryMojangAPIToken,
 	) {
 		add("paper")
 	}
