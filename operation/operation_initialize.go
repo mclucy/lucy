@@ -279,24 +279,30 @@ func (s *Service) applyDetectedVersions(
 			"product", manifest.Server.Core.Product,
 		)
 	}
-	mcdrVersion := opts.MCDRVersion
-	if mcdrVersion == "" && observed != nil && observed.Wrappers.MCDR != nil {
-		v := observed.Wrappers.MCDR.Version
-		if v.IsInvalid() || v.CanInfer() {
-			return fmt.Errorf(
-				"MCDR detected without an exact app version; specify --mcdr-version",
+	mcdrVersion := version.Version(opts.MCDRVersion)
+	detectedMCDR := observed != nil && observed.Wrappers.MCDR != nil
+	if mcdrVersion == "" && detectedMCDR {
+		observedVersion := observed.Wrappers.MCDR.Version
+		if observedVersion.IsInvalid() || observedVersion.CanInfer() {
+			// The lock needs a concrete version, so resolution records the
+			// latest published release. The warning keeps this substitution
+			// visible to the user.
+			observed.Warnings = append(observed.Warnings, fmt.Errorf("failed to detect the system's MCDReforged version"))
+		} else {
+			mcdrVersion = observedVersion
+			s.logger.Debug(
+				"MCDR version from workspace detection",
+				"version", mcdrVersion,
 			)
 		}
-		mcdrVersion = string(v)
-		s.logger.Debug(
-			"MCDR version from workspace detection",
-			"version", mcdrVersion,
-		)
 	}
-	if mcdrVersion != "" {
+	if mcdrVersion != "" || detectedMCDR {
+		if mcdrVersion == "" {
+			mcdrVersion = version.Any
+		}
 		manifest.MCDR = &documentpkg.ManifestMCDR{
 			Directory: ".",
-			Version:   version.Version(mcdrVersion),
+			Version:   mcdrVersion,
 			Packages:  map[string]documentpkg.Requirement{},
 		}
 	}

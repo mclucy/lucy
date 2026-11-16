@@ -34,7 +34,7 @@ The generated `lucy.yaml` explains each field inline. Pass `--no-comments` to om
 
 ## MCDReforged
 
-Pass `--mcdr-version` to record MCDReforged as the server wrapper when lucy cannot detect the version you want. Installation can then use your global MCDReforged or an isolated environment.
+Init records MCDReforged as the server wrapper when it finds an MCDReforged workspace. If init cannot read the installed MCDReforged version, it warns and records the selector `any`. The lock then records the latest published release. Pass `--mcdr-version` to pin the release that the server already runs. Installation can use your global MCDReforged or an isolated environment.
 
 ## Versions
 
