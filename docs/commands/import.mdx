@@ -20,7 +20,7 @@ Import accepts two kinds of source:
 
 Sources are a local path, a direct link to the archive, or a remote modpack reference described below. Relative local paths resolve against the current directory.
 
-Client packs and launcher instances are not supported yet.
+Client packs are supported on a best-effort basis. Import keeps the files the server loader can read and removes files whose own descriptors declare client-only support. Expect missing features, and expect some overrides not to apply. Import continues and reports what it could not use.
 
 ## Remote modpacks
 
@@ -34,7 +34,7 @@ Without a pin, import uses the newest pack the provider lists. Pin a version or 
 - `modrinth:all-the-mods@1.2.0` or `https://modrinth.com/modpack/all-the-mods/version/1.2.0` pins a Modrinth version, given by its version number or version ID.
 - `curseforge:all-the-mods@4567890` or `https://www.curseforge.com/minecraft/modpacks/all-the-mods/files/4567890` pins a CurseForge file, given by its numeric file ID.
 
-CurseForge requires an API key. Set `curseforge.api_key` in your lucy configuration (see [`lucy config`](/commands/config)). Without it, a CurseForge source fails before any file is written.
+Lucy builds in a CurseForge API key. Set `curseforge.api_key` in your lucy configuration to override it (see [`lucy config`](/commands/config)). An empty value keeps the embedded key.
 
 Import checks the hashes the provider publishes for the pack, preferring SHA-512 over SHA-1. A resolved pack that publishes neither is rejected, so pass `--sha256` to supply the expected checksum yourself. Other `http` and `https` links are downloaded directly and are checked only by `--sha256`.
 
