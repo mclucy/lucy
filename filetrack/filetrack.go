@@ -162,10 +162,11 @@ func (s *Service) Run(ctx context.Context, root string, request Request) (result
 		if err != nil {
 			return result, err
 		}
-	case Update, Recover:
+	case Update, Recover, Lock, Unlock:
 		if !request.All {
 			var skipped []string
 			request.Paths, skipped, err = expandDeclaredPaths(
+				files,
 				document.Files,
 				request.Paths,
 				request.Operation,

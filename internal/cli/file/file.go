@@ -87,12 +87,17 @@ const (
 		"toggling. A hash selects a digest, --revision selects one exact " +
 		"historical sequence."
 
-	LockLong = "Snapshot and accept the current bytes of one or more files, " +
-		"then warn about any future deviation without restoring or " +
-		"replacing them."
+	LockLong = "Snapshot and accept the current bytes of one or more tracked " +
+		"files, then warn about any future deviation without restoring or " +
+		"replacing them. Paths accept shell-style patterns matched against " +
+		"tracked declarations; hidden tracked paths need an explicit leading " +
+		"dot. A matched declaration with no working file is reported as " +
+		"skipped."
 
 	UnlockLong = "Accept the existing hashes and recover_urls but stop " +
-		"warning about deviation."
+		"warning about deviation. Paths accept shell-style patterns matched " +
+		"against tracked declarations; hidden tracked paths need an explicit " +
+		"leading dot."
 
 	ListLong = "Read-only inspection of every tracked file. Mutable files " +
 		"may deviate without warning; immutable files warn during " +

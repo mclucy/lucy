@@ -55,6 +55,8 @@ lucy file lock config/example.json
 lucy file unlock config/example.json
 ```
 
+`lock` and `unlock` accept the same shell-style patterns as `update`; a pattern matches tracked declarations, and `lock` skips a matched file that has no working copy.
+
 To stop tracking a file without deleting it, run:
 
 ```bash

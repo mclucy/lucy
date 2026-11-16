@@ -3,6 +3,7 @@ package filetrack
 import (
 	"errors"
 	"fmt"
+	"os"
 
 	documentpkg "github.com/mclucy/lucy/document"
 	"github.com/mclucy/lucy/input"
@@ -12,7 +13,10 @@ import (
 // expandDeclaredPaths resolves patterns against tracked declarations without
 // walking the workspace, so a declared file that no longer exists still
 // matches. Recover reports matched presence-only declarations as skipped.
+// Lock reports matched declarations with no working file as skipped because
+// there are no current bytes to accept.
 func expandDeclaredPaths(
+	workspace *os.Root,
 	files []documentpkg.TrackedFile,
 	paths []string,
 	operation Operation,
@@ -84,6 +88,16 @@ func expandDeclaredPaths(
 				addSkipped(path)
 				continue
 			}
+			if operation == Lock {
+				missing, statErr := workspaceMissing(workspace, path)
+				if statErr != nil {
+					return nil, nil, statErr
+				}
+				if missing {
+					addSkipped(path)
+					continue
+				}
+			}
 			addSelected(path)
 		}
 		if !matched {
@@ -94,4 +108,12 @@ func expandDeclaredPaths(
 		}
 	}
 	return selected, skipped, nil
+}
+
+// workspaceMissing reports whether the workspace holds no entry at path.
+func workspaceMissing(workspace *os.Root, path string) (bool, error) {
+	if _, err := workspace.Lstat(path); !errors.Is(err, os.ErrNotExist) {
+		return false, err
+	}
+	return true, nil
 }
