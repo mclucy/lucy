@@ -56,6 +56,9 @@ func normalizeForgeDescriptor(data []byte) ([]byte, error) {
 	normalized := map[string]any{}
 	copyForgeStrings(normalized, document,
 		"modLoader", "loaderVersion", "issueTrackerURL", "logoFile", "license")
+	if clientOnly, ok := document["clientSideOnly"].(bool); ok {
+		normalized["clientSideOnly"] = clientOnly
+	}
 	mods, err := normalizeForgeMods(document)
 	if err != nil {
 		return nil, err
@@ -125,6 +128,9 @@ func normalizeForgeMods(document map[string]any) ([]any, error) {
 		copyForgeStrings(mod, table,
 			"modId", "version", "displayName", "itemIcon", "displayURL",
 			"updateJSONURL", "logoFile", "credits", "description")
+		if clientOnly, ok := table["clientSideOnly"].(bool); ok {
+			mod["clientSideOnly"] = clientOnly
+		}
 		if authors := normalizeForgeAuthors(table["authors"]); len(authors) > 0 {
 			mod["authors"] = authors
 		}
