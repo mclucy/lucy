@@ -3,7 +3,6 @@ package artifact
 import (
 	"archive/zip"
 	"bytes"
-	"encoding/json/v2"
 	"fmt"
 	"sort"
 	"strings"
@@ -76,7 +75,7 @@ func readQuiltDescriptor(zipRdr *zip.Reader) (*quiltModFile, error) {
 		return nil, err
 	}
 	descriptor := &quiltModFile{}
-	if err := json.Unmarshal(raw, descriptor); err != nil {
+	if err := unmarshalDescriptor(raw, descriptor); err != nil {
 		return nil, err
 	}
 	if err := validateQuiltDescriptor(descriptor); err != nil {
@@ -424,7 +423,7 @@ func quiltRecordNestedNames(
 		return false, nil
 	}
 	fabric := &fileschema.FileFabricModIdentifier{}
-	if err := json.Unmarshal(raw, fabric); err != nil {
+	if err := unmarshalDescriptor(raw, fabric); err != nil {
 		return false, err
 	}
 	quiltRecordNames(names, fabric.ID)

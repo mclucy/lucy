@@ -31,6 +31,11 @@ type (
 		origin       requestOrigin
 		requirements []document.RequirementBinding
 		dependencyOf catalog.Ref
+		// previousFileID is the file the lock selected for this project. A
+		// release may publish several files of one version, and only the
+		// primary one answers an unconstrained requirement, so the locked
+		// variant stays eligible.
+		previousFileID string
 		// releaseHints come from remote dependency metadata. They order
 		// candidates but do not by themselves reject another build.
 		releaseHints []releaseHint
@@ -67,6 +72,13 @@ type Target struct {
 	CoreModules []catalog.DescriptorModule
 }
 
+// ModuleIdentity names one scoped module identity.
+type ModuleIdentity struct {
+	Environment serverpkg.Environment
+	Namespace   catalog.Ecosystem
+	ID          string
+}
+
 // PackageRuntime returns the ecosystem whose loader loads server packages on
 // target. A paperclip server runs Paper regardless of how the manifest names
 // its product. The second result is false for a target that loads no server
@@ -101,6 +113,12 @@ func (t Target) moduleNamespace(d catalog.Ecosystem) catalog.Ecosystem {
 	return runtime.ModuleNamespace(d)
 }
 
+// ModuleNamespace returns the ecosystem that scopes module identities of
+// descriptor ecosystem d on target.
+func (t Target) ModuleNamespace(d catalog.Ecosystem) catalog.Ecosystem {
+	return t.moduleNamespace(d)
+}
+
 // descriptorLoader returns the loader whose descriptor precedence reads an
 // artifact of a package in ecosystem. A runtime that loads the ecosystem
 // reads the artifact as its own loader would.
@@ -129,7 +147,11 @@ type PackagesRequest struct {
 	Context  context.Context
 	Manifest *document.Manifest
 	Previous []document.Package
-	Target   Target
+	// PreserveLocked keeps the file recorded by Previous selectable when the
+	// catalogue no longer publishes it for the current labels. It applies only
+	// while the runtime target is unchanged.
+	PreserveLocked bool
+	Target         Target
 	// Candidates lists the builds a direct or dependency requirement may
 	// select. It is required for every non-empty resolution.
 	Candidates CandidateSource

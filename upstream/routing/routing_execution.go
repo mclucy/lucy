@@ -134,8 +134,8 @@ func (r *Router) ResolveArtifactByHash(
 	artifact upstream.ArtifactFingerprint,
 ) upstream.ArtifactLookup {
 	result := upstream.ArtifactLookup{}
-	for _, mapper := range r.artifactMappers() {
-		ref, _, ok, err := mapper.PackageByHash(ctx, artifact)
+	for _, mapper := range r.artifactReleaseMappers() {
+		release, ok, err := mapper.ReleaseByHash(ctx, artifact)
 		if err != nil {
 			result.Errors = append(result.Errors, upstream.ProviderError{
 				Provider: mapper.Provider(),
@@ -143,8 +143,8 @@ func (r *Router) ResolveArtifactByHash(
 			})
 			continue
 		}
-		if ok && ref.Name != "" {
-			result.Ref = ref
+		if ok && release.Ref.Name != "" {
+			result.Ref = release.Ref
 			return result
 		}
 	}

@@ -7,22 +7,24 @@ type FileModLoaderIdentifier struct {
 	IssueTrackerURL string                            `toml:"issueTrackerURL"`
 	LogoFile        string                            `toml:"logoFile"`
 	License         string                            `toml:"license"`
+	ClientSideOnly  bool                              `toml:"clientSideOnly"`
 	Mods            []forgeModInfo                    `toml:"mods"`
 	Dependencies    map[string][]forgeModDependencies `toml:"dependencies"`
 	ModProperties   map[string]string                 `toml:"-"` // ignored
 }
 
 type forgeModInfo struct {
-	ModID         string `toml:"modId"`
-	Version       string `toml:"version"`
-	DisplayName   string `toml:"displayName"`
-	ItemIcon      string `toml:"itemIcon"`
-	DisplayURL    string `toml:"displayURL"`
-	UpdateJSONURL string `toml:"updateJSONURL"`
-	LogoFile      string `toml:"logoFile"`
-	Credits       string `toml:"credits"`
-	Authors       string `toml:"authors"`
-	Description   string `toml:"description"`
+	ModID          string `toml:"modId"`
+	Version        string `toml:"version"`
+	DisplayName    string `toml:"displayName"`
+	ItemIcon       string `toml:"itemIcon"`
+	DisplayURL     string `toml:"displayURL"`
+	UpdateJSONURL  string `toml:"updateJSONURL"`
+	LogoFile       string `toml:"logoFile"`
+	Credits        string `toml:"credits"`
+	Authors        string `toml:"authors"`
+	Description    string `toml:"description"`
+	ClientSideOnly bool   `toml:"clientSideOnly"`
 }
 
 type forgeModDependencies struct {

@@ -28,6 +28,9 @@ type packageMapperTestSource struct {
 	initializeTestSource
 	mappers  map[catalog.Provider]fakePackageMapper
 	releases map[catalog.Provider][]upstream.Candidate
+	// unidentified adds a jar without a readable descriptor, so initialization
+	// has to identify it through the upstream lookup.
+	unidentified bool
 
 	// artifactURL and artifactSHA256 locate the jar every release points at.
 	// initializePackageMapperLayout sets them after serving the jar.
@@ -35,14 +38,39 @@ type packageMapperTestSource struct {
 	artifactSHA256 string
 }
 
-func (s packageMapperTestSource) GetArtifactMapper(
+func (s packageMapperTestSource) GetArtifactReleaseMapper(
 	provider catalog.Provider,
-) (upstream.ArtifactMapProvider, bool, error) {
+) (upstream.ArtifactReleaseMapper, bool, error) {
 	mapper, ok := s.mappers[provider]
 	if !ok {
 		return nil, false, nil
 	}
-	return mapper, true, nil
+	return fakeReleaseMapper{
+		fakePackageMapper: mapper,
+		candidates:        s.releases[provider],
+		url:               s.artifactURL,
+		sha256:            s.artifactSHA256,
+	}, true, nil
+}
+
+// ResolveArtifactByHash reports the mappers that fail, so identification sees
+// the incomplete lookups this source configures instead of an empty answer.
+func (s packageMapperTestSource) ResolveArtifactByHash(
+	context.Context,
+	upstream.ArtifactFingerprint,
+) upstream.ArtifactLookup {
+	lookup := upstream.ArtifactLookup{}
+	for _, provider := range packageMapperProviders {
+		mapper, ok := s.mappers[provider]
+		if !ok || mapper.err == nil {
+			continue
+		}
+		lookup.Errors = append(lookup.Errors, upstream.ProviderError{
+			Provider: provider,
+			Err:      mapper.err,
+		})
+	}
+	return lookup
 }
 
 func (s packageMapperTestSource) Candidates(
@@ -82,9 +110,9 @@ func (s packageMapperInstallSource) Candidates(
 	return s.catalogue.Candidates(ctx, registry, project, minecraft, ecosystem)
 }
 
-// fakePackageMapper answers a hash lookup the way an upstream does when it
-// recognizes the file: as one project at one version. err makes the lookup
-// fail the way an unreachable upstream does.
+// fakePackageMapper names the project a provider recognizes and whose
+// releases the test lists. err makes the lookup fail the way an unreachable
+// upstream does.
 type fakePackageMapper struct {
 	provider catalog.Provider
 	name     catalog.Name
@@ -94,19 +122,39 @@ type fakePackageMapper struct {
 
 func (m fakePackageMapper) Provider() catalog.Provider { return m.provider }
 
-func (m fakePackageMapper) PackageByHash(
+// fakeReleaseMapper answers a hash lookup with the first listed release. A
+// provider with no listed release does not recognize the file.
+type fakeReleaseMapper struct {
+	fakePackageMapper
+	candidates []upstream.Candidate
+	url        string
+	sha256     string
+}
+
+func (m fakeReleaseMapper) ReleaseByHash(
 	context.Context,
 	upstream.ArtifactFingerprint,
-) (catalog.VersionedRef, string, bool, error) {
+) (upstream.Release, bool, error) {
 	if m.err != nil {
-		return catalog.VersionedRef{}, "", false, m.err
+		return upstream.Release{}, false, m.err
 	}
-	return catalog.VersionedRef{
-		Name:      m.name,
-		Provider:  m.provider,
-		Ecosystem: catalog.EcosystemFabric,
-		Version:   m.version,
-	}, "", true, nil
+	if len(m.candidates) == 0 {
+		return upstream.Release{}, false, nil
+	}
+	candidate := m.candidates[0]
+	candidate.URL = m.url
+	candidate.Hashes = map[string]string{"sha256": m.sha256}
+	return upstream.Release{
+		Ref: catalog.VersionedRef{
+			Name:      m.name,
+			Provider:  m.provider,
+			Ecosystem: catalog.EcosystemFabric,
+			Version:   m.version,
+		},
+		Candidate:         candidate,
+		MinecraftVersions: []string{"1.21.1"},
+		Loaders:           []string{"fabric"},
+	}, true, nil
 }
 
 // releaseCandidate is one published release of a project, as the upstream
@@ -153,6 +201,13 @@ func initializePackageMapperResult(
 	writeInitializeTestJar(t, modPath, map[string]string{
 		"fabric.mod.json": `{"schemaVersion":1,"id":"example","version":"1.0.0"}`,
 	})
+	if source.unidentified {
+		writeInitializeTestJar(
+			t,
+			filepath.Join(root, "mods", "unidentified.jar"),
+			map[string]string{"data.txt": "no descriptor"},
+		)
+	}
 	jar := readFileBytes(t, modPath)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = w.Write(jar)
@@ -244,33 +299,6 @@ func TestInitializePrefersModrinthWhenBothMatch(t *testing.T) {
 	}
 }
 
-// A Modrinth match whose project offers no release for the hash-matched
-// version is not a dead end: adoption falls through to CurseForge.
-func TestInitializeFallsThroughToCurseForgeWithoutModrinthRelease(t *testing.T) {
-	_, manifest, lock := initializePackageMapperLayout(t, packageMapperTestSource{
-		mappers: map[catalog.Provider]fakePackageMapper{
-			catalog.ProviderModrinth:   {provider: catalog.ProviderModrinth, name: "example", version: "1.0.0"},
-			catalog.ProviderCurseForge: {provider: catalog.ProviderCurseForge, name: "example", version: "1.0.0"},
-		},
-		releases: map[catalog.Provider][]upstream.Candidate{
-			catalog.ProviderCurseForge: {releaseCandidate(catalog.ProviderCurseForge, "123", "1.0.0")},
-		},
-	})
-	requirements := manifest.Server.Packages[catalog.EcosystemFabric]
-	if _, ok := requirements["curseforge:example"]; !ok {
-		t.Fatalf("manifest packages = %v, want curseforge:example", requirements)
-	}
-	if _, ok := requirements["modrinth:example"]; ok {
-		t.Fatalf("manifest packages = %v, Modrinth has no release to pin", requirements)
-	}
-	if len(lock.Packages) != 1 {
-		t.Fatalf("lock packages = %d, want 1", len(lock.Packages))
-	}
-	if got := lock.Packages[0].Provider; got != catalog.ProviderCurseForge {
-		t.Fatalf("lock provider = %q, want curseforge", got)
-	}
-}
-
 // Without any configured mapper, an installed package stays unmanaged: the
 // declaration gains no requirement and the file is left in place.
 func TestInitializeLeavesPackageUnmanagedWithoutMapper(t *testing.T) {
@@ -287,10 +315,12 @@ func TestInitializeLeavesPackageUnmanagedWithoutMapper(t *testing.T) {
 	readFileBytes(t, filepath.Join(root, "mods", "example.jar"))
 }
 
-// A lookup error is not a miss: the file stays unmanaged, and the warning
-// names the package, the provider, and the failure.
-func TestInitializeWarnsWhenHashLookupFails(t *testing.T) {
+// A failed lookup is not a user-facing warning by itself. Without a provider
+// that identifies the file, the file stays unmanaged and the report names it
+// once.
+func TestInitializeLeavesPackageUnmanagedWhenHashLookupFails(t *testing.T) {
 	_, result := initializePackageMapperResult(t, packageMapperTestSource{
+		unidentified: true,
 		mappers: map[catalog.Provider]fakePackageMapper{
 			catalog.ProviderModrinth: {
 				provider: catalog.ProviderModrinth,
@@ -300,14 +330,19 @@ func TestInitializeWarnsWhenHashLookupFails(t *testing.T) {
 			},
 		},
 	})
-	if got := len(result.Warnings); got != 1 {
-		t.Fatalf("warnings = %v, want one", result.Warnings)
-	}
-	message := result.Warnings[0].Error()
-	for _, want := range []string{"example.jar", "modrinth", "modrinth unavailable"} {
-		if !strings.Contains(message, want) {
-			t.Errorf("warning %q does not name %q", message, want)
+	unmanaged := false
+	for _, warning := range result.Warnings {
+		message := warning.Error()
+		if strings.Contains(message, "modrinth unavailable") {
+			t.Errorf("warning %q reports a provider lookup failure", message)
 		}
+		if strings.Contains(message, "example.jar") &&
+			strings.Contains(message, "left unmanaged") {
+			unmanaged = true
+		}
+	}
+	if !unmanaged {
+		t.Fatalf("warnings = %v, want the unmanaged package warning", result.Warnings)
 	}
 	if got := len(result.Document.Server.Packages[catalog.EcosystemFabric]); got != 0 {
 		t.Fatalf("manifest packages = %d, want none", got)

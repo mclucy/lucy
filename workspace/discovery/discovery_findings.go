@@ -2,8 +2,10 @@ package discovery
 
 import (
 	"iter"
+	"path/filepath"
 	"slices"
 	"sort"
+	"strings"
 )
 
 // FindingKind is a typed observation condition. Presentation severity and CLI
@@ -73,6 +75,82 @@ func (r *Result) FindInstallation(members map[string]FileRole) *Installation {
 		}
 	}
 	return nil
+}
+
+// RebasePaths returns the observation with every absolute path under from
+// repointed to to. A caller that observes a staged tree and then publishes it
+// at another path reports the published paths instead of the staging paths.
+func (r Result) RebasePaths(from, to string) Result {
+	from, to = filepath.Clean(from), filepath.Clean(to)
+	if from == to || from == "." || !filepath.IsAbs(from) {
+		return r
+	}
+	rebase := func(path string) string {
+		if path == "" {
+			return ""
+		}
+		relative, err := filepath.Rel(from, path)
+		if err != nil || relative == ".." ||
+			strings.HasPrefix(relative, ".."+string(filepath.Separator)) {
+			return path
+		}
+		return filepath.Join(to, relative)
+	}
+	selected := -1
+	if r.Selection.Installation != nil {
+		for index := range r.Installations {
+			if &r.Installations[index] == r.Selection.Installation {
+				selected = index
+				break
+			}
+		}
+	}
+
+	installations := make([]Installation, len(r.Installations))
+	for index := range r.Installations {
+		installations[index] = r.Installations[index].rebasePaths(rebase)
+	}
+	r.Installations = installations
+	diagnostics := make([]Finding, len(r.Diagnostics))
+	for index := range r.Diagnostics {
+		diagnostics[index] = r.Diagnostics[index].rebasePaths(rebase)
+	}
+	r.Diagnostics = diagnostics
+	switch {
+	case selected >= 0:
+		r.Selection.Installation = &r.Installations[selected]
+	case r.Selection.Installation != nil:
+		installation := r.Selection.Installation.rebasePaths(rebase)
+		r.Selection.Installation = &installation
+	}
+	return r
+}
+
+func (i Installation) rebasePaths(rebase func(string) string) Installation {
+	i.CorePath = rebase(i.CorePath)
+	if i.Files == nil {
+		return i
+	}
+	files := make([]File, len(i.Files))
+	for index := range i.Files {
+		files[index] = i.Files[index]
+		files[index].Path = rebase(files[index].Path)
+	}
+	i.Files = files
+	return i
+}
+
+func (f Finding) rebasePaths(rebase func(string) string) Finding {
+	f.Path = rebase(f.Path)
+	if f.Paths == nil {
+		return f
+	}
+	paths := make([]string, len(f.Paths))
+	for index := range f.Paths {
+		paths[index] = rebase(f.Paths[index])
+	}
+	f.Paths = paths
+	return f
 }
 
 func installationMatchesMembers(

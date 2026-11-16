@@ -4,15 +4,11 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"path/filepath"
 
 	"github.com/mclucy/lucy/document"
-	"github.com/mclucy/lucy/internal/fsutil"
-	"github.com/mclucy/lucy/internal/workspaceguard"
 	"github.com/mclucy/lucy/internal/workspacewrite"
 	"github.com/mclucy/lucy/log"
 	"github.com/mclucy/lucy/receipt"
-	"go.yaml.in/yaml/v4"
 )
 
 // adoptionDocument is one metadata file the adoption transaction publishes.
@@ -97,7 +93,6 @@ func publishAdoption(
 	}
 	return publishAdoptionDocuments(
 		root,
-		files,
 		documents,
 		expectations,
 		protected,
@@ -203,154 +198,38 @@ func pinnedPlan(
 
 func publishAdoptionDocuments(
 	root string,
-	files *os.Root,
 	documents []adoptionDocument,
 	expected []adoptionExpectation,
 	protected []adoptionProtected,
 	logger *log.Logger,
-) (resultErr error) {
-	names := make([]string, 0, len(documents))
+) error {
+	writes := make([]commitWrite, 0, len(documents))
 	for _, document := range documents {
-		names = append(names, document.name)
+		after := document.plan.Image
+		writes = append(writes, commitWrite{
+			path:  document.name,
+			data:  document.plan.Data,
+			base:  document.plan.Base,
+			after: &after,
+		})
 	}
-	if err := rejectInstallPathAliases(root, names); err != nil {
-		return err
-	}
-	backup, err := os.MkdirTemp(filepath.Join(root, ".lucy"), "rollback-*")
-	if err != nil {
-		return err
-	}
-	backupRelative := filepath.ToSlash(filepath.Join(".lucy", filepath.Base(backup)))
-	journalPublished := false
-	defer func() {
-		if journalPublished {
-			return
-		}
-		if err := os.RemoveAll(backup); err != nil {
-			logger.Warn(fmt.Errorf("remove unused adoption backup: %w", err))
-		}
-	}()
-	data := make(map[string][]byte, len(documents))
-	journal := workspacewrite.InstallJournal{
-		Backup:  backupRelative,
-		Entries: make([]workspacewrite.InstallJournalEntry, 0, len(documents)),
-	}
-	for _, document := range documents {
-		if err := workspacewrite.SafePath(root, document.name); err != nil {
-			return err
-		}
-		target := filepath.Join(root, filepath.FromSlash(document.name))
-		before, err := workspacewrite.ObserveInstallImage(files, document.name)
-		if err != nil {
-			return err
-		}
-		if !workspacewrite.InstallImagesEqual(before, document.plan.Base) {
-			return fmt.Errorf(
-				"adoption document %s changed while planning",
-				document.name,
-			)
-		}
-		after := &document.plan.Image
-		if workspacewrite.InstallImagesEqual(before, after) {
-			continue
-		}
-		if before != nil {
-			if err := preserveInstallPreImage(
-				files,
-				backup,
-				backupRelative,
-				*before,
-				target,
-			); err != nil {
+	_, err := executeCommit(root, commitRequest{
+		label:  "adoption",
+		writes: writes,
+		verify: func(
+			files *os.Root,
+			entries []workspacewrite.InstallJournalEntry,
+		) error {
+			if err := verifyAdoptedOutputs(root, expected); err != nil {
 				return err
 			}
-		}
-		journal.Entries = append(journal.Entries, workspacewrite.InstallJournalEntry{
-			Path:   document.name,
-			Before: before,
-			After:  after,
-		})
-		data[document.name] = document.plan.Data
-	}
-	if len(journal.Entries) == 0 {
-		return nil
-	}
-	journalBytes, err := yaml.Marshal(journal)
-	if err != nil {
-		return err
-	}
-	journalPath := filepath.Join(root, workspacewrite.InstallJournalName)
-	if err := fsutil.AtomicWrite(journalPath, journalBytes, 0o600); err != nil {
-		// AtomicWrite can return a sync error after the replacement was
-		// published. Keep the backup while any journal remains so recovery can
-		// verify and remove it.
-		if _, statErr := os.Lstat(journalPath); statErr == nil {
-			journalPublished = true
-		}
-		return err
-	}
-	journalPublished = true
-	logger.Debug(
-		"adoption metadata journaled",
-		"journal", journalPath,
-		"backup", journal.Backup,
-		"paths", len(journal.Entries),
-	)
-	failed := true
-	defer func() {
-		if !failed {
-			return
-		}
-		committed, _ := workspacewrite.InstallJournalCommitted(root)
-		resultErr = errors.Join(resultErr, workspaceguard.RecoverInstall(root, logger))
-		if committed && resultErr != nil {
-			resultErr = &CommittedError{Err: fmt.Errorf(
-				"adoption committed; %w", resultErr,
-			)}
-		}
-	}()
-	for _, entry := range journal.Entries {
-		if err := publishInstallBytes(
-			files,
-			entry.Path,
-			data[entry.Path],
-			entry.After,
-			entry,
-		); err != nil {
-			return err
-		}
-	}
-	if err := verifyAdoptedOutputs(root, expected); err != nil {
-		return err
-	}
-	if err := recheckJournaledDocuments(files, journal.Entries); err != nil {
-		return err
-	}
-	if err := recheckProtectedDocuments(files, protected, journal.Entries); err != nil {
-		return err
-	}
-	journal.Committed = true
-	committedBytes, err := yaml.Marshal(journal)
-	if err != nil {
-		return err
-	}
-	if err := fsutil.AtomicWrite(journalPath, committedBytes, 0o600); err != nil {
-		return err
-	}
-	failed = false
-	if err := os.RemoveAll(backup); err != nil {
-		return &CommittedError{Err: fmt.Errorf(
-			"adoption committed; remove rollback backup %s: %w",
-			backup, err,
-		)}
-	}
-	if err := workspacewrite.RemoveRoot(files, workspacewrite.InstallJournalName); err != nil {
-		return &CommittedError{Err: fmt.Errorf(
-			"adoption committed; remove transaction journal: %w", err,
-		)}
-	}
-	logger.Debug("adoption metadata committed", "root", root, "paths", len(journal.Entries))
-	return nil
+			if err := recheckJournaledDocuments(files, entries); err != nil {
+				return err
+			}
+			return recheckProtectedDocuments(files, protected, entries)
+		},
+	}, logger)
+	return err
 }
 
 // recheckJournaledDocuments verifies the transaction's own writes immediately

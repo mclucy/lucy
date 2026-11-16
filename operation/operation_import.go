@@ -14,8 +14,10 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync"
 	"time"
 
+	"github.com/mclucy/lucy/artifact"
 	"github.com/mclucy/lucy/artifactstore"
 	"github.com/mclucy/lucy/cache"
 	"github.com/mclucy/lucy/catalog"
@@ -24,6 +26,8 @@ import (
 	"github.com/mclucy/lucy/internal/importpack"
 	"github.com/mclucy/lucy/internal/workspacewrite"
 	"github.com/mclucy/lucy/receipt"
+	serverpkg "github.com/mclucy/lucy/server"
+	"github.com/mclucy/lucy/upstream"
 	"github.com/mclucy/lucy/version"
 	"github.com/mclucy/lucy/workspace"
 	"github.com/mclucy/lucy/workspace/discovery"
@@ -37,6 +41,125 @@ const (
 	importDownloadArchivePhase = "download archive"
 	importFilesPhase           = "files"
 )
+
+// importWarningCause groups file warnings that share one cause so the import
+// report can summarize repeats. The per-file warning stays a distinct error
+// until ImportResult finalizes its messages.
+type importWarningCause uint8
+
+const (
+	importWarningLoaderMismatch importWarningCause = iota + 1
+	importWarningRemoteSide
+	importWarningNoProvider
+	importWarningNoServerModule
+)
+
+// importWarning is one file-level import warning with the cause that lets the
+// report summarize several files into one line.
+type importWarning struct {
+	cause   importWarningCause
+	path    string
+	message string
+}
+
+func (w *importWarning) Error() string {
+	return w.message
+}
+
+// newImportWarning records a warning whose path is already relative to the
+// workspace.
+func newImportWarning(
+	cause importWarningCause,
+	path, message string,
+) *importWarning {
+	return &importWarning{cause: cause, path: path, message: message}
+}
+
+// groupImportWarnings replaces repeated per-file warnings with one line per
+// cause. A single warning keeps its exact message so its file-specific detail
+// stays visible.
+func groupImportWarnings(warnings []error) []error {
+	groups := map[importWarningCause][]*importWarning{}
+	for _, warning := range warnings {
+		var grouped *importWarning
+		if errors.As(warning, &grouped) {
+			groups[grouped.cause] = append(groups[grouped.cause], grouped)
+		}
+	}
+	if len(groups) == 0 {
+		return warnings
+	}
+	grouped := make([]error, 0, len(warnings))
+	emitted := map[importWarningCause]bool{}
+	for _, warning := range warnings {
+		var fileWarning *importWarning
+		if !errors.As(warning, &fileWarning) {
+			grouped = append(grouped, warning)
+			continue
+		}
+		if len(groups[fileWarning.cause]) <= 1 {
+			grouped = append(grouped, warning)
+			continue
+		}
+		if emitted[fileWarning.cause] {
+			continue
+		}
+		emitted[fileWarning.cause] = true
+		grouped = append(grouped, errors.New(summarizeImportWarnings(
+			fileWarning.cause,
+			groups[fileWarning.cause],
+		)))
+	}
+	return grouped
+}
+
+// summarizeImportWarnings names one repeated cause, its count, and up to three
+// example paths.
+func summarizeImportWarnings(
+	cause importWarningCause,
+	warnings []*importWarning,
+) string {
+	paths := make([]string, 0, len(warnings))
+	for _, warning := range warnings {
+		if warning.path == "" || slices.Contains(paths, warning.path) {
+			continue
+		}
+		paths = append(paths, warning.path)
+	}
+	count := len(paths)
+	if count == 0 {
+		count = len(warnings)
+	}
+	examples := firstExamples(paths, 3)
+	var subject string
+	switch cause {
+	case importWarningLoaderMismatch:
+		subject = "matched releases that target another loader"
+	case importWarningRemoteSide:
+		subject = "matched releases that exclude a dedicated server"
+	case importWarningNoProvider:
+		subject = "have no configured provider identity"
+	case importWarningNoServerModule:
+		subject = "have descriptors that declare no server-side module"
+	default:
+		subject = "were reported"
+	}
+	message := fmt.Sprintf("%s %s", packageCountLabel(count), subject)
+	if len(examples) > 0 {
+		message += " (examples: " + strings.Join(examples, ", ") + ")"
+	}
+	return message
+}
+
+// finalizeImportResult groups repeated warning causes and renders the strings
+// the JSON result and CLI report expose.
+func finalizeImportResult(result *ImportResult) {
+	if result == nil {
+		return
+	}
+	result.Warnings = groupImportWarnings(result.Warnings)
+	result.WarningMessages = warningStrings(result.Warnings)
+}
 
 // importDownloadPhase names the stage that fetches the source, or "" when the
 // source is already local.
@@ -94,7 +217,7 @@ func (s *Service) importSource(
 			result.Warnings = append(result.Warnings, fmt.Errorf(
 				"release import operation lease: %w", closeErr,
 			))
-			result.WarningMessages = warningStrings(result.Warnings)
+			finalizeImportResult(result)
 			return
 		}
 		resultErr = errors.Join(resultErr, closeErr)
@@ -180,6 +303,24 @@ func (s *Service) importSource(
 		Elapsed: time.Since(filesStarted),
 		Count:   materialized.ServerFiles,
 	})
+	var removalWarnings []error
+	if plan.Format == importpack.FormatMrpack {
+		// A client modpack marks its client-only files server-required, so the
+		// env declaration alone cannot exclude them from a server.
+		removed, warnings, err := s.removeClientOnlyMods(
+			ctx,
+			stage,
+			materialized.Product,
+			materialized.Minecraft,
+		)
+		if err != nil {
+			return nil, err
+		}
+		removalWarnings = warnings
+		materialized.SkippedClient += len(removed)
+		materialized.ServerFiles -= len(removed)
+		materialized.Skipped = append(materialized.Skipped, removed...)
+	}
 
 	force := false
 	if plan.Format == importpack.FormatMrpack {
@@ -248,7 +389,11 @@ func (s *Service) importSource(
 		Review:        review,
 		Manifest:      manifest,
 		Lock:          lock,
-		Warnings:      append([]error(nil), initResult.Warnings...),
+		Warnings: append(
+			append([]error(nil), initResult.Warnings...),
+			removalWarnings...,
+		),
+		Discovery: initResult.Discovery.RebasePaths(stage, target),
 	}
 	if lock != nil {
 		result.ManagedPackages = len(lock.Packages)
@@ -294,7 +439,7 @@ func (s *Service) importSource(
 			duplicate.Path,
 		))
 	}
-	result.WarningMessages = warningStrings(result.Warnings)
+	finalizeImportResult(result)
 	return result, nil
 }
 
@@ -584,6 +729,530 @@ func publishImportStage(stage, target string) (*importPublication, error) {
 		publication.moved = append(publication.moved, name)
 	}
 	return publication, nil
+}
+
+// removeClientOnlyMods deletes mod jars only when their own descriptor says a
+// dedicated server cannot load them. Provider labels are reported for review
+// but never decide deletion, because a remote label is not evidence about the
+// installed bytes. A client-only candidate stays when a kept package needs one
+// of its modules or projects.
+func (s *Service) removeClientOnlyMods(
+	ctx context.Context,
+	stage string,
+	product serverpkg.Product,
+	minecraft string,
+) ([]string, []error, error) {
+	modsDir := filepath.Join(stage, "mods")
+	entries, err := os.ReadDir(modsDir)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil, nil, nil
+	}
+	if err != nil {
+		return nil, nil, fmt.Errorf("read imported mod directory: %w", err)
+	}
+	ecosystem := catalog.Ecosystem(product)
+	mappers, mapperErr := s.packageMappers()
+	if mapperErr != nil {
+		s.logger.Debug(
+			"package mappers unavailable during import",
+			"error", mapperErr,
+		)
+	}
+
+	var paths []string
+	for _, entry := range entries {
+		if entry.IsDir() ||
+			!strings.EqualFold(filepath.Ext(entry.Name()), ".jar") {
+			continue
+		}
+		paths = append(paths, filepath.Join(modsDir, entry.Name()))
+	}
+	files := make([]importModFile, len(paths))
+	limit := make(chan struct{}, packageProbeLimit)
+	var wg sync.WaitGroup
+	for i, path := range paths {
+		wg.Go(func() {
+			limit <- struct{}{}
+			defer func() { <-limit }()
+			files[i] = s.classifyImportMod(
+				ctx,
+				path,
+				ecosystem,
+				minecraft,
+				mappers,
+			)
+		})
+	}
+	wg.Wait()
+	if err := ctx.Err(); err != nil {
+		return nil, nil, err
+	}
+
+	keepRequiredMods(files)
+
+	var removed []string
+	var warnings []error
+	for _, file := range files {
+		relative, err := filepath.Rel(stage, file.path)
+		if err != nil {
+			return removed, warnings, fmt.Errorf(
+				"relativize imported mod %s: %w",
+				file.path,
+				err,
+			)
+		}
+		relative = filepath.ToSlash(relative)
+		if file.remote {
+			message := fmt.Sprintf(
+				"package %s: its %s; keeping the installed file",
+				relative,
+				file.reason,
+			)
+			if file.provider != "" {
+				message = fmt.Sprintf(
+					"package %s matched %s but its %s; keeping the installed file",
+					relative,
+					file.provider,
+					file.reason,
+				)
+			}
+			warnings = append(warnings, newImportWarning(
+				importWarningRemoteSide,
+				relative,
+				message,
+			))
+		}
+		if file.kept {
+			continue
+		}
+		if err := os.Remove(file.path); err != nil {
+			return removed, warnings, fmt.Errorf(
+				"remove client-only mod %s: %w",
+				file.path,
+				err,
+			)
+		}
+		s.logger.Debug(
+			"removed client-only mod",
+			"path", relative,
+			"reason", file.reason,
+		)
+		removed = append(removed, relative)
+	}
+	return removed, warnings, nil
+}
+
+// classifyImportMod reads one archive and decides whether a dedicated server
+// can use it. Classification runs concurrently across files, so the helper
+// reads no shared mutable state.
+func (s *Service) classifyImportMod(
+	ctx context.Context,
+	path string,
+	ecosystem catalog.Ecosystem,
+	minecraft string,
+	mappers []packageMapper,
+) importModFile {
+	modules := importModules(ctx, path, ecosystem, minecraft)
+	if len(modules) == 0 {
+		// A descriptor that is client-only is filtered from the server view,
+		// but its identity still proves a kept file depends on it.
+		modules = importDescriptorIdentities(path)
+	}
+	file := importModFile{
+		path:    path,
+		modules: modules,
+		kept:    true,
+	}
+	release, matched := s.identifiedRelease(ctx, path, mappers)
+	if matched {
+		file.project = projectKey(
+			release.Candidate.Provider,
+			release.Candidate.ProjectID,
+		)
+		file.dependencies = release.Candidate.Dependencies
+		file.provider = release.Candidate.Provider
+		switch {
+		case release.ServerSide == upstream.ServerSideUnsupported:
+			file.reason = "release does not support a dedicated server"
+			file.remote = true
+		case release.ClientOnly():
+			file.reason = "release declares client-only support"
+			file.remote = true
+		}
+	}
+	reason, clientOnly := clientOnlyDescriptor(
+		ctx,
+		path,
+		ecosystem,
+		minecraft,
+	)
+	if clientOnly {
+		// Local descriptor evidence is the only reason a dedicated server may
+		// delete a jar.
+		file.reason = reason
+		file.remote = false
+		file.kept = false
+	} else if !matched {
+		if project, found := s.catalogProjectSide(
+			ctx,
+			path,
+			mappers,
+		); found {
+			switch {
+			case project.ServerSide == upstream.ServerSideUnsupported:
+				file.reason = "release does not support a dedicated server"
+				file.remote = true
+			case project.IsClientOnly():
+				file.reason = "release declares client-only support"
+				file.remote = true
+			}
+		}
+	}
+	return file
+}
+
+// importDescriptorIdentities reads the package identities a client-only
+// descriptor still declares, so a kept file can be matched to its module.
+func importDescriptorIdentities(path string) []catalog.DescriptorModule {
+	infos, err := artifact.ReadInfo(path)
+	if err != nil {
+		return nil
+	}
+	modules := make([]catalog.DescriptorModule, 0, len(infos))
+	for _, info := range infos {
+		if info.Ref.Name == "" {
+			continue
+		}
+		modules = append(modules, catalog.DescriptorModule{
+			ID:        string(info.Ref.Name),
+			Ecosystem: info.Ref.Ecosystem,
+		})
+	}
+	return modules
+}
+
+// importModFile is one imported mod archive and its classification.
+type importModFile struct {
+	path string
+	// project is the provider-qualified project the file was published as.
+	project string
+	// dependencies lists the project relationships the release declares.
+	dependencies []upstream.ProjectDependency
+	modules      []catalog.DescriptorModule
+	// provider names the release mapper that identified the file.
+	provider catalog.Provider
+	// reason explains a deletion candidate or a review warning.
+	reason string
+	// remote marks a provider label that excludes a dedicated server. It is a
+	// review warning, never a deletion decision.
+	remote bool
+	kept   bool
+}
+
+// keepRequiredMods keeps candidates a server package depends on, whether the
+// dependency comes from a descriptor module or the provider's release
+// metadata. A promoted candidate can itself require another candidate, so the
+// pass repeats until nothing changes.
+func keepRequiredMods(files []importModFile) {
+	for {
+		requiredModules := requiredModuleIDs(files)
+		requiredProjectKeys := requiredProjectIDs(files)
+		changed := false
+		for i := range files {
+			if files[i].kept {
+				continue
+			}
+			if modulesProvide(files[i].modules, requiredModules) ||
+				(files[i].project != "" && requiredProjectKeys[files[i].project]) {
+				files[i].kept = true
+				changed = true
+			}
+		}
+		if !changed {
+			return
+		}
+	}
+}
+
+// requiredModuleIDs lists every dependency a kept archive declares.
+func requiredModuleIDs(files []importModFile) map[string]bool {
+	required := make(map[string]bool)
+	for _, file := range files {
+		if !file.kept {
+			continue
+		}
+		for _, module := range file.modules {
+			for _, dependency := range module.Dependencies {
+				addDependencyIDs(required, dependency)
+			}
+		}
+	}
+	return required
+}
+
+// requiredProjectIDs lists the provider projects that kept files require.
+func requiredProjectIDs(files []importModFile) map[string]bool {
+	required := make(map[string]bool)
+	for _, file := range files {
+		if !file.kept {
+			continue
+		}
+		for _, dependency := range file.dependencies {
+			if dependency.Kind != catalog.DependencyKindRequired {
+				continue
+			}
+			if key := projectKey(dependency.Provider, dependency.ProjectID); key != "" {
+				required[key] = true
+			}
+		}
+	}
+	return required
+}
+
+func addDependencyIDs(ids map[string]bool, dependency catalog.DescriptorDependency) {
+	if dependency.Kind != catalog.DependencyKindRequired {
+		return
+	}
+	if dependency.ID != "" {
+		ids[dependency.ID] = true
+	}
+	for _, alternative := range dependency.AnyOf {
+		addDependencyIDs(ids, alternative)
+	}
+	for _, condition := range dependency.AllOf {
+		addDependencyIDs(ids, condition)
+	}
+}
+
+// modulesProvide reports whether any module or provided identity satisfies one
+// of the required IDs.
+func modulesProvide(
+	modules []catalog.DescriptorModule,
+	required map[string]bool,
+) bool {
+	for _, module := range modules {
+		if required[module.ID] {
+			return true
+		}
+		if module.Group != "" && required[module.Group+":"+module.ID] {
+			return true
+		}
+		for _, provided := range module.Provides {
+			if required[provided] {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// descriptorLoaders lists the loaders whose descriptor the file carries,
+// starting with the server loader. A file with no readable descriptor answers
+// only the server loader.
+func descriptorLoaders(path string, loader catalog.Ecosystem) []catalog.Ecosystem {
+	loaders := []catalog.Ecosystem{loader}
+	infos, err := artifact.ReadInfo(path)
+	if err != nil {
+		return loaders
+	}
+	for _, info := range infos {
+		ecosystem := info.Ref.Ecosystem
+		if ecosystem == catalog.EcosystemUnspecified ||
+			slices.Contains(loaders, ecosystem) {
+			continue
+		}
+		loaders = append(loaders, ecosystem)
+	}
+	return loaders
+}
+
+// importModules reads the modules that describe a file. The server loader's
+// descriptor answers first; a file it has no descriptor for (a Fabric jar
+// bridged by Connector) contributes the modules of the descriptor it carries,
+// so the dependencies that keep server-optional libraries stay visible.
+func importModules(
+	ctx context.Context,
+	path string,
+	loader catalog.Ecosystem,
+	minecraft string,
+) []catalog.DescriptorModule {
+	for _, candidate := range descriptorLoaders(path, loader) {
+		modules, err := artifact.ReadModulesFor(ctx, path, candidate, minecraft)
+		if err == nil && len(modules) > 0 {
+			return modules
+		}
+	}
+	return nil
+}
+
+// clientOnlyDescriptor reports which descriptor makes the file client-only.
+// The server loader is tried first because its view decides whether the file
+// can load at all. A file whose descriptor belongs to another ecosystem (a
+// Fabric jar bridged by Connector) is checked with that descriptor's loader.
+func clientOnlyDescriptor(
+	ctx context.Context,
+	path string,
+	loader catalog.Ecosystem,
+	minecraft string,
+) (string, bool) {
+	for _, candidate := range descriptorLoaders(path, loader) {
+		clientOnly, known, err := artifact.ReadClientOnly(
+			ctx,
+			path,
+			candidate,
+			minecraft,
+		)
+		if err != nil || !known {
+			continue
+		}
+		if clientOnly {
+			return "client-only " + string(candidate), true
+		}
+		if candidate == loader {
+			// The server loader accepts the file, so another loader's
+			// client-only descriptor cannot remove it.
+			return "", false
+		}
+	}
+	return "", false
+}
+
+// catalogProjectSide asks a provider that publishes side labels for the
+// file's project. The descriptor title and project name select the project; a
+// provider title must agree with the descriptor title, so a same-named but
+// different project cannot classify the file.
+func (s *Service) catalogProjectSide(
+	ctx context.Context,
+	path string,
+	mappers []packageMapper,
+) (upstream.ProjectServerSide, bool) {
+	infos, err := artifact.ReadInfo(path)
+	if err != nil {
+		return upstream.ProjectServerSide{}, false
+	}
+	for _, info := range infos {
+		names := projectNameCandidates(info)
+		if len(names) == 0 {
+			continue
+		}
+		for _, mapper := range mappers {
+			resolver, ok := mapper.release.(upstream.ServerSideResolver)
+			if !ok {
+				continue
+			}
+			for _, candidate := range names {
+				project, found, err := resolver.ServerSideByName(
+					ctx,
+					candidate,
+				)
+				if err != nil {
+					s.logger.Debug(
+						"project side lookup failed",
+						"name", candidate,
+						"provider", mapper.provider,
+						"error", err,
+					)
+					continue
+				}
+				if !found {
+					continue
+				}
+				if info.Metadata.Title == "" ||
+					!sameProjectTitle(info.Metadata.Title, project.Title) {
+					break
+				}
+				return project, true
+			}
+		}
+	}
+	return upstream.ProjectServerSide{}, false
+}
+
+// projectNameCandidates lists the names a provider may use for the project:
+// the descriptor title as a slug, then the module name.
+func projectNameCandidates(info artifact.PackageInfo) []string {
+	var candidates []string
+	add := func(name string) {
+		if name == "" || slices.Contains(candidates, name) {
+			return
+		}
+		candidates = append(candidates, name)
+	}
+	add(slugify(info.Metadata.Title))
+	add(string(info.Ref.Name))
+	return candidates
+}
+
+// slugify lowercases a project title and joins its words with hyphens.
+func slugify(raw string) string {
+	var b strings.Builder
+	pending := false
+	for _, r := range strings.ToLower(raw) {
+		alphanumeric := (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9')
+		if !alphanumeric {
+			pending = true
+			continue
+		}
+		if pending && b.Len() > 0 {
+			b.WriteByte('-')
+		}
+		pending = false
+		b.WriteRune(r)
+	}
+	return b.String()
+}
+
+// sameProjectTitle reports whether two titles name the same project. An empty
+// title on either side gives the slug lookup the benefit of the doubt.
+func sameProjectTitle(left, right string) bool {
+	a, b := slugify(left), slugify(right)
+	if a == "" || b == "" {
+		return true
+	}
+	return a == b
+}
+
+// identifiedRelease asks the release mappers whether a provider identifies the
+// file's hash, and returns that provider's record: side labels, project
+// identity, and declared project dependencies. A miss for every mapper reports
+// false, which sends the caller to descriptors.
+func (s *Service) identifiedRelease(
+	ctx context.Context,
+	path string,
+	mappers []packageMapper,
+) (*upstream.Release, bool) {
+	for _, mapper := range mappers {
+		release, matched, err := mapper.release.ReleaseByHash(
+			ctx,
+			artifact.File{Path: path},
+		)
+		if err != nil {
+			s.logger.Debug(
+				"artifact hash lookup failed",
+				"path", path,
+				"provider", mapper.provider,
+				"error", err,
+			)
+			continue
+		}
+		if !matched {
+			continue
+		}
+		if release.Candidate.Provider == "" {
+			release.Candidate.Provider = mapper.provider
+		}
+		return &release, true
+	}
+	return nil, false
+}
+
+// projectKey identifies one provider project across the files of an import.
+// An empty provider or project has no identity to match.
+func projectKey(provider catalog.Provider, projectID string) string {
+	if provider == "" || projectID == "" {
+		return ""
+	}
+	return string(provider) + ":" + projectID
 }
 
 // relativeImportPaths reports files relative to root, slash-separated, so no

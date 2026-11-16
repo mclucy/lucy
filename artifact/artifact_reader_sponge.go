@@ -2,7 +2,6 @@ package artifact
 
 import (
 	"archive/zip"
-	"encoding/json/v2"
 	"errors"
 	"strings"
 
@@ -36,7 +35,7 @@ func (r *spongeReader) Read(
 		}
 
 		var metadata fileschema.FileSpongePluginsIdentifier
-		decodeErr := json.UnmarshalRead(rc, &metadata)
+		decodeErr := readDescriptorJSON(rc, &metadata)
 		if err := errors.Join(decodeErr, rc.Close()); err != nil {
 			return nil, err
 		}
