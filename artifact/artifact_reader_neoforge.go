@@ -4,6 +4,7 @@ import (
 	"archive/zip"
 	"bytes"
 	"encoding/json/v2"
+	"fmt"
 
 	"github.com/mclucy/lucy/catalog"
 	"github.com/mclucy/lucy/input"
@@ -49,7 +50,10 @@ func decodeNeoForgeDescriptor(
 	if err != nil {
 		return nil, err
 	}
-	jarjarMeta := readNeoforgeJarjarMeta(zipRdr)
+	jarjarMeta, err := readNeoforgeJarjarMeta(zipRdr)
+	if err != nil {
+		return nil, err
+	}
 	if descriptor == nil {
 		// A jar without its own descriptor may ship its mods only through
 		// JarJar containers, which FML loads from the outer archive.
@@ -148,17 +152,20 @@ func hasLoaderDependency(
 
 func readNeoforgeJarjarMeta(
 	zipRdr *zip.Reader,
-) *fileschema.FileNeoforgeJarjar {
+) (*fileschema.FileNeoforgeJarjar, error) {
 	raw, err := readZipEntryBytes(zipRdr, "META-INF/jarjar/metadata.json")
-	if err != nil || raw == nil {
-		return nil
+	if err != nil {
+		return nil, err
+	}
+	if raw == nil {
+		return nil, nil
 	}
 
 	var meta fileschema.FileNeoforgeJarjar
 	if err := json.Unmarshal(raw, &meta); err != nil {
-		return nil
+		return nil, fmt.Errorf("decode NeoForge JarJar metadata: %w", err)
 	}
-	return &meta
+	return &meta, nil
 }
 
 func neoforgeJarjarEmbeddedModIDs(
