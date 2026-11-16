@@ -1,6 +1,7 @@
 package filetrack
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"io/fs"
@@ -9,9 +10,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/bmatcuk/doublestar/v4"
 	documentpkg "github.com/mclucy/lucy/document"
 	"github.com/mclucy/lucy/input"
+	"github.com/mclucy/lucy/internal/fileglob"
 )
 
 // expandDeclaredPaths resolves patterns against tracked declarations without
@@ -39,7 +40,7 @@ func expandDeclaredPaths(
 		}
 		arguments = append(arguments, argument{raw: raw, path: path})
 		_, exists := declared[path]
-		if !hasPatternMeta(path) || exists {
+		if !fileglob.IsPattern(path) || exists {
 			literal[path] = struct{}{}
 		}
 	}
@@ -67,38 +68,31 @@ func expandDeclaredPaths(
 			addSelected(argument.path)
 			continue
 		}
-		pattern := globPattern(argument.path)
-		if !doublestar.ValidatePattern(pattern) {
+		entries, matchErr := fileglob.Match(tree, argument.path)
+		if errors.Is(matchErr, fileglob.ErrInvalidPattern) {
 			return nil, nil, fmt.Errorf("invalid pattern %q", argument.raw)
 		}
+		if matchErr != nil {
+			return nil, nil, matchErr
+		}
 		matched := false
-		err := doublestar.GlobWalk(
-			tree,
-			pattern,
-			func(name string, _ fs.DirEntry) error {
-				if !explicitlySelectsHidden(pattern, name) {
-					return nil
-				}
-				matched = true
-				if _, explicit := literal[name]; explicit {
-					return nil
-				}
-				file, exists := declared[name]
-				if !exists {
-					return nil
-				}
-				if operation == Recover && file.Hash == "" {
-					addSkipped(name)
-					return nil
-				}
-				addSelected(name)
-				return nil
-			},
-			doublestar.WithFilesOnly(),
-			doublestar.WithNoHidden(),
-		)
-		if err != nil {
-			return nil, nil, err
+		for _, entry := range entries {
+			if entry.Dir {
+				continue
+			}
+			matched = true
+			if _, explicit := literal[entry.Path]; explicit {
+				continue
+			}
+			file, exists := declared[entry.Path]
+			if !exists {
+				continue
+			}
+			if operation == Recover && file.Hash == "" {
+				addSkipped(entry.Path)
+				continue
+			}
+			addSelected(entry.Path)
 		}
 		if !matched {
 			return nil, nil, fmt.Errorf(

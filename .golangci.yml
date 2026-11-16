@@ -102,6 +102,15 @@ linters:
             - $gostd
             - golang.org/x/sys/
 
+        fileglob-leaf:
+          list-mode: strict
+          files:
+            - "**/internal/fileglob/*.go"
+            - "**/internal/fileglob/**/*.go"
+          allow:
+            - $gostd
+            - github.com/bmatcuk/doublestar/v4$
+
         backend-presentation:
           list-mode: lax
           files:
