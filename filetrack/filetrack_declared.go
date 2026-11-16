@@ -3,12 +3,6 @@ package filetrack
 import (
 	"errors"
 	"fmt"
-	"io"
-	"io/fs"
-	"path"
-	"slices"
-	"strings"
-	"time"
 
 	documentpkg "github.com/mclucy/lucy/document"
 	"github.com/mclucy/lucy/input"
@@ -28,8 +22,10 @@ func expandDeclaredPaths(
 		path string
 	}
 	declared := make(map[string]documentpkg.TrackedFile, len(files))
+	declaredPaths := make([]string, 0, len(files))
 	for _, file := range files {
 		declared[file.Path] = file
+		declaredPaths = append(declaredPaths, file.Path)
 	}
 	arguments := make([]argument, 0, len(paths))
 	literal := make(map[string]struct{}, len(paths))
@@ -44,7 +40,6 @@ func expandDeclaredPaths(
 			literal[path] = struct{}{}
 		}
 	}
-	tree := newDeclarationTree(files)
 	selected = make([]string, 0, len(files))
 	skipped = make([]string, 0)
 	selectedSeen := make(map[string]struct{}, len(files))
@@ -68,7 +63,7 @@ func expandDeclaredPaths(
 			addSelected(argument.path)
 			continue
 		}
-		entries, matchErr := fileglob.Match(tree, argument.path)
+		matches, matchErr := fileglob.MatchPaths(argument.path, declaredPaths)
 		if errors.Is(matchErr, fileglob.ErrInvalidPattern) {
 			return nil, nil, fmt.Errorf("invalid pattern %q", argument.raw)
 		}
@@ -76,23 +71,20 @@ func expandDeclaredPaths(
 			return nil, nil, matchErr
 		}
 		matched := false
-		for _, entry := range entries {
-			if entry.Dir {
-				continue
-			}
+		for _, path := range matches {
 			matched = true
-			if _, explicit := literal[entry.Path]; explicit {
+			if _, explicit := literal[path]; explicit {
 				continue
 			}
-			file, exists := declared[entry.Path]
+			file, exists := declared[path]
 			if !exists {
 				continue
 			}
 			if operation == Recover && file.Hash == "" {
-				addSkipped(entry.Path)
+				addSkipped(path)
 				continue
 			}
-			addSelected(entry.Path)
+			addSelected(path)
 		}
 		if !matched {
 			return nil, nil, fmt.Errorf(
@@ -103,120 +95,3 @@ func expandDeclaredPaths(
 	}
 	return selected, skipped, nil
 }
-
-// declarationTree exposes tracked paths to doublestar as an in-memory
-// filesystem, so declaration matching inherits WithNoHidden and globstar
-// semantics without walking the workspace.
-type declarationTree struct {
-	children map[string][]declarationEntry
-	stats    map[string]declarationEntry
-}
-
-type declarationEntry struct {
-	name string
-	mode fs.FileMode
-}
-
-func newDeclarationTree(files []documentpkg.TrackedFile) *declarationTree {
-	tree := &declarationTree{
-		children: make(map[string][]declarationEntry),
-		stats: map[string]declarationEntry{
-			".": {name: ".", mode: fs.ModeDir},
-		},
-	}
-	tree.children["."] = nil
-	for _, file := range files {
-		components := strings.Split(file.Path, "/")
-		parent := "."
-		for _, component := range components[:len(components)-1] {
-			child := path.Join(parent, component)
-			if _, exists := tree.stats[child]; !exists {
-				entry := declarationEntry{name: component, mode: fs.ModeDir}
-				tree.stats[child] = entry
-				tree.children[parent] = append(tree.children[parent], entry)
-				tree.children[child] = nil
-			}
-			parent = child
-		}
-		name := components[len(components)-1]
-		entry := declarationEntry{name: name}
-		tree.stats[file.Path] = entry
-		tree.children[parent] = append(tree.children[parent], entry)
-	}
-	for parent := range tree.children {
-		slices.SortFunc(
-			tree.children[parent],
-			func(left, right declarationEntry) int {
-				return strings.Compare(left.name, right.name)
-			},
-		)
-	}
-	return tree
-}
-
-func (t *declarationTree) Open(name string) (fs.File, error) {
-	entry, exists := t.stats[name]
-	if !exists {
-		return nil, fs.ErrNotExist
-	}
-	return &declarationFile{tree: t, name: name, entry: entry}, nil
-}
-
-func (t *declarationTree) ReadDir(name string) ([]fs.DirEntry, error) {
-	children, exists := t.children[name]
-	if !exists {
-		return nil, fs.ErrNotExist
-	}
-	entries := make([]fs.DirEntry, len(children))
-	for index := range children {
-		entries[index] = children[index]
-	}
-	return entries, nil
-}
-
-func (t *declarationTree) Stat(name string) (fs.FileInfo, error) {
-	entry, exists := t.stats[name]
-	if !exists {
-		return nil, fs.ErrNotExist
-	}
-	return entry, nil
-}
-
-type declarationFile struct {
-	tree  *declarationTree
-	name  string
-	entry declarationEntry
-}
-
-func (f *declarationFile) Read([]byte) (int, error) { return 0, io.EOF }
-
-func (f *declarationFile) Close() error { return nil }
-
-func (f *declarationFile) Stat() (fs.FileInfo, error) { return f.entry, nil }
-
-func (f *declarationFile) ReadDir(count int) ([]fs.DirEntry, error) {
-	entries, err := f.tree.ReadDir(f.name)
-	if err != nil {
-		return nil, err
-	}
-	if count <= 0 || count > len(entries) {
-		return entries, nil
-	}
-	return entries[:count], nil
-}
-
-func (e declarationEntry) Name() string { return e.name }
-
-func (e declarationEntry) Size() int64 { return 0 }
-
-func (e declarationEntry) Mode() fs.FileMode { return e.mode }
-
-func (e declarationEntry) ModTime() time.Time { return time.Time{} }
-
-func (e declarationEntry) IsDir() bool { return e.mode.IsDir() }
-
-func (e declarationEntry) Sys() any { return nil }
-
-func (e declarationEntry) Type() fs.FileMode { return e.mode.Type() }
-
-func (e declarationEntry) Info() (fs.FileInfo, error) { return e, nil }

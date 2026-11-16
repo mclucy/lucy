@@ -62,6 +62,24 @@ func Match(fsys fs.FS, pattern string) ([]Entry, error) {
 	return entries, nil
 }
 
+// MatchPaths returns the paths that pattern selects, in input order. MatchPaths
+// does not read a filesystem, so a declared path that no longer exists still
+// matches. The hidden and syntax rules are the same as Match.
+func MatchPaths(pattern string, paths []string) ([]string, error) {
+	matcher := globPattern(pattern)
+	if !doublestar.ValidatePattern(matcher) {
+		return nil, fmt.Errorf("%w %q", ErrInvalidPattern, pattern)
+	}
+	matched := make([]string, 0, len(paths))
+	for _, path := range paths {
+		if !explicitlySelectsHidden(matcher, path) {
+			continue
+		}
+		matched = append(matched, path)
+	}
+	return matched, nil
+}
+
 // reservedDirectory reports whether the directory holds Lucy or version
 // control state. A pattern never selects it.
 func reservedDirectory(entry fs.DirEntry) bool {
