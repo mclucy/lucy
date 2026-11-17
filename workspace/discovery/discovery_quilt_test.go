@@ -450,44 +450,34 @@ func TestDiscoverQuiltRejectsForeignLaunchProperties(t *testing.T) {
 }
 
 // Quilt and Fabric launchers differ by main class, not by filename. A Fabric
-// launcher is never observed as Quilt, even when its file is named like a
-// Quilt launcher.
+// launcher named like a Quilt launcher stays a Fabric installation.
 func TestDiscoverQuiltDoesNotClaimFabricLauncher(t *testing.T) {
 	t.Parallel()
 
-	fabricFiles := fabricMetaLauncherFiles("0.19.5", "1.21.1")
-	tests := []struct {
-		name     string
-		baseName string
-	}{
-		{name: "fabric filename", baseName: "fabric-server-launch.jar"},
-		{name: "quilt filename", baseName: quiltTestLauncherName},
+	root := t.TempDir()
+	writeRootJarIn(
+		t,
+		root,
+		quiltTestLauncherName,
+		fabricMetaLauncherFiles("0.19.5", "1.21.1"),
+	)
+
+	result := Discover(root)
+	for _, installation := range result.Installations {
+		if installation.Identity.Product() == server.ProductQuilt {
+			t.Fatalf(
+				"Fabric launcher %s observed as Quilt: %+v",
+				quiltTestLauncherName,
+				installation.Identity,
+			)
+		}
 	}
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			t.Parallel()
-
-			root := t.TempDir()
-			writeRootJarIn(t, root, test.baseName, fabricFiles)
-
-			result := Discover(root)
-			for _, installation := range result.Installations {
-				if installation.Identity.Product() == server.ProductQuilt {
-					t.Fatalf(
-						"Fabric launcher %s observed as Quilt: %+v",
-						test.baseName,
-						installation.Identity,
-					)
-				}
-			}
-			if len(result.Installations) != 1 ||
-				result.Installations[0].Identity.Product() != server.ProductFabric {
-				t.Fatalf(
-					"installations = %v, want one Fabric installation",
-					resultProductNames(result),
-				)
-			}
-		})
+	if len(result.Installations) != 1 ||
+		result.Installations[0].Identity.Product() != server.ProductFabric {
+		t.Fatalf(
+			"installations = %v, want one Fabric installation",
+			resultProductNames(result),
+		)
 	}
 }
 

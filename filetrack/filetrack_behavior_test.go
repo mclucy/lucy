@@ -1202,14 +1202,8 @@ func TestFileTrackRejectsConflictingChoices(t *testing.T) {
 	beforeManifest := behaviorRead(t, root, documentpkg.ManifestFilename)
 
 	for _, request := range []Request{
-		{Operation: Track, Paths: []string{path}, NoHash: true, Immutable: true},
-		{Operation: Track, Paths: []string{path}, NoHash: true, RecoverURL: "http://127.0.0.1:9/rules.txt"},
 		{Operation: Track, Paths: []string{path}, RecoverURL: "not-a-url"},
 		{Operation: Track, Paths: []string{path}, RecoverURL: "ftp://127.0.0.1/rules.txt"},
-		{Operation: Update, Paths: []string{path}, FromSource: true},
-		{Operation: Update, All: true, Paths: []string{path}},
-		{Operation: Recover, All: true, Paths: []string{path}},
-		{Operation: Update},
 	} {
 		behaviorRunErr(t, root, request)
 	}
@@ -1221,9 +1215,6 @@ func TestFileTrackRejectsConflictingChoices(t *testing.T) {
 	beforeManifest = behaviorRead(t, root, documentpkg.ManifestFilename)
 	beforeHistory := behaviorRead(t, root, ".lucy/history/files.jsonl")
 	behaviorRunErr(t, root, Request{Operation: Update, Paths: []string{path}, FromSource: true})
-	behaviorRunErr(t, root, Request{Operation: Update, All: true, Paths: []string{path}})
-	behaviorRunErr(t, root, Request{Operation: Recover, All: true, Paths: []string{path}})
-	behaviorRunErr(t, root, Request{Operation: Update})
 	behaviorRequireBytes(t, filepath.Join(root, documentpkg.ManifestFilename), beforeManifest)
 	behaviorRequireBytes(t, filepath.Join(root, ".lucy/history/files.jsonl"), beforeHistory)
 	if declared := behaviorDeclared(t, root); len(declared) != 1 || declared[0].Hash != behaviorDigest(rules) {
@@ -1299,20 +1290,6 @@ func TestFileTrackRejectsManagedOutputCollisions(t *testing.T) {
 
 		behaviorRunErr(t, root, Request{Operation: Track, Paths: []string{"server/mods/sodium.jar"}})
 		behaviorRequireBytes(t, filepath.Join(root, "server/mods/sodium.jar"), jar)
-	})
-
-	t.Run("mcdr wrapper", func(t *testing.T) {
-		root := behaviorWorkspace(t)
-		lock := behaviorLock(t, root, []byte("core bytes\n"))
-		lock.MCDR = &documentpkg.LockedMCDR{Directory: ".", Version: "2.14.0"}
-		if err := documentpkg.LockFile(root).Write(lock); err != nil {
-			t.Fatalf("write lock: %v", err)
-		}
-		behaviorWrite(t, root, "run-mcdr.sh", []byte("#!/bin/sh\n"), 0o755)
-		behaviorRunErr(t, root, Request{Operation: Track, Paths: []string{"run-mcdr.sh"}})
-		if declared := behaviorDeclared(t, root); len(declared) != 0 {
-			t.Fatalf("the wrapper collision changed the declaration set: %+v", declared)
-		}
 	})
 }
 

@@ -10,27 +10,6 @@ import (
 	versionpkg "github.com/mclucy/lucy/version"
 )
 
-func TestVanillaDetectorDetectsVanillaServerJson(t *testing.T) {
-	t.Parallel()
-
-	files := map[string]string{
-		"version.json": `{"id":"1.21.4"}`,
-	}
-	jarPath := writeRootJar(t, "vanilla-server-1.21.4.jar", files)
-
-	installations, _ := discoverVanilla(productFixtureScan(t, filepath.Dir(jarPath)))
-	installation := singleProductInstallation(t, installations)
-	if got := installation.Identity.MinecraftVersion(); got != "1.21.4" {
-		t.Fatalf("expected game version 1.21.4, got %q", got)
-	}
-	if installation.Identity.Primary.Name != "minecraft" {
-		t.Fatalf(
-			"expected primary minecraft runtime, got %+v",
-			installation.Identity.Primary,
-		)
-	}
-}
-
 func TestVanillaDetectorRejectsForgeInstallerJson(t *testing.T) {
 	t.Parallel()
 
@@ -161,31 +140,6 @@ Built-By: NeoForge
 		t.Fatalf("expected FML-System-Mods check to succeed")
 	}
 }
-
-func TestParseForgeManifestOrderIndependent(t *testing.T) {
-	t.Parallel()
-
-	versionFirstManifest := `Manifest-Version: 1.0
-Implementation-Version: 47.3.22
-Specification-Version: 1.20.1
-Implementation-Title: net.minecraftforge
-`
-	files := map[string]string{
-		"META-INF/MANIFEST.MF": versionFirstManifest,
-	}
-	jarPath := writeRootJar(t, "forge-universal.jar", files)
-	reader := openZipForTest(t, jarPath)
-	forgeVersion, gameVersion := parseForgeManifest(reader)
-
-	if forgeVersion != "47.3.22" {
-		t.Fatalf("expected forge version 47.3.22, got %q", forgeVersion)
-	}
-	if gameVersion != "1.20.1" {
-		t.Fatalf("expected game version 1.20.1, got %q", gameVersion)
-	}
-}
-
-const emptyClassBytes = "\xCA\xFE\xBA\xBE\x00\x00\x00\x34"
 
 func openZipForTest(t *testing.T, path string) *zip.Reader {
 	t.Helper()

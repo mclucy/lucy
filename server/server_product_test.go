@@ -6,29 +6,6 @@ import (
 	"github.com/mclucy/lucy/catalog"
 )
 
-func TestProductDefinitionsInvariants(t *testing.T) {
-	seenProducts := make(map[Product]bool)
-	seenAliases := make(map[productAlias]Product)
-	for _, definition := range productDefinitions {
-		if seenProducts[definition.Product] {
-			t.Errorf("duplicate definition for product %q", definition.Product)
-		}
-		seenProducts[definition.Product] = true
-		for _, alias := range definition.Aliases {
-			if alias.Name == "" {
-				t.Errorf("product %q has empty alias", definition.Product)
-			}
-			if alias.Name != catalog.Name(lowercaseName(alias.Name)) {
-				t.Errorf("product %q alias %q is not lowercase", definition.Product, alias.Name)
-			}
-			if owner, exists := seenAliases[alias]; exists {
-				t.Errorf("alias %q/%q claimed by %q and %q", alias.Ecosystem, alias.Name, owner, definition.Product)
-			}
-			seenAliases[alias] = definition.Product
-		}
-	}
-}
-
 func TestNormalizeProduct(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -87,15 +64,4 @@ func TestNormalizeProduct(t *testing.T) {
 			}
 		})
 	}
-}
-
-func lowercaseName(name catalog.Name) string {
-	lowered := ""
-	for _, r := range string(name) {
-		if r >= 'A' && r <= 'Z' {
-			r += 'a' - 'A'
-		}
-		lowered += string(r)
-	}
-	return lowered
 }

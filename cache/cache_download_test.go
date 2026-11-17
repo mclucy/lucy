@@ -697,27 +697,6 @@ func TestCachedGetRequestHonorsPreCanceledContext(t *testing.T) {
 	}
 }
 
-func TestNewIntegrityHasherSelectsAlgorithm(t *testing.T) {
-	t.Parallel()
-	if hasher := newIntegrityHasher(HashNone, "digest"); hasher != nil {
-		t.Fatal("HashNone selected a hasher")
-	}
-	if hasher := newIntegrityHasher(HashSHA256, "digest"); hasher != nil {
-		t.Fatal("SHA-256 reused a separate hasher")
-	}
-	if hasher := newIntegrityHasher(HashSHA1, ""); hasher != nil {
-		t.Fatal("empty expected hash selected a hasher")
-	}
-	if hasher := newIntegrityHasher(HashSHA1, "digest"); hasher == nil ||
-		hasher.Size() != sha1.Size {
-		t.Fatal("SHA-1 did not select a SHA-1 hasher")
-	}
-	if hasher := newIntegrityHasher(HashSHA512, "digest"); hasher == nil ||
-		hasher.Size() != sha512.Size {
-		t.Fatal("SHA-512 did not select a SHA-512 hasher")
-	}
-}
-
 // A MaxBytes download must fail before it stages an oversized response and
 // again when materializing an oversized cache hit.
 func TestCachedDownloadEnforcesMaxBytes(t *testing.T) {

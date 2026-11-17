@@ -474,12 +474,16 @@ func TestCreateImportParentsDoesNotRemoveDanglingSymlink(t *testing.T) {
 }
 
 // fakePackResolver stands in for the router's pack resolution. It embeds the
-// service's real source so the rest of the Source contract keeps working.
+// service's real source so the rest of the Source contract keeps working. When
+// wantProject is set, a reference other than the configured one fails the call,
+// so an import can only succeed when the user's reference is forwarded intact.
 type fakePackResolver struct {
 	Source
-	pack  upstream.ImportPack
-	err   error
-	calls []string
+	pack         upstream.ImportPack
+	err          error
+	wantProvider catalog.Provider
+	wantProject  string
+	wantVersion  string
 }
 
 func (f *fakePackResolver) ResolveImportPack(
@@ -487,7 +491,13 @@ func (f *fakePackResolver) ResolveImportPack(
 	provider catalog.Provider,
 	project, version string,
 ) (upstream.ImportPack, error) {
-	f.calls = append(f.calls, fmt.Sprintf("%s:%s@%s", provider, project, version))
+	if f.wantProject != "" && (provider != f.wantProvider ||
+		project != f.wantProject || version != f.wantVersion) {
+		return upstream.ImportPack{}, fmt.Errorf(
+			"unexpected pack reference %s:%s@%s",
+			provider, project, version,
+		)
+	}
 	return f.pack, f.err
 }
 
@@ -739,6 +749,9 @@ func TestImportRemoteSourceDownloadsResolvedPack(t *testing.T) {
 			"sha1":   strings.Repeat("0", 40),
 		},
 	}}
+	resolver.wantProvider = catalog.ProviderModrinth
+	resolver.wantProject = "all-the-mods"
+	resolver.wantVersion = "1.2.0"
 	service := newRemoteImportTestService(t, resolver)
 	target := filepath.Join(t.TempDir(), "imported")
 	result, err := service.Import(
@@ -751,9 +764,6 @@ func TestImportRemoteSourceDownloadsResolvedPack(t *testing.T) {
 	}
 	if result.Source != "modrinth:all-the-mods@1.2.0" {
 		t.Fatalf("result.Source = %q, want the user identifier", result.Source)
-	}
-	if want := []string{"modrinth:all-the-mods@1.2.0"}; !slices.Equal(resolver.calls, want) {
-		t.Fatalf("resolver calls = %v, want %v", resolver.calls, want)
 	}
 }
 
@@ -812,7 +822,7 @@ func TestImportDirectURLBypassesRemoteResolver(t *testing.T) {
 		t.Fatalf("read pack: %v", err)
 	}
 	directURL := serveImportPack(t, data)
-	resolver := &fakePackResolver{}
+	resolver := &fakePackResolver{err: errors.New("remote resolver called for a direct URL")}
 	service := newRemoteImportTestService(t, resolver)
 	target := filepath.Join(t.TempDir(), "imported")
 	result, err := service.Import(
@@ -825,9 +835,6 @@ func TestImportDirectURLBypassesRemoteResolver(t *testing.T) {
 	}
 	if result.Source != directURL {
 		t.Fatalf("result.Source = %q, want %q", result.Source, directURL)
-	}
-	if len(resolver.calls) != 0 {
-		t.Fatalf("resolver called for direct URL: %v", resolver.calls)
 	}
 }
 

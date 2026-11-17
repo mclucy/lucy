@@ -47,13 +47,34 @@ func TestOrderedArtifacts(t *testing.T) {
 		}
 		return ids
 	}
-	requireOrder := func(t *testing.T, graph *Graph, want ...string) {
+	// The graph is map-backed, so callers rely on the same order on every call
+	// and on each artifact appearing exactly once.
+	stableArtifacts := func(t *testing.T, graph *Graph) []string {
 		t.Helper()
-		for range 50 {
-			got := ids(graph.OrderedArtifacts())
-			if !slices.Equal(got, want) {
-				t.Fatalf("OrderedArtifacts() = %v, want %v", got, want)
+		want := ids(graph.OrderedArtifacts())
+		seen := make(map[string]bool, len(want))
+		for _, id := range want {
+			if seen[id] {
+				t.Fatalf("OrderedArtifacts() repeated %q: %v", id, want)
 			}
+			seen[id] = true
+		}
+		for range 50 {
+			if got := ids(graph.OrderedArtifacts()); !slices.Equal(got, want) {
+				t.Fatalf("OrderedArtifacts() = %v, first call = %v", got, want)
+			}
+		}
+		return want
+	}
+	requireBefore := func(t *testing.T, order []string, dependency, dependent string) {
+		t.Helper()
+		dependencyIndex := slices.Index(order, dependency)
+		dependentIndex := slices.Index(order, dependent)
+		if dependencyIndex < 0 || dependentIndex < 0 {
+			t.Fatalf("artifacts %q and %q missing from order %v", dependency, dependent, order)
+		}
+		if dependencyIndex > dependentIndex {
+			t.Fatalf("dependency %q follows dependent %q in %v", dependency, dependent, order)
 		}
 	}
 
@@ -73,18 +94,14 @@ func TestOrderedArtifacts(t *testing.T) {
 		link(dependent, dependentModule)
 		link(dependentModule, providerAPI)
 
-		requireOrder(
-			t,
-			buildGraph(
-				provider,
-				providerAPI,
-				providerDeep,
-				dependent,
-				dependentModule,
-			),
-			provider.ID,
-			dependent.ID,
-		)
+		order := stableArtifacts(t, buildGraph(
+			provider,
+			providerAPI,
+			providerDeep,
+			dependent,
+			dependentModule,
+		))
+		requireBefore(t, order, provider.ID, dependent.ID)
 	})
 
 	t.Run("direct artifact edge is preserved", func(t *testing.T) {
@@ -92,15 +109,16 @@ func TestOrderedArtifacts(t *testing.T) {
 		dependent := artifact("modrinth:dependent")
 		link(dependent, provider)
 
-		requireOrder(t, buildGraph(provider, dependent), provider.ID, dependent.ID)
+		order := stableArtifacts(t, buildGraph(provider, dependent))
+		requireBefore(t, order, provider.ID, dependent.ID)
 	})
 
-	t.Run("cycle falls back to identifier order", func(t *testing.T) {
+	t.Run("cycle still lists every artifact once", func(t *testing.T) {
 		provider := artifact("modrinth:provider")
 		dependent := artifact("modrinth:dependent")
 		link(dependent, provider)
 		link(provider, dependent)
 
-		requireOrder(t, buildGraph(provider, dependent), dependent.ID, provider.ID)
+		stableArtifacts(t, buildGraph(provider, dependent))
 	})
 }

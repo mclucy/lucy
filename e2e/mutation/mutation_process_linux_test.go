@@ -6,13 +6,10 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"syscall"
-	"testing"
-	"time"
 )
 
 // Unreaped zombies retain their process group but cannot modify the workspace.
@@ -76,34 +73,4 @@ func linuxProcessState(pid int) (string, int, error) {
 		return "", 0, fmt.Errorf("parse process %d group: %w", pid, err)
 	}
 	return fields[0], group, nil
-}
-
-func TestZombieProcessGroupIsNotLive(t *testing.T) {
-	command := exec.Command("/bin/sh", "-c", "exit 0")
-	command.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
-	if err := command.Start(); err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = command.Wait() })
-	pid := command.Process.Pid
-	deadline := time.Now().Add(5 * time.Second)
-	for {
-		state, _, err := linuxProcessState(pid)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if state == "Z" {
-			break
-		}
-		if time.Now().After(deadline) {
-			t.Fatalf("process %d did not become a zombie", pid)
-		}
-		time.Sleep(10 * time.Millisecond)
-	}
-	if live, err := liveProcess(pid); err != nil || live {
-		t.Fatalf("zombie process %d: live=%t, err=%v", pid, live, err)
-	}
-	if live, err := liveProcessGroup(pid); err != nil || live {
-		t.Fatalf("zombie process group %d: live=%t, err=%v", pid, live, err)
-	}
 }

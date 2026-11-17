@@ -54,6 +54,7 @@ func TestDecideCandidate(t *testing.T) {
 	release := testCandidate("1.0.0", "r1", "f1", "demo.jar", time.Unix(1, 0), upstream.ReleaseChannelRelease, true)
 	beta := testCandidate("1.1.0", "r2", "f2", "demo-1.1.0.jar", time.Unix(2, 0), upstream.ReleaseChannelBeta, true)
 	unprimary := testCandidate("1.0.0", "r1", "f1", "demo-sources.jar", time.Unix(1, 0), upstream.ReleaseChannelRelease, false)
+	betaUnprimary := testCandidate("1.1.0", "r2", "f2", "demo-1.1.0-sources.jar", time.Unix(2, 0), upstream.ReleaseChannelBeta, false)
 
 	tests := []struct {
 		name       string
@@ -166,9 +167,12 @@ func TestDecideCandidate(t *testing.T) {
 			want: true,
 		},
 		{
+			// Both the channel and the primary-file check reject this
+			// candidate; the first reason is the one recorded in the
+			// rejection ledger and shown to the user.
 			name:      "first rejection wins",
-			candidate: beta,
-			request:   projectRequest{origin: originManifest, requirements: testRequest(versionpkg.Stable, "").requirements},
+			candidate: betaUnprimary,
+			request:   testRequest(versionpkg.Stable, ""),
 			wantKind:  RejectionChannel,
 		},
 		{

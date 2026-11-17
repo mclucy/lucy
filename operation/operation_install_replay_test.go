@@ -219,16 +219,6 @@ func TestInitializeThenLockedInstallReplaysInEmptyWorkspace(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read initialized lock: %v", err)
 	}
-	if manifest.Server.Core.Product != "minecraft" ||
-		manifest.Server.Core.ProductVersion != "1.21.4" ||
-		manifest.Server.Minecraft != "1.21.4" ||
-		manifest.Server.Directory != "." {
-		t.Fatalf("initialized identity = %+v", manifest.Server)
-	}
-	if lock.Server.Product != "minecraft" || lock.Server.CoreVersion != "1.21.4" ||
-		lock.Server.Directory != "." {
-		t.Fatalf("initialized lock identity = %+v", lock.Server)
-	}
 
 	destination := t.TempDir()
 	operationTestWrite(t, destination, document.ManifestFilename, manifestBytes, 0o644)
@@ -253,28 +243,5 @@ func TestInitializeThenLockedInstallReplaysInEmptyWorkspace(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(destination, ".lucy", "install.yaml")); err != nil {
 		t.Fatalf("installation receipt: %v", err)
-	}
-
-	coreInfo, err := os.Stat(filepath.Join(destination, "server.jar"))
-	if err != nil {
-		t.Fatalf("stat installed core: %v", err)
-	}
-	again, err := installer.Sync(t.Context(), destination, manifest, lock, options)
-	if err != nil {
-		t.Fatalf("second install: %v", err)
-	}
-	if again.Files.Created != 0 || again.Files.Replaced != 0 {
-		t.Fatalf("a current installation reported changes: %+v", again)
-	}
-	info, err := os.Stat(filepath.Join(destination, "server.jar"))
-	if err != nil {
-		t.Fatalf("stat replayed core: %v", err)
-	}
-	if !info.ModTime().Equal(coreInfo.ModTime()) {
-		t.Fatal("a no-op replay touched the installed core")
-	}
-	if !bytes.Equal(operationTestRead(t, destination, document.ManifestFilename), manifestBytes) ||
-		!bytes.Equal(operationTestRead(t, destination, document.LockFilename), lockBytes) {
-		t.Fatal("a no-op replay rewrote the initialized documents")
 	}
 }

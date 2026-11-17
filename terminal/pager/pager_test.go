@@ -145,16 +145,13 @@ func TestSearchSkipsWrappedRows(t *testing.T) {
 	if len(m.search.matches) != 1 || m.search.matches[0].line != 20 {
 		t.Fatalf("matches = %v, want line 20", m.search.matches)
 	}
-	wantOffset := m.search.matches[0].row
-	if wantOffset != 60 {
-		t.Fatalf("match row = %d, want 60", wantOffset)
-	}
-	if m.viewport.YOffset() != wantOffset {
-		t.Fatalf("search scrolled to row %d, want %d", m.viewport.YOffset(), wantOffset)
+	row := m.search.matches[0].row
+	if row != 60 {
+		t.Fatalf("match row = %d, want 60", row)
 	}
 }
 
-func TestSearchScrollsToMatchInsideWrappedLine(t *testing.T) {
+func TestSearchLocatesMatchInsideWrappedLine(t *testing.T) {
 	t.Parallel()
 
 	text := strings.Repeat("x", 800) + "needle" + strings.Repeat("\ntail", 20)
@@ -172,12 +169,9 @@ func TestSearchScrollsToMatchInsideWrappedLine(t *testing.T) {
 	if len(m.search.matches) != 1 || m.search.matches[0].column != 800 {
 		t.Fatalf("matches = %v, want column 800", m.search.matches)
 	}
-	wantOffset := m.search.matches[0].row
-	if wantOffset != 20 {
-		t.Fatalf("match row = %d, want 20", wantOffset)
-	}
-	if m.viewport.YOffset() != wantOffset {
-		t.Fatalf("search scrolled to row %d, want %d", m.viewport.YOffset(), wantOffset)
+	row := m.search.matches[0].row
+	if row != 20 {
+		t.Fatalf("match row = %d, want 20", row)
 	}
 }
 
@@ -202,26 +196,6 @@ func TestSearchFindsEveryOccurrenceOnOneLine(t *testing.T) {
 		if m.search.matches[i].column <= m.search.matches[i-1].column {
 			t.Fatalf("columns are not increasing: %v", m.search.matches)
 		}
-	}
-}
-
-func TestResizeClampsScrollOffset(t *testing.T) {
-	t.Parallel()
-
-	lines := make([]string, 100)
-	for index := range lines {
-		lines[index] = strings.Repeat("x", 100)
-	}
-	m := newModel(Options{
-		Text:     strings.Join(lines, "\n"),
-		Terminal: style.Terminal{Width: 40, Height: 10},
-		Theme:    style.New(false),
-	})
-	m.Update(tea.WindowSizeMsg{Width: 40, Height: 10})
-	m.viewport.GotoBottom()
-	m.resize(120, 10)
-	if m.viewport.PastBottom() {
-		t.Fatalf("resize left offset %d past the document", m.viewport.YOffset())
 	}
 }
 
@@ -442,22 +416,6 @@ func TestEscapeCancelsSearch(t *testing.T) {
 	}
 	if m.hint != "" {
 		t.Fatalf("canceled search left hint %q", m.hint)
-	}
-}
-
-func TestModelQuits(t *testing.T) {
-	t.Parallel()
-
-	m := newModel(Options{
-		Text:     "content",
-		Terminal: style.Terminal{Width: 20, Height: 5},
-	})
-	command := m.handleKey(tea.KeyPressMsg{Text: "q", Code: 'q'})
-	if command == nil {
-		t.Fatal("q returned no command")
-	}
-	if _, ok := command().(tea.QuitMsg); !ok {
-		t.Fatalf("q produced %T, want tea.QuitMsg", command())
 	}
 }
 

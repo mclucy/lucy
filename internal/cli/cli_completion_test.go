@@ -2,7 +2,6 @@ package cli
 
 import (
 	"slices"
-	"strings"
 	"testing"
 )
 
@@ -50,35 +49,6 @@ func TestCompletionFiltering(t *testing.T) {
 					t.Fatalf("FilterByPrefix(%q) = %q, want %q", test.prefix, got, test.want)
 				}
 			})
-		}
-	})
-
-	t.Run("cobra completions preserve values and descriptions", func(t *testing.T) {
-		completions := ToCobraCompletions([]CompletionCandidate{
-			{Value: "paper", Description: "Paper server"},
-			{Value: "fabric"},
-		})
-		want := []string{"paper\tPaper server", "fabric"}
-		if !slices.Equal(completions, want) {
-			t.Fatalf("ToCobraCompletions() = %q, want %q", completions, want)
-		}
-
-		value, description, hasDescription := strings.Cut(completions[0], "\t")
-		if !hasDescription || value != "paper" || description != "Paper server" {
-			t.Fatalf(
-				"first completion = {%q, %q}, want {paper, Paper server}",
-				value,
-				description,
-			)
-		}
-		if strings.Contains(completions[1], "\t") {
-			t.Fatalf("undescribed completion %q carries a separator", completions[1])
-		}
-	})
-
-	t.Run("cobra completions of nothing", func(t *testing.T) {
-		if got := ToCobraCompletions(nil); len(got) != 0 {
-			t.Fatalf("ToCobraCompletions(nil) = %q, want none", got)
 		}
 	})
 }

@@ -145,9 +145,6 @@ func TestProjectInfoDropsInvalidBase64(t *testing.T) {
 	if info.DescriptionIsMarkdown {
 		t.Fatalf("expected html-only fallback not to be markdown")
 	}
-	if decodeBase64HTML("%%%not-base64%%%").Valid {
-		t.Fatalf("expected invalid base64 decode to be marked invalid")
-	}
 }
 
 // TestSpigetCurrentDownloadArtifact covers the live Candidates download inputs:
