@@ -151,8 +151,8 @@ type PackagesRequest struct {
 	// catalogue no longer publishes it for the current labels. It applies only
 	// while the runtime target is unchanged.
 	PreserveLocked bool
-	// PreferLocked tries a strict graph with compatible prior pins before
-	// listing alternative builds. Forced refresh and adoption do not use it.
+	// PreferLocked requires PreserveLocked. It tries compatible pins before
+	// listing alternatives unless WithOptional requires fresh dependency metadata.
 	PreferLocked bool
 	Target       Target
 	// Candidates lists the builds a direct or dependency requirement may

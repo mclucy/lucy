@@ -372,9 +372,9 @@ func Packages(request PackagesRequest) ([]document.Package, []error, error) {
 	}
 	attempts := 0
 	backtracks := 0
-	preferPins := preserveLocked && request.PreferLocked
+	preferPins := preserveLocked && request.PreferLocked && !withOptional
 	var pinnedEdges map[projectKey][]projectRequest
-	if preferPins && expandDependencies && !withOptional {
+	if preferPins && expandDependencies {
 		pinnedEdges = previous.lockedEdges(requests, request.Previous)
 	}
 	usedPin := false
