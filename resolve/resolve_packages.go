@@ -496,9 +496,6 @@ func Packages(request PackagesRequest) ([]document.Package, []error, error) {
 		}
 		ledger.noteDisplay(r.key, r.display)
 		dependencyDemand := r.dependencyOf.Name != ""
-		if dependencyDemand && r.key.environment == serverpkg.EnvironmentServer {
-			r.key = state.selectedRuntimeProject(target, r.key)
-		}
 		active := len(r.requirements) == 0
 		for _, req := range r.requirements {
 			active = active || req.Enabled
@@ -796,13 +793,24 @@ func Packages(request PackagesRequest) ([]document.Package, []error, error) {
 			// A pure dependency demand binds to a selected package that
 			// answers every module identity of the candidate. The candidate
 			// installs only when that substitution leaves no settled graph.
-			if dependencyDemand && len(requirements) == 0 && len(r.releaseHints) == 0 {
-				if providerKey, ok := state.substitute(target, pkg); ok {
+			if dependencyDemand && len(requirements) == 0 {
+				var providerKey projectKey
+				var ok bool
+				if r.key.environment == serverpkg.EnvironmentServer {
+					other := state.selectedRuntimeProject(target, r.key)
+					if other != r.key && coversModules(target, state.chosen[other], pkg, maps.Values(state.chosen)) {
+						providerKey, ok = other, true
+					}
+				}
+				if !ok && len(r.releaseHints) == 0 {
+					providerKey, ok = state.substitute(target, pkg)
+				}
+				if ok {
 					provider, _ := state.selection(providerKey)
 					branch := state.extend(
 						providerKey,
 						withDependents(provider, dependencyOf),
-						false,
+						len(r.releaseHints) != 0,
 					)
 					logger.Debug(
 						"resolve: dependency answered by provider",

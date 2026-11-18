@@ -159,6 +159,14 @@ func providesFor(
 	if !ok || providerRank >= dependencyRank {
 		return false
 	}
+	return coversModules(target, provider, dependency, selected)
+}
+
+func coversModules(
+	target Target,
+	provider, dependency document.Package,
+	selected iter.Seq[document.Package],
+) bool {
 	provided := identityVersions(target, provider)
 	required := identityVersions(target, dependency)
 	if len(required) == 0 {
