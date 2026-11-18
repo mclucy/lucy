@@ -246,20 +246,31 @@ func (o *installOutput) Failure(err error) error {
 // processLogNote retains the process log and returns the sentence that names
 // it. It returns an empty string when no subprocess ran, so unrelated
 // failures stay unchanged. The first call fixes the sentence, so a presenter
-// that adapts the failure again names the same file.
+// that adapts the failure again names the same file. A log that dropped output
+// says so instead of claiming it saved everything observed.
 func (o *installOutput) processLogNote() string {
 	if o.noted {
 		return o.note
 	}
 	o.noted = true
-	path, seen, ok := o.spool.Retain()
+	retained, ok := o.spool.Retain()
 	if !ok {
 		return ""
 	}
+	observed := style.FormatBytesDecimal(retained.Observed)
+	if retained.Truncated {
+		o.note = fmt.Sprintf(
+			"Subprocess output (%s observed) is incomplete: %s holds %s",
+			observed,
+			retained.Path,
+			style.FormatBytesDecimal(retained.Stored),
+		)
+		return o.note
+	}
 	o.note = fmt.Sprintf(
 		"Subprocess output (%s) saved to %s",
-		style.FormatBytesDecimal(seen),
-		path,
+		observed,
+		retained.Path,
 	)
 	return o.note
 }

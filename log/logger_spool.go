@@ -15,6 +15,25 @@ import (
 // user's disk.
 const maxSpoolBytes = 64 << 20
 
+// truncationMarker ends a file that omitted output. Room for it is reserved
+// from maxSpoolBytes, so the file never exceeds the bound.
+const truncationMarker = "\n[process output truncated]\n"
+
+// contentLimit bounds headers and subprocess output, leaving the marker its
+// space inside maxSpoolBytes.
+const contentLimit int64 = maxSpoolBytes - int64(len(truncationMarker))
+
+// ProcessLog reports what became of a retained process log. Observed counts
+// every byte the subprocesses printed; Stored counts the bytes the file
+// holds, including command headers. Truncated reports that the file is
+// incomplete because the size bound was reached or a write failed.
+type ProcessLog struct {
+	Path      string
+	Observed  int64
+	Stored    int64
+	Truncated bool
+}
+
 // ProcessSpool retains the combined output of the subprocesses one command
 // runs. The file appears in the platform log directory under "installer" when
 // the first subprocess is about to start, because its command header is
@@ -23,17 +42,19 @@ const maxSpoolBytes = 64 << 20
 // always failure evidence. Writes are safe from concurrent copy goroutines,
 // which the process package starts for stdout and stderr separately.
 type ProcessSpool struct {
-	mu        sync.Mutex
-	prefix    string
-	logger    *Logger
-	file      *os.File
-	path      string
-	written   int64
-	seen      int64
-	capped    bool
-	createErr bool
-	writeErr  bool
-	retained  bool
+	mu          sync.Mutex
+	prefix      string
+	logger      *Logger
+	file        *os.File
+	path        string
+	written     int64
+	seen        int64
+	capped      bool
+	createErr   bool
+	writeErr    bool
+	retained    bool
+	retainedLog ProcessLog
+	closed      bool
 }
 
 // NewProcessSpool prepares a spool that names its file after prefix. No file
@@ -47,12 +68,16 @@ func NewProcessSpool(prefix string, logger *Logger) *ProcessSpool {
 // reports the full input length: the copy goroutines of the process package
 // read a short write as a broken pipe and would fail the command over its
 // diagnostic record. A spool that cannot create or write its file keeps
-// counting and never fails the command; the retained byte count then reports
-// how much evidence was lost.
+// counting and never fails the command; the retained log then reports how
+// much evidence was lost. Output that arrives after Retain or Discard is
+// accepted and dropped, so the retained file stays the evidence it named.
 func (s *ProcessSpool) Write(data []byte) (int, error) {
 	total := len(data)
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if s.retained || s.closed {
+		return total, nil
+	}
 	s.seen += int64(total)
 	if s.writeErr || !s.ensure() {
 		return total, nil
@@ -66,7 +91,7 @@ func (s *ProcessSpool) Write(data []byte) (int, error) {
 func (s *ProcessSpool) Section(label string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if s.writeErr || !s.ensure() {
+	if s.retained || s.closed || s.writeErr || !s.ensure() {
 		return
 	}
 	separator := ""
@@ -76,78 +101,87 @@ func (s *ProcessSpool) Section(label string) {
 	s.append([]byte(fmt.Sprintf("%s=== %s\n", separator, label)))
 }
 
-// Retain closes the file and reports where the evidence survives. It reports
-// no path when no file was created, so a failure without a subprocess run
-// names no file.
-func (s *ProcessSpool) Retain() (path string, seen int64, ok bool) {
+// Retain closes the file and reports where the evidence survives. Retention is
+// terminal: a repeated call reports the same log, and no later write reopens
+// the file. It reports no log when no file was created, so a failure without
+// a subprocess run names no file.
+func (s *ProcessSpool) Retain() (ProcessLog, bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if s.retained {
+		return s.retainedLog, s.retainedLog.Path != ""
+	}
 	s.retained = true
 	if s.file == nil {
-		return "", s.seen, false
+		return ProcessLog{}, false
 	}
 	err := s.file.Close()
 	s.file = nil
 	if err != nil {
 		s.warnOnce(fmt.Errorf("close process log %q: %w", s.path, err))
 	}
-	return s.path, s.seen, true
+	s.retainedLog = ProcessLog{
+		Path:      s.path,
+		Observed:  s.seen,
+		Stored:    s.written,
+		Truncated: s.capped || s.writeErr || err != nil,
+	}
+	return s.retainedLog, true
 }
 
-// Discard deletes the unretained file. A spool that a later step writes again
-// creates a fresh file, so an action that releases its terminal mid-run loses
-// no evidence from the steps that follow.
+// Discard deletes the unretained file and ends the spool, so no later write
+// leaves a file the command boundary does not own.
 func (s *ProcessSpool) Discard() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if s.retained {
+	if s.retained || s.closed {
 		return
 	}
-	if s.file != nil {
-		err := errors.Join(s.file.Close(), os.Remove(s.path))
-		s.file = nil
-		if err != nil {
-			s.warnOnce(fmt.Errorf("discard process log %q: %w", s.path, err))
-		}
+	s.closed = true
+	if s.file == nil {
+		return
 	}
-	s.path = ""
-	s.written = 0
-	s.seen = 0
-	s.capped = false
-	s.createErr = false
-	s.writeErr = false
+	err := errors.Join(s.file.Close(), os.Remove(s.path))
+	s.file = nil
+	if err != nil {
+		s.warnOnce(fmt.Errorf("discard process log %q: %w", s.path, err))
+	}
 }
 
-// append stores what fits of data within the size bound and records the
-// truncation once. Headers and subprocess output share it, so neither can
-// push the file past the bound unnoticed.
+// append stores what fits of data and, when it must drop bytes, ends the file
+// with the truncation marker. Headers and subprocess output share the bound,
+// so neither can push the file past it.
 func (s *ProcessSpool) append(data []byte) {
-	if s.capped || s.written >= maxSpoolBytes {
-		s.capped = true
+	if s.capped || s.writeErr {
 		return
 	}
-	remaining := maxSpoolBytes - s.written
-	if int64(len(data)) > remaining {
-		data = data[:remaining]
+	room := contentLimit - s.written
+	if room < 0 {
+		room = 0
 	}
-	if len(data) > 0 {
-		written, err := s.file.Write(data)
-		s.written += int64(written)
-		if err != nil {
-			// The spool is a diagnostic record; a file that stopped
-			// accepting writes must never fail or spam over the
-			// command it records.
-			s.writeErr = true
-			s.warnOnce(fmt.Errorf("write process log %q: %w", s.path, err))
-			return
-		}
+	if int64(len(data)) <= room {
+		s.store(data)
+		return
 	}
-	if s.written >= maxSpoolBytes {
-		s.capped = true
-		_, err := s.file.WriteString("\n[process output truncated]\n")
-		if err != nil {
-			s.warnOnce(fmt.Errorf("write process log %q: %w", s.path, err))
-		}
+	if room > 0 {
+		s.store(data[:room])
+	}
+	s.capped = true
+	s.store([]byte(truncationMarker))
+}
+
+// store writes what the file accepts and counts it. The spool is a diagnostic
+// record; a file that stopped accepting writes must never fail or spam over
+// the command it records.
+func (s *ProcessSpool) store(data []byte) {
+	if len(data) == 0 {
+		return
+	}
+	written, err := s.file.Write(data)
+	s.written += int64(written)
+	if err != nil {
+		s.writeErr = true
+		s.warnOnce(fmt.Errorf("write process log %q: %w", s.path, err))
 	}
 }
 
