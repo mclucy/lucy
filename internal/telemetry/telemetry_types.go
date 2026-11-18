@@ -71,21 +71,44 @@ const (
 type ContextKind string
 
 const (
-	ContextServer    ContextKind = "server"
-	ContextRuntime   ContextKind = "runtime"
-	ContextManifest  ContextKind = "manifest"
-	ContextLockfile  ContextKind = "lockfile"
-	ContextPackages  ContextKind = "packages"
-	ContextWorkspace ContextKind = "workspace"
+	ContextServer     ContextKind = "server"
+	ContextRuntime    ContextKind = "runtime"
+	ContextManifest   ContextKind = "manifest"
+	ContextLockfile   ContextKind = "lockfile"
+	ContextPackages   ContextKind = "packages"
+	ContextWorkspace  ContextKind = "workspace"
+	ContextInvocation ContextKind = "invocation"
+	ContextExecution  ContextKind = "execution"
+	ContextPrompt     ContextKind = "prompt"
+	ContextScale      ContextKind = "scale"
+	ContextWarnings   ContextKind = "warnings"
+	ContextCollection ContextKind = "collection"
+)
+
+// ContextReason explains why a typed snapshot is absent or failed. It is a
+// bounded wire value; unrecognized reasons are rejected before enqueueing.
+type ContextReason string
+
+const (
+	ContextReasonNotObserved       ContextReason = "not_observed"
+	ContextReasonNotReached        ContextReason = "not_reached"
+	ContextReasonNotApplicable     ContextReason = "not_applicable"
+	ContextReasonNoResult          ContextReason = "no_result"
+	ContextReasonObservationFailed ContextReason = "observation_failed"
 )
 
 // Context is an optional typed snapshot attached to an event. Data must be
 // JSON-marshalable and fit in 8 KiB. Data is required when Status is present
-// and must be nil when Status is absent. Failed contexts may include data.
+// and must be nil when Status is absent or failed. Reason is optional for
+// absent contexts (the default is not_observed) and failed contexts (the
+// default is observation_failed), and must be empty for present contexts.
+// Version is stamped as 1 by the writer; zero selects the current version.
 type Context struct {
-	Kind   ContextKind
-	Status ContextStatus
-	Data   any
+	Kind    ContextKind
+	Status  ContextStatus
+	Version int
+	Reason  ContextReason
+	Data    any
 }
 
 // Event describes one non-sensitive invocation observation. Command is the
@@ -95,10 +118,13 @@ type Event struct {
 	InvocationID string
 	Command      string
 	Duration     time.Duration
-	Outcome      Outcome
-	ErrorCode    string
-	OccurredAt   time.Time
-	Contexts     []Context
+	// DurationMeasured emits duration_ms even when Duration is zero. A
+	// positive Duration is emitted regardless; an unmeasured zero is omitted.
+	DurationMeasured bool
+	Outcome          Outcome
+	ErrorCode        string
+	OccurredAt       time.Time
+	Contexts         []Context
 }
 
 // ReportKind classifies an explicitly submitted report.
@@ -193,13 +219,16 @@ type DroppedStats struct {
 // transport; it excludes HTTP headers, framing, TLS, and other wire overhead
 // and must never be presented as network usage. Uncertain counts attempts
 // whose acceptance is unknown (transport error, timeout, or an unparseable
-// success response). An attempt interrupted by process termination may be
-// missing from these counters.
+// success response). Throttles counts attempts a retryable response identified
+// as intake-limited (HTTP 429, or a rejection reason of intake_limited); it
+// counts denied delivery attempts, not unique records lost. An attempt
+// interrupted by process termination may be missing from these counters.
 type TransportStats struct {
 	Requests             int64 `json:"requests"`
 	Succeeded            int64 `json:"succeeded"`
 	RejectedRequests     int64 `json:"rejected_requests"`
 	Uncertain            int64 `json:"uncertain"`
+	Throttles            int64 `json:"throttles"`
 	RequestBodyBytes     int64 `json:"request_body_bytes"`
 	LastRequestBodyBytes int64 `json:"last_request_body_bytes"`
 }

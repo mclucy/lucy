@@ -14,7 +14,7 @@ import (
 )
 
 func main() {
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	ctx, stop := signalContext()
 	directory, err := os.Getwd()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "determine invocation directory: %v\n", err)
@@ -24,6 +24,42 @@ func main() {
 	code := run(ctx, os.Args[1:], directory, os.Stdin, os.Stdout, os.Stderr)
 	stop()
 	os.Exit(code)
+}
+
+// signalCancelCause marks a cancellation that came from the operating system.
+// It implements Is(context.Canceled) so existing exit handling is unchanged,
+// and SignalCancellation lets command telemetry distinguish an actual signal
+// from generic internal cancellation without exposing its description.
+type signalCancelCause struct{}
+
+func (signalCancelCause) Error() string {
+	return "signal received"
+}
+
+func (signalCancelCause) Is(target error) bool {
+	return target == context.Canceled
+}
+
+func (signalCancelCause) SignalCancellation() {}
+
+// signalContext owns signal handling at the process boundary. The returned
+// context carries a typed cause so telemetry can classify interruption only
+// when a signal actually arrived.
+func signalContext() (context.Context, context.CancelFunc) {
+	ctx, cancel := context.WithCancelCause(context.Background())
+	signals := make(chan os.Signal, 1)
+	signal.Notify(signals, os.Interrupt, syscall.SIGTERM)
+	go func() {
+		select {
+		case <-signals:
+			cancel(signalCancelCause{})
+		case <-ctx.Done():
+		}
+	}()
+	return ctx, func() {
+		signal.Stop(signals)
+		cancel(nil)
+	}
 }
 
 func run(ctx context.Context, args []string, directory string, stdin io.Reader, stdout, stderr io.Writer) (exitCode int) {

@@ -76,7 +76,9 @@ func Lock(root string, logger *log.Logger) (*fsutil.FileLock, error) {
 	if err := SafePath(root, ".lucy/"+LockFileName); err != nil {
 		return nil, err
 	}
+	start := logger.WaitStart()
 	lock, err := fsutil.TryLockFile(filepath.Join(root, ".lucy", LockFileName))
+	logger.WaitDone(log.WaitFileLock, start)
 	if err != nil {
 		if errors.Is(err, fsutil.ErrLocked) {
 			return nil, fmt.Errorf("another Lucy operation owns this workspace: %w", err)

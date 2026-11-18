@@ -60,6 +60,11 @@ func (s *Service) Initialize(ctx context.Context, root string, opts InitOptions)
 	if err != nil {
 		return nil, err
 	}
+	// Runtime discovery, selection, and identity form one reported phase.
+	// Any error or prompt cancellation returns before completion, so the
+	// trace keeps the phase active instead of inventing an elapsed time.
+	opts.Trace.ReportPhaseStarted("identification")
+	identificationStarted := time.Now()
 	observed := workspace.Observe(
 		root,
 		discovery.Request{Expectation: opts.Expectation},
@@ -84,8 +89,13 @@ func (s *Service) Initialize(ctx context.Context, root string, opts InitOptions)
 	if err := verifyCoreVersionExpectation(opts.Expectation, manifest); err != nil {
 		return initResult(observed), err
 	}
+	opts.Trace.ReportPhase(install.PhaseInfo{
+		Name:    "identification",
+		Elapsed: time.Since(identificationStarted),
+	})
 
 	adoptionStarted := time.Now()
+	opts.Trace.ReportPhaseStarted("adoption")
 	var identificationErrors []error
 	observed, identificationErrors = identify.Packages(
 		ctx,

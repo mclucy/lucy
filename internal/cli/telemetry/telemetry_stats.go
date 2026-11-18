@@ -38,6 +38,7 @@ func actionStats(cmd *cobra.Command, inv *cli.Invocation, state *State) error {
 			"Destination: %s\nAccepted records: %d (events: %d, reports: %d)\n"+
 			"Accepted event payload: %d bytes\nAccepted report content: %d bytes\n"+
 			"Upload request bodies: %d bytes in %d attempts (%d uncertain)\n"+
+			"Intake-limited upload attempts: %d\n"+
 			"Pending records: %d (events: %d, reports: %d; %d bytes)\n"+
 			"Dropped records: %d (%d bytes)\nRejected records: %d (%d bytes)\n\n"+
 			"Request bytes include retries but exclude HTTP and TLS overhead. "+
@@ -46,6 +47,7 @@ func actionStats(cmd *cobra.Command, inv *cli.Invocation, state *State) error {
 		destination, stats.Accepted.Records, stats.Accepted.Events, stats.Accepted.Reports,
 		stats.Accepted.EventPayloadBytes, stats.Accepted.ReportBodyBytes,
 		stats.Transport.RequestBodyBytes, stats.Transport.Requests, stats.Transport.Uncertain,
+		stats.Transport.Throttles,
 		stats.Queue.Records, stats.Queue.Events, stats.Queue.Reports, stats.Queue.PayloadBytes,
 		stats.Dropped.Records, stats.Dropped.Bytes, stats.Rejected.Records,
 		stats.Rejected.PayloadBytes,

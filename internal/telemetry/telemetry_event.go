@@ -8,10 +8,13 @@ import (
 )
 
 const (
-	maxContexts          = 16
+	// maxContexts leaves one slot for the worker-injected transport context
+	// when an event carries the upload envelope.
+	maxContexts          = 15
 	maxContextDataBytes  = 8 << 10
 	maxContextTypeLength = 64
-	maxEventDuration     = 30 * 24 * time.Hour
+	maxEventDuration     = 7 * 24 * time.Hour
+	contextSchemaVersion = 1
 )
 
 type eventPayload struct {
@@ -24,7 +27,7 @@ type eventPayload struct {
 	Channel          string           `json:"channel"`
 	OS               string           `json:"os"`
 	Arch             string           `json:"arch"`
-	DurationMS       int64            `json:"duration_ms"`
+	DurationMS       *int64           `json:"duration_ms,omitempty"`
 	Outcome          Outcome          `json:"outcome"`
 	ErrorCode        string           `json:"error_code"`
 	SchemaVersion    int              `json:"schema_version"`
@@ -33,9 +36,11 @@ type eventPayload struct {
 }
 
 type contextPayload struct {
-	Type   string         `json:"type"`
-	Status ContextStatus  `json:"status"`
-	Data   jsontext.Value `json:"data,omitzero"`
+	Type    string         `json:"type"`
+	Status  ContextStatus  `json:"status"`
+	Version int            `json:"version,omitempty"`
+	Reason  ContextReason  `json:"reason,omitempty"`
+	Data    jsontext.Value `json:"data,omitzero"`
 }
 
 type reportPayload struct {
@@ -52,13 +57,14 @@ type reportPayload struct {
 }
 
 type preparedEvent struct {
-	invocationID string
-	command      string
-	durationMS   int64
-	outcome      Outcome
-	errorCode    string
-	occurredAt   time.Time
-	contexts     []contextPayload
+	invocationID     string
+	command          string
+	durationMS       int64
+	durationMeasured bool
+	outcome          Outcome
+	errorCode        string
+	occurredAt       time.Time
+	contexts         []contextPayload
 }
 
 type preparedReport struct {
@@ -98,14 +104,16 @@ func (c *Client) prepareEvent(event Event, now time.Time) (preparedEvent, error)
 	if occurredAt.IsZero() {
 		occurredAt = now
 	}
+	durationMeasured := event.DurationMeasured || event.Duration > 0
 	return preparedEvent{
-		invocationID: invocationID,
-		command:      command,
-		durationMS:   event.Duration.Milliseconds(),
-		outcome:      event.Outcome,
-		errorCode:    event.ErrorCode,
-		occurredAt:   occurredAt.UTC(),
-		contexts:     contexts,
+		invocationID:     invocationID,
+		command:          command,
+		durationMS:       event.Duration.Milliseconds(),
+		durationMeasured: durationMeasured,
+		outcome:          event.Outcome,
+		errorCode:        event.ErrorCode,
+		occurredAt:       occurredAt.UTC(),
+		contexts:         contexts,
 	}, nil
 }
 
@@ -122,12 +130,22 @@ func normalizeContexts(contexts []Context) ([]contextPayload, error) {
 		if !validContextType(kind) {
 			return nil, fmt.Errorf("%w: invalid context type", ErrInvalidEvent)
 		}
+		if kind == "transport" {
+			return nil, fmt.Errorf("%w: transport context is reserved for the upload worker", ErrInvalidEvent)
+		}
+		if context.Version != 0 && context.Version != contextSchemaVersion {
+			return nil, fmt.Errorf("%w: unsupported context version", ErrInvalidEvent)
+		}
 		switch context.Status {
 		case ContextPresent, ContextAbsent, ContextFailed:
 		default:
 			return nil, fmt.Errorf("%w: invalid context status", ErrInvalidEvent)
 		}
-		payload := contextPayload{Type: kind, Status: context.Status}
+		reason, err := normalizeContextReason(context.Status, context.Reason)
+		if err != nil {
+			return nil, err
+		}
+		payload := contextPayload{Type: kind, Status: context.Status, Version: contextSchemaVersion, Reason: reason}
 		if context.Status == ContextAbsent {
 			if context.Data != nil {
 				return nil, fmt.Errorf("%w: absent context must not carry data", ErrInvalidEvent)
@@ -142,16 +160,15 @@ func normalizeContexts(contexts []Context) ([]contextPayload, error) {
 			normalized = append(normalized, payload)
 			continue
 		}
+		if context.Status == ContextFailed {
+			return nil, fmt.Errorf("%w: failed context must not carry data", ErrInvalidEvent)
+		}
 		encoded, err := marshalCanonical(context.Data)
 		if err != nil {
 			return nil, fmt.Errorf("%w: context data is not JSON: %v", ErrInvalidEvent, err)
 		}
 		if len(encoded) == 0 || string(encoded) == "null" {
-			if context.Status == ContextPresent {
-				return nil, fmt.Errorf("%w: present context requires data", ErrInvalidEvent)
-			}
-			normalized = append(normalized, payload)
-			continue
+			return nil, fmt.Errorf("%w: present context requires data", ErrInvalidEvent)
 		}
 		if len(encoded) > maxContextDataBytes {
 			return nil, fmt.Errorf("%w: context data exceeds %d bytes", ErrInvalidEvent, maxContextDataBytes)
@@ -160,6 +177,35 @@ func normalizeContexts(contexts []Context) ([]contextPayload, error) {
 		normalized = append(normalized, payload)
 	}
 	return normalized, nil
+}
+
+// normalizeContextReason applies the status-specific default and validates the
+// bounded reason vocabulary.
+func normalizeContextReason(status ContextStatus, reason ContextReason) (ContextReason, error) {
+	switch status {
+	case ContextPresent:
+		if reason != "" {
+			return "", fmt.Errorf("%w: present context must not carry a reason", ErrInvalidEvent)
+		}
+		return "", nil
+	case ContextAbsent:
+		if reason == "" {
+			return ContextReasonNotObserved, nil
+		}
+		switch reason {
+		case ContextReasonNotObserved, ContextReasonNotReached,
+			ContextReasonNotApplicable, ContextReasonNoResult:
+			return reason, nil
+		}
+	case ContextFailed:
+		if reason == "" {
+			return ContextReasonObservationFailed, nil
+		}
+		if reason == ContextReasonObservationFailed {
+			return reason, nil
+		}
+	}
+	return "", fmt.Errorf("%w: invalid context reason", ErrInvalidEvent)
 }
 
 func validContextType(value string) bool {
@@ -181,6 +227,11 @@ func validContextType(value string) bool {
 }
 
 func (c *Client) buildEventPayload(event preparedEvent, state *persistedState) eventPayload {
+	var durationMS *int64
+	if event.durationMeasured {
+		measured := event.durationMS
+		durationMS = &measured
+	}
 	return eventPayload{
 		InvocationID:     event.invocationID,
 		InstallationID:   state.InstallationID,
@@ -191,7 +242,7 @@ func (c *Client) buildEventPayload(event preparedEvent, state *persistedState) e
 		Channel:          c.channel,
 		OS:               c.os,
 		Arch:             c.arch,
-		DurationMS:       event.durationMS,
+		DurationMS:       durationMS,
 		Outcome:          event.outcome,
 		ErrorCode:        event.errorCode,
 		SchemaVersion:    SchemaVersion,

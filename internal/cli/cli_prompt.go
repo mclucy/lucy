@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"os"
+	"time"
 
 	"charm.land/huh/v2"
 	"github.com/charmbracelet/x/term"
@@ -55,6 +56,26 @@ func (g PromptGate) flagsAllow() bool {
 		return false
 	}
 	return true
+}
+
+// RunPrompt runs one form under the invocation observation in ctx. The wait
+// stopwatch covers only the prompt. Abort is recorded only when huh reported
+// it and the surrounding context was not canceled, so a signal or deadline
+// keeps its own cause.
+func RunPrompt(ctx context.Context, form *huh.Form) error {
+	observation := telemetryObservationFromContext(ctx)
+	started := time.Time{}
+	if observation != nil {
+		started = time.Now()
+	}
+	raw := form.RunWithContext(ctx)
+	contextErr := ctx.Err()
+	aborted := errors.Is(raw, huh.ErrUserAborted) && contextErr == nil
+	interrupted := contextErr != nil
+	if observation != nil {
+		observation.ObservePromptWait(time.Since(started), aborted, interrupted)
+	}
+	return NormalizePromptError(ctx, raw)
 }
 
 // Huh can report a cancelled context as a timeout instead of its cause.

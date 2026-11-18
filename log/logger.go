@@ -6,6 +6,8 @@ import (
 	"io"
 	"os"
 	"sync"
+	"sync/atomic"
+	"time"
 
 	charm "charm.land/log/v2"
 	"github.com/charmbracelet/colorprofile"
@@ -21,6 +23,13 @@ type Logger struct {
 	mirror     *charm.Logger
 	capture    bool
 	stages     []string
+
+	captureWait     atomic.Bool
+	waitMu          sync.Mutex
+	waitHTTP        time.Duration
+	waitLock        time.Duration
+	waitHTTPSampled bool
+	waitLockSampled bool
 }
 
 // New records all diagnostic levels in path. The level selects which records
@@ -105,6 +114,7 @@ func (l *Logger) CaptureStages() {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	l.capture = true
+	l.captureWait.Store(true)
 }
 
 // Stages returns the captured messages without exposing log fields.

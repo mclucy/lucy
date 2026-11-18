@@ -58,7 +58,7 @@ func (h *handler) initialize(cfg Config) (resultErr error) {
 	if err := fsutil.MkdirAllPrivate(h.dir); err != nil {
 		return err
 	}
-	lock, err := fsutil.LockFile(h.dir + ".lock")
+	lock, err := h.acquireIndexLock()
 	if err != nil {
 		return err
 	}
@@ -86,11 +86,18 @@ func (h *handler) initialize(cfg Config) (resultErr error) {
 	return h.store.Cleanup()
 }
 
+func (h *handler) acquireIndexLock() (*fsutil.FileLock, error) {
+	start := h.logger.WaitStart()
+	lock, err := fsutil.LockFile(h.dir + ".lock")
+	h.logger.WaitDone(log.WaitFileLock, start)
+	return lock, err
+}
+
 func (h *handler) lockIndex() (*fsutil.FileLock, error) {
 	if !h.on {
 		return nil, ErrDisabled
 	}
-	lock, err := fsutil.LockFile(h.dir + ".lock")
+	lock, err := h.acquireIndexLock()
 	if err != nil {
 		return nil, err
 	}

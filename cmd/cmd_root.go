@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"runtime/debug"
 	"strings"
+	"time"
 
 	"charm.land/fang/v2"
 	"github.com/mclucy/lucy/cache"
@@ -83,6 +84,9 @@ type Runner struct {
 	ownsHTTPClient    bool
 	directory         string
 	telemetryState    telemetrycli.State
+	runContext        context.Context
+	setupStarted      time.Time
+	commandStarted    time.Time
 }
 
 // NewRunner prepares an isolated invocation with a fresh command tree, fresh
@@ -224,15 +228,18 @@ func (r *Runner) persistentPreRunE(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	r.loggingReady = true
+	r.beginTelemetryObservation(cmd)
 	if err := r.configureServices(cmd); err != nil {
 		return err
 	}
+	r.completeSetupObservation()
 	if n := cmd.Name(); n != "__complete" && n != "__completeNoDesc" {
 		r.invocation.Logger.Info("action invoked", "action", cmd.CommandPath(), "directory", r.invocation.Directory)
 		if mode == cli.JSONNone && !r.contracts.Ignores(cmd) && r.invocation.TelemetryEnabled {
 			r.announceTelemetry(cmd)
 		}
 	}
+	r.startCommandObservation()
 	return nil
 }
 
@@ -580,6 +587,9 @@ func (e *panicError) Error() string {
 // Execute runs the invocation. Per-run state is reset first, so a runner
 // always starts from a clean parse result and output buffer.
 func (r *Runner) Execute(ctx context.Context) (err error) {
+	r.runContext = ctx
+	r.setupStarted = time.Time{}
+	r.commandStarted = time.Time{}
 	started := r.startTelemetry()
 	defer func() { r.finishTelemetry(started, err) }()
 	defer func() {
