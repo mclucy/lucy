@@ -19,7 +19,6 @@ import (
 	"github.com/mclucy/lucy/internal/fsutil"
 	"github.com/mclucy/lucy/internal/workspacewrite"
 	"github.com/mclucy/lucy/javaruntime"
-	"github.com/mclucy/lucy/receipt"
 	"github.com/mclucy/lucy/upstream"
 	"github.com/mclucy/lucy/version"
 )
@@ -143,7 +142,7 @@ func (s *Service) stageInstall(
 		return nil, err
 	}
 	result.Java = check
-	current, err := installationCurrent(root, resolved, s.logger)
+	bootstrapOK, current, err := installationCurrent(ctx, root, resolved, s.logger)
 	if err != nil {
 		return nil, err
 	}
@@ -235,16 +234,8 @@ func (s *Service) stageInstall(
 		return nil, err
 	}
 	defer os.RemoveAll(stage)
-	existingReceipt, err := receipt.Read(root)
-	if err != nil && !errors.Is(err, os.ErrNotExist) {
-		return nil, err
-	}
-	bCurrent, err := bootstrapCurrent(root, resolved, existingReceipt, s.logger)
-	if err != nil {
-		return nil, err
-	}
 	var bootstrapOutputs map[string]bootstrap.Output
-	stagedBootstrap := !bCurrent
+	stagedBootstrap := !bootstrapOK
 	if stagedBootstrap {
 		// Bootstrap validation and package staging must not share a view of
 		// the stage. ValidateStagedOutputs walks the server tree and accepts only the

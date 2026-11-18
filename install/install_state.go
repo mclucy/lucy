@@ -1,10 +1,12 @@
 package install
 
 import (
+	"context"
 	"errors"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	"github.com/mclucy/lucy/bootstrap"
 	"github.com/mclucy/lucy/document"
@@ -15,29 +17,29 @@ import (
 
 // installationCurrent reports whether the receipt answers the lock and both
 // bootstrap and package convergence are current.
-func installationCurrent(root string, l *document.Lock, logger *log.Logger) (bool, error) {
+func installationCurrent(ctx context.Context, root string, l *document.Lock, logger *log.Logger) (bootstrapOK, packagesOK bool, err error) {
 	current, err := receipt.Read(root)
 	if errors.Is(err, os.ErrNotExist) {
 		logger.Debug("installation not current", "reason", "no install receipt")
-		return false, nil
+		return false, false, nil
 	}
 	if err != nil {
-		return false, err
+		return false, false, err
 	}
 	bCurrent, err := bootstrapCurrent(root, l, current, logger)
 	if err != nil || !bCurrent {
-		return false, err
+		return false, false, err
 	}
-	pCurrent, err := packagesCurrent(root, l, current, logger)
+	pCurrent, err := packagesCurrent(ctx, root, l, current, logger)
 	if err != nil || !pCurrent {
-		return false, err
+		return true, false, err
 	}
 	logger.Debug(
 		"installation current",
 		"reason", "receipt satisfies bootstrap contract and package set",
 		"receipt", filepath.Join(root, receipt.Filename),
 	)
-	return true, nil
+	return true, true, nil
 }
 
 // bootstrapCurrent reports whether the receipt satisfies the resolved bootstrap
@@ -151,7 +153,7 @@ func requiredBootstrapOutputs(
 
 // packagesCurrent reports whether recorded package entries match the lock's
 // package pins and every package file exists with its expected digest.
-func packagesCurrent(root string, l *document.Lock, current *receipt.Receipt, logger *log.Logger) (bool, error) {
+func packagesCurrent(ctx context.Context, root string, l *document.Lock, current *receipt.Receipt, logger *log.Logger) (bool, error) {
 	if current == nil {
 		return false, nil
 	}
@@ -176,10 +178,10 @@ func packagesCurrent(root string, l *document.Lock, current *receipt.Receipt, lo
 		}
 	}
 
-	for i := range l.Packages {
+	check := func(i int) (bool, error) {
 		p := &l.Packages[i]
 		if !p.Enabled() {
-			continue
+			return true, nil
 		}
 		dest, err := l.PackageDestination(p)
 		if err != nil {
@@ -195,12 +197,46 @@ func packagesCurrent(root string, l *document.Lock, current *receipt.Receipt, lo
 			logger.Debug("packages not current", "reason", "package identity mismatch", "path", cleanDest)
 			return false, nil
 		}
-		current, err := receiptEntryCurrent(root, entry, "packages", logger)
-		if err != nil || !current {
-			return false, err
-		}
+		return receiptEntryCurrent(root, entry, "packages", logger)
 	}
-	return true, nil
+	return checkPackageFiles(ctx, len(l.Packages), check)
+}
+
+// Each worker verifies one file at a time. Stop assigning work on a stale
+// file but finish earlier checks: the first result in lock order decides.
+func checkPackageFiles(ctx context.Context, count int, check func(int) (bool, error)) (bool, error) {
+	var mu sync.Mutex
+	var wg sync.WaitGroup
+	next, firstFailure := 0, count
+	var firstErr error
+	for range min(count, 4) {
+		wg.Go(func() {
+			for ctx.Err() == nil {
+				mu.Lock()
+				i := next
+				if i == count {
+					mu.Unlock()
+					return
+				}
+				next++
+				mu.Unlock()
+				if ok, err := check(i); !ok || err != nil {
+					mu.Lock()
+					next = count
+					if i < firstFailure {
+						firstFailure, firstErr = i, err
+					}
+					mu.Unlock()
+					return
+				}
+			}
+		})
+	}
+	wg.Wait()
+	if err := ctx.Err(); err != nil {
+		return false, err
+	}
+	return firstFailure == count, firstErr
 }
 
 // receiptEntryCurrent reports whether the file a receipt entry protects still
