@@ -9,6 +9,7 @@ import (
 
 	"github.com/mclucy/lucy/bootstrap"
 	"github.com/mclucy/lucy/install"
+	"github.com/mclucy/lucy/log"
 	"github.com/mclucy/lucy/resolve"
 	"github.com/mclucy/lucy/terminal/report"
 	"github.com/mclucy/lucy/terminal/style"
@@ -24,6 +25,11 @@ type installOutput struct {
 	*Output
 	input io.Reader
 
+	spool *log.ProcessSpool
+
+	note  string
+	noted bool
+
 	phase           string
 	resolved        int
 	pending         int
@@ -37,7 +43,11 @@ type installOutput struct {
 func newInstallOutput(cmd *cobra.Command, inv *Invocation) *installOutput {
 	output := NewOperationOutput(cmd, inv)
 	output.Progress()
-	return &installOutput{Output: output, input: cmd.InOrStdin()}
+	return &installOutput{
+		Output: output,
+		input:  cmd.InOrStdin(),
+		spool:  log.NewProcessSpool(cmd.Name(), inv.Logger),
+	}
 }
 
 // Trace returns the hooks the operation reports through.
@@ -48,7 +58,7 @@ func (o *installOutput) Trace() *install.Trace {
 		FetchStarted:  o.fetchStarted,
 		FetchProgress: o.fetchProgress,
 		FetchDone:     o.fetchDone,
-		ProcessOutput: processLog{o},
+		ProcessOutput: processTee{area: processLog{o}, spool: o.spool},
 		Resolve: resolve.Trace{
 			State:    o.resolveState,
 			Rejected: o.resolveRejected,
@@ -183,11 +193,13 @@ func (o *installOutput) Render(result *install.Result) error {
 }
 
 // Failure converts an operation error into the detail the command framework
-// renders. Unknown errors pass through unchanged.
+// renders. When a subprocess ran, the retained process log is named once, in
+// the returned error and in every detail built from it.
 func (o *installOutput) Failure(err error) error {
 	if err == nil {
 		return nil
 	}
+	note := o.processLogNote()
 	var failure *resolve.Failure
 	if errors.As(err, &failure) {
 		detail := resolutionDetail(failure)
@@ -199,29 +211,92 @@ func (o *installOutput) Failure(err error) error {
 		(errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded)) {
 		return &report.Detail{
 			Title: "interrupted",
-			Lines: []string{
+			Lines: detailLines(
+				note,
 				"The installation was committed, but file provisioning was interrupted.",
 				"Run lucy install again to finish.",
-			},
+			),
 			Cause: err,
 		}
 	}
 	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 		return &report.Detail{
 			Title: "interrupted",
-			Lines: []string{"The installation stopped before it committed; staged files were rolled back."},
+			Lines: detailLines(
+				note,
+				"The installation stopped before it committed; staged files were rolled back.",
+			),
 			Cause: err,
 		}
 	}
 	if errors.Is(err, bootstrap.ErrNoJava) {
 		return &report.Detail{
 			Title: "no Java runtime",
-			Lines: []string{err.Error()},
+			Lines: detailLines(note, err.Error()),
 			Hint:  "Run lucy install --java to install the Java runtime the server asks for.",
 			Cause: err,
 		}
 	}
+	if note != "" {
+		return fmt.Errorf("%w\n%s", err, note)
+	}
 	return err
+}
+
+// processLogNote retains the process log and returns the sentence that names
+// it. It returns an empty string when no subprocess ran, so unrelated
+// failures stay unchanged. The first call fixes the sentence, so a presenter
+// that adapts the failure again names the same file. A log that dropped output
+// says so instead of claiming it saved everything observed.
+func (o *installOutput) processLogNote() string {
+	if o.noted {
+		return o.note
+	}
+	o.noted = true
+	retained, ok := o.spool.Retain()
+	if !ok {
+		return ""
+	}
+	observed := style.FormatBytesDecimal(retained.Observed)
+	if retained.Truncated {
+		o.note = fmt.Sprintf(
+			"Subprocess output (%s observed) is incomplete: %s holds %s",
+			observed,
+			retained.Path,
+			style.FormatBytesDecimal(retained.Stored),
+		)
+		return o.note
+	}
+	o.note = fmt.Sprintf(
+		"Subprocess output (%s) saved to %s",
+		observed,
+		retained.Path,
+	)
+	return o.note
+}
+
+// Close ends the command's output lifetime. The progress area stops and an
+// unretained process log is discarded, so a surviving file is always evidence
+// of a failure.
+func (o *installOutput) Close() {
+	o.Output.Close()
+	o.spool.Discard()
+}
+
+// EndProgress closes the progress area only. A prompt or plain report owns the
+// terminal while the command keeps running, and the process log is kept for
+// the steps that follow.
+func (o *installOutput) EndProgress() {
+	o.Output.Close()
+}
+
+// detailLines appends the process log note to the fixed lines of a failure
+// detail, so a human rendering and a machine document name the same evidence.
+func detailLines(note string, lines ...string) []string {
+	if note == "" {
+		return lines
+	}
+	return append(lines, note)
 }
 
 // processLog forwards subprocess output to the current progress area, which
@@ -230,6 +305,26 @@ type processLog struct{ o *installOutput }
 
 func (l processLog) Write(data []byte) (int, error) {
 	return l.o.renderer.LogWriter().Write(data)
+}
+
+// processTee streams subprocess output to the progress area and to the
+// retained process log. Section markers reach only the log, because the
+// command line they name already narrates on the terminal.
+type processTee struct {
+	area  io.Writer
+	spool *log.ProcessSpool
+}
+
+func (t processTee) Write(data []byte) (int, error) {
+	written, err := t.area.Write(data)
+	if err != nil {
+		return written, err
+	}
+	return t.spool.Write(data)
+}
+
+func (t processTee) Section(label string) {
+	t.spool.Section(label)
 }
 
 func warningMessages(warnings []error) []string {

@@ -100,7 +100,7 @@ func actionUpgrade(
 	if err != nil {
 		return output.Failure(err)
 	}
-	output.Close()
+	output.EndProgress()
 
 	if jsonMode && (dryRun || policy == "options") {
 		selectedHash := ""

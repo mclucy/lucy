@@ -1,7 +1,6 @@
 package install
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"io"
@@ -23,16 +22,19 @@ import (
 type PythonHost struct {
 	// LookPath resolves an executable name on PATH.
 	LookPath func(name string) (string, error)
-	// Output captures stdout separately from startup diagnostics on stderr.
-	Output func(ctx context.Context, name string, args []string) ([]byte, error)
-	// Run runs one command and returns its combined output. A non-nil output
-	// also receives the output as it arrives.
-	Run func(
+	// Output runs one probe command. It returns stdout for parsing and
+	// streams stderr to output, which already retains the diagnostics a
+	// failure report names.
+	Output func(
 		ctx context.Context,
 		name string,
 		args []string,
 		output io.Writer,
 	) ([]byte, error)
+	// Run runs one command. A non-nil output receives the combined output
+	// as it arrives; that output already retains the evidence a failure
+	// report names.
+	Run func(ctx context.Context, name string, args []string, output io.Writer) error
 	// Getenv reads an environment variable. LUCY_PYTHON names the preferred
 	// interpreter.
 	Getenv func(string) string
@@ -61,17 +63,21 @@ func NewPythonHost(directory string, logger *log.Logger) *PythonHost {
 	return &PythonHost{
 		directory: directory,
 		LookPath:  exec.LookPath,
-		Output: func(ctx context.Context, name string, args []string) ([]byte, error) {
-			cmd := exec.CommandContext(ctx, name, args...)
-			cmd.Dir = directory
-			return cmd.Output()
-		},
-		Run: func(
+		Output: func(
 			ctx context.Context,
 			name string,
 			args []string,
 			output io.Writer,
 		) ([]byte, error) {
+			cmd := exec.CommandContext(ctx, name, args...)
+			cmd.Dir = directory
+			if output != nil {
+				markSection(output, cmd.String())
+				cmd.Stderr = output
+			}
+			return cmd.Output()
+		},
+		Run: func(ctx context.Context, name string, args []string, output io.Writer) error {
 			cmd := exec.CommandContext(ctx, name, args...)
 			cmd.Dir = directory
 			return runProcess(cmd, output)
@@ -84,14 +90,16 @@ func NewPythonHost(directory string, logger *log.Logger) *PythonHost {
 }
 
 // Interpreter returns the Python 3.8+ executable and its version, probing at
-// most once per host.
-func (h *PythonHost) Interpreter(ctx context.Context) (string, string, error) {
+// most once per host. stdout is parsed for the version and copied to output;
+// stderr streams to output as it arrives, so the probe's evidence reaches the
+// retained process log instead of an error message.
+func (h *PythonHost) Interpreter(ctx context.Context, output io.Writer) (string, string, error) {
 	h.interpreterMu.Lock()
 	defer h.interpreterMu.Unlock()
 	if h.interpreterOK {
 		return h.interpreterPath, h.interpreterVer, nil
 	}
-	path, version, err := h.discoverInterpreter(ctx)
+	path, version, err := h.discoverInterpreter(ctx, output)
 	if err != nil {
 		return "", "", err
 	}
@@ -102,6 +110,7 @@ func (h *PythonHost) Interpreter(ctx context.Context) (string, string, error) {
 
 func (h *PythonHost) discoverInterpreter(
 	ctx context.Context,
+	output io.Writer,
 ) (string, string, error) {
 	name := strings.TrimSpace(h.Getenv("LUCY_PYTHON"))
 	if name == "" {
@@ -121,7 +130,11 @@ func (h *PythonHost) discoverInterpreter(
 			"-c",
 			"import sys;print('%d.%d.%d' % sys.version_info[:3])",
 		},
+		output,
 	)
+	if output != nil && len(out) > 0 {
+		_, _ = output.Write(out)
+	}
 	if err != nil {
 		return "", "", fmt.Errorf(
 			"Python interpreter %s could not run: %w",
@@ -133,41 +146,57 @@ func (h *PythonHost) discoverInterpreter(
 	parts := strings.Split(value, ".")
 	if len(parts) < 2 {
 		return "", "", fmt.Errorf(
-			"Python interpreter %s reported %q",
+			"Python interpreter %s printed %d bytes that are not a version",
 			path,
-			value,
+			len(out),
 		)
 	}
-	major, _ := strconv.Atoi(parts[0])
-	minor, _ := strconv.Atoi(parts[1])
+	major, errMajor := strconv.Atoi(parts[0])
+	minor, errMinor := strconv.Atoi(parts[1])
+	if errMajor != nil || errMinor != nil {
+		return "", "", fmt.Errorf(
+			"Python interpreter %s printed %d bytes that are not a version",
+			path,
+			len(out),
+		)
+	}
 	if major < 3 || (major == 3 && minor < 8) {
 		return "", "", fmt.Errorf(
-			"Python interpreter %s is %s; MCDReforged needs 3.8 or newer",
+			"Python interpreter %s is %d.%d; MCDReforged needs 3.8 or newer",
 			path,
-			value,
+			major,
+			minor,
 		)
 	}
 	if major > 3 || minor > 13 {
 		h.Logger.Warn(fmt.Errorf(
-			"MCDReforged is tested through Python 3.13; %s is Python %s and "+
+			"MCDReforged is tested through Python 3.13; %s is Python %d.%d and "+
 				"some dependencies may not publish wheels for it",
 			path,
-			value,
+			major,
+			minor,
 		))
 	}
 	return path, value, nil
 }
 
-// runProcess streams a subprocess's combined output to output while retaining
-// it for the error message.
-func runProcess(cmd *exec.Cmd, output io.Writer) ([]byte, error) {
+// runProcess streams a subprocess's combined output to output, which already
+// retains the evidence the failure report needs. An output that marks sections
+// also records the command line that introduced the run.
+func runProcess(cmd *exec.Cmd, output io.Writer) error {
 	if output == nil {
 		output = io.Discard
 	}
-	var captured bytes.Buffer
-	writer := io.MultiWriter(output, &captured)
-	cmd.Stdout = writer
-	cmd.Stderr = writer
-	err := cmd.Run()
-	return captured.Bytes(), err
+	markSection(output, cmd.String())
+	cmd.Stdout = output
+	cmd.Stderr = output
+	return cmd.Run()
+}
+
+// markSection records the command line in an output that keeps command
+// boundaries, so a retained log can attribute the output that follows.
+func markSection(output io.Writer, label string) {
+	if marker, ok := output.(interface{ Section(label string) }); ok {
+		marker.Section(label)
+	}
 }

@@ -7,19 +7,24 @@ import (
 	"runtime"
 )
 
-func DefaultFile() string {
-	var directory string
+// DefaultDirectory names the per-user directory that holds Lucy's diagnostic
+// records. Every retained diagnostic file derives from it, so their
+// locations cannot drift apart.
+func DefaultDirectory() string {
 	switch runtime.GOOS {
 	case "windows":
-		directory = filepath.Join(os.Getenv("APPDATA"), "lucy", "logs")
+		return filepath.Join(os.Getenv("APPDATA"), "lucy", "logs")
 	case "darwin":
-		directory = filepath.Join(os.Getenv("HOME"), "Library", "Logs", "lucy")
+		return filepath.Join(os.Getenv("HOME"), "Library", "Logs", "lucy")
 	case "linux":
-		directory = filepath.Join(os.Getenv("HOME"), ".local", "share", "lucy", "logs")
+		return filepath.Join(os.Getenv("HOME"), ".local", "share", "lucy", "logs")
 	default:
-		directory = "logs"
+		return "logs"
 	}
-	return filepath.Join(directory, "lucy.log")
+}
+
+func DefaultFile() string {
+	return filepath.Join(DefaultDirectory(), "lucy.log")
 }
 
 func openLogFile(path string) (*os.File, error) {

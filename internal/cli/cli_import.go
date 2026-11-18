@@ -329,14 +329,14 @@ func importWorkspace(
 	defer output.Close()
 	opts.Trace = output.Trace()
 	opts.PromptRuntime = func(observed discovery.Result) (*discovery.Installation, error) {
-		output.Close()
+		output.EndProgress()
 		return promptRuntime(ctx, cmd, inv, observed)
 	}
 	result, err := deps.Operations.Import(ctx, opts, deps.Network)
 	if err != nil {
 		return output.Failure(err)
 	}
-	output.Close()
+	output.EndProgress()
 	for _, warning := range result.Warnings {
 		output.Warn(warning)
 	}

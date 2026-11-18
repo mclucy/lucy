@@ -144,6 +144,10 @@ func (o *createOutput) Failure(err error) error {
 			detail.Hint = inner.Hint
 		} else {
 			detail.Lines = append(detail.Lines, installErr.Err.Error())
+			detail.Lines = detailLines(
+				o.installOutput.processLogNote(),
+				detail.Lines...,
+			)
 		}
 		if detail.Hint == "" {
 			detail.Hint = "Run " + createInstallCommand(installErr.Workspace, o.inv.Directory) + " to finish."
