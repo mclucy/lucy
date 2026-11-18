@@ -27,6 +27,9 @@ type installOutput struct {
 
 	spool *log.ProcessSpool
 
+	note  string
+	noted bool
+
 	phase           string
 	resolved        int
 	pending         int
@@ -242,17 +245,23 @@ func (o *installOutput) Failure(err error) error {
 
 // processLogNote retains the process log and returns the sentence that names
 // it. It returns an empty string when no subprocess ran, so unrelated
-// failures stay unchanged.
+// failures stay unchanged. The first call fixes the sentence, so a presenter
+// that adapts the failure again names the same file.
 func (o *installOutput) processLogNote() string {
+	if o.noted {
+		return o.note
+	}
+	o.noted = true
 	path, seen, ok := o.spool.Retain()
 	if !ok {
 		return ""
 	}
-	return fmt.Sprintf(
+	o.note = fmt.Sprintf(
 		"Subprocess output (%s) saved to %s",
 		style.FormatBytesDecimal(seen),
 		path,
 	)
+	return o.note
 }
 
 // Close ends the command's output lifetime. The progress area stops and an
