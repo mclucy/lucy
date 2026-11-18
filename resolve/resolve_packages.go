@@ -643,7 +643,17 @@ func Packages(request PackagesRequest) ([]document.Package, []error, error) {
 		eligible := false
 		explained := r.origin == originManifest
 		var causes map[projectKey]bool
-		retrying := false
+		triedBranch := false
+		descend := func(next []projectRequest) searchOutcome {
+			if triedBranch {
+				backtracks++
+				if backtracks > backtrackLimit {
+					return stop(&SearchLimitError{Attempts: backtrackLimit})
+				}
+			}
+			triedBranch = true
+			return backtrack(next)
+		}
 		for _, candidate := range list {
 			if err := ctx.Err(); err != nil {
 				return stop(err)
@@ -818,10 +828,12 @@ func Packages(request PackagesRequest) ([]document.Package, []error, error) {
 						"project", r.key.project,
 						"answered-by", providerKey.project,
 					)
-					if outcome := backtrack(rest); outcome != branchFailed {
+					if outcome := descend(rest); outcome != branchFailed {
 						return outcome
 					}
 					state.restore(branch)
+					blockers = nil
+					explained = false
 				}
 			}
 			branches := []selectionBranch{
@@ -881,20 +893,13 @@ func Packages(request PackagesRequest) ([]document.Package, []error, error) {
 					}
 				}
 			}
-			if retrying {
-				backtracks++
-				if backtracks > backtrackLimit {
-					return stop(&SearchLimitError{Attempts: backtrackLimit})
-				}
-			}
-			if outcome := backtrack(next); outcome != branchFailed {
+			if outcome := descend(next); outcome != branchFailed {
 				return outcome
 			}
 			state.restoreAll(branches)
 			for _, key := range claims {
 				delete(native, key)
 			}
-			retrying = true
 			if blockers == nil {
 				explained = false
 			} else {
