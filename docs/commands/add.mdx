@@ -14,7 +14,7 @@ lucy add spiget:6245
 
 Use [`lucy search`](/commands/search) to find packages. A bare name can also work: lucy checks the current lock first, then uses Modrinth (or the MCDR catalogue for an MCDR plugin). It never searches Hangar or Spiget by name. If the name is ambiguous, use the full source-qualified reference.
 
-An `@version` suffix pins a version. Without one, lucy prefers a release and may select a prerelease if necessary. Existing package pins are preserved. If resolution fails, the manifest and lock remain unchanged.
+An `@version` suffix pins a version. For a new package without a suffix, lucy prefers a release and may select a prerelease if necessary. Adding an existing package without a suffix keeps its version rule and file pattern. Use `@any` to remove an exact version pin. If resolution fails, the manifest and lock remain unchanged.
 
 Lucy normally infers the mod or plugin type from the server. Use `--ecosystem` when it needs help, for example:
 
@@ -60,7 +60,7 @@ The package must be an enabled direct entry in `lucy.yaml`, and the lock must ma
 <ParamField path="package" type="string" required>
   One or more package references.
 
-  References include the package source, such as `modrinth:lithium`, `curseforge:238222`, `hangar:HelpChat/PlaceholderAPI`, `spiget:6245`, or `mcdr:synced`. An `@` suffix pins a version — `modrinth:fabric-api@0.100.8`. Without `@`, the recorded version rule is `any`.
+  References include the package source, such as `modrinth:lithium`, `curseforge:238222`, `hangar:HelpChat/PlaceholderAPI`, `spiget:6245`, or `mcdr:synced`. An `@` suffix pins a version, for example `modrinth:fabric-api@0.100.8`. Without `@`, a new requirement uses `any`.
 
   A bare name such as `lithium` works as a shortcut. `lucy` first looks for a unique match among the package names the current lock already records; if nothing matches, it falls back to Modrinth, or to the MCDR catalogue when adding an MCDR plugin. A name matching more than one locked package is an error asking for a `modrinth:project`-style reference rather than a guess. Hangar and Spiget are not searched by name; only an exact project ID already in the lock resolves without a prefix.
 

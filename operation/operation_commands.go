@@ -7,6 +7,7 @@ import (
 	"maps"
 	"os"
 	"slices"
+	"strings"
 
 	"github.com/mclucy/lucy/artifact"
 	"github.com/mclucy/lucy/catalog"
@@ -194,11 +195,7 @@ func commandReference(d *documentpkg.Manifest, old *documentpkg.Lock, raw string
 	if _, _, err := documentpkg.ParseReference(ref); err != nil {
 		return "", "", err
 	}
-	selector := request.Version
-	if selector == "" {
-		selector = version.Any
-	}
-	return ref, selector, nil
+	return ref, request.Version, nil
 }
 
 func (s *Service) Add(ctx context.Context, root string, args []string, ecosystem catalog.Ecosystem, opts install.Options) (*install.Result, error) {
@@ -233,20 +230,38 @@ func (s *Service) Add(ctx context.Context, root string, args []string, ecosystem
 				ecosystem,
 			)
 		}
-		r := documentpkg.Requirement{Selector: selector, Enabled: new(true)}
+		packages := d.Server.Packages[ecosystem]
 		if ecosystem == catalog.EcosystemMCDR {
 			if d.MCDR == nil {
 				return nil, fmt.Errorf("manifest has no MCDR runtime")
 			}
-			d.MCDR.Packages[ref] = r
-		} else {
-			if d.Server.Packages[ecosystem] == nil {
-				d.Server.Packages[ecosystem] = map[string]documentpkg.Requirement{}
-			}
-			d.Server.Packages[ecosystem][ref] = r
+			packages = d.MCDR.Packages
 		}
+		if existing, ok := packages[ref]; ok {
+			// A bare add enables an existing declaration without discarding
+			// its version pin or file pattern. Explicit selectors still edit it.
+			explicit := strings.Contains(raw, "@")
+			if existing.IsEnabled() && (!explicit || selector == existing.Selector) {
+				continue
+			}
+			if explicit {
+				existing.Selector = selector
+			}
+			existing.Enabled = new(true)
+			packages[ref] = existing
+		} else {
+			if packages == nil {
+				packages = make(map[string]documentpkg.Requirement)
+				if ecosystem == catalog.EcosystemMCDR {
+					d.MCDR.Packages = packages
+				} else {
+					d.Server.Packages[ecosystem] = packages
+				}
+			}
+			packages[ref] = documentpkg.Requirement{Selector: selector, Enabled: new(true)}
+		}
+		opts.PublishManifest = true
 	}
-	opts.PublishManifest = true
 	return s.install.Sync(ctx, root, d, old, opts)
 }
 
