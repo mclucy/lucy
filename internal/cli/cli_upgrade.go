@@ -252,7 +252,7 @@ func promptUpgradeRoots(
 		Value(&selected))).
 		WithInput(cmd.InOrStdin()).
 		WithOutput(cmd.ErrOrStderr())
-	if err := NormalizePromptError(ctx, form.RunWithContext(ctx)); err != nil {
+	if err := RunPrompt(ctx, form); err != nil {
 		return nil, err
 	}
 	if len(selected) == 0 {
@@ -284,7 +284,7 @@ func promptUpgradeChoice(
 		Value(&selected))).
 		WithInput(cmd.InOrStdin()).
 		WithOutput(cmd.ErrOrStderr())
-	if err := NormalizePromptError(ctx, form.RunWithContext(ctx)); err != nil {
+	if err := RunPrompt(ctx, form); err != nil {
 		return 0, err
 	}
 	return selected, nil
@@ -297,7 +297,7 @@ func promptUpgradeConfirm(ctx context.Context, cmd *cobra.Command) (bool, error)
 		Value(&confirmed))).
 		WithInput(cmd.InOrStdin()).
 		WithOutput(cmd.ErrOrStderr())
-	if err := NormalizePromptError(ctx, form.RunWithContext(ctx)); err != nil {
+	if err := RunPrompt(ctx, form); err != nil {
 		return false, err
 	}
 	return confirmed, nil

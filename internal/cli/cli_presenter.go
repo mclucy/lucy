@@ -62,6 +62,9 @@ func (o *Output) Warn(err error) {
 	if err == nil {
 		return
 	}
+	if o.inv != nil {
+		o.inv.TelemetryObservation.ObserveWarning()
+	}
 	o.warnings = append(o.warnings, err.Error())
 	if !o.JSON() {
 		o.Close()

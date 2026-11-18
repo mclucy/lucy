@@ -32,7 +32,7 @@ func promptModProject(
 	)).
 		WithInput(gate.Input()).
 		WithOutput(gate.Output())
-	if err := cli.NormalizePromptError(ctx, form.RunWithContext(ctx)); err != nil {
+	if err := cli.RunPrompt(ctx, form); err != nil {
 		return gradleProject{}, err
 	}
 	return candidates[picked], nil

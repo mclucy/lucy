@@ -200,7 +200,7 @@ func promptCreate(
 	form := huh.NewForm(groups...).
 		WithInput(cmd.InOrStdin()).
 		WithOutput(cmd.ErrOrStderr())
-	if err := NormalizePromptError(ctx, form.RunWithContext(ctx)); err != nil {
+	if err := RunPrompt(ctx, form); err != nil {
 		return createChoices{}, err
 	}
 	values.Directory = strings.TrimSpace(values.Directory)

@@ -8,9 +8,10 @@ import (
 )
 
 type preparedRecord struct {
-	entry  queueEntry
-	record queuedRecord
-	wire   wireRecord
+	entry     queueEntry
+	record    queuedRecord
+	wire      wireRecord
+	wireBytes int
 }
 
 // Flush performs one bounded upload run. It never blocks on another process's
@@ -119,12 +120,8 @@ func (c *Client) Flush(ctx context.Context) (FlushResult, error) {
 			}
 			break
 		}
-		records := make([]wireRecord, len(prepared))
-		for index := range prepared {
-			records[index] = prepared[index].wire
-		}
-		upload, uploadErr := c.uploadRecords(flushContext, records, state)
-		result.Attempted += len(records)
+		upload, uploadErr := c.uploadRecords(flushContext, prepared, state)
+		result.Attempted += len(prepared)
 		if uploadErr != nil {
 			if failure, isHTTP := errors.AsType[*httpError](uploadErr); isHTTP && failure.batchInvalid {
 				rejectedEntries := c.applyRejectedBatch(state, prepared)
@@ -209,12 +206,19 @@ func (c *Client) prepareBatch(state *persistedState, skipped map[string]struct{}
 			missing = append(missing, entry)
 			continue
 		}
-		additional := int64(len(encoded)) + 1
+		wireBytes := len(encoded)
+		additional := int64(wireBytes) + 1
+		// Reserve room for event-only transport metadata so the actual POST can
+		// add it without crossing either size bound. Reports keep their exact
+		// legacy sizing.
+		if entry.Type == recordTypeEvent && wireBytes+maxUploadEnvelopeBytes <= c.limits.MaxRecordBytes {
+			additional += maxUploadEnvelopeBytes
+		}
 		if len(prepared) > 0 && estimated+additional > int64(c.limits.MaxRequestBytes) {
 			break
 		}
 		estimated += additional
-		prepared = append(prepared, preparedRecord{entry: entry, record: record, wire: wire})
+		prepared = append(prepared, preparedRecord{entry: entry, record: record, wire: wire, wireBytes: wireBytes})
 	}
 	return prepared, missing
 }

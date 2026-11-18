@@ -358,7 +358,7 @@ func promptJavaChange(
 	).
 		WithInput(gate.Input()).
 		WithOutput(gate.Output())
-	if err := NormalizePromptError(ctx, form.RunWithContext(ctx)); err != nil {
+	if err := RunPrompt(ctx, form); err != nil {
 		return operation.JavaChange{}, err
 	}
 	return operation.JavaChange{

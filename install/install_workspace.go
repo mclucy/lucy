@@ -81,6 +81,9 @@ type (
 )
 
 func (s *Service) syncInstall(ctx context.Context, root string, d *document.Manifest, old *document.Lock, opts Options, result *Result) (diagnostics []filetrack.Diagnostic, resultErr error) {
+	// Report before recovery, resolution, or replay so a failure or
+	// cancellation still carries the workload this operation started from.
+	opts.Trace.reportInputScale(d, old)
 	absolute, err := filepath.Abs(root)
 	if err != nil {
 		return nil, err

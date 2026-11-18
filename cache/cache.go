@@ -67,7 +67,10 @@ func (c *Client) Do(request *http.Request) (*http.Response, error) {
 	if c.httpClient == nil {
 		return nil, ErrNoHTTPClient
 	}
-	return c.httpClient.Do(request)
+	start := c.logger.WaitStart()
+	response, err := c.httpClient.Do(request)
+	c.logger.WaitDone(log.WaitHTTP, start)
+	return response, err
 }
 
 // Close waits for cache operations and closes the store if it was opened.

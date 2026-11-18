@@ -9,7 +9,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/mclucy/lucy/internal/agent"
 	"github.com/mclucy/lucy/internal/cli"
 	telemetrycli "github.com/mclucy/lucy/internal/cli/telemetry"
 	"github.com/mclucy/lucy/internal/telemetry"
@@ -30,6 +29,7 @@ func (r *Runner) registerTelemetryCommands() {
 func (r *Runner) startTelemetry() time.Time {
 	started := time.Now()
 	r.invocation.TelemetryEnabled = false
+	r.invocation.TelemetryObservation = nil
 	r.invocation.TelemetryContexts = nil
 	version, commit := buildVersion()
 	local := !isTelemetryRelease()
@@ -73,13 +73,19 @@ func (r *Runner) finishTelemetry(started time.Time, commandErr error) {
 	if !policy.collect {
 		return
 	}
+	ended := time.Now()
+	if ended.Before(started) {
+		ended = started
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
-	r.recordInvocation(ctx, command, started, commandErr)
+	r.recordInvocation(ctx, command, started, ended, commandErr)
 	if !policy.flush {
+		r.invocation.Logger.Debug("telemetry flush skipped", "reason", "offline")
 		return
 	}
 	flush, flushErr := client.Flush(ctx)
+	r.logTelemetryFlush(flush, flushErr)
 	if flushErr == nil && flush.Attempted > 0 && !r.JSONSelected() && r.stderr != nil {
 		fmt.Fprintln(r.stderr, "Telemetry upload attempted; run `lucy telemetry stats` for local totals.")
 	}
@@ -91,7 +97,8 @@ type telemetryInvocationPolicy struct {
 }
 
 // invocationTelemetryPolicy governs automatic telemetry, not explicit
-// telemetry commands. Failed guidance invocations remain observable.
+// telemetry commands. Failed guidance invocations remain observable, but a
+// successful schema inspection is guidance and does not queue or flush.
 func invocationTelemetryPolicy(command *cobra.Command, commandErr error) telemetryInvocationPolicy {
 	if cli.TelemetryExempt(command) {
 		return telemetryInvocationPolicy{}
@@ -101,6 +108,10 @@ func invocationTelemetryPolicy(command *cobra.Command, commandErr error) telemet
 			switch current.Name() {
 			case "completion", "__complete", "__completeNoDesc", "help", "man":
 				return telemetryInvocationPolicy{}
+			case "schema":
+				if commandErr == nil {
+					return telemetryInvocationPolicy{}
+				}
 			}
 		}
 	}
@@ -117,7 +128,7 @@ func invocationTelemetryPolicy(command *cobra.Command, commandErr error) telemet
 		}
 	}
 	policy := telemetryInvocationPolicy{collect: true, flush: true}
-	if offline := command.Flags().Lookup("offline"); offline != nil && offline.Value.String() == "true" {
+	if telemetryBoolFlag(command, "offline") {
 		policy.flush = false
 	}
 	return policy
@@ -126,8 +137,9 @@ func invocationTelemetryPolicy(command *cobra.Command, commandErr error) telemet
 // recordInvocation records the terminal event and, for failures, a diagnostic
 // report. An unidentified build skips this call so harness traffic cannot pass
 // as user activity, but it still flushes records queued by identified builds.
-func (r *Runner) recordInvocation(ctx context.Context, command *cobra.Command, started time.Time, commandErr error) {
+func (r *Runner) recordInvocation(ctx context.Context, command *cobra.Command, started, ended time.Time, commandErr error) {
 	client := r.telemetryState.Client
+	usageError := r.telemetryUsageError(commandErr)
 	outcome := telemetry.Outcome("success")
 	code := ""
 	reportKind := telemetry.ReportKind("")
@@ -136,10 +148,12 @@ func (r *Runner) recordInvocation(ctx context.Context, command *cobra.Command, s
 		code = cli.CodeCommandFailed
 		_, panicked := errors.AsType[*panicError](commandErr)
 		exit, hasExit := errors.AsType[*cli.ExitError](commandErr)
+		canceled := errors.Is(commandErr, context.Canceled) ||
+			errors.Is(commandErr, context.DeadlineExceeded)
 		switch {
-		case errors.Is(commandErr, context.Canceled), errors.Is(commandErr, context.DeadlineExceeded):
+		case canceled:
 			outcome, code = telemetry.Outcome("canceled"), cli.CodeOperationCancelled
-		case cli.IsUsageError(commandErr):
+		case usageError:
 			code = cli.CodeInvalidInvocation
 		case panicked:
 			reportKind = telemetry.ReportKind("panic")
@@ -152,26 +166,44 @@ func (r *Runner) recordInvocation(ctx context.Context, command *cobra.Command, s
 		}
 		if detail, ok := errors.AsType[*report.Detail](commandErr); ok && detail != nil && detail.Code != "" {
 			code = detail.Code
+		} else if code == cli.CodeCommandFailed {
+			if mapped := telemetryFailureCode(commandErr); mapped != "" {
+				code = mapped
+			}
 		}
 	}
-	if r.invocation.TelemetryEnabled {
-		r.invocation.TelemetryContexts = append(r.invocation.TelemetryContexts, telemetry.Context{
-			Kind: "agent", Status: telemetry.ContextPresent,
-			Data: struct {
-				Detected bool `json:"detected"`
-			}{Detected: agent.Detected()},
-		})
-	}
+
+	r.completeCommandObservation(ended, commandErr)
+	localLog := r.telemetryLocalLog()
+	failureKind := r.telemetryFailureKind(commandErr, usageError)
+	cancelReason := r.telemetryCancelReason(
+		commandErr,
+		r.invocation.TelemetryObservation.PromptAborted(),
+	)
 	id := telemetry.NewUUID()
-	_, _ = client.RecordEvent(ctx, telemetry.Event{
-		InvocationID: id,
-		Command:      strings.TrimPrefix(command.CommandPath(), "lucy "),
-		Duration:     time.Since(started),
-		Outcome:      outcome,
-		ErrorCode:    code,
-		OccurredAt:   started,
-		Contexts:     r.invocation.TelemetryContexts,
-	})
+	if localLog {
+		r.invocation.Logger.Debug("telemetry invocation", "invocation_id", id)
+	}
+	event := telemetry.Event{
+		InvocationID:     id,
+		Command:          strings.TrimPrefix(command.CommandPath(), "lucy "),
+		Duration:         ended.Sub(started),
+		DurationMeasured: true,
+		Outcome:          outcome,
+		ErrorCode:        code,
+		OccurredAt:       started,
+		Contexts: r.buildTelemetryContexts(
+			command,
+			usageError,
+			failureKind,
+			cancelReason,
+			started,
+			ended,
+			localLog,
+		),
+	}
+	submission, enqueueErr := client.RecordEvent(ctx, event)
+	r.logTelemetrySubmission("event", submission, enqueueErr)
 	if reportKind != "" {
 		body := cli.ReportBody{
 			Command: command.CommandPath(),
@@ -185,7 +217,12 @@ func (r *Runner) recordInvocation(ctx context.Context, command *cobra.Command, s
 		if panicFailure, ok := errors.AsType[*panicError](commandErr); ok && panicFailure != nil {
 			body.Stack = telemetryPanicFunctions(panicFailure.stack)
 		}
-		_, _ = client.SubmitReport(ctx, telemetry.Report{Kind: reportKind, InvocationID: id, Body: body.Encode()})
+		reportSubmission, reportErr := client.SubmitReport(ctx, telemetry.Report{
+			Kind:         reportKind,
+			InvocationID: id,
+			Body:         body.Encode(),
+		})
+		r.logTelemetrySubmission("report", reportSubmission, reportErr)
 	}
 }
 

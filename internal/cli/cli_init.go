@@ -139,6 +139,7 @@ func initializeWorkspace(
 		return promptRuntime(ctx, cmd, inv, observed)
 	}
 	result, err := deps.Operations.Initialize(ctx, inv.Directory, opts)
+	recordInitWorkspaceTelemetry(inv, result)
 	if err != nil {
 		return output.Failure(initializationFailure(err, result))
 	}
@@ -349,7 +350,7 @@ func promptRuntime(
 		Description("Use --core, --core-version, and --minecraft to make this selection without a prompt.").
 		Options(options...).Value(&selected))).
 		WithInput(cmd.InOrStdin()).WithOutput(cmd.ErrOrStderr())
-	if err := NormalizePromptError(ctx, form.RunWithContext(ctx)); err != nil {
+	if err := RunPrompt(ctx, form); err != nil {
 		return nil, fmt.Errorf("server selection cancelled: %w", err)
 	}
 	if selected < 0 || selected >= len(observed.Installations) {
