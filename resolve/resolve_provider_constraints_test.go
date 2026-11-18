@@ -1,6 +1,7 @@
 package resolve
 
 import (
+	"slices"
 	"testing"
 
 	"github.com/mclucy/lucy/catalog"
@@ -111,7 +112,7 @@ func TestProvidesForScopesConstraintsByNamespace(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			packages := providerConstraintPackages(tt.dependent)
-			got := providesFor(target, packages[1], packages[0], packages)
+			got := providesFor(target, packages[1], packages[0], slices.Values(packages))
 			if got != tt.want {
 				t.Fatalf("providesFor() = %v, want %v", got, tt.want)
 			}

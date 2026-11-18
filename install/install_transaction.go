@@ -140,9 +140,12 @@ func pruneTargets(
 // wrapper outputs. mcdrOutputs identifies the subset produced by the
 // MCDReforged wrapper so those entries carry their own receipt origin.
 // stagedBootstrap reports whether the bootstrap contract ran for this
-// operation; when false its established outputs are preserved. The commit
-// never inspects the stage tree against the bootstrap contract, because that
-// tree also contains package and wrapper files that are not bootstrap outputs.
+// operation; when false its established outputs are preserved and
+// revalidated against the freshly read receipt, so drift between the
+// currency check and the commit aborts before anything is written. The
+// commit never inspects the stage tree against the bootstrap contract,
+// because that tree also contains package and wrapper files that are not
+// bootstrap outputs.
 func applyCommit(root, stage string, d *document.Manifest, l *document.Lock, publish bool, overwritePaths map[string]bool, stagedOutputs, mcdrOutputs map[string]bootstrap.Output, stagedBootstrap bool, mode installCommitMode, logger *log.Logger) (FileChanges, error) {
 	var counts FileChanges
 	resultErr := applyCommitFiles(root, stage, d, l, publish, overwritePaths, stagedOutputs, mcdrOutputs, stagedBootstrap, mode, &counts, logger)
@@ -164,6 +167,22 @@ func applyCommitFiles(root, stage string, d *document.Manifest, l *document.Lock
 		previous = *parsed
 	} else if !os.IsNotExist(err) {
 		return err
+	}
+	if !stagedBootstrap {
+		// The currency check that skipped bootstrap staging predates
+		// package staging and downloads, so the outputs this commit
+		// retains are revalidated here: a fingerprint carried forward
+		// over drifted files would leave the receipt reporting a server
+		// tree that no longer satisfies the contract.
+		retained, err := bootstrapCurrent(root, l, &previous, logger)
+		if err != nil {
+			return err
+		}
+		if !retained {
+			return fmt.Errorf(
+				"retained bootstrap outputs no longer satisfy the locked bootstrap contract; rerun the install to restage the server tree",
+			)
+		}
 	}
 	owned := map[string]receipt.Entry{}
 	observedBefore := map[string]*workspacewrite.InstallImage{}

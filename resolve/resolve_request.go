@@ -151,7 +151,10 @@ type PackagesRequest struct {
 	// catalogue no longer publishes it for the current labels. It applies only
 	// while the runtime target is unchanged.
 	PreserveLocked bool
-	Target         Target
+	// PreferLocked requires PreserveLocked. It tries compatible pins before
+	// listing alternatives unless WithOptional requires fresh dependency metadata.
+	PreferLocked bool
+	Target       Target
 	// Candidates lists the builds a direct or dependency requirement may
 	// select. It is required for every non-empty resolution.
 	Candidates CandidateSource
@@ -166,8 +169,8 @@ type PackagesRequest struct {
 	// relaxes every module check.
 	AcceptPackageConflicts bool
 	ExpandDependencies     bool
-	// Cache reuses artifact analysis across candidate combinations. A nil
-	// cache analyzes every candidate from scratch.
+	// Cache shares artifact analysis across related searches. A nil cache
+	// limits reuse to this invocation.
 	Cache *AnalysisCache
 	// Logger records resolution diagnostics. A nil Logger records nothing.
 	Logger *log.Logger

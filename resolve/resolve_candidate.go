@@ -100,26 +100,17 @@ func keepsLockedFile(
 // request's selectors, so the caller applies it after reading the cache.
 func orderCandidates(
 	list []upstream.Candidate,
-	previous []document.Package,
-	request projectRequest,
+	pin *document.Package,
 ) []upstream.Candidate {
 	ordered := slices.Clone(list)
 	sort.SliceStable(ordered, func(i, j int) bool {
 		return ordered[i].PublishedAt.After(ordered[j].PublishedAt)
 	})
-	for _, p := range previous {
-		if p.Environment != request.key.environment ||
-			p.Ecosystem != request.key.ecosystem ||
-			p.Provider != request.key.provider ||
-			p.ProjectID != request.key.project {
-			continue
-		}
+	if pin != nil {
 		for i, candidate := range ordered {
-			if candidate.ReleaseID == p.ReleaseID && candidate.FileID == p.FileID {
-				ordered = append(
-					[]upstream.Candidate{candidate},
-					append(ordered[:i], ordered[i+1:]...)...,
-				)
+			if candidate.ReleaseID == pin.ReleaseID && candidate.FileID == pin.FileID {
+				copy(ordered[1:i+1], ordered[:i])
+				ordered[0] = candidate
 				break
 			}
 		}
@@ -135,6 +126,9 @@ func preferReleaseBuilds(
 	list []upstream.Candidate,
 	requirements []document.RequirementBinding,
 ) []upstream.Candidate {
+	if len(list) < 2 {
+		return list
+	}
 	prefer := false
 	for _, requirement := range requirements {
 		if !requirement.Enabled {
@@ -395,20 +389,22 @@ type analysisEntry struct {
 
 // AnalysisCache reuses artifact analysis within one resolution session.
 type AnalysisCache struct {
-	entries map[string]analysisEntry
+	entries map[analysisKey]analysisEntry
 }
 
 func NewAnalysisCache() *AnalysisCache {
-	return &AnalysisCache{entries: map[string]analysisEntry{}}
+	return &AnalysisCache{entries: map[analysisKey]analysisEntry{}}
 }
 
-func (c *AnalysisCache) get(key string) (analysisEntry, bool) {
-	if c == nil {
-		return analysisEntry{}, false
-	}
+func (c *AnalysisCache) get(key analysisKey, expected map[string]string) (analysisEntry, bool) {
 	entry, ok := c.entries[key]
 	if !ok {
 		return analysisEntry{}, false
+	}
+	for algorithm, digest := range expected {
+		if actual, found := entry.hashes[algorithm]; !found || digest != "" && !strings.EqualFold(actual, digest) {
+			return analysisEntry{}, false
+		}
 	}
 	return analysisEntry{
 		modules: cloneModules(entry.modules),
@@ -416,22 +412,22 @@ func (c *AnalysisCache) get(key string) (analysisEntry, bool) {
 	}, true
 }
 
-func (c *AnalysisCache) put(key string, entry analysisEntry) {
-	if c == nil {
-		return
-	}
+func (c *AnalysisCache) put(key analysisKey, entry analysisEntry) {
 	c.entries[key] = analysisEntry{
 		modules: cloneModules(entry.modules),
 		hashes:  entry.hashes,
 	}
 }
 
-func candidateAnalysisKey(candidate upstream.Candidate) string {
-	return string(candidate.Provider) + "|" +
-		candidate.ProjectID + "|" +
-		candidate.ReleaseID + "|" +
-		candidate.FileID + "|" +
-		candidate.URL
+type analysisKey struct {
+	provider                              catalog.Provider
+	project, release, file, url, filename string
+	loader                                catalog.Ecosystem
+	minecraft                             versionpkg.Version
+}
+
+func analysisKeyFor(c upstream.Candidate, loader catalog.Ecosystem, minecraft versionpkg.Version) analysisKey {
+	return analysisKey{c.Provider, c.ProjectID, c.ReleaseID, c.FileID, c.URL, c.Filename, loader, minecraft}
 }
 
 func cloneModules(modules []catalog.DescriptorModule) []catalog.DescriptorModule {
