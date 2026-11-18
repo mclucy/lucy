@@ -74,14 +74,15 @@ func NewPythonHost(directory string, logger *log.Logger) *PythonHost {
 }
 
 // Interpreter returns the Python 3.8+ executable and its version, probing at
-// most once per host.
-func (h *PythonHost) Interpreter(ctx context.Context) (string, string, error) {
+// most once per host. output receives whatever the probe prints, so its
+// evidence reaches the retained process log instead of an error message.
+func (h *PythonHost) Interpreter(ctx context.Context, output io.Writer) (string, string, error) {
 	h.interpreterMu.Lock()
 	defer h.interpreterMu.Unlock()
 	if h.interpreterOK {
 		return h.interpreterPath, h.interpreterVer, nil
 	}
-	path, version, err := h.discoverInterpreter(ctx)
+	path, version, err := h.discoverInterpreter(ctx, output)
 	if err != nil {
 		return "", "", err
 	}
@@ -92,6 +93,7 @@ func (h *PythonHost) Interpreter(ctx context.Context) (string, string, error) {
 
 func (h *PythonHost) discoverInterpreter(
 	ctx context.Context,
+	output io.Writer,
 ) (string, string, error) {
 	name := strings.TrimSpace(h.Getenv("LUCY_PYTHON"))
 	if name == "" {
@@ -112,6 +114,9 @@ func (h *PythonHost) discoverInterpreter(
 			"import sys;print('%d.%d.%d' % sys.version_info[:3])",
 		},
 	)
+	if output != nil {
+		_, _ = output.Write(out)
+	}
 	if err != nil {
 		return "", "", fmt.Errorf(
 			"Python interpreter %s could not run: %w",
@@ -123,26 +128,35 @@ func (h *PythonHost) discoverInterpreter(
 	parts := strings.Split(value, ".")
 	if len(parts) < 2 {
 		return "", "", fmt.Errorf(
-			"Python interpreter %s reported %q",
+			"Python interpreter %s printed %d bytes that are not a version",
 			path,
-			value,
+			len(out),
 		)
 	}
-	major, _ := strconv.Atoi(parts[0])
-	minor, _ := strconv.Atoi(parts[1])
+	major, errMajor := strconv.Atoi(parts[0])
+	minor, errMinor := strconv.Atoi(parts[1])
+	if errMajor != nil || errMinor != nil {
+		return "", "", fmt.Errorf(
+			"Python interpreter %s printed %d bytes that are not a version",
+			path,
+			len(out),
+		)
+	}
 	if major < 3 || (major == 3 && minor < 8) {
 		return "", "", fmt.Errorf(
-			"Python interpreter %s is %s; MCDReforged needs 3.8 or newer",
+			"Python interpreter %s is %d.%d; MCDReforged needs 3.8 or newer",
 			path,
-			value,
+			major,
+			minor,
 		)
 	}
 	if major > 3 || minor > 13 {
 		h.Logger.Warn(fmt.Errorf(
-			"MCDReforged is tested through Python 3.13; %s is Python %s and "+
+			"MCDReforged is tested through Python 3.13; %s is Python %d.%d and "+
 				"some dependencies may not publish wheels for it",
 			path,
-			value,
+			major,
+			minor,
 		))
 	}
 	return path, value, nil

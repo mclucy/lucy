@@ -82,7 +82,7 @@ func provisionMCDR(
 		if err != nil {
 			return mcdrRuntime{}, mcdrGlobalError(`"mcdreforged"`)
 		}
-		if _, _, err := python.Interpreter(ctx); err != nil {
+		if _, _, err := python.Interpreter(ctx, store.trace.processOutput()); err != nil {
 			return mcdrRuntime{}, fmt.Errorf(
 				"MCDReforged requires Python 3.8+ on PATH: %w. "+
 					"Install Python 3, or %s",
@@ -180,7 +180,7 @@ func createMCDREnvironment(
 		uvError = fmt.Errorf("uv venv: %w", err)
 		python.Logger.Warn(uvError)
 	}
-	interpreter, _, err := python.Interpreter(ctx)
+	interpreter, _, err := python.Interpreter(ctx, store.trace.processOutput())
 	if err != nil {
 		if uvError != nil {
 			return "", fmt.Errorf(
