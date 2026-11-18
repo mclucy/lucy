@@ -125,24 +125,21 @@ release:
     irm https://lucy.lc/ps1 | iex
     ```
 
-    Or install with Homebrew or Go:
+    Or install with other package managers:
 
     ```sh
+    # brew
     brew tap mclucy/tap
     brew trust --tap mclucy/tap
     brew install --cask lucy
+
+    # native go
     go install github.com/mclucy/lucy@latest
-    ```
 
-    Or run without installing with Nix (x86_64-linux, aarch64-linux, aarch64-darwin):
-
-    ```sh
+    # nix (flake)
     nix run github:mclucy/lucy
-    ```
 
-    To run the CLI from a container:
-
-    ```sh
+    # docker
     docker pull ghcr.io/mclucy/lucy
     ```
 
@@ -151,7 +148,7 @@ release:
 # Release notes follow the commit convention. User-visible changes get their
 # own heading; refactors, documentation, tests, CI, and chores stay available
 # but collapse into one details block, grouped by kind. Every entry keeps its
-# subject, which squash merges end with the pull request number (#123). GitHub
+# subject, which squash merges end with the pull request number (#). GitHub
 # renders that reference as a link, so the notes name the pull request rather
 # than its author.
 changelog:
@@ -191,10 +188,10 @@ changelog:
       order: 9
     - title: Other changes
       order: 4
-  format: '{{ .Message }}'
+  format: "{{ .Message }}"
   filters:
     exclude:
-      - '^Merge '
+      - "^Merge "
 
 snapshot:
   version_template: "{{ incpatch .Version }}-next"
