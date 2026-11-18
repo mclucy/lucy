@@ -16,9 +16,9 @@ import (
 	"github.com/mclucy/lucy/upstream"
 )
 
-// All three graphs use local Fabric jars so registry latency does not mask search work.
+// All four graphs use local Fabric jars so registry latency does not mask search work.
 func BenchmarkPackageSearch(b *testing.B) {
-	for _, shape := range []string{"dependencies", "locked-add", "duplicate"} {
+	for _, shape := range []string{"dependencies", "locked-add", "duplicate", "duplicate-recovered"} {
 		b.Run(shape, func(b *testing.B) {
 			dir := b.TempDir()
 			roots := map[string]document.Requirement{}
@@ -27,15 +27,10 @@ func BenchmarkPackageSearch(b *testing.B) {
 			if shape == "locked-add" {
 				count = 465
 			}
-			if shape == "duplicate" {
+			if shape == "duplicate" || shape == "duplicate-recovered" {
 				count = 11
 			}
-			for i := range count {
-				name := fmt.Sprintf("pkg%04d", i)
-				module := name
-				if shape == "duplicate" && i == 1 {
-					module = "pkg0000"
-				}
+			writeJar := func(name, module string) {
 				file, err := os.Create(filepath.Join(dir, name+".jar"))
 				if err != nil {
 					b.Fatal(err)
@@ -54,6 +49,19 @@ func BenchmarkPackageSearch(b *testing.B) {
 				if err := file.Close(); err != nil {
 					b.Fatal(err)
 				}
+			}
+			for i := range count {
+				name := fmt.Sprintf("pkg%04d", i)
+				module := name
+				if shape == "duplicate" && i == 1 {
+					module = "pkg0000"
+				}
+				if shape == "duplicate-recovered" && (i == 0 || i == count-1) {
+					// The first and last roots both claim the shared module;
+					// only the first owner has a non-conflicting alternate.
+					module = "shared"
+				}
+				writeJar(name, module)
 				c := upstream.Candidate{
 					Artifact: catalog.Artifact{
 						Provider:  catalog.ProviderModrinth,
@@ -66,12 +74,19 @@ func BenchmarkPackageSearch(b *testing.B) {
 					PrimaryFile: true,
 					Channel:     upstream.ReleaseChannelRelease,
 				}
-				if shape != "dependencies" || i%2 == 0 {
+				if (shape != "dependencies" || i%2 == 0) && !(shape == "locked-add" && (i == 462 || i == 464)) {
 					roots["modrinth:"+name] = document.Requirement{Selector: "any"}
 					if shape == "dependencies" {
 						c.Dependencies = []upstream.ProjectDependency{{
 							Provider:  catalog.ProviderModrinth,
 							ProjectID: fmt.Sprintf("pkg%04d", i+1),
+							Kind:      catalog.DependencyKindRequired,
+						}}
+					}
+					if shape == "locked-add" && i == 463 {
+						c.Dependencies = []upstream.ProjectDependency{{
+							Provider:  catalog.ProviderModrinth,
+							ProjectID: "pkg0462",
 							Kind:      catalog.DependencyKindRequired,
 						}}
 					}
@@ -82,6 +97,25 @@ func BenchmarkPackageSearch(b *testing.B) {
 					c.Version = "2.0.0"
 					builds[name] = append(builds[name], c)
 				}
+				if shape == "duplicate-recovered" && i >= 1 && i <= count-2 {
+					// Unrelated roots keep alternates so recovery has to
+					// search past them.
+					c.ReleaseID = "r2"
+					c.Version = "2.0.0"
+					builds[name] = append(builds[name], c)
+				}
+				if shape == "duplicate-recovered" && i == 0 {
+					c.ReleaseID = "r2"
+					c.Version = "2.0.0"
+					c.Filename = name + "-alt.jar"
+					builds[name] = append(builds[name], c)
+				}
+			}
+			if shape == "duplicate-recovered" {
+				// The first owner's alternate installs its own module, so the
+				// resolver can fall back to it after the shared-module
+				// collision with the last root.
+				writeJar("pkg0000-alt", "pkg0000")
 			}
 			lookups, reads := 0, 0
 			r := resolve.PackagesRequest{
@@ -101,11 +135,32 @@ func BenchmarkPackageSearch(b *testing.B) {
 				},
 			}
 			if shape == "locked-add" {
-				delete(roots, "modrinth:pkg0464")
+				// pkg0462 enters the previous graph only through pkg0463's
+				// dependency edge; pkg0464 is genuinely new and absent from
+				// the lock until the addition below.
 				var err error
 				r.Previous, _, err = resolve.Packages(r)
 				if err != nil {
 					b.Fatal(err)
+				}
+				transitive := false
+				for _, p := range r.Previous {
+					if p.Artifact.FileID != "pkg0462" || !p.Dependency {
+						continue
+					}
+					for _, dep := range p.DependencyOf {
+						if dep.Provider == catalog.ProviderModrinth && dep.Name == "pkg0463" {
+							transitive = true
+						}
+					}
+				}
+				if !transitive {
+					b.Fatal("previous graph did not record pkg0462 as a transitive edge of pkg0463")
+				}
+				for _, p := range r.Previous {
+					if p.Artifact.FileID == "pkg0464" {
+						b.Fatal("pkg0464 already present in previous graph; fixture no longer adds a new package")
+					}
 				}
 				r.PreserveLocked = true
 				r.PreferLocked = true
@@ -114,14 +169,49 @@ func BenchmarkPackageSearch(b *testing.B) {
 			lookups, reads = 0, 0
 			for b.Loop() {
 				pkgs, _, err := resolve.Packages(r)
-				if shape == "duplicate" {
+				switch shape {
+				case "duplicate":
 					if err == nil || !strings.Contains(err.Error(), "duplicate native module pkg0000") {
 						b.Fatalf("expected duplicate module rejection, got %v", err)
+					}
+					continue
+				case "duplicate-recovered":
+					if err != nil {
+						b.Fatalf("expected the alternate graph to settle, got %v", err)
+					}
+					if len(pkgs) != count {
+						b.Fatalf("resolved %d/%d: %v", len(pkgs), count, err)
+					}
+					for _, p := range pkgs {
+						if p.Artifact.FileID == "pkg0000" && p.Artifact.Version != "2.0.0" {
+							b.Fatalf("first owner pkg0000 settled on %s, want the alternate 2.0.0", p.Artifact.Version)
+						}
+						if p.Artifact.FileID == "pkg0010" && p.Artifact.Version != "1.0.0" {
+							b.Fatalf("last owner pkg0010 settled on %s, want its primary 1.0.0", p.Artifact.Version)
+						}
 					}
 					continue
 				}
 				if err != nil || len(pkgs) != count {
 					b.Fatalf("resolved %d/%d: %v", len(pkgs), count, err)
+				}
+				if shape == "locked-add" {
+					// The addition must not disturb the recorded transitive
+					// edge: pkg0462 stays a dependency of pkg0463.
+					transitive := false
+					for _, p := range pkgs {
+						if p.Artifact.FileID != "pkg0462" || !p.Dependency {
+							continue
+						}
+						for _, dep := range p.DependencyOf {
+							if dep.Provider == catalog.ProviderModrinth && dep.Name == "pkg0463" {
+								transitive = true
+							}
+						}
+					}
+					if !transitive {
+						b.Fatal("resolved graph dropped pkg0462's transitive edge from pkg0463")
+					}
 				}
 			}
 			b.ReportMetric(float64(lookups)/float64(b.N), "lookups/op")
