@@ -224,9 +224,14 @@ func TestOrderCandidatesNewestFirst(t *testing.T) {
 	}
 }
 
-func TestOrderCandidatesKeepsLockedBuildFirst(t *testing.T) {
+// TestOrderCandidatesKeepsLockedFileFirst checks that promotion matches the
+// exact locked file: one release can publish several variants, and only the
+// recorded file stays first. The fixture shares a ReleaseID between two
+// candidates so release-only matching would order the sibling file first.
+func TestOrderCandidatesKeepsLockedFileFirst(t *testing.T) {
+	newest := testCandidate("1.1.0", "r2", "f3", "demo-1.1.0.jar", time.Unix(3, 0), upstream.ReleaseChannelBeta, true)
+	sibling := testCandidate("1.0.0", "r1", "f2", "demo-1.0.0-sources.jar", time.Unix(2, 0), upstream.ReleaseChannelBeta, true)
 	locked := testCandidate("1.0.0", "r1", "f1", "demo-1.0.0.jar", time.Unix(1, 0), upstream.ReleaseChannelBeta, true)
-	newer := testCandidate("1.1.0", "r2", "f2", "demo-1.1.0.jar", time.Unix(2, 0), upstream.ReleaseChannelBeta, true)
 	previous := []document.Package{{
 		Environment: serverpkg.EnvironmentServer,
 		Ecosystem:   catalog.EcosystemFabric,
@@ -239,11 +244,14 @@ func TestOrderCandidatesKeepsLockedBuildFirst(t *testing.T) {
 	}}
 
 	got := orderCandidates(
-		[]upstream.Candidate{newer, locked},
+		[]upstream.Candidate{newest, sibling, locked},
 		&previous[0],
 	)
-	if got[0].ReleaseID != "r1" {
-		t.Fatalf("orderCandidates()[0] = %q, want the locked build", got[0].ReleaseID)
+	want := []string{"f1", "f3", "f2"}
+	for i, candidate := range got {
+		if candidate.FileID != want[i] {
+			t.Fatalf("orderCandidates()[%d] = file %q, want the locked file order %v", i, candidate.FileID, want)
+		}
 	}
 }
 
