@@ -71,7 +71,7 @@ type SearchLimitError struct {
 
 func (e *SearchLimitError) Error() string {
 	return fmt.Sprintf(
-		"package resolution exceeded %d candidate combinations",
+		"package resolution exhausted its budget of %d speculative retries",
 		e.Attempts,
 	)
 }
@@ -315,6 +315,21 @@ func (l *rejectionLedger) add(
 	return group
 }
 
+// A conflict on a build that passed its selector explains more than all the
+// other versions that never matched that selector in the first place.
+func rejectionPriority(kind RejectionKind) int {
+	switch kind {
+	case RejectionServer:
+		return 3
+	case RejectionModules, RejectionMetadataConflict, RejectionEmpty:
+		return 2
+	case RejectionNested:
+		return 0
+	default:
+		return 1
+	}
+}
+
 // summary picks the project whose rejection explains the failure best: a
 // requirement the server cannot satisfy first, then the most specific reasons,
 // not the request that happened to be processed first. Nested failures only
@@ -322,7 +337,7 @@ func (l *rejectionLedger) add(
 func (l *rejectionLedger) summary(minecraft versionpkg.Version, cause error) *Failure {
 	var bestKey projectKey
 	var bestEntry *projectLedger
-	bestServer := -1
+	bestPriority := -1
 	bestScore := -1
 	bestTotal := -1
 	for _, key := range l.order {
@@ -330,29 +345,29 @@ func (l *rejectionLedger) summary(minecraft versionpkg.Version, cause error) *Fa
 			continue
 		}
 		entry := l.projects[key]
-		server := 0
+		priority := -1
 		score := 0
 		total := 0
 		for _, group := range entry.groups {
 			total += group.count
-			if group.kind == RejectionServer {
-				server += group.count
-				continue
+			rank := rejectionPriority(group.kind)
+			if rank > priority {
+				priority, score = rank, 0
 			}
-			if group.kind != RejectionNested {
+			if rank == priority {
 				score += group.count
 			}
 		}
 		if total == 0 {
 			continue
 		}
-		better := server > bestServer
-		if server == bestServer {
+		better := priority > bestPriority
+		if priority == bestPriority {
 			better = score > bestScore || (score == bestScore && total > bestTotal)
 		}
 		if better {
 			bestKey, bestEntry = key, entry
-			bestServer, bestScore, bestTotal = server, score, total
+			bestPriority, bestScore, bestTotal = priority, score, total
 		}
 	}
 	if bestEntry == nil {
@@ -393,13 +408,12 @@ func (l *rejectionLedger) build(
 			return group.Kind == RejectionNested
 		})
 	}
-	// A server constraint explains the failure better than any package
-	// rejection, so it leads the groups the renderers and reports read.
+	// Report the strongest evidence before incidental filter rejections.
 	sort.SliceStable(groups, func(i, j int) bool {
-		left := groups[i].Kind == RejectionServer
-		right := groups[j].Kind == RejectionServer
+		left := rejectionPriority(groups[i].Kind)
+		right := rejectionPriority(groups[j].Kind)
 		if left != right {
-			return left
+			return left > right
 		}
 		if groups[i].Count != groups[j].Count {
 			return groups[i].Count > groups[j].Count

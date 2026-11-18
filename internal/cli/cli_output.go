@@ -190,7 +190,9 @@ func (o *installOutput) Failure(err error) error {
 	}
 	var failure *resolve.Failure
 	if errors.As(err, &failure) {
-		return resolutionDetail(failure)
+		detail := resolutionDetail(failure)
+		detail.Lines = append(detail.Lines, "Resolution did not change the manifest or lock.")
+		return detail
 	}
 	var committed *install.CommittedError
 	if errors.As(err, &committed) &&
