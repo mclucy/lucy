@@ -22,8 +22,15 @@ import (
 type PythonHost struct {
 	// LookPath resolves an executable name on PATH.
 	LookPath func(name string) (string, error)
-	// Output captures stdout separately from startup diagnostics on stderr.
-	Output func(ctx context.Context, name string, args []string) ([]byte, error)
+	// Output runs one probe command. It returns stdout for parsing and
+	// streams stderr to output, which already retains the diagnostics a
+	// failure report names.
+	Output func(
+		ctx context.Context,
+		name string,
+		args []string,
+		output io.Writer,
+	) ([]byte, error)
 	// Run runs one command. A non-nil output receives the combined output
 	// as it arrives; that output already retains the evidence a failure
 	// report names.
@@ -56,9 +63,18 @@ func NewPythonHost(directory string, logger *log.Logger) *PythonHost {
 	return &PythonHost{
 		directory: directory,
 		LookPath:  exec.LookPath,
-		Output: func(ctx context.Context, name string, args []string) ([]byte, error) {
+		Output: func(
+			ctx context.Context,
+			name string,
+			args []string,
+			output io.Writer,
+		) ([]byte, error) {
 			cmd := exec.CommandContext(ctx, name, args...)
 			cmd.Dir = directory
+			if output != nil {
+				markSection(output, cmd.String())
+				cmd.Stderr = output
+			}
 			return cmd.Output()
 		},
 		Run: func(ctx context.Context, name string, args []string, output io.Writer) error {
@@ -74,8 +90,9 @@ func NewPythonHost(directory string, logger *log.Logger) *PythonHost {
 }
 
 // Interpreter returns the Python 3.8+ executable and its version, probing at
-// most once per host. output receives whatever the probe prints, so its
-// evidence reaches the retained process log instead of an error message.
+// most once per host. stdout is parsed for the version and copied to output;
+// stderr streams to output as it arrives, so the probe's evidence reaches the
+// retained process log instead of an error message.
 func (h *PythonHost) Interpreter(ctx context.Context, output io.Writer) (string, string, error) {
 	h.interpreterMu.Lock()
 	defer h.interpreterMu.Unlock()
@@ -113,8 +130,9 @@ func (h *PythonHost) discoverInterpreter(
 			"-c",
 			"import sys;print('%d.%d.%d' % sys.version_info[:3])",
 		},
+		output,
 	)
-	if output != nil {
+	if output != nil && len(out) > 0 {
 		_, _ = output.Write(out)
 	}
 	if err != nil {
@@ -169,10 +187,16 @@ func runProcess(cmd *exec.Cmd, output io.Writer) error {
 	if output == nil {
 		output = io.Discard
 	}
-	if marker, ok := output.(interface{ Section(label string) }); ok {
-		marker.Section(cmd.String())
-	}
+	markSection(output, cmd.String())
 	cmd.Stdout = output
 	cmd.Stderr = output
 	return cmd.Run()
+}
+
+// markSection records the command line in an output that keeps command
+// boundaries, so a retained log can attribute the output that follows.
+func markSection(output io.Writer, label string) {
+	if marker, ok := output.(interface{ Section(label string) }); ok {
+		marker.Section(label)
+	}
 }
