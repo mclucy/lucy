@@ -379,6 +379,7 @@ func Packages(request PackagesRequest) ([]document.Package, []error, error) {
 	}
 	usedPin := false
 	native := make(map[moduleKey]nativeOwner)
+	nonPrimary := make(map[projectKey]bool)
 	// Non-nil only when a direct requirement exhausted its candidates and
 	// the named prior decisions alone suffice to explain every rejection.
 	var blockers map[projectKey]bool
@@ -506,6 +507,23 @@ func Packages(request PackagesRequest) ([]document.Package, []error, error) {
 		// package that no file can satisfy.
 		if previous, ok := state.selection(r.key); ok &&
 			(!active || previous.Artifact.Filename != "") {
+			if active && len(r.requirements) != 0 {
+				selected := upstream.Candidate{
+					Artifact:    previous.Artifact,
+					Channel:     previous.Channel,
+					PrimaryFile: !nonPrimary[r.key],
+				}
+				decision, err := decideCandidate(selected, r)
+				if err != nil {
+					return hardFail(err)
+				}
+				if !decision.eligible {
+					ledger.record(r.key, r.display, string(previous.Version), decision.detail, decision.kind)
+					trace.rejected(r.display, string(previous.Version), decision.reason)
+					giveUp()
+					return branchFailed
+				}
+			}
 			previous.Requirements = append(previous.Requirements, r.requirements...)
 			previous.Dependency = previous.Dependency || dependencyDemand
 			if dependencyDemand && !slices.Contains(previous.DependencyOf, r.dependencyOf) {
@@ -855,6 +873,10 @@ func Packages(request PackagesRequest) ([]document.Package, []error, error) {
 			)
 			trace.selected(r.display, string(candidate.Version))
 			next := rest
+			wasNonPrimary := nonPrimary[r.key]
+			if !candidate.PrimaryFile || wasNonPrimary {
+				nonPrimary[r.key] = !candidate.PrimaryFile
+			}
 			if replayEdges {
 				next = append(next, pinnedEdges[r.key]...)
 			} else if expandDependencies {
@@ -895,6 +917,11 @@ func Packages(request PackagesRequest) ([]document.Package, []error, error) {
 			}
 			if outcome := descend(next); outcome != branchFailed {
 				return outcome
+			}
+			if wasNonPrimary {
+				nonPrimary[r.key] = true
+			} else {
+				delete(nonPrimary, r.key)
 			}
 			state.restoreAll(branches)
 			for _, key := range claims {
@@ -943,6 +970,7 @@ func Packages(request PackagesRequest) ([]document.Package, []error, error) {
 		attempts = 0
 		backtracks = 0
 		clear(native)
+		clear(nonPrimary)
 		blockers = nil
 		strict = !allowBroken
 		lastErr = nil
