@@ -333,13 +333,15 @@ func rejectionPriority(kind RejectionKind) int {
 // summary picks the project whose rejection explains the failure best: a
 // requirement the server cannot satisfy first, then the most specific reasons,
 // not the request that happened to be processed first. Nested failures only
-// back up a deeper cause.
+// back up a deeper cause, so a tie between projects with direct evidence
+// breaks on the rejections the report will show, not the nested counts that
+// build drops from it.
 func (l *rejectionLedger) summary(minecraft versionpkg.Version, cause error) *Failure {
 	var bestKey projectKey
 	var bestEntry *projectLedger
 	bestPriority := -1
 	bestScore := -1
-	bestTotal := -1
+	bestDirect := -1
 	for _, key := range l.order {
 		if !l.failed[key] {
 			continue
@@ -347,9 +349,11 @@ func (l *rejectionLedger) summary(minecraft versionpkg.Version, cause error) *Fa
 		entry := l.projects[key]
 		priority := -1
 		score := 0
-		total := 0
+		direct := 0
 		for _, group := range entry.groups {
-			total += group.count
+			if group.kind != RejectionNested {
+				direct += group.count
+			}
 			rank := rejectionPriority(group.kind)
 			if rank > priority {
 				priority, score = rank, 0
@@ -358,16 +362,13 @@ func (l *rejectionLedger) summary(minecraft versionpkg.Version, cause error) *Fa
 				score += group.count
 			}
 		}
-		if total == 0 {
+		if priority < 0 {
 			continue
 		}
-		better := priority > bestPriority
-		if priority == bestPriority {
-			better = score > bestScore || (score == bestScore && total > bestTotal)
-		}
-		if better {
+		if priority > bestPriority ||
+			(priority == bestPriority && (score > bestScore || score == bestScore && direct > bestDirect)) {
 			bestKey, bestEntry = key, entry
-			bestPriority, bestScore, bestTotal = priority, score, total
+			bestPriority, bestScore, bestDirect = priority, score, direct
 		}
 	}
 	if bestEntry == nil {
