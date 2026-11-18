@@ -318,7 +318,9 @@ func (o *TelemetryObservation) ObservePhaseCount(name string, count, total int) 
 	case "packages":
 		o.scale.observeMax(&o.scale.Packages, count)
 		o.scale.observeMax(&o.scale.RequestedPackages, total)
-	case "files":
+	case "files", "install":
+		// Import reports the server files it materialized, and a committed
+		// installation reports the files it created and replaced.
 		o.scale.observeMax(&o.scale.Files, count)
 	}
 }
