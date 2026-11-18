@@ -366,14 +366,19 @@ func (o *TelemetryObservation) ObserveResolveRejected() {
 
 // ObserveWarning counts one recoverable warning already routed to the user.
 func (o *TelemetryObservation) ObserveWarning() {
-	if o == nil {
+	o.ObserveWarnings(1)
+}
+
+// ObserveWarnings counts several recoverable warnings already routed to the
+// user. The count is additive and bounded, so a renderer reports a whole
+// result in one call without formatting its warnings.
+func (o *TelemetryObservation) ObserveWarnings(count int) {
+	if o == nil || count <= 0 {
 		return
 	}
 	o.mu.Lock()
 	defer o.mu.Unlock()
-	if o.warnings < maxTelemetryWarnings {
-		o.warnings++
-	}
+	o.warnings = min(o.warnings+count, maxTelemetryWarnings)
 }
 
 // ObservePromptWait records one prompt interaction and whether the user

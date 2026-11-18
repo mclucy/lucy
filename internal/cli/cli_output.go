@@ -164,7 +164,10 @@ func (o *installOutput) Render(result *install.Result) error {
 		return nil
 	}
 	result.Warnings = append(result.Warnings, javaWarnings(result.Java)...)
-	result.WarningMessages = append(warningMessages(result.Warnings), o.Warnings()...)
+	warnings := warningMessages(result.Warnings)
+	// Output.Warn has already counted the warnings collected earlier in the run.
+	o.inv.TelemetryObservation.ObserveWarnings(len(warnings) + len(result.Diagnostics))
+	result.WarningMessages = append(warnings, o.Warnings()...)
 	if o.JSON() {
 		return installJSON.Write(o.Output, result)
 	}
@@ -193,10 +196,10 @@ func (o *installOutput) Render(result *install.Result) error {
 	// Flush the summary before warnings so the two surfaces cannot interleave.
 	o.renderer.Close()
 	for _, warning := range result.Warnings {
-		o.Warn(warning)
+		o.warn(warning, false)
 	}
 	for _, diagnostic := range result.Diagnostics {
-		o.Warn(fmt.Errorf("%s: %s", diagnostic.Path, diagnostic.Message))
+		o.warn(fmt.Errorf("%s: %s", diagnostic.Path, diagnostic.Message), false)
 	}
 	return nil
 }

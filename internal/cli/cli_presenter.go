@@ -59,10 +59,17 @@ func (o *Output) writeJSON(w io.Writer, value any) error {
 
 // Warn records warnings for the result document and reports them in human mode.
 func (o *Output) Warn(err error) {
+	o.warn(err, true)
+}
+
+// warn records one warning. observe reports it to telemetry; a caller that
+// already counted the warnings of a whole result passes false, so each
+// warning reaches the observation exactly once.
+func (o *Output) warn(err error, observe bool) {
 	if err == nil {
 		return
 	}
-	if o.inv != nil {
+	if observe && o.inv != nil {
 		o.inv.TelemetryObservation.ObserveWarning()
 	}
 	o.warnings = append(o.warnings, err.Error())
