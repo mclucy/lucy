@@ -4,6 +4,7 @@ import (
 	"archive/zip"
 	"bytes"
 	"context"
+	"maps"
 	"os"
 	"path/filepath"
 	"slices"
@@ -1032,7 +1033,7 @@ func TestProvidesFor(t *testing.T) {
 				[]document.Package{tt.provider, tt.dependency},
 				tt.others...,
 			)
-			got := providesFor(tt.target, tt.provider, tt.dependency, selected)
+			got := providesFor(tt.target, tt.provider, tt.dependency, slices.Values(selected))
 			if got != tt.want {
 				t.Fatalf("providesFor() = %v, want %v", got, tt.want)
 			}
@@ -1173,7 +1174,7 @@ func TestProvidedDependencyReplacesStandaloneModule(t *testing.T) {
 		qfapi.Provider,
 		qfapi.ProjectID,
 	})
-	packages := state.packages()
+	packages := slices.Collect(maps.Values(state.chosen))
 	sortPackages(packages)
 	if len(packages) != 2 {
 		t.Fatalf("selected packages = %+v", packages)

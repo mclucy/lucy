@@ -149,6 +149,7 @@ func (s *Service) resolveInstall(
 		Manifest:       d,
 		Previous:       previousPackages,
 		PreserveLocked: preserveLocked,
+		PreferLocked:   !opts.ForceResolve && len(opts.Adopted) == 0,
 		Target: resolve.Target{
 			Product:      resolved.Server.Product,
 			Bootstrapper: resolved.Server.Bootstrapper,

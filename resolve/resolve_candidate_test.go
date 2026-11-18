@@ -215,7 +215,6 @@ func TestOrderCandidatesNewestFirst(t *testing.T) {
 	got := orderCandidates(
 		[]upstream.Candidate{middle, oldest, newest},
 		nil,
-		testRequest(versionpkg.Beta, ""),
 	)
 	want := []string{"r3", "r2", "r1"}
 	for i, candidate := range got {
@@ -241,8 +240,7 @@ func TestOrderCandidatesKeepsLockedBuildFirst(t *testing.T) {
 
 	got := orderCandidates(
 		[]upstream.Candidate{newer, locked},
-		previous,
-		testRequest(versionpkg.Beta, ""),
+		&previous[0],
 	)
 	if got[0].ReleaseID != "r1" {
 		t.Fatalf("orderCandidates()[0] = %q, want the locked build", got[0].ReleaseID)
@@ -282,7 +280,7 @@ func TestOrderCandidatesLockedBetaStillYieldsToRelease(t *testing.T) {
 
 	request := testRequest(versionpkg.Any, "")
 	got := preferReleaseBuilds(
-		orderCandidates([]upstream.Candidate{beta, release}, previous, request),
+		orderCandidates([]upstream.Candidate{beta, release}, &previous[0]),
 		request.requirements,
 	)
 	if got[0].ReleaseID != "r1" {

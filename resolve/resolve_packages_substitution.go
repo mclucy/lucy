@@ -2,6 +2,8 @@ package resolve
 
 import (
 	"cmp"
+	"iter"
+	"maps"
 	"slices"
 	"strings"
 
@@ -25,16 +27,43 @@ func (s *selectionState) substitute(
 	target Target,
 	dependency document.Package,
 ) (projectKey, bool) {
+	if rank, ok := target.descriptorRank(dependency); !ok || rank == 0 {
+		return projectKey{}, false
+	}
 	for _, key := range s.keys() {
 		provider := s.chosen[key]
 		if provider.Artifact.Filename == "" {
 			continue
 		}
-		if providesFor(target, provider, dependency, s.packages()) {
+		if providesFor(target, provider, dependency, maps.Values(s.chosen)) {
 			return key, true
 		}
 	}
 	return projectKey{}, false
+}
+
+// Upstream dependency edges name projects, not descriptor ecosystems. For
+// example, a Quilt mod can depend on a Fabric project already loaded by Quilt.
+// Direct manifest bindings keep their own ecosystem.
+func (s *selectionState) selectedRuntimeProject(target Target, key projectKey) projectKey {
+	if p, found := s.chosen[key]; found && p.Filename != "" {
+		return key
+	}
+	runtime, ok := target.PackageRuntime()
+	if !ok {
+		return key
+	}
+	for _, ecosystem := range runtime.Loads() {
+		if ecosystem == key.ecosystem || target.moduleNamespace(ecosystem) != target.moduleNamespace(key.ecosystem) {
+			continue
+		}
+		other := key
+		other.ecosystem = ecosystem
+		if p, found := s.chosen[other]; found && p.Filename != "" {
+			return other
+		}
+	}
+	return key
 }
 
 // supersede removes every selected pure dependency package that the package at
@@ -45,6 +74,11 @@ func (s *selectionState) supersede(
 	key projectKey,
 ) []selectionBranch {
 	provider := s.chosen[key]
+	rank, ok := target.descriptorRank(provider)
+	runtime, _ := target.PackageRuntime()
+	if !ok || rank+1 == len(runtime.Loads()) {
+		return nil
+	}
 	var branches []selectionBranch
 	var dependents []catalog.Ref
 	for _, other := range s.keys() {
@@ -56,7 +90,7 @@ func (s *selectionState) supersede(
 			dependency.Artifact.Filename == "" {
 			continue
 		}
-		if !providesFor(target, provider, dependency, s.packages()) {
+		if !providesFor(target, provider, dependency, maps.Values(s.chosen)) {
 			continue
 		}
 		branches = append(branches, s.remove(other))
@@ -87,14 +121,6 @@ func (s *selectionState) keys() []projectKey {
 	return keys
 }
 
-func (s *selectionState) packages() []document.Package {
-	packages := make([]document.Package, 0, len(s.chosen))
-	for _, p := range s.chosen {
-		packages = append(packages, p)
-	}
-	return packages
-}
-
 // withDependents records dependents as packages that depend on p.
 func withDependents(p document.Package, dependents []catalog.Ref) document.Package {
 	if len(dependents) == 0 {
@@ -119,7 +145,7 @@ func providesFor(
 	target Target,
 	provider document.Package,
 	dependency document.Package,
-	selected []document.Package,
+	selected iter.Seq[document.Package],
 ) bool {
 	if provider.Environment != dependency.Environment ||
 		samePackage(provider, dependency) {
@@ -143,7 +169,7 @@ func providesFor(
 			return false
 		}
 	}
-	for _, p := range selected {
+	for p := range selected {
 		if samePackage(p, dependency) {
 			continue
 		}

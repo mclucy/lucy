@@ -17,7 +17,9 @@ Server resolution determines the server product, core artifact, bootstrap profil
 
 The lock is the authoritative package resolution for a declaration. A dependency graph can be derived from the lock's resolved packages, or from a live observation when no valid lock is available; it analyzes relationship structures without mutating lock, receipt, or workspace state.
 
-The package resolver restores each selection and its incompatibility declarations together when backtracking. Search passes start with empty branch state but share candidate, identity, and artifact-analysis caches.
+When requirements are added to an unchanged target, resolution first tries the prior pins and their recorded dependency edges. These edges reflect what an imported pack actually installed, including substitutions. New packages still expand their upstream dependencies. Removing or changing a binding, requesting optional dependencies, or encountering ambiguous parent identities requires fresh dependency expansion. A failed pinned graph can backtrack through catalogue alternatives. Lock records contain only the surviving modules, so the resolver inspects the full descriptors of pinned artifacts when validating a changed graph.
+
+Search passes restore selections and incompatibilities together. A duplicate native identity between direct requirements rejects that choice immediately. If those owners explain every rejected alternative, the resolver skips unrelated decisions on rollback. Successful selections and requirement merges do not consume the speculative retry budget. Catalogue results and verified descriptor analysis are shared across retries.
 
 Package resolution normally rejects module and upstream metadata incompatibilities. Downgrade's force mode accepts package-only problems during the first search and reports conflicts from the final selected graph as warnings. Runtime requirements, hard candidate filters, and operational failures remain fatal. This differs from broken-graph acceptance, which retries with all module checks relaxed.
 

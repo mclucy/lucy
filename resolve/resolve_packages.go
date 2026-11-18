@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"slices"
 	"sort"
 	"strings"
@@ -19,9 +20,8 @@ import (
 	versionpkg "github.com/mclucy/lucy/version"
 )
 
-// searchAttemptLimit bounds how many candidate combinations one resolution
-// may explore before it reports the stop together with the rejection ledger.
-const searchAttemptLimit = 10000
+// Limit failed speculative selections, not successful visits and merges.
+const backtrackLimit = 10000
 
 // catalogueRegistry names the registry that serves a package provider. Only a
 // provider backing a registry can answer catalogue queries.
@@ -168,28 +168,27 @@ func (s *selectionState) restoreAll(branches []selectionBranch) {
 	}
 }
 
-// lockedFileID returns the file the lock selected for a reference. A release
-// may publish several files of one version, and the recorded variant must stay
-// eligible so a later resolution does not swap in the release's primary file.
-func lockedFileID(
-	previous []document.Package,
-	environment serverpkg.Environment,
-	ecosystem catalog.Ecosystem,
-	provider catalog.Provider,
-	ref string,
-) string {
-	for _, p := range previous {
-		if p.Environment != environment || p.Ecosystem != ecosystem ||
-			p.Provider != provider {
-			continue
-		}
-		for _, requirement := range p.Requirements {
-			if requirement.Reference == ref {
-				return p.FileID
-			}
+// Index both identities: manifest requests use references, dependencies use project IDs.
+type lockIndex struct {
+	byProject   map[projectKey]*document.Package
+	byReference map[projectKey]*document.Package
+}
+
+func indexLock(previous []document.Package) lockIndex {
+	index := lockIndex{
+		byProject:   make(map[projectKey]*document.Package, len(previous)),
+		byReference: make(map[projectKey]*document.Package, len(previous)),
+	}
+	for i := range previous {
+		p := &previous[i]
+		key := projectKey{p.Environment, p.Ecosystem, p.Provider, p.ProjectID}
+		index.byProject[key] = p
+		for _, binding := range p.Requirements {
+			key.project = binding.Reference
+			index.byReference[key] = p
 		}
 	}
-	return ""
+	return index
 }
 
 // lockedCandidate rebuilds the candidate the lock accepted for this request.
@@ -197,27 +196,17 @@ func lockedFileID(
 // provider filtering drops, so the locked file stays selectable while its
 // runtime target is unchanged. The candidate keeps the dependency metadata the
 // lock recorded, because the catalogue no longer supplies it.
-func lockedCandidate(
-	previous []document.Package,
-	r projectRequest,
-) (upstream.Candidate, bool) {
-	for _, p := range previous {
-		if p.Environment != r.key.environment ||
-			p.Ecosystem != r.key.ecosystem ||
-			p.Provider != r.key.provider ||
-			p.ProjectID != r.key.project ||
-			p.Filename == "" {
-			continue
-		}
-		locked := upstream.Candidate{Artifact: p.Artifact}
-		locked.PrimaryFile = true
-		locked.Channel = p.Channel
-		locked.CompatibilityUnknown = true
-		locked.Dependencies = candidateDependencies(p.Dependencies)
-		locked.DependenciesUnknown = p.DependenciesUnknown
-		return locked, true
+func lockedCandidate(p *document.Package) (upstream.Candidate, bool) {
+	if p == nil || p.Filename == "" {
+		return upstream.Candidate{}, false
 	}
-	return upstream.Candidate{}, false
+	return upstream.Candidate{
+		Artifact:            p.Artifact,
+		PrimaryFile:         true,
+		Channel:             p.Channel,
+		Dependencies:        candidateDependencies(p.Dependencies),
+		DependenciesUnknown: p.DependenciesUnknown,
+	}, true
 }
 
 // releaseDependencies records a candidate's declared project relationships in
@@ -263,13 +252,13 @@ func candidateDependencies(
 // publish a matching candidate.
 func appendLockedCandidate(
 	list []upstream.Candidate,
-	previous []document.Package,
-	r projectRequest,
+	pin *document.Package,
 ) []upstream.Candidate {
-	locked, ok := lockedCandidate(previous, r)
+	locked, ok := lockedCandidate(pin)
 	if !ok {
 		return list
 	}
+	locked.CompatibilityUnknown = true
 	if slices.ContainsFunc(list, func(candidate upstream.Candidate) bool {
 		if locked.FileID != "" && candidate.FileID != "" {
 			return candidate.FileID == locked.FileID
@@ -290,7 +279,7 @@ func Packages(request PackagesRequest) ([]document.Package, []error, error) {
 		ctx = context.Background()
 	}
 	d := request.Manifest
-	previous := request.Previous
+	previous := indexLock(request.Previous)
 	preserveLocked := request.PreserveLocked
 	target := request.Target
 	materialize := request.Materialize
@@ -308,14 +297,9 @@ func Packages(request PackagesRequest) ([]document.Package, []error, error) {
 		// The slug the user wrote is the display name even when the lock lets
 		// resolution start from the project identity.
 		display := project
-		for _, p := range previous {
-			if p.Environment == environment && p.Ecosystem == ecosystem && p.Provider == provider {
-				for _, old := range p.Requirements {
-					if old.Reference == ref {
-						project = p.ProjectID
-					}
-				}
-			}
+		fileID := ""
+		if pin := previous.byReference[projectKey{environment, ecosystem, provider, ref}]; pin != nil {
+			project, fileID = pin.ProjectID, pin.FileID
 		}
 		requests = append(requests, projectRequest{
 			key: projectKey{
@@ -324,15 +308,9 @@ func Packages(request PackagesRequest) ([]document.Package, []error, error) {
 				provider,
 				project,
 			},
-			display: display,
-			origin:  originManifest,
-			previousFileID: lockedFileID(
-				previous,
-				environment,
-				ecosystem,
-				provider,
-				ref,
-			),
+			display:        display,
+			origin:         originManifest,
+			previousFileID: fileID,
 			requirements: []document.RequirementBinding{
 				{
 					Reference:   ref,
@@ -389,7 +367,23 @@ func Packages(request PackagesRequest) ([]document.Package, []error, error) {
 	canonical := map[projectKey]projectKey{}
 	state := newSelectionState()
 	cache := request.Cache
+	if cache == nil {
+		cache = NewAnalysisCache()
+	}
 	attempts := 0
+	backtracks := 0
+	preferPins := preserveLocked && request.PreferLocked
+	var pinnedEdges map[projectKey][]projectRequest
+	if preferPins && expandDependencies && !withOptional {
+		pinnedEdges = previous.lockedEdges(requests, request.Previous)
+	}
+	usedPin := false
+	native := make(map[moduleKey]nativeOwner)
+	// Non-nil only when a direct requirement exhausted its candidates and
+	// the named prior decisions alone suffice to explain every rejection.
+	var blockers map[projectKey]bool
+	var settled []document.Package
+	var problems []ModuleProblem
 	strict := true
 	var lastErr error
 	ledger := newRejectionLedger()
@@ -424,18 +418,18 @@ func Packages(request PackagesRequest) ([]document.Package, []error, error) {
 			return stop(err)
 		}
 		attempts++
-		if attempts > searchAttemptLimit {
-			return stop(&SearchLimitError{Attempts: searchAttemptLimit})
-		}
 		trace.state(len(state.chosen), len(pending))
 		if len(pending) == 0 {
 			all := make([]document.Package, 0, len(state.chosen))
 			for _, p := range state.chosen {
-				all = append(all, p)
+				if p.Filename != "" {
+					all = append(all, p)
+				}
 			}
 			all = mergeArtifactSelections(all)
 			sortPackages(all)
-			problems, err := finalizeModules(all, target)
+			var err error
+			problems, err = finalizeModules(all, target)
 			if err != nil {
 				logger.Debug(
 					"resolve: settled graph invalid",
@@ -450,6 +444,7 @@ func Packages(request PackagesRequest) ([]document.Package, []error, error) {
 					fatal = serverModuleProblems(problems)
 				}
 				if len(fatal) == 0 {
+					settled = all
 					return graphSettled
 				}
 				logger.Debug(
@@ -483,6 +478,7 @@ func Packages(request PackagesRequest) ([]document.Package, []error, error) {
 				}
 				return branchFailed
 			}
+			settled = all
 			return graphSettled
 		}
 		r := pending[0]
@@ -500,6 +496,9 @@ func Packages(request PackagesRequest) ([]document.Package, []error, error) {
 		}
 		ledger.noteDisplay(r.key, r.display)
 		dependencyDemand := r.dependencyOf.Name != ""
+		if dependencyDemand && r.key.environment == serverpkg.EnvironmentServer {
+			r.key = state.selectedRuntimeProject(target, r.key)
+		}
 		active := len(r.requirements) == 0
 		for _, req := range r.requirements {
 			active = active || req.Enabled
@@ -557,6 +556,22 @@ func Packages(request PackagesRequest) ([]document.Package, []error, error) {
 			artifactless, replacingArtifactless = prior, true
 		}
 		list, ok := candidates[r.key]
+		prior := previous.byProject[r.key]
+		replayEdges := false
+		if preferPins {
+			if pin, found := lockedCandidate(prior); found {
+				decision, err := decideCandidate(pin, r)
+				if err != nil {
+					return hardFail(err)
+				}
+				if decision.eligible && (len(r.releaseHints) == 0 || r.releaseHints[0].releaseID == pin.ReleaseID) {
+					list, ok = []upstream.Candidate{pin}, true
+					usedPin = true
+					replayEdges = pinnedEdges != nil
+					ledger.setCandidates(r.key, r.display, 1)
+				}
+			}
+		}
 		if !ok {
 			if candidatesFor == nil {
 				return stop(errors.New("resolution requires a candidate source"))
@@ -567,7 +582,8 @@ func Packages(request PackagesRequest) ([]document.Package, []error, error) {
 				var locked upstream.Candidate
 				lockedOK := false
 				if preserveLocked {
-					locked, lockedOK = lockedCandidate(previous, r)
+					locked, lockedOK = lockedCandidate(prior)
+					locked.CompatibilityUnknown = true
 				}
 				if !lockedOK {
 					// A manifest requirement holds in every branch, so a
@@ -587,9 +603,9 @@ func Packages(request PackagesRequest) ([]document.Package, []error, error) {
 				)
 				list = []upstream.Candidate{locked}
 			} else if preserveLocked {
-				list = appendLockedCandidate(list, previous, r)
+				list = appendLockedCandidate(list, prior)
 			}
-			list = orderCandidates(list, previous, r)
+			list = orderCandidates(list, prior)
 			candidates[r.key] = list
 			ledger.setCandidates(r.key, r.display, len(list))
 		}
@@ -611,15 +627,8 @@ func Packages(request PackagesRequest) ([]document.Package, []error, error) {
 					"reference", r.key.project,
 					"project", project,
 				)
-				return backtrack(append([]projectRequest{{
-					key:            canonicalKey,
-					display:        r.display,
-					origin:         r.origin,
-					requirements:   r.requirements,
-					dependencyOf:   r.dependencyOf,
-					previousFileID: r.previousFileID,
-					releaseHints:   r.releaseHints,
-				}}, rest...))
+				pending[0].key = canonicalKey
+				return backtrack(pending)
 			}
 		}
 		if len(list) == 0 {
@@ -634,7 +643,14 @@ func Packages(request PackagesRequest) ([]document.Package, []error, error) {
 		}
 		list = preferReleaseBuilds(list, r.requirements)
 		list = preferReleaseHints(list, r.releaseHints)
+		eligible := false
+		explained := r.origin == originManifest
+		var causes map[projectKey]bool
+		retrying := false
 		for _, candidate := range list {
+			if err := ctx.Err(); err != nil {
+				return stop(err)
+			}
 			decision, err := decideCandidate(candidate, r)
 			if err != nil {
 				return hardFail(err)
@@ -653,8 +669,10 @@ func Packages(request PackagesRequest) ([]document.Package, []error, error) {
 				)
 				continue
 			}
+			eligible = true
 			if detail, conflicting := metadataConflict(candidate, r, state.chosen, state.conflicts); conflicting {
 				if !acceptPackageConflicts {
+					explained = false
 					reason := describeRejection(RejectionMetadataConflict, detail)
 					ledger.record(r.key, r.display, string(candidate.Version), detail, RejectionMetadataConflict)
 					trace.rejected(r.display, string(candidate.Version), reason)
@@ -694,10 +712,8 @@ func Packages(request PackagesRequest) ([]document.Package, []error, error) {
 			}
 			var modules []catalog.DescriptorModule
 			descriptorLoader := target.descriptorLoader(r.key.ecosystem)
-			entry, cached := analysisEntry{}, false
-			if cache != nil {
-				entry, cached = cache.get(candidateAnalysisKey(candidate))
-			}
+			key := analysisKeyFor(candidate, descriptorLoader, target.Minecraft)
+			entry, cached := cache.get(key, a.Hashes)
 			if cached {
 				a.Hashes = entry.hashes
 				modules = entry.modules
@@ -714,6 +730,7 @@ func Packages(request PackagesRequest) ([]document.Package, []error, error) {
 					string(target.Minecraft),
 				)
 				if err != nil {
+					explained = false
 					// A descriptor the reader cannot interpret rejects this
 					// candidate. It is content evidence, not an operational
 					// failure of the whole search.
@@ -728,12 +745,7 @@ func Packages(request PackagesRequest) ([]document.Package, []error, error) {
 					trace.rejected(r.display, string(candidate.Version), message)
 					continue
 				}
-				if cache != nil && len(modules) > 0 {
-					cache.put(candidateAnalysisKey(candidate), analysisEntry{
-						modules: modules,
-						hashes:  a.Hashes,
-					})
-				}
+				cache.put(key, analysisEntry{modules: modules, hashes: a.Hashes})
 			}
 			if len(modules) == 0 {
 				message := fmt.Sprintf("artifact %s has no server-visible %s modules", a.Filename, descriptorLoader)
@@ -761,6 +773,25 @@ func Packages(request PackagesRequest) ([]document.Package, []error, error) {
 				Dependencies:        releaseDependencies(candidate.Dependencies),
 				DependenciesUnknown: candidate.DependenciesUnknown,
 				Channel:             candidate.Channel,
+			}
+			// Direct selections cannot be superseded. A duplicate between
+			// two of them cannot be repaired by any remaining request.
+			var claims []moduleKey
+			if r.origin == originManifest {
+				var duplicate error
+				var other projectKey
+				claims, other, duplicate = claimNativeModules(native, r.key, pkg, target)
+				if duplicate != nil {
+					if causes == nil {
+						causes = make(map[projectKey]bool)
+					}
+					causes[other] = true
+					lastErr = duplicate
+					ledger.record(r.key, r.display, string(candidate.Version), duplicate.Error(), RejectionModules)
+					trace.rejected(r.display, string(candidate.Version), duplicate.Error())
+					logger.Debug("resolve: duplicate native module", "reason", duplicate)
+					continue
+				}
 			}
 			// A pure dependency demand binds to a selected package that
 			// answers every module identity of the candidate. The candidate
@@ -803,8 +834,10 @@ func Packages(request PackagesRequest) ([]document.Package, []error, error) {
 				"modules", len(modules),
 			)
 			trace.selected(r.display, string(candidate.Version))
-			next := append([]projectRequest{}, rest...)
-			if expandDependencies {
+			next := rest
+			if replayEdges {
+				next = append(next, pinnedEdges[r.key]...)
+			} else if expandDependencies {
 				for _, dep := range candidate.Dependencies {
 					if dep.Kind == catalog.DependencyKindRequired || (withOptional && dep.Kind == catalog.DependencyKindOptional) {
 						var hints []releaseHint
@@ -840,10 +873,34 @@ func Packages(request PackagesRequest) ([]document.Package, []error, error) {
 					}
 				}
 			}
+			if retrying {
+				backtracks++
+				if backtracks > backtrackLimit {
+					return stop(&SearchLimitError{Attempts: backtrackLimit})
+				}
+			}
 			if outcome := backtrack(next); outcome != branchFailed {
 				return outcome
 			}
 			state.restoreAll(branches)
+			for _, key := range claims {
+				delete(native, key)
+			}
+			retrying = true
+			if blockers == nil {
+				explained = false
+			} else {
+				if !blockers[r.key] {
+					return branchFailed
+				}
+				delete(blockers, r.key)
+				if causes == nil {
+					causes = blockers
+				} else {
+					maps.Copy(causes, blockers)
+				}
+				blockers = nil
+			}
 			logger.Debug(
 				"resolve: backtracking candidate",
 				"provider", r.key.provider,
@@ -860,11 +917,20 @@ func Packages(request PackagesRequest) ([]document.Package, []error, error) {
 			)
 		}
 		giveUp()
+		if !eligible && r.origin == originManifest {
+			return searchStopped
+		}
+		if explained && causes != nil {
+			blockers = causes
+		}
 		return branchFailed
 	}
 	search := func(allowBroken bool) searchOutcome {
 		state.reset()
 		attempts = 0
+		backtracks = 0
+		clear(native)
+		blockers = nil
 		strict = !allowBroken
 		lastErr = nil
 		operational = false
@@ -895,6 +961,11 @@ func Packages(request PackagesRequest) ([]document.Package, []error, error) {
 	// A stopped search cannot be relaxed: no candidate choice changes a
 	// cancelled context, an exhausted budget, or a missing catalogue answer.
 	outcome := search(false)
+	if outcome == branchFailed && usedPin {
+		logger.Debug("resolve: prior pins did not settle; considering catalogue alternatives", "reason", lastErr)
+		preferPins = false
+		outcome = search(false)
+	}
 	if outcome == branchFailed && acceptBroken {
 		logger.Debug(
 			"resolve: retrying with broken graphs",
@@ -905,26 +976,11 @@ func Packages(request PackagesRequest) ([]document.Package, []error, error) {
 	if outcome != graphSettled {
 		return nil, nil, finalFailure()
 	}
-	var out []document.Package
-	for _, p := range state.chosen {
-		// A requirement the manifest disables and nothing demands pins no
-		// artifact, so recording it would leave the lock claiming a package
-		// that has no file to install.
-		if p.Artifact.Filename == "" {
-			continue
-		}
-		out = append(out, p)
-	}
-	out = mergeArtifactSelections(out)
-	sortPackages(out)
+	out := settled
 	for i := range out {
 		slices.SortFunc(out[i].DependencyOf, func(a, b catalog.Ref) int {
 			return cmp.Or(cmp.Compare(a.Provider, b.Provider), cmp.Compare(a.Name, b.Name))
 		})
-	}
-	problems, err := finalizeModules(out, target)
-	if err != nil {
-		return nil, nil, err
 	}
 	var warnings []error
 	if acceptPackageConflicts {

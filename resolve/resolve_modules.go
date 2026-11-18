@@ -259,6 +259,39 @@ func buildModuleIndex(
 	return index, nil
 }
 
+type nativeOwner struct {
+	project projectKey
+	file    string
+}
+
+// claimNativeModules reserves identities for a direct requirement only after
+// every identity is free. Several declarations within one artifact may share
+// an identity. The caller releases the returned keys on backtrack.
+func claimNativeModules(owners map[moduleKey]nativeOwner, owner projectKey, p document.Package, target Target) ([]moduleKey, projectKey, error) {
+	var keys []moduleKey
+	for _, module := range p.Modules {
+		if module.NestedPath != "" {
+			continue
+		}
+		namespace := target.moduleNamespace(module.Ecosystem)
+		for _, name := range moduleIdentities(module) {
+			key := moduleKey{p.Environment, namespace, normalizeModuleID(module.Ecosystem, name)}
+			if other, ok := owners[key]; ok {
+				return nil, other.project, duplicateNativeModule(name, p.Filename, other.file)
+			}
+			keys = append(keys, key)
+		}
+	}
+	for _, key := range keys {
+		owners[key] = nativeOwner{owner, p.Filename}
+	}
+	return keys, projectKey{}, nil
+}
+
+func duplicateNativeModule(name, candidate, previous string) error {
+	return fmt.Errorf("duplicate native module %s in %s and %s", name, candidate, previous)
+}
+
 // moduleWins reports whether the module already indexed keeps the identity.
 func moduleWins(
 	previous moduleProvider,
@@ -275,12 +308,7 @@ func moduleWins(
 		if previous.source.packageIndex == candidate.source.packageIndex {
 			return true, nil
 		}
-		return false, fmt.Errorf(
-			"duplicate native module %s in %s and %s",
-			name,
-			candidateFile,
-			previousFile,
-		)
+		return false, duplicateNativeModule(name, candidateFile, previousFile)
 	}
 	if previousNative {
 		return true, nil

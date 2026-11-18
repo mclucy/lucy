@@ -6,7 +6,7 @@ Resolves manifest and dependency requirements through candidate search, then val
 
 - `Packages` runs candidate search, hard filtering, backtracking (`backtrack`), and module finalization (`finalizeModules`).
 - Callers inject candidate listing (`CandidateSource`) and artifact materialization (`Materialize`). The package performs no network access and does not own routing, the network cache, or provider clients.
-- `AnalysisCache` is optional and session-scoped, keyed by the candidate's provider, project ID, release ID, file ID, and URL, not by content digest.
+- `AnalysisCache` reuses verified descriptor analysis by artifact identity, filename, loader and Minecraft version. Incoming hash expectations must agree. Without an injected cache, reuse ends with the current search.
 
 ## Search
 
@@ -14,7 +14,7 @@ Resolves manifest and dependency requirements through candidate search, then val
 - **Provider Substitution**: A pure dependency demand (no direct requirement, no release hint) binds to a selected package when that package ranks before the demanded package in the runtime's descriptor precedence, answers every module identity the demanded package exposes, and satisfies the module constraints of the selected graph. Substitutions and pins from release hints are branch-local, so backtracking undoes them.
 - **Demand Overrides Direct Bindings**: An active dependency demand overrides a disabled direct manifest requirement, forcing artifact selection and module validation.
 - **Lock Replay**: `Previous` supplies the project identity and the locked file variant. `PreserveLocked` keeps that file selectable while the target is unchanged. A release may publish several files; only the primary answers an unconstrained requirement.
-- **Limits**: `searchAttemptLimit` bounds candidate combinations (`SearchLimitError`); context cancellation aborts traversal. A failure that holds in every branch — cancellation, the attempt limit, or a manifest requirement no catalogue answer can satisfy — ends the search instead of backtracking, because every branch reaches the same answer. A dependency requirement exists only because one parent candidate selected it, and another candidate of that parent may not need the project, so its failure only fails the branch. Unrecovered operational failures are preserved in the final error; otherwise the rejection ledger supplies the summary.
+- **Search budget**: Only a new candidate branch after a failed selection counts toward `backtrackLimit`. Cancellation, an exhausted retry budget, or a manifest request with no eligible build stops the search. Dependency demands are branch-local. A duplicate native identity between direct roots can backtrack to the responsible choice without retrying unrelated selections.
 
 ## Validation
 
