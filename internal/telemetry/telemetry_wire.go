@@ -278,7 +278,11 @@ func (c *Client) postOnce(ctx context.Context, records []wireRecord) (attemptOut
 	responseBody, readErr := io.ReadAll(io.LimitReader(response.Body, maxResponseBytes+1))
 	if readErr != nil {
 		outcome.kind = attemptUncertain
-		return outcome, &httpError{detail: "read response: " + sanitizeErrorText(readErr), retryable: true}
+		failure := &httpError{detail: "read response: " + sanitizeErrorText(readErr), retryable: true}
+		if response.StatusCode == http.StatusTooManyRequests {
+			failure.throttled = true
+		}
+		return outcome, failure
 	}
 	if response.StatusCode < 200 || response.StatusCode >= 300 {
 		detail, _ := sanitizeText(string(responseBody), 256)
