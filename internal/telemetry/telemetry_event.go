@@ -104,11 +104,12 @@ func (c *Client) prepareEvent(event Event, now time.Time) (preparedEvent, error)
 	if occurredAt.IsZero() {
 		occurredAt = now
 	}
+	durationMeasured := event.DurationMeasured || event.Duration > 0
 	return preparedEvent{
 		invocationID:     invocationID,
 		command:          command,
 		durationMS:       event.Duration.Milliseconds(),
-		durationMeasured: event.DurationMeasured,
+		durationMeasured: durationMeasured,
 		outcome:          event.Outcome,
 		errorCode:        event.ErrorCode,
 		occurredAt:       occurredAt.UTC(),
@@ -227,7 +228,7 @@ func validContextType(value string) bool {
 
 func (c *Client) buildEventPayload(event preparedEvent, state *persistedState) eventPayload {
 	var durationMS *int64
-	if event.durationMeasured || event.durationMS > 0 {
+	if event.durationMeasured {
 		measured := event.durationMS
 		durationMS = &measured
 	}
