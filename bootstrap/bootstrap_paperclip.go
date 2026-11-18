@@ -27,9 +27,8 @@ func preparePaperclip(
 	}
 	cmd := exec.CommandContext(ctx, java, "-Dpaperclip.patchonly=true", "-jar", "server.jar")
 	cmd.Dir = root
-	captured, err := runLockedProcess(cmd, output)
-	if err != nil {
-		return fmt.Errorf("Paperclip patching: %w\n%s", err, captured)
+	if err := runLockedProcess(cmd, output); err != nil {
+		return fmt.Errorf("Paperclip patching: %w", err)
 	}
 	return nil
 }

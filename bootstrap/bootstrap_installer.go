@@ -42,9 +42,8 @@ func RunInstaller(
 		}
 		cmd := exec.CommandContext(ctx, java, "-jar", installer.FilePath, "--installServer")
 		cmd.Dir = root
-		captured, err := runLockedProcess(cmd, output)
-		if err != nil {
-			return fmt.Errorf("%s: %w\n%s", installer.Kind, err, captured)
+		if err := runLockedProcess(cmd, output); err != nil {
+			return fmt.Errorf("%s installer: %w", installer.Kind, err)
 		}
 		return nil
 	default:

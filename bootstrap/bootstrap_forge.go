@@ -180,9 +180,8 @@ func prepareForgeInstaller(ctx context.Context, root string, server document.Loc
 		}
 		cmd := exec.CommandContext(ctx, java, commandArgs...)
 		cmd.Dir = root
-		captured, err := runLockedProcess(cmd, output)
-		if err != nil {
-			return fmt.Errorf("installer processor %s: %w\n%s", proc.Jar, err, captured)
+		if err := runLockedProcess(cmd, output); err != nil {
+			return fmt.Errorf("installer processor %s: %w", proc.Jar, err)
 		}
 		for name, expected := range proc.Outputs {
 			destination, err := expand(name)

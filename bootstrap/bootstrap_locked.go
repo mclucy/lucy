@@ -2,7 +2,6 @@ package bootstrap
 
 import (
 	"archive/zip"
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -105,18 +104,19 @@ func extractLockedEntry(z *zip.Reader, name, dst string) error {
 	return fmt.Errorf("missing pinned installer entry %s", name)
 }
 
-// runLockedProcess streams a subprocess's combined output to output while
-// retaining it for the error message. It returns the captured output.
-func runLockedProcess(cmd *exec.Cmd, output io.Writer) ([]byte, error) {
+// runLockedProcess streams a subprocess's combined output to output, which
+// already retains the evidence the failure report needs. An output that marks
+// sections also records the command line that introduced the run.
+func runLockedProcess(cmd *exec.Cmd, output io.Writer) error {
 	if output == nil {
 		output = io.Discard
 	}
-	var captured bytes.Buffer
-	writer := io.MultiWriter(output, &captured)
-	cmd.Stdout = writer
-	cmd.Stderr = writer
-	err := cmd.Run()
-	return captured.Bytes(), err
+	if marker, ok := output.(interface{ Section(label string) }); ok {
+		marker.Section(cmd.String())
+	}
+	cmd.Stdout = output
+	cmd.Stderr = output
+	return cmd.Run()
 }
 
 // ErrNoJava reports a bootstrap step that runs Java when no Java runtime is

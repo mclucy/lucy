@@ -1,7 +1,6 @@
 package install
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"io"
@@ -25,14 +24,10 @@ type PythonHost struct {
 	LookPath func(name string) (string, error)
 	// Output captures stdout separately from startup diagnostics on stderr.
 	Output func(ctx context.Context, name string, args []string) ([]byte, error)
-	// Run runs one command and returns its combined output. A non-nil output
-	// also receives the output as it arrives.
-	Run func(
-		ctx context.Context,
-		name string,
-		args []string,
-		output io.Writer,
-	) ([]byte, error)
+	// Run runs one command. A non-nil output receives the combined output
+	// as it arrives; that output already retains the evidence a failure
+	// report names.
+	Run func(ctx context.Context, name string, args []string, output io.Writer) error
 	// Getenv reads an environment variable. LUCY_PYTHON names the preferred
 	// interpreter.
 	Getenv func(string) string
@@ -66,12 +61,7 @@ func NewPythonHost(directory string, logger *log.Logger) *PythonHost {
 			cmd.Dir = directory
 			return cmd.Output()
 		},
-		Run: func(
-			ctx context.Context,
-			name string,
-			args []string,
-			output io.Writer,
-		) ([]byte, error) {
+		Run: func(ctx context.Context, name string, args []string, output io.Writer) error {
 			cmd := exec.CommandContext(ctx, name, args...)
 			cmd.Dir = directory
 			return runProcess(cmd, output)
@@ -158,16 +148,17 @@ func (h *PythonHost) discoverInterpreter(
 	return path, value, nil
 }
 
-// runProcess streams a subprocess's combined output to output while retaining
-// it for the error message.
-func runProcess(cmd *exec.Cmd, output io.Writer) ([]byte, error) {
+// runProcess streams a subprocess's combined output to output, which already
+// retains the evidence the failure report needs. An output that marks sections
+// also records the command line that introduced the run.
+func runProcess(cmd *exec.Cmd, output io.Writer) error {
 	if output == nil {
 		output = io.Discard
 	}
-	var captured bytes.Buffer
-	writer := io.MultiWriter(output, &captured)
-	cmd.Stdout = writer
-	cmd.Stderr = writer
-	err := cmd.Run()
-	return captured.Bytes(), err
+	if marker, ok := output.(interface{ Section(label string) }); ok {
+		marker.Section(cmd.String())
+	}
+	cmd.Stdout = output
+	cmd.Stderr = output
+	return cmd.Run()
 }

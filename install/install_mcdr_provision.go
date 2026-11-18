@@ -90,14 +90,12 @@ func provisionMCDR(
 				mcdrFlagHint(),
 			)
 		}
-		output, err := python.Run(ctx, path, []string{"--version"}, nil)
-		if err != nil {
+		if err := python.Run(ctx, path, []string{"--version"}, store.trace.processOutput()); err != nil {
 			return mcdrRuntime{}, fmt.Errorf(
-				"global MCDReforged at %s could not run: %w\n%s\n"+
+				"global MCDReforged at %s could not run: %w. "+
 					"Repair it, or %s",
 				path,
 				err,
-				output,
 				mcdrFlagHint(),
 			)
 		}
@@ -170,7 +168,7 @@ func createMCDREnvironment(
 ) (string, error) {
 	var uvError error
 	if uv, err := python.LookPath("uv"); err == nil {
-		captured, err := python.Run(
+		err := python.Run(
 			ctx,
 			uv,
 			[]string{"venv", "--seed", environment},
@@ -179,7 +177,7 @@ func createMCDREnvironment(
 		if err == nil {
 			return "uv", nil
 		}
-		uvError = fmt.Errorf("uv venv: %w\n%s", err, captured)
+		uvError = fmt.Errorf("uv venv: %w", err)
 		python.Logger.Warn(uvError)
 	}
 	interpreter, _, err := python.Interpreter(ctx)
@@ -193,19 +191,14 @@ func createMCDREnvironment(
 		}
 		return "", err
 	}
-	captured, err := python.Run(
+	err = python.Run(
 		ctx,
 		interpreter,
 		[]string{"-m", "venv", environment},
 		store.trace.processOutput(),
 	)
 	if err != nil {
-		return "", fmt.Errorf(
-			"create Python environment with %s: %w\n%s",
-			interpreter,
-			err,
-			captured,
-		)
+		return "", fmt.Errorf("create Python environment with %s: %w", interpreter, err)
 	}
 	return "python", nil
 }
@@ -248,19 +241,13 @@ func installMCDRRequirements(
 			requirementsPath,
 		}
 	}
-	captured, err := python.Run(
+	if err := python.Run(
 		ctx,
 		commandName,
 		arguments,
 		store.trace.processOutput(),
-	)
-	if err != nil {
-		return fmt.Errorf(
-			"install Python requirements with %s: %w\n%s",
-			backend,
-			err,
-			captured,
-		)
+	); err != nil {
+		return fmt.Errorf("install Python requirements with %s: %w", backend, err)
 	}
 	return nil
 }
