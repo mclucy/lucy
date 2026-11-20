@@ -13,6 +13,7 @@ import (
 	"github.com/mclucy/lucy/bootstrap/snapshot"
 	"github.com/mclucy/lucy/cas"
 	"github.com/mclucy/lucy/document"
+	serverpkg "github.com/mclucy/lucy/server"
 )
 
 // restoreBootstrapSnapshot restores a stored output set into a fresh stage.
@@ -128,9 +129,12 @@ func requireEmptyDirectory(path string) error {
 	return nil
 }
 
-// coreArtifactPath opens no network connection. Only an object whose contents
-// match the lock may supply evidence about other files in an existing tree.
+// coreArtifactPath returns the offline installer used to verify Forge outputs.
+// Only an object whose contents match the lock may supply that evidence.
 func coreArtifactPath(server document.LockedServer) string {
+	if server.Bootstrapper != serverpkg.BootstrapMethodForgeInstaller {
+		return ""
+	}
 	value := server.Artifact.Hashes["sha256"]
 	digest, err := cas.ParseDigest("sha256:" + value)
 	if err != nil {
