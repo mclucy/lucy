@@ -174,6 +174,13 @@ func (s *Service) adoptInstalledPackages(
 	for _, proposal := range proposals {
 		adopter.apply(proposal)
 	}
+	if observed != nil {
+		for _, path := range observed.UnidentifiedPackageFiles {
+			if lookupErrors := known[path].Errors; len(lookupErrors) != 0 {
+				adopter.warn("%v", incompleteHashLookupWarning("package", path, lookupErrors))
+			}
+		}
+	}
 	reportedMissing = adopter.reportMissingModules(proposals)
 	// Derive the receipt entries and the resolver input from the accepted
 	// records in one pass; an invalidated record contributes to neither.
@@ -319,6 +326,9 @@ func (a *packageAdopter) lookupReleases(
 	positions := make([]int, 0, len(proposals))
 	for i := range proposals {
 		if !proposals[i].mapped {
+			// MCDR uses its own catalogue to match releases, but can retain
+			// diagnostics from an earlier lookup without querying mappers.
+			resolutions[i].Errors = known[proposals[i].pkg.Path].Errors
 			continue
 		}
 		if resolution, ok := known[proposals[i].pkg.Path]; ok {
@@ -366,12 +376,7 @@ func (a *packageAdopter) complete(
 		a.adoptMapped(ctx, proposal, resolution)
 		return
 	}
-	ecosystem := proposal.pkg.ID.Ecosystem
-	if ecosystem == catalog.EcosystemMCDR {
-		a.probeDescriptor(ctx, proposal, catalog.EcosystemMCDR)
-		return
-	}
-	a.probeDescriptor(ctx, proposal, ecosystem)
+	a.probeDescriptor(ctx, proposal, resolution.Errors)
 }
 
 // probeDescriptor classifies a file no provider identified. Adoption needs a
@@ -379,9 +384,10 @@ func (a *packageAdopter) complete(
 func (a *packageAdopter) probeDescriptor(
 	ctx context.Context,
 	proposal *adoptionProposal,
-	ecosystem catalog.Ecosystem,
+	lookupErrors []upstream.ProviderError,
 ) {
 	p := proposal.pkg
+	ecosystem := p.ID.Ecosystem
 	if ecosystem != catalog.EcosystemMCDR {
 		if _, ok := a.served[ecosystem]; !ok {
 			var adopted bool
@@ -431,7 +437,11 @@ func (a *packageAdopter) probeDescriptor(
 	}
 	proposal.modules = modules
 	if ecosystem == catalog.EcosystemMCDR {
-		a.probeMCDR(ctx, proposal, modules, ecosystem)
+		a.probeMCDR(ctx, proposal, lookupErrors)
+		return
+	}
+	if len(lookupErrors) != 0 {
+		proposal.warnings = append(proposal.warnings, incompleteHashLookupWarning("package", p.Path, lookupErrors))
 		return
 	}
 	proposal.warnings = append(proposal.warnings, a.importWarning(
@@ -445,12 +455,10 @@ func (a *packageAdopter) probeDescriptor(
 func (a *packageAdopter) probeMCDR(
 	ctx context.Context,
 	proposal *adoptionProposal,
-	modules []catalog.DescriptorModule,
-	ecosystem catalog.Ecosystem,
+	lookupErrors []upstream.ProviderError,
 ) {
 	p := proposal.pkg
-	proposal.modules = modules
-	moduleID := modules[0].ID
+	moduleID := proposal.modules[0].ID
 	if a.manifest.MCDR == nil {
 		proposal.warnings = append(proposal.warnings, fmt.Errorf(
 			"plugin %s left unmanaged: MCDReforged is not configured",
@@ -475,11 +483,11 @@ func (a *packageAdopter) probeMCDR(
 		catalog.RegistryMCDR,
 		moduleID,
 		string(a.manifest.Server.Minecraft),
-		ecosystem,
+		catalog.EcosystemMCDR,
 	)
 	if err != nil {
 		proposal.warnings = append(proposal.warnings, fmt.Errorf(
-			"plugin %s left unmanaged: %w",
+			"plugin %s left unmanaged: MCDReforged catalogue lookup failed: %w",
 			p.Path,
 			err,
 		))
@@ -509,10 +517,22 @@ func (a *packageAdopter) probeMCDR(
 		proposal.matched = true
 		return
 	}
+	if len(lookupErrors) != 0 {
+		proposal.warnings = append(proposal.warnings, incompleteHashLookupWarning("plugin", p.Path, lookupErrors))
+		return
+	}
 	proposal.warnings = append(proposal.warnings, fmt.Errorf(
 		"plugin %s left unmanaged: no listed release matches its bytes",
 		p.Path,
 	))
+}
+
+func incompleteHashLookupWarning(kind, path string, failures []upstream.ProviderError) error {
+	reasons := make([]string, len(failures))
+	for i, failure := range failures {
+		reasons[i] = failure.Error()
+	}
+	return fmt.Errorf("%s %s left unmanaged: provider hash lookup incomplete: %s", kind, path, strings.Join(reasons, "; "))
 }
 
 // adoptMapped records an installed package a provider identified by content

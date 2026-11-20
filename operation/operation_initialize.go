@@ -117,8 +117,8 @@ func (s *Service) initialize(ctx context.Context, root string, opts InitOptions,
 	if fatalIdentification != nil {
 		return initResult(observed), fatalIdentification
 	}
-	// A failed lookup leaves the file unidentified. Adoption reports it once
-	// when no provider identifies it, so the failure stays at debug level.
+	// Keep per-attempt details at debug level. Adoption reports incomplete
+	// lookups when they prevent identification.
 	for _, warning := range identificationWarnings {
 		s.logger.Debug("package identification failed", "error", warning)
 	}
