@@ -188,7 +188,7 @@ func (h *handler) flush() (resultErr error) {
 }
 
 func (h *handler) exist(k string) bool {
-	hit, reader, _, err := h.get(k)
+	hit, reader, _, _, err := h.get(k)
 	if err != nil {
 		h.logger.Warn(err)
 		return false
@@ -203,53 +203,65 @@ func (h *handler) exist(k string) bool {
 }
 
 // get keeps a reader alive independently of later index replacements. The caller must Close it.
-func (h *handler) get(k string) (hit bool, reader io.ReadCloser, filename string, resultErr error) {
+func (h *handler) get(k string) (
+	hit bool,
+	reader io.ReadCloser,
+	filename string,
+	digest cas.Digest,
+	resultErr error,
+) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	if !h.on {
-		return false, nil, "", nil
+		return false, nil, "", cas.Digest{}, nil
 	}
 	lock, err := h.lockIndex()
 	if err != nil {
-		return false, nil, "", err
+		return false, nil, "", cas.Digest{}, err
 	}
 	defer func() {
 		resultErr = errors.Join(resultErr, lock.Close())
 		if resultErr != nil && reader != nil {
 			resultErr = errors.Join(resultErr, reader.Close())
-			hit, reader, filename = false, nil, ""
+			hit, reader, filename, digest = false, nil, "", cas.Digest{}
 		}
 	}()
 	entry, ok := h.index.get(canonicalizeKey(k))
 	if !ok || !entry.Expiration.After(time.Now()) {
-		return false, nil, "", nil
+		return false, nil, "", cas.Digest{}, nil
 	}
-	digest, err := cas.ParseDigest(entry.ContentHash)
+	digest, err = cas.ParseDigest(entry.ContentHash)
 	if err != nil {
-		return false, nil, "", err
+		return false, nil, "", cas.Digest{}, err
 	}
 	reader, err = h.store.Open(digest)
 	if err != nil {
-		return false, nil, "", err
+		return false, nil, "", cas.Digest{}, err
 	}
-	return true, reader, entry.Filename, nil
+	return true, reader, entry.Filename, digest, nil
 }
 
-func (h *handler) getBytes(k string) (hit bool, data []byte, resultErr error) {
-	return h.getBytesContext(context.Background(), k)
+func (h *handler) getBytes(k string) (bool, []byte, error) {
+	hit, data, _, err := h.getBytesContext(context.Background(), k)
+	return hit, data, err
 }
 
-func (h *handler) getBytesContext(ctx context.Context, k string) (hit bool, data []byte, resultErr error) {
-	hit, reader, _, err := h.get(k)
+func (h *handler) getBytesContext(ctx context.Context, k string) (
+	hit bool,
+	data []byte,
+	digest cas.Digest,
+	resultErr error,
+) {
+	hit, reader, _, digest, err := h.get(k)
 	if err != nil || !hit {
-		return false, nil, err
+		return false, nil, cas.Digest{}, err
 	}
 	defer func() { resultErr = errors.Join(resultErr, reader.Close()) }()
 	data, err = io.ReadAll(contextReader{ctx, reader})
 	if err != nil {
-		return false, nil, err
+		return false, nil, cas.Digest{}, err
 	}
-	return true, data, nil
+	return true, data, digest, nil
 }
 
 func (h *handler) remove(k string) (resultErr error) {

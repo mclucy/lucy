@@ -101,7 +101,7 @@ func (c *Client) CachedDownload(
 	if opts.FileMode == 0 {
 		opts.FileMode = 0o640
 	}
-	hit, cachedReader, cachedFilename, err := c.cache().get(url)
+	hit, cachedReader, cachedFilename, _, err := c.cache().get(url)
 	if err != nil {
 		c.logger.Warn(
 			fmt.Errorf(
@@ -386,7 +386,7 @@ func (c *Client) cachedBytesRequest(
 		maxBytes = 50 * 1024 * 1024
 	}
 
-	hit, data, err := c.cache().getBytesContext(ctx, cacheKey)
+	hit, data, digest, err := c.cache().getBytesContext(ctx, cacheKey)
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -405,14 +405,15 @@ func (c *Client) cachedBytesRequest(
 				maxBytes,
 			)
 		}
-		if validate == nil || validate(data) == nil {
+		if c.verifyCachedBytes(opts, url, data, digest) == nil &&
+			(validate == nil || validate(data) == nil) {
 			return &BytesResponse{
 				StatusCode: http.StatusOK,
 				Data:       data,
 				CacheHit:   true,
 			}, nil
 		}
-		// Refetch when a stored response fails the lookup's validator.
+		// Refetch when the stored response fails either integrity or validation.
 	}
 
 	var requestBody io.Reader
@@ -520,6 +521,29 @@ func (c *Client) cachedBytesRequest(
 		CacheHit:   false,
 		Header:     resp.Header,
 	}, nil
+}
+
+func (c *Client) verifyCachedBytes(
+	opts BytesRequestOptions,
+	url string,
+	data []byte,
+	digest cas.Digest,
+) error {
+	if opts.ExpectedHash == "" {
+		return nil
+	}
+	// The store already verified the content address as it read the bytes.
+	hasher := newIntegrityHasher(opts.HashAlgorithm, opts.ExpectedHash)
+	if hasher != nil {
+		hasher.Write(data)
+	}
+	_, _, err := c.verifyIntegrity(
+		integrityActual(opts.HashAlgorithm, digest, hasher),
+		opts.HashAlgorithm,
+		opts.ExpectedHash,
+		url,
+	)
+	return err
 }
 
 func readLimitedBytes(reader io.Reader, maxBytes int64) ([]byte, error) {
