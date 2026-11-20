@@ -100,7 +100,7 @@ func (s *Service) Initialize(ctx context.Context, root string, opts InitOptions)
 	observed, identificationErrors = identify.Packages(
 		ctx,
 		observed,
-		s.source.ResolveArtifactByHash,
+		s.source.ResolveArtifactsByHash,
 	)
 	if err := ctx.Err(); err != nil {
 		return initResult(observed), err

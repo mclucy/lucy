@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"strings"
-	"sync"
 
 	"github.com/mclucy/lucy/artifact"
 	"github.com/mclucy/lucy/catalog"
@@ -15,12 +14,13 @@ import (
 	"github.com/mclucy/lucy/workspace"
 )
 
-// HashLookup resolves an artifact fingerprint through the configured
-// upstream catalogue. Callers inject the routing capability they own.
+// HashLookup resolves artifact fingerprints through the configured upstream
+// catalogue, returning one result per fingerprint in input order. Callers
+// inject the routing capability they own.
 type HashLookup func(
 	ctx context.Context,
-	artifact upstream.ArtifactFingerprint,
-) upstream.ArtifactLookup
+	artifacts []upstream.ArtifactFingerprint,
+) []upstream.ArtifactLookup
 
 // Packages adds upstream identities for observed.UnidentifiedPackageFiles.
 // It preserves descriptor-derived packages and dependencies, updates the same
@@ -43,33 +43,29 @@ func Packages(
 		return observed, []error{errors.New("package identification requires a hash lookup")}
 	}
 
-	// Each worker owns one slot. Merge in candidate order after all lookups finish.
-	lookups := make([]upstream.ArtifactLookup, len(candidates))
-	var wg sync.WaitGroup
+	fingerprints := make([]upstream.ArtifactFingerprint, len(candidates))
 	for i, path := range candidates {
-		wg.Go(func() {
-			lookups[i] = lookup(ctx, artifact.File{Path: path})
-		})
+		fingerprints[i] = artifact.File{Path: path}
 	}
-	wg.Wait()
+	lookups := lookup(ctx, fingerprints)
 
 	var (
 		idx          *workspace.PackageIndex
 		unidentified []string
 		errs         []error
 	)
-	for i, lookup := range lookups {
-		path := candidates[i]
-		if lookup.Matched() {
+	for i, path := range candidates {
+		result := lookups[i]
+		if result.Matched() {
 			if idx == nil {
 				idx = workspace.NewPackageIndex()
 				idx.Merge(observed.Packages)
 			}
-			idx.Add(identifiedPackage(path, lookup.Ref))
+			idx.Add(identifiedPackage(path, result.Ref))
 		} else {
 			unidentified = append(unidentified, path)
 		}
-		for _, providerErr := range lookup.Errors {
+		for _, providerErr := range result.Errors {
 			errs = append(errs, fmt.Errorf("%s: %w", path, providerErr))
 		}
 	}

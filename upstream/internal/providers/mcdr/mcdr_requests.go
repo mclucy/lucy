@@ -4,17 +4,24 @@ import (
 	"context"
 	"encoding/json/v2"
 	"fmt"
+	"net/http"
+	"net/url"
 
+	"github.com/mclucy/lucy/cache"
 	"github.com/sahilm/fuzzy"
 )
 
 const (
 	pluginCatalogueRepoEndpoint = `https://api.github.com/repos/MCDReforged/PluginCatalogue/contents/`
-	branchMaster                = "?ref=master"
 	branchCatalogue             = "?ref=catalogue"
-	branchMeta                  = "?ref=meta"
+
+	mcdrCatalogueEndpoint = `https://api.mcdreforged.com/catalogue/`
 )
 
+// search lists plugin ids through the GitHub contents API. The official
+// plugins.json carries the same ids in about 1.35 MB for one request, so this
+// listing is kept while it stays far below the contents API's 1000-entry cap;
+// switching would buy no request reduction and only grow the payload.
 func (p *Provider) search(
 	ctx context.Context,
 	query string,
@@ -41,99 +48,113 @@ func (p *Provider) search(
 	return result, nil
 }
 
-func (p *Provider) getInfo(
+// getPlugin fetches one plugin's aggregate catalogue document. Its meta,
+// plugin, and repository sections replace the three former GitHub contents
+// requests with a single request. Sections the catalogue failed to refresh are
+// null and stay absent from the resulting metadata.
+func (p *Provider) getPlugin(
 	ctx context.Context,
 	id string,
-) (*pluginInfo, error) {
-	ghEndpoint := pluginCatalogueRepoEndpoint + "plugins/" + id + "/plugin_info.json" + branchMaster
-	var data []byte
-	err, msg, data := p.githubClient.GetFileFromGitHub(ctx, ghEndpoint)
-	if err != nil {
+) (*pluginAll, error) {
+	var all pluginAll
+	if err := p.getPluginDocument(ctx, id, "all.json", &all); err != nil {
 		return nil, err
 	}
-	if msg != nil && msg.Message != "" {
-		if msg.Status == "404" {
-			return nil, ErrPluginNotFound(id)
-		}
-		return nil, fmt.Errorf("%w: %s", ErrorGhApi, msg.Message)
+	if all.Meta == nil && all.Plugin == nil && all.Repository == nil {
+		return nil, fmt.Errorf("%w: %s has no catalogue data", ErrorCatalogueApi, id)
 	}
-
-	var info pluginInfo
-	err = json.Unmarshal(data, &info)
-	if err != nil {
-		return nil, err
-	}
-	return &info, nil
+	return &all, nil
 }
 
-func (p *Provider) getMeta(
-	ctx context.Context,
-	id string,
-) (*pluginMeta, error) {
-	ghEndpoint := pluginCatalogueRepoEndpoint + id + "/meta.json" + branchMeta
-	err, msg, data := p.githubClient.GetFileFromGitHub(ctx, ghEndpoint)
-	if err != nil {
-		return nil, err
-	}
-	if msg != nil && msg.Message != "" {
-		if msg.Status == "404" {
-			return nil, ErrPluginNotFound(id)
-		}
-		return nil, fmt.Errorf("%w: %s", ErrorGhApi, msg.Message)
-	}
-
-	var meta pluginMeta
-	err = json.Unmarshal(data, &meta)
-	if err != nil {
-		return nil, err
-	}
-	return &meta, nil
-}
-
+// getReleaseHistory fetches the plugin's narrow release document. It carries
+// the same release history as the catalogue aggregate without the plugin's
+// readme and introduction.
 func (p *Provider) getReleaseHistory(
 	ctx context.Context,
 	id string,
 ) (*pluginRelease, error) {
-	ghEndpoint := pluginCatalogueRepoEndpoint + id + "/release.json" + branchMeta
-	err, msg, data := p.githubClient.GetFileFromGitHub(ctx, ghEndpoint)
-	if err != nil {
-		return nil, err
-	}
-	if msg != nil && msg.Message != "" {
-		if msg.Status == "404" {
-			return nil, ErrPluginNotFound(id)
-		}
-		return nil, fmt.Errorf("%w: %s", ErrorGhApi, msg.Message)
-	}
-
 	var releaseHistory pluginRelease
-	err = json.Unmarshal(data, &releaseHistory)
-	if err != nil {
+	if err := p.getPluginDocument(ctx, id, "release.json", &releaseHistory); err != nil {
 		return nil, err
 	}
 	return &releaseHistory, nil
 }
 
-func (p *Provider) getRepository(
+// getAuthorLinks fetches the catalogue-wide author index. Author links are the
+// one field the aggregate drops from plugin_info.json, and the index is
+// shared by every plugin and cached under its own URL, so it is requested only
+// when a plugin lists authors and reused across plugins.
+func (p *Provider) getAuthorLinks(
+	ctx context.Context,
+) (map[string]string, error) {
+	var summary authorSummary
+	if err := p.getCatalogueJSON(ctx, mcdrCatalogueEndpoint+"authors.json", &summary); err != nil {
+		return nil, err
+	}
+	links := make(map[string]string, len(summary.Authors))
+	for name, record := range summary.Authors {
+		if record.Link != "" {
+			links[name] = record.Link
+		}
+	}
+	return links, nil
+}
+
+func (p *Provider) getPluginDocument(
 	ctx context.Context,
 	id string,
-) (*pluginRepo, error) {
-	ghEndpoint := pluginCatalogueRepoEndpoint + id + "/repository.json" + branchMeta
-	err, msg, data := p.githubClient.GetFileFromGitHub(ctx, ghEndpoint)
+	document string,
+	out any,
+) error {
+	rawURL := mcdrCatalogueEndpoint + url.PathEscape(id) + "/" + document
+	res, err := p.fetchCatalogue(ctx, rawURL)
 	if err != nil {
-		return nil, err
+		return err
 	}
-	if msg != nil && msg.Message != "" {
-		if msg.Status == "404" {
-			return nil, ErrPluginNotFound(id)
-		}
-		return nil, fmt.Errorf("%w: %s", ErrorGhApi, msg.Message)
+	switch res.StatusCode {
+	case http.StatusOK:
+		return decodeCatalogue(res.Data, out)
+	case http.StatusNotFound:
+		return ErrPluginNotFound(id)
+	default:
+		return fmt.Errorf("%w: unexpected status %d", ErrorCatalogueApi, res.StatusCode)
 	}
+}
 
-	var repo pluginRepo
-	err = json.Unmarshal(data, &repo)
+func (p *Provider) getCatalogueJSON(
+	ctx context.Context,
+	rawURL string,
+	out any,
+) error {
+	res, err := p.fetchCatalogue(ctx, rawURL)
 	if err != nil {
-		return nil, err
+		return err
 	}
-	return &repo, nil
+	if res.StatusCode != http.StatusOK {
+		return fmt.Errorf("%w: unexpected status %d", ErrorCatalogueApi, res.StatusCode)
+	}
+	return decodeCatalogue(res.Data, out)
+}
+
+func (p *Provider) fetchCatalogue(
+	ctx context.Context,
+	rawURL string,
+) (*cache.BytesResponse, error) {
+	p.logger.Debug("mcdr catalogue: GET " + rawURL)
+	res, err := p.network.CachedGetRequest(
+		ctx,
+		rawURL,
+		cache.BytesRequestOptions{Kind: cache.KindMetadata},
+	)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %w", ErrorCatalogueApi, err)
+	}
+	return res, nil
+}
+
+func decodeCatalogue(data []byte, out any) error {
+	if err := json.Unmarshal(data, out); err != nil {
+		return fmt.Errorf("%w: %w", ErrorCatalogueApi, err)
+	}
+	return nil
 }

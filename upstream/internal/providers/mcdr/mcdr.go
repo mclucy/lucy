@@ -12,8 +12,9 @@ import (
 	"github.com/mclucy/lucy/upstream"
 )
 
-// Provider resolves MCDR plugin catalogue entries through one configured
-// network cache and GitHub client. logger may be nil, which records nothing.
+// Provider resolves MCDR plugin catalogue entries through the official
+// catalogue API and, for search ids, GitHub. logger may be nil, which records
+// nothing.
 type Provider struct {
 	network      *cache.Client
 	logger       *log.Logger
@@ -85,25 +86,29 @@ func (p *Provider) Search(ctx context.Context, q upstream.Query) (upstream.Searc
 	return res.ToSearchResults(p.Provider()), nil
 }
 
+// Info resolves plugin metadata from the catalogue's per-plugin aggregate
+// document in one request, plus the shared author index when the plugin lists
+// authors. Sections the catalogue marks null stay absent.
 func (p *Provider) Info(ctx context.Context, ref catalog.Ref) (catalog.Metadata, error) {
 	name := ref.Name.PythonName()
-	plugin, err := p.getInfo(ctx, name)
-	if err != nil {
-		return catalog.Metadata{}, err
-	}
-	meta, err := p.getMeta(ctx, name)
-	if err != nil {
-		return catalog.Metadata{}, err
-	}
-	repo, err := p.getRepository(ctx, name)
+	all, err := p.getPlugin(ctx, name)
 	if err != nil {
 		return catalog.Metadata{}, err
 	}
 
+	var authorLinks map[string]string
+	if all.Plugin != nil && len(all.Plugin.Authors) > 0 {
+		authorLinks, err = p.getAuthorLinks(ctx)
+		if err != nil {
+			return catalog.Metadata{}, err
+		}
+	}
+
 	info := rawProjectInformation{
-		Info:       plugin,
-		Meta:       meta,
-		Repository: repo,
+		Info:        all.Plugin,
+		Meta:        all.Meta,
+		Repository:  all.Repository,
+		AuthorLinks: authorLinks,
 	}.ToProjectInformation()
 	return info, nil
 }

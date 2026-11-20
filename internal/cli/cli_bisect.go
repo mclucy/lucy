@@ -263,7 +263,7 @@ func actionBisectStart(
 		inv.Directory,
 		inv.Logger,
 		deps.Operations,
-		deps.Router.ResolveArtifactByHash,
+		deps.Router.ResolveArtifactsByHash,
 	)
 	warnings := reportBisectFindings(cmd, inv, result.Findings)
 	if err != nil {

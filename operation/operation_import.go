@@ -1051,6 +1051,7 @@ func (s *Service) removeClientOnlyMods(
 		paths = append(paths, filepath.Join(modsDir, entry.Name()))
 	}
 	files := make([]importModFile, len(paths))
+	resolutions := s.importReleaseResolutions(ctx, paths, mappers)
 	limit := make(chan struct{}, packageProbeLimit)
 	var wg sync.WaitGroup
 	for i, path := range paths {
@@ -1063,6 +1064,7 @@ func (s *Service) removeClientOnlyMods(
 				ecosystem,
 				minecraft,
 				mappers,
+				resolutions[i],
 			)
 		})
 	}
@@ -1133,7 +1135,8 @@ func (s *Service) classifyImportMod(
 	path string,
 	ecosystem catalog.Ecosystem,
 	minecraft string,
-	mappers []packageMapper,
+	mappers []upstream.ArtifactReleaseMapper,
+	resolution upstream.ArtifactReleaseResolution,
 ) importModFile {
 	modules := importModules(ctx, path, ecosystem, minecraft)
 	if len(modules) == 0 {
@@ -1146,8 +1149,12 @@ func (s *Service) classifyImportMod(
 		modules: modules,
 		kept:    true,
 	}
-	release, matched := s.identifiedRelease(ctx, path, mappers)
+	matched := resolution.Matched
 	if matched {
+		release := resolution.Release
+		if release.Candidate.Provider == "" {
+			release.Candidate.Provider = resolution.Provider
+		}
 		file.project = projectKey(
 			release.Candidate.Provider,
 			release.Candidate.ProjectID,
@@ -1407,7 +1414,7 @@ func clientOnlyDescriptor(
 func (s *Service) catalogProjectSide(
 	ctx context.Context,
 	path string,
-	mappers []packageMapper,
+	mappers []upstream.ArtifactReleaseMapper,
 ) (upstream.ProjectServerSide, bool) {
 	infos, err := artifact.ReadInfo(path)
 	if err != nil {
@@ -1419,7 +1426,7 @@ func (s *Service) catalogProjectSide(
 			continue
 		}
 		for _, mapper := range mappers {
-			resolver, ok := mapper.release.(upstream.ServerSideResolver)
+			resolver, ok := mapper.(upstream.ServerSideResolver)
 			if !ok {
 				continue
 			}
@@ -1432,7 +1439,7 @@ func (s *Service) catalogProjectSide(
 					s.logger.Debug(
 						"project side lookup failed",
 						"name", candidate,
-						"provider", mapper.provider,
+						"provider", mapper.Provider(),
 						"error", err,
 					)
 					continue
@@ -1495,38 +1502,36 @@ func sameProjectTitle(left, right string) bool {
 	return a == b
 }
 
-// identifiedRelease asks the release mappers whether a provider identifies the
-// file's hash, and returns that provider's record: side labels, project
-// identity, and declared project dependencies. A miss for every mapper reports
-// false, which sends the caller to descriptors.
-func (s *Service) identifiedRelease(
+// importReleaseResolutions asks the release mappers once for every imported
+// file. Mappers run in trial order: the first provider that identifies a file
+// supplies its side labels, project identity, and declared dependencies, and a
+// failed lookup leaves the file to the next provider.
+func (s *Service) importReleaseResolutions(
 	ctx context.Context,
-	path string,
-	mappers []packageMapper,
-) (*upstream.Release, bool) {
-	for _, mapper := range mappers {
-		release, matched, err := mapper.release.ReleaseByHash(
-			ctx,
-			artifact.File{Path: path},
-		)
-		if err != nil {
+	paths []string,
+	mappers []upstream.ArtifactReleaseMapper,
+) []upstream.ArtifactReleaseResolution {
+	resolutions := make([]upstream.ArtifactReleaseResolution, len(paths))
+	if len(paths) == 0 || len(mappers) == 0 {
+		return resolutions
+	}
+	fingerprints := make([]upstream.ArtifactFingerprint, len(paths))
+	for i, path := range paths {
+		fingerprints[i] = artifact.File{Path: path}
+	}
+	found := upstream.LookupArtifactReleases(ctx, fingerprints, mappers, nil)
+	for i := 0; i < len(resolutions) && i < len(found); i++ {
+		resolutions[i] = found[i]
+		for _, providerErr := range found[i].Errors {
 			s.logger.Debug(
 				"artifact hash lookup failed",
-				"path", path,
-				"provider", mapper.provider,
-				"error", err,
+				"path", paths[i],
+				"provider", providerErr.Provider,
+				"error", providerErr.Err,
 			)
-			continue
 		}
-		if !matched {
-			continue
-		}
-		if release.Candidate.Provider == "" {
-			release.Candidate.Provider = mapper.provider
-		}
-		return &release, true
 	}
-	return nil, false
+	return resolutions
 }
 
 // projectKey identifies one provider project across the files of an import.

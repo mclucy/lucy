@@ -8,6 +8,12 @@ import (
 	"github.com/mclucy/lucy/input"
 )
 
+// lookupBatchSize bounds one array-lookup request. CurseForge documents no cap
+// for these arrays; a fixed batch keeps each response inside
+// maxLookupResponseBytes and makes the request count independent of how many
+// files a project publishes.
+const lookupBatchSize = 100
+
 // resolveProjectID resolves a project identity to a CurseForge mod ID. A
 // numeric string is treated as an ID; anything else is resolved as a slug.
 func (p *Provider) resolveProjectID(
@@ -65,6 +71,30 @@ func (p *Provider) getModById(
 		return nil, err
 	}
 	return &resp.Data, nil
+}
+
+// getModsByIds returns many projects in one POST /v1/mods request. Projects
+// the API does not know are omitted; a 404 response means the same, not a
+// failed lookup. Every returned project's ID is its own identity.
+// Docs: https://docs.curseforge.com/rest-api/#get-mods
+func (p *Provider) getModsByIds(
+	ctx context.Context,
+	modIDs []int32,
+) ([]modResponse, error) {
+	if len(modIDs) == 0 {
+		return nil, nil
+	}
+	payload := struct {
+		ModIds []int32 `json:"modIds"`
+	}{ModIds: modIDs}
+	var resp modsDataResponse
+	if err := p.post(ctx, baseUrl+"/v1/mods", payload, &resp); err != nil {
+		if isNotFound(err) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return resp.Data, nil
 }
 
 func (p *Provider) getModDescription(

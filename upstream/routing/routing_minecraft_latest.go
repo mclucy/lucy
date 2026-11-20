@@ -10,7 +10,7 @@ import (
 )
 
 const (
-	paperProjectURL  = "https://fill.papermc.io/v3/projects/paper"
+	paperProjectURL  = fillProjectBase + "paper"
 	purpurProjectURL = "https://api.purpurmc.org/v2/purpur"
 )
 
@@ -90,7 +90,7 @@ func (r *Router) latestPaperMinecraft(ctx context.Context) (version.Version, err
 	var project struct {
 		Versions map[string][]string `json:"versions"`
 	}
-	if err := r.Metadata(ctx, paperProjectURL, &project); err != nil {
+	if err := r.fillMetadata(ctx, paperProjectURL, &project); err != nil {
 		return "", err
 	}
 	versions := make([]version.Version, 0, len(project.Versions))

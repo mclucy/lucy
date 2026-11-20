@@ -40,6 +40,19 @@ type ArtifactReleaseMapper interface {
 	) (Release, bool, error)
 }
 
+// ArtifactBatchReleaseMapper resolves fingerprints in input order. Results
+// distinguish an unknown fingerprint from a failed lookup for each artifact.
+type ArtifactBatchReleaseMapper interface {
+	ArtifactReleaseMapper
+	ReleasesByHash(context.Context, []ArtifactFingerprint) []ArtifactReleaseLookup
+}
+
+type ArtifactReleaseLookup struct {
+	Release Release
+	Matched bool
+	Err     error
+}
+
 // ServerSide is a project's dedicated-server support label. Providers report
 // it when they publish one; an empty value means the provider has no answer.
 type ServerSide string

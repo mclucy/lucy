@@ -151,6 +151,36 @@ func (r *Router) ResolveArtifactByHash(
 	return result
 }
 
+// ResolveArtifactsByHash resolves canonical upstream references for artifacts
+// in input order. Only a named release is reported; provider failures stay
+// attached to the artifact they affected.
+func (r *Router) ResolveArtifactsByHash(
+	ctx context.Context,
+	artifacts []upstream.ArtifactFingerprint,
+) []upstream.ArtifactLookup {
+	resolutions := upstream.LookupArtifactReleases(
+		ctx,
+		artifacts,
+		r.artifactReleaseMappers(),
+		func(release upstream.Release) bool {
+			return release.Ref.Name != ""
+		},
+	)
+	if len(resolutions) == 0 {
+		return nil
+	}
+	lookups := make([]upstream.ArtifactLookup, len(resolutions))
+	for i, resolution := range resolutions {
+		if len(resolution.Errors) > 0 {
+			lookups[i].Errors = resolution.Errors
+		}
+		if resolution.Matched {
+			lookups[i].Ref = resolution.Release.Ref
+		}
+	}
+	return lookups
+}
+
 func joinProviderErrors(providerErrors []upstream.ProviderError) error {
 	if len(providerErrors) == 0 {
 		return ErrNoProviderSucceeded

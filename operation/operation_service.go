@@ -34,10 +34,10 @@ type Source interface {
 		minecraft version.Version,
 		md5 string,
 	) (version.Version, bool, error)
-	ResolveArtifactByHash(
+	ResolveArtifactsByHash(
 		ctx context.Context,
-		artifact upstream.ArtifactFingerprint,
-	) upstream.ArtifactLookup
+		artifacts []upstream.ArtifactFingerprint,
+	) []upstream.ArtifactLookup
 }
 
 // Service executes workspace operations with explicit installation, routing,
