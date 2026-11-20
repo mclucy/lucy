@@ -223,7 +223,9 @@ func RetryAfter(header http.Header) time.Duration {
 		}
 		return time.Duration(seconds) * time.Second
 	}
-	if errors.Is(err, strconv.ErrRange) {
+	if errors.Is(err, strconv.ErrRange) && strings.IndexFunc(value, func(c rune) bool {
+		return c < '0' || c > '9'
+	}) == -1 {
 		// Syntactically valid digits overflowed; the provider asked to wait
 		// longer than any duration can express, so saturate.
 		return time.Duration(math.MaxInt64)
