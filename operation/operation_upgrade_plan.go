@@ -223,6 +223,7 @@ func selectedRootPackage(packages []document.Package, root upgradeRoot) *documen
 func verifyRecoveredBase(
 	baseDocuments install.WorkspaceDocuments,
 	manifestFingerprint string,
+	manifestName string,
 	lockFingerprint string,
 	action string,
 ) error {
@@ -234,6 +235,9 @@ func verifyRecoveredBase(
 	if recoveredManifest != nil {
 		if recoveredManifestFingerprint, err = recoveredManifest.Fingerprint(); err != nil {
 			return err
+		}
+		if recoveredManifest.Name != manifestName {
+			return fmt.Errorf("manifest name changed during %s planning; retry", action)
 		}
 	}
 	if recoveredLock != nil {

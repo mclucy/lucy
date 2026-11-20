@@ -119,7 +119,13 @@ func (s *Service) PlanUpgrade(
 	if err != nil {
 		return nil, err
 	}
-	if err := verifyRecoveredBase(baseDocuments, baseManifest, baseLock, "upgrade"); err != nil {
+	if err := verifyRecoveredBase(
+		baseDocuments,
+		baseManifest,
+		d.Name,
+		baseLock,
+		"upgrade",
+	); err != nil {
 		return nil, err
 	}
 	roots, err := upgradeRoots(d, old)

@@ -103,7 +103,13 @@ func (s *Service) Downgrade(
 	if err != nil {
 		return nil, err
 	}
-	if err := verifyRecoveredBase(baseDocuments, baseManifest, baseLock, "downgrade"); err != nil {
+	if err := verifyRecoveredBase(
+		baseDocuments,
+		baseManifest,
+		d.Name,
+		baseLock,
+		"downgrade",
+	); err != nil {
 		return nil, err
 	}
 	targets, err := s.selectDowngradeTargets(ctx, d, old, args, ecosystem, steps)
