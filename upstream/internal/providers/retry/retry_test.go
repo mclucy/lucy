@@ -17,13 +17,35 @@ func TestRetryAfterPreservesRequestedDelay(t *testing.T) {
 	}
 }
 
-func TestRetryAfterSaturatesNumericOverflow(t *testing.T) {
+func TestRetryAfterNumericOverflow(t *testing.T) {
 	t.Parallel()
-	header := http.Header{
-		"Retry-After": []string{"99999999999999999999999999"},
-	}
-	if got := RetryAfter(header); got != time.Duration(math.MaxInt64) {
-		t.Fatalf("Retry-After = %s, want a saturated maximum", got)
+	for _, tc := range []struct {
+		name  string
+		value string
+		want  time.Duration
+	}{
+		{
+			name:  "overflows duration",
+			value: "9223372037",
+			want:  time.Duration(math.MaxInt64),
+		},
+		{
+			name:  "overflows uint64",
+			value: "99999999999999999999999999",
+			want:  time.Duration(math.MaxInt64),
+		},
+		{
+			name:  "invalid suffix after overflow",
+			value: "99999999999999999999999999x",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			header := http.Header{"Retry-After": []string{tc.value}}
+			if got := RetryAfter(header); got != tc.want {
+				t.Fatalf("Retry-After = %s, want %s", got, tc.want)
+			}
+		})
 	}
 }
 
