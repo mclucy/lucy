@@ -55,6 +55,7 @@ type foojayPackage struct {
 	Distribution      string `json:"distribution"`
 	Filename          string `json:"filename"`
 	JavaVersion       string `json:"java_version"`
+	PackageType       string `json:"package_type"`
 	Checksum          string `json:"checksum"`
 	ChecksumType      string `json:"checksum_type"`
 	ChecksumURI       string `json:"checksum_uri"`
@@ -85,80 +86,86 @@ func (h *Host) downloadPlan(ctx context.Context, req Request) (*Plan, error) {
 	if req.Distribution == java.DistributionAny {
 		distributions = anyDistributionOrder
 	}
-	for _, distribution := range distributions {
-		plan, err := h.downloadPlanFor(ctx, req.Major, distribution, architecture, operatingSystem)
-		if err != nil {
-			return nil, err
-		}
-		if plan != nil {
-			return plan, nil
-		}
-	}
-	return nil, nil
+	return h.downloadPlanFor(ctx, req.Major, distributions, architecture, operatingSystem)
 }
 
-// downloadPlanFor finds a verifiable download of one distribution. A runtime
-// without the compiler is enough to run a server, so it asks for a JRE first.
+// downloadPlanFor finds a verifiable download of the first preferred
+// distribution that has one. A runtime without the compiler is enough to run a
+// server, so it asks for a JRE before the JDK of the same distribution. One
+// package listing covers every preferred distribution for a package type, so
+// trying the next distribution does not repeat the read. The package types keep
+// separate listings because dropping the type filter reorders archive
+// candidates within a distribution.
 func (h *Host) downloadPlanFor(
 	ctx context.Context,
 	major int,
-	distribution java.Distribution,
+	distributions []java.Distribution,
 	architecture string,
 	operatingSystem string,
 ) (*Plan, error) {
-	for _, packageType := range []string{"jre", "jdk"} {
-		packages, err := h.fetchDownloadPackages(
-			ctx,
-			major,
-			distribution,
-			architecture,
-			operatingSystem,
-			packageType,
-		)
-		if err != nil {
-			return nil, err
-		}
-		for _, pkg := range packages {
-			if pkg.ID == "" {
-				continue
-			}
-			build, err := h.fetchDownloadBuild(ctx, pkg.ID)
-			if err != nil {
-				h.logger.Debug(
-					"java download package unavailable",
-					"id", pkg.ID,
-					"reason", err,
+	listings := make(map[string][]foojayPackage, 2)
+	for _, distribution := range distributions {
+		for _, packageType := range []string{"jre", "jdk"} {
+			packages, listed := listings[packageType]
+			if !listed {
+				var err error
+				packages, err = h.fetchDownloadPackages(
+					ctx,
+					major,
+					distributions,
+					architecture,
+					operatingSystem,
+					packageType,
 				)
-				continue
+				if err != nil {
+					return nil, err
+				}
+				listings[packageType] = packages
 			}
-			if build.Checksum == "" && build.ChecksumURI != "" {
-				build.Checksum, err = h.fetchChecksumFile(ctx, build.ChecksumURI)
+			for _, pkg := range packages {
+				if pkg.ID == "" ||
+					!strings.EqualFold(pkg.PackageType, packageType) ||
+					!strings.EqualFold(pkg.Distribution, string(distribution)) {
+					continue
+				}
+				build, err := h.fetchDownloadBuild(ctx, pkg.ID)
 				if err != nil {
 					h.logger.Debug(
-						"java download checksum unavailable",
+						"java download package unavailable",
 						"id", pkg.ID,
 						"reason", err,
 					)
 					continue
 				}
+				if build.Checksum == "" && build.ChecksumURI != "" {
+					build.Checksum, err = h.fetchChecksumFile(ctx, build.ChecksumURI)
+					if err != nil {
+						h.logger.Debug(
+							"java download checksum unavailable",
+							"id", pkg.ID,
+							"reason", err,
+						)
+						continue
+					}
+				}
+				download, ok := newDownload(pkg, build, distribution, major)
+				if !ok {
+					continue
+				}
+				root, err := h.managedRoot()
+				if err != nil {
+					return nil, fmt.Errorf("find the Java runtime directory: %w", err)
+				}
+				return &Plan{
+					Method:       MethodDownload,
+					Package:      download.filename,
+					Distribution: distribution,
+					Major:        major,
+					root:         h.isRoot(),
+					managedRoot:  root,
+					download:     download,
+				}, nil
 			}
-			download, ok := newDownload(pkg, build, distribution, major)
-			if !ok {
-				continue
-			}
-			root, err := h.managedRoot()
-			if err != nil {
-				return nil, fmt.Errorf("find the Java runtime directory: %w", err)
-			}
-			return &Plan{
-				Method:       MethodDownload,
-				Package:      download.filename,
-				Distribution: distribution,
-				Major:        major,
-				root:         h.isRoot(),
-				managedRoot:  root,
-				download:     download,
-			}, nil
 		}
 	}
 	return nil, nil
@@ -229,14 +236,16 @@ func newDownload(
 func (h *Host) fetchDownloadPackages(
 	ctx context.Context,
 	major int,
-	distribution java.Distribution,
+	distributions []java.Distribution,
 	architecture string,
 	operatingSystem string,
 	packageType string,
 ) ([]foojayPackage, error) {
 	query := url.Values{}
 	query.Set("version", strconv.Itoa(major))
-	query.Set("distribution", string(distribution))
+	for _, distribution := range distributions {
+		query.Add("distribution", string(distribution))
+	}
 	query.Set("architecture", architecture)
 	query.Set("operating_system", operatingSystem)
 	musl := operatingSystem == "linux" && h.usesMusl()
