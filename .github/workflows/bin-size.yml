@@ -51,7 +51,8 @@ jobs:
 
       - name: Compare binary sizes
         if: steps.check_gomod.outputs.changed == 'true'
-        run: bash pr/scripts/ci-bin-size-report.sh
+        working-directory: pr
+        run: go run ./scripts/ci-bin-size-report.go
 
       - name: Publish report to pull request
         if: steps.check_gomod.outputs.changed == 'true' && github.event.pull_request.number != ''

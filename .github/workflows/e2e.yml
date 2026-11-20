@@ -175,7 +175,7 @@ jobs:
         env:
           DOMAINS: ${{ inputs.force && '["mutation","init","compile"]' || steps.filter.outputs.changes }}
           COMPILE_FULL: ${{ inputs.compile-full || (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'ci:compile-full')) }}
-        run: bash scripts/e2e-plan.sh
+        run: go run ./scripts/e2e-plan.go
 
   build:
     name: Build Lucy

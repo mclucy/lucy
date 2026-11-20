@@ -37,7 +37,7 @@ published_at="$(
   gh release view "$tag" --repo "${GITHUB_REPOSITORY}" --json publishedAt --jq .publishedAt
 )"
 
-node scripts/release-manifest.mjs \
+go run ./scripts/release-manifest.go \
   --dir release-assets \
   --out "release-meta/${version}.json" \
   --tag "$tag" \

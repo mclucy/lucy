@@ -136,7 +136,7 @@ jobs:
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           INPUT_TAG: ${{ github.event.inputs.tag }}
-        run: bash scripts/release-announce-discord.sh
+        run: go run ./scripts/release-announce-discord.go
 
   revoke:
     if: github.event_name == 'workflow_dispatch' && (github.event.inputs.revoke == 'true' || github.event.inputs.unrevoke == 'true')

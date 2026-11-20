@@ -174,7 +174,7 @@ LUCY_HEURISTIC_REPORT_DIR="$PWD/test_reports/changed" go test -tags e2e -count=1
 
 Promote a behavior into a deterministic regression test only in a separate change, and only when it holds across repeated runs and follows from a logical contract. Such tests use hermetic fixtures with no network access or upstream data. Never pin unstable observations, such as network-dependent resolution, upstream versions, timing, durations, timeouts, or absolute paths. Keep those heuristic.
 
-When adding a sandbox-backed install scenario, add its sandbox to the matching suite's `sandboxes` list in `scripts/e2e-plan.sh`. Local fixtures do not establish CI prerequisites.
+When adding a sandbox-backed install scenario, add its sandbox to the matching suite's `sandboxes` list in `scripts/e2e-plan.go`. Local fixtures do not establish CI prerequisites.
 
 ## Sandbox CLI
 
