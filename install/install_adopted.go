@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/mclucy/lucy/artifact"
+	"github.com/mclucy/lucy/artifactstore"
 	"github.com/mclucy/lucy/catalog"
 	"github.com/mclucy/lucy/document"
 	"github.com/mclucy/lucy/internal/workspacewrite"
@@ -97,8 +98,10 @@ func adoptionMatchesLock(adopted []AdoptedRelease, lock *document.Lock) bool {
 }
 
 // prepareAdoptedArtifacts imports the observed bytes of every accepted adopted
-// package. With a target it also records each package's descriptor view in a
-// resolution cache; without one it only seeds the store for replay.
+// package through one artifact store. Each import verifies the observed
+// SHA-256 and every digest the candidate pinned. With a target it also records
+// each package's descriptor view in a resolution cache; without one it only
+// seeds the store for replay.
 func prepareAdoptedArtifacts(
 	ctx context.Context,
 	root string,
@@ -108,17 +111,40 @@ func prepareAdoptedArtifacts(
 	if len(adopted) == 0 {
 		return nil, nil
 	}
+	store, err := artifactstore.Open()
+	if err != nil {
+		return nil, err
+	}
+	defer store.Close()
 	var cache *resolve.AnalysisCache
 	if target != nil {
 		cache = resolve.NewAnalysisCache()
 	}
 	for _, release := range adopted {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
 		if cache != nil && release.Analysis == nil {
 			return nil, fmt.Errorf("missing local evidence for adopted package %s", release.Reference)
 		}
 		if name := release.Candidate.Filename; name == "" ||
 			filepath.Base(name) != name || strings.ContainsAny(name, "/\\") {
 			return nil, fmt.Errorf("invalid artifact filename %q", name)
+		}
+		observed := release.Path
+		if !filepath.IsAbs(observed) {
+			observed = filepath.Join(root, filepath.FromSlash(observed))
+		}
+		relative, ok := workspaceRelative(root, observed)
+		if !ok || release.SHA256 == "" {
+			return nil, fmt.Errorf("missing local evidence for adopted package %s", release.Reference)
+		}
+		if err := workspacewrite.SafePath(root, relative); err != nil {
+			return nil, err
+		}
+		info, err := os.Lstat(observed)
+		if err != nil || !info.Mode().IsRegular() {
+			return nil, fmt.Errorf("missing local evidence for adopted package %s", release.Reference)
 		}
 		candidate := release.Candidate
 		candidate.Hashes = maps.Clone(release.Candidate.Hashes)
@@ -130,16 +156,9 @@ func prepareAdoptedArtifacts(
 			return nil, fmt.Errorf("sha256 checksum mismatch for adopted package %s", release.Reference)
 		}
 		candidate.Hashes["sha256"] = release.SHA256
-		source := newLocalRuntimeSource(root, []AdoptedRuntimeFile{{
-			Path:           release.Path,
-			ExpectedSHA256: release.SHA256,
-		}})
-		materialized, matched, err := source.materialize(ctx, &candidate.Artifact)
+		_, hashes, err := importFile(store.Store, observed, relative, candidate.Hashes)
 		if err != nil {
 			return nil, fmt.Errorf("store adopted package %s: %w", release.Reference, err)
-		}
-		if !matched {
-			return nil, fmt.Errorf("missing local evidence for adopted package %s", release.Reference)
 		}
 		if cache == nil {
 			continue
@@ -152,7 +171,7 @@ func prepareAdoptedArtifacts(
 		if err != nil {
 			return nil, fmt.Errorf("read descriptor for adopted package %s: %w", release.Reference, err)
 		}
-		cache.RecordVerified(release.Candidate, *target, release.Ecosystem, view.Modules, materialized.Hashes)
+		cache.RecordVerified(release.Candidate, *target, release.Ecosystem, view.Modules, hashes)
 	}
 	return cache, nil
 }
@@ -169,7 +188,9 @@ type localRuntimeSource struct {
 type localRuntimeFile struct {
 	path, rel string
 	digests   map[string]string
-	object    *artifact.MaterializedFile
+	// storePath is the verified artifact store object this file was imported
+	// as. It carries no hash map, so every request builds its own.
+	storePath string
 }
 
 func newLocalRuntimeSource(root string, files []AdoptedRuntimeFile) *localRuntimeSource {
@@ -206,16 +227,20 @@ func (s *localRuntimeSource) acquire(
 }
 
 // importServer imports the core and inputs a metadata resolver pinned and
-// attaches the digests the import proved. It never downloads; an artifact the
-// observed runtime cannot prove keeps its pins.
+// attaches a SHA-256 the observed runtime proved when the artifact lacks one.
+// It never downloads or replaces an existing pin: the existing map is cloned
+// and the proven digest added, so the caller's lock is never mutated and an
+// artifact that already pins SHA-256 keeps its exact values. It reports
+// whether any artifact gained a SHA-256.
 func (s *localRuntimeSource) importServer(
 	ctx context.Context,
 	server document.LockedServer,
-) (document.LockedServer, error) {
+) (document.LockedServer, bool, error) {
 	if len(s.files) == 0 {
-		return server, nil
+		return server, false, nil
 	}
 	server.Inputs = slices.Clone(server.Inputs)
+	changed := false
 	artifacts := make([]*catalog.Artifact, 0, len(server.Inputs)+1)
 	artifacts = append(artifacts, &server.Artifact)
 	for i := range server.Inputs {
@@ -224,13 +249,43 @@ func (s *localRuntimeSource) importServer(
 	for _, artifact := range artifacts {
 		materialized, matched, err := s.materialize(ctx, artifact)
 		if err != nil {
-			return server, err
+			return server, false, err
 		}
-		if matched {
-			artifact.Hashes = materialized.Hashes
+		if !matched {
+			continue
 		}
+		proven := strings.ToLower(strings.TrimSpace(materialized.Hashes["sha256"]))
+		if proven == "" || strings.TrimSpace(artifact.Hashes["sha256"]) != "" {
+			continue
+		}
+		hashes := maps.Clone(artifact.Hashes)
+		if hashes == nil {
+			hashes = make(map[string]string, 1)
+		}
+		hashes["sha256"] = proven
+		artifact.Hashes = hashes
+		changed = true
 	}
-	return server, nil
+	return server, changed, nil
+}
+
+// withProvenServer returns old carrying the server digests the observed
+// runtime proved. It keeps every pin the lock already carried and returns old
+// itself when the proof added nothing, so an unchanged lock keeps its exact
+// bytes and pointer identity.
+func withProvenServer(
+	old *document.Lock,
+	server document.LockedServer,
+	changed bool,
+) *document.Lock {
+	if !changed {
+		return old
+	}
+	enriched := *old
+	enriched.Server = server
+	enriched.Packages = slices.Clone(old.Packages)
+	enriched.Files = slices.Clone(old.Files)
+	return &enriched
 }
 
 func (s *localRuntimeSource) materialize(
@@ -250,11 +305,8 @@ func (s *localRuntimeSource) materialize(
 	if file == nil {
 		return artifact.MaterializedFile{}, false, nil
 	}
-	if file.object != nil {
-		for algorithm := range pins {
-			file.object.Hashes[algorithm] = file.digests[algorithm]
-		}
-		return *file.object, true, nil
+	if file.storePath != "" {
+		return file.materialization(pins), true, nil
 	}
 	if !s.confined(file) {
 		return artifact.MaterializedFile{}, false, nil
@@ -263,12 +315,23 @@ func (s *localRuntimeSource) materialize(
 	if err := ctx.Err(); err != nil {
 		return artifact.MaterializedFile{}, false, err
 	}
-	materialized, err := s.importFile(file, pins)
-	if err != nil {
+	if err := s.importFile(file, pins); err != nil {
 		return artifact.MaterializedFile{}, false, err
 	}
-	file.object = &materialized
-	return materialized, true, nil
+	return file.materialization(pins), true, nil
+}
+
+// materialization returns a fresh digest map for one request: the store's
+// SHA-256 and only the digests that request pinned. The cached digest map
+// stays private, so a later request cannot change a map already returned to
+// an earlier caller.
+func (f *localRuntimeFile) materialization(requested map[string]string) artifact.MaterializedFile {
+	hashes := make(map[string]string, len(requested)+1)
+	hashes["sha256"] = f.digests["sha256"]
+	for algorithm := range requested {
+		hashes[algorithm] = f.digests[algorithm]
+	}
+	return artifact.MaterializedFile{Path: f.storePath, Hashes: hashes}
 }
 
 func (s *localRuntimeSource) match(pins map[string]string) *localRuntimeFile {
@@ -326,10 +389,16 @@ func (s *localRuntimeSource) confined(file *localRuntimeFile) bool {
 func (s *localRuntimeSource) importFile(
 	file *localRuntimeFile,
 	expected map[string]string,
-) (artifact.MaterializedFile, error) {
-	input := catalog.Artifact{Filename: file.rel, Hashes: expected}
-	store := &downloadStore{injected: func(*catalog.Artifact) (artifact.MaterializedFile, error) {
-		return artifact.MaterializedFile{Path: file.path}, nil
-	}}
-	return store.injectedMaterialize(&input)
+) error {
+	store, err := artifactstore.Open()
+	if err != nil {
+		return err
+	}
+	defer store.Close()
+	object, _, err := importFile(store.Store, file.path, file.rel, expected)
+	if err != nil {
+		return err
+	}
+	file.storePath = store.Path(object.Digest)
+	return nil
 }

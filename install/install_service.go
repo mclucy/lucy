@@ -143,13 +143,17 @@ func (s *Service) Resolve(
 			return nil, result, err
 		}
 		localRuntime := newLocalRuntimeSource(absolute, opts.LocalRuntime)
-		if _, err := localRuntime.importServer(ctx, old.Server); err != nil {
+		proven, changed, err := localRuntime.importServer(ctx, old.Server)
+		if err != nil {
 			return nil, result, err
 		}
 		s.logger.Debug("lock resolution reused current lock", "reason", "manifest unchanged")
 		result.Mode = ModeReplay
 		result.Reason = "manifest unchanged; lock reused"
-		return old, result, nil
+		// The observed runtime may prove a SHA-256 the reused lock does not
+		// pin. Returning an enriched copy publishes that digest without
+		// dropping an existing pin; an unchanged lock keeps its exact bytes.
+		return withProvenServer(old, proven, changed), result, nil
 	}
 	store := s.newDownloadStore(ctx, opts, result)
 	resolved, err := s.resolveInstall(ctx, absolute, d, old, fingerprint, &opts, store, result)

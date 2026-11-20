@@ -141,15 +141,14 @@ func (s *Service) resolveInstall(
 	// A metadata resolver can pin the core and its inputs without acquiring
 	// them. Import any of those bytes the observed runtime proves anyway, so
 	// the lock stays replayable from the store and later staging needs no
-	// download. Reused core pins stay exactly as the old lock recorded them;
-	// only a freshly resolved core takes the digests the import proved.
-	proven, err := localRuntime.importServer(ctx, resolved.Server)
+	// download. A reused core keeps every pin the old lock recorded and gains
+	// the SHA-256 the import proved, so an offline replay can address the
+	// store object.
+	proven, _, err := localRuntime.importServer(ctx, resolved.Server)
 	if err != nil {
 		return nil, err
 	}
-	if !canReuse {
-		resolved.Server = proven
-	}
+	resolved.Server = proven
 	var previousPackages []document.Package
 	if old != nil {
 		previousPackages = old.Packages

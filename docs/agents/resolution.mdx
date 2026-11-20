@@ -42,7 +42,7 @@ Candidate filtering belongs to providers because only they know their own compat
 
 The resolver receives candidate lookup and artifact materialization as injected capability functions, plus an optional cache that reuses artifact analysis across candidates; descriptor reading remains a dedicated archive inspection. The resolver does not select a provider or open the network cache. Installation and operation workflows receive configured capabilities at construction; operation options can supply prefetched artifact bytes without changing catalog selection. They still extract the server core's descriptor modules to supply as target constraints. Installation strictly verifies supplied bytes against the artifact's pinned hashes.
 
-Initialization carries each hash lookup into adoption with its release, file identity, and provider errors. A match supplies provenance, not ownership. Initialization uses accepted local packages as fixed resolver candidates and saves verified package and runtime artifacts to the store, even when it reuses the lock.
+Initialization carries each hash lookup into adoption with its release, file identity, and provider errors. A match supplies provenance, not ownership. Initialization uses accepted local packages as fixed resolver candidates and saves verified package and runtime artifacts to the store, even when it reuses the lock. A reused runtime artifact that lacks a SHA-256 pin gains one only when the adopted bytes match its existing pins. This lets offline replay find the stored object without changing the selected artifact or replacing its original checksums.
 
 ## From pins to installed files
 
