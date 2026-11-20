@@ -14,57 +14,67 @@ import (
 )
 
 // HashLookup resolves artifact fingerprints through the configured upstream
-// catalogue, returning one result per fingerprint in input order. Callers
+// catalogue, returning one resolution per fingerprint in input order. Callers
 // inject the routing capability they own.
 type HashLookup func(
 	ctx context.Context,
 	artifacts []upstream.ArtifactFingerprint,
-) []upstream.ArtifactLookup
+) []upstream.ArtifactReleaseResolution
 
 // Packages adds upstream identities for observed.UnidentifiedPackageFiles.
-// It preserves descriptor-derived packages and dependencies, updates the same
-// observation, and returns it. Unmatched paths remain. Provider failures
-// include file context and are returned even when a later provider identifies
-// the file. A non-empty candidate set requires lookup.
+// A non-nil resolutions map supplies and retains lookup outcomes by path,
+// including misses and provider errors. Unmatched paths remain unidentified.
 func Packages(
 	ctx context.Context,
 	observed *workspace.Workspace,
 	lookup HashLookup,
-) (*workspace.Workspace, []error) {
-	if observed == nil {
-		return nil, nil
+	resolutions map[string]upstream.ArtifactReleaseResolution,
+) []error {
+	if observed == nil || len(observed.UnidentifiedPackageFiles) == 0 {
+		return nil
 	}
 	candidates := observed.UnidentifiedPackageFiles
-	if len(candidates) == 0 {
-		return observed, nil
+
+	var fingerprints []upstream.ArtifactFingerprint
+	for _, path := range candidates {
+		if _, resolved := resolutions[path]; !resolved {
+			fingerprints = append(fingerprints, observed.PackageAnalysis(path))
+		}
 	}
-	if lookup == nil {
-		return observed, []error{errors.New("package identification requires a hash lookup")}
+	if len(fingerprints) > 0 && lookup == nil {
+		return []error{errors.New("package identification requires a hash lookup")}
 	}
 
-	fingerprints := make([]upstream.ArtifactFingerprint, len(candidates))
-	for i, path := range candidates {
-		fingerprints[i] = observed.PackageAnalysis(path)
+	var lookups []upstream.ArtifactReleaseResolution
+	if len(fingerprints) > 0 {
+		lookups = lookup(ctx, fingerprints)
 	}
-	lookups := lookup(ctx, fingerprints)
 
 	var (
 		idx          *workspace.PackageIndex
 		unidentified []string
 		errs         []error
 	)
-	for i, path := range candidates {
-		result := lookups[i]
-		if result.Matched() {
+	next := 0
+	for _, path := range candidates {
+		resolution, resolved := resolutions[path]
+		if !resolved {
+			resolution = lookups[next]
+			next++
+			if resolutions != nil {
+				resolutions[path] = resolution
+			}
+		}
+		if resolution.Matched && resolution.Release.Ref.Name != "" {
 			if idx == nil {
 				idx = workspace.NewPackageIndex()
 				idx.Merge(observed.Packages)
 			}
-			idx.Add(identifiedPackage(path, result.Ref))
+			idx.Add(identifiedPackage(path, resolution.Release.Ref))
 		} else {
 			unidentified = append(unidentified, path)
 		}
-		for _, providerErr := range result.Errors {
+		for _, providerErr := range resolution.Errors {
 			errs = append(errs, fmt.Errorf("%s: %w", path, providerErr))
 		}
 	}
@@ -73,7 +83,7 @@ func Packages(
 		observed.Packages = idx.Packages()
 	}
 	observed.UnidentifiedPackageFiles = unidentified
-	return observed, errs
+	return errs
 }
 
 func identifiedPackage(

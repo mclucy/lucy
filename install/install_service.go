@@ -135,10 +135,25 @@ func (s *Service) Resolve(
 		return nil, result, err
 	}
 	if old != nil && !opts.WithOptional && old.ManifestFingerprint == fingerprint && adoptionMatchesLock(opts.Adopted, old) {
+		// Reuse must still leave the accepted local bytes replayable. Only
+		// adopted packages and runtime files whose trusted digest proves the
+		// requested artifact are imported; a missing artifact is not fetched
+		// merely because the lock was reused.
+		if _, err := prepareAdoptedArtifacts(ctx, absolute, opts.Adopted, nil); err != nil {
+			return nil, result, err
+		}
+		localRuntime := newLocalRuntimeSource(absolute, opts.LocalRuntime)
+		proven, changed, err := localRuntime.importServer(ctx, old.Server)
+		if err != nil {
+			return nil, result, err
+		}
 		s.logger.Debug("lock resolution reused current lock", "reason", "manifest unchanged")
 		result.Mode = ModeReplay
 		result.Reason = "manifest unchanged; lock reused"
-		return old, result, nil
+		// The observed runtime may prove a SHA-256 the reused lock does not
+		// pin. Returning an enriched copy publishes that digest without
+		// dropping an existing pin; an unchanged lock keeps its exact bytes.
+		return withProvenServer(old, proven, changed), result, nil
 	}
 	store := s.newDownloadStore(ctx, opts, result)
 	resolved, err := s.resolveInstall(ctx, absolute, d, old, fingerprint, &opts, store, result)
@@ -182,15 +197,14 @@ func (s *Service) ApplyPlan(
 		return nil, err
 	}
 	defer func() { resultErr = errors.Join(resultErr, writer.Close()) }()
-	preflightOptions := opts
-	preflightOptions.PublishManifest = plan.PublishManifest
-	if _, _, err := preflightLocked(root, plan.Manifest, plan.Previous, preflightOptions, s.logger); err != nil {
+	opts.PublishManifest = plan.PublishManifest
+	baseManifest, baseLock, documents, err := preflightLocked(
+		root, plan.Manifest, plan.Previous, opts, s.logger,
+	)
+	if err != nil {
 		return nil, err
 	}
-	if err := checkPlannedDocuments(plan); err != nil {
-		return nil, err
-	}
-	if err := checkPlannedState(root, plan); err != nil {
+	if err := plan.checkBase(baseManifest, baseLock, documents); err != nil {
 		return nil, err
 	}
 	if err := s.registerServer(root, plan.Result); err != nil {
@@ -219,9 +233,8 @@ func (s *Service) ApplyPlan(
 		result.applyChanges(plan.Previous, plan.Resolved, plan.Manifest)
 	}
 	store := s.newDownloadStore(ctx, opts, result)
-	opts.PublishManifest = plan.PublishManifest
 	opts.publishLock = plan.PublishLock
-	diagnostics, err := s.stageInstall(ctx, root, plan.Manifest, plan.Resolved, store, opts, result)
+	diagnostics, err := s.stageInstall(ctx, root, plan.Manifest, plan.Resolved, documents, store, opts, result)
 	result.Diagnostics = diagnostics
 	return result, err
 }

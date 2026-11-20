@@ -33,7 +33,7 @@ func (s *Service) Initialize(ctx context.Context, root string, opts InitOptions)
 	return s.initialize(ctx, root, opts, new(artifact.Analyses), nil)
 }
 
-func (s *Service) initialize(ctx context.Context, root string, opts InitOptions, analyses *artifact.Analyses, matches map[string]upstream.ArtifactReleaseResolution) (result *InitResult, resultErr error) {
+func (s *Service) initialize(ctx context.Context, root string, opts InitOptions, analyses *artifact.Analyses, known map[string]upstream.ArtifactReleaseResolution) (result *InitResult, resultErr error) {
 	root, err := filepath.Abs(root)
 	if err != nil {
 		return nil, err
@@ -57,7 +57,7 @@ func (s *Service) initialize(ctx context.Context, root string, opts InitOptions,
 	// Pin the recovered documents before resolution reads the workspace.
 	// Adoption publishes the manifest, lock, and receipt as one transaction
 	// and refuses to overwrite bytes that changed in between.
-	preconditions, err := install.CaptureAdoptionPreconditions(root)
+	documents, err := install.CaptureWorkspaceDocuments(root)
 	if err != nil {
 		return nil, err
 	}
@@ -99,11 +99,14 @@ func (s *Service) initialize(ctx context.Context, root string, opts InitOptions,
 
 	adoptionStarted := time.Now()
 	opts.Trace.ReportPhaseStarted("adoption")
-	var identificationErrors []error
-	observed, identificationErrors = identify.Packages(
+	if known == nil && len(observed.UnidentifiedPackageFiles) > 0 {
+		known = make(map[string]upstream.ArtifactReleaseResolution, len(observed.UnidentifiedPackageFiles))
+	}
+	identificationErrors := identify.Packages(
 		ctx,
 		observed,
 		s.source.ResolveArtifactsByHash,
+		known,
 	)
 	if err := ctx.Err(); err != nil {
 		return initResult(observed), err
@@ -114,8 +117,8 @@ func (s *Service) initialize(ctx context.Context, root string, opts InitOptions,
 	if fatalIdentification != nil {
 		return initResult(observed), fatalIdentification
 	}
-	// A failed lookup leaves the file unidentified. Adoption reports it once
-	// when no provider identifies it, so the failure stays at debug level.
+	// Keep per-attempt details at debug level. Adoption reports incomplete
+	// lookups when they prevent identification.
 	for _, warning := range identificationWarnings {
 		s.logger.Debug("package identification failed", "error", warning)
 	}
@@ -130,7 +133,7 @@ func (s *Service) initialize(ctx context.Context, root string, opts InitOptions,
 		root,
 		manifest,
 		observed,
-		matches,
+		known,
 	)
 	if err != nil {
 		return initResult(observed), err
@@ -141,7 +144,7 @@ func (s *Service) initialize(ctx context.Context, root string, opts InitOptions,
 		Count:   len(adoptedPackages),
 		Total:   inspected,
 	})
-	old, err := readExistingLock(root)
+	old, err := documents.DecodeLock()
 	if err != nil {
 		return initResult(observed), err
 	}
@@ -152,6 +155,7 @@ func (s *Service) initialize(ctx context.Context, root string, opts InitOptions,
 		old,
 		opts,
 		observed,
+		runtimeObserved,
 		adoptedReleases,
 		reportedMissing,
 	)
@@ -168,7 +172,7 @@ func (s *Service) initialize(ctx context.Context, root string, opts InitOptions,
 		runtimeObserved,
 		observed,
 		opts,
-		preconditions,
+		documents,
 	)
 }
 
@@ -400,19 +404,12 @@ func (s *Service) applyDetectedVersions(
 	return nil
 }
 
-func readExistingLock(root string) (*documentpkg.Lock, error) {
-	old, err := documentpkg.LockFile(root).Read()
-	if errors.Is(err, os.ErrNotExist) {
-		return nil, nil
-	}
-	return old, err
-}
-
 // resolveAdoptedLock resolves the observed declaration. Module requirements
 // the installed jars report but the catalogue metadata cannot satisfy become
 // warnings instead of a refusal, because adoption records the set the server
 // already runs. A missing module the adoption report already named with its
-// files does not warn again.
+// files does not warn again. The selected runtime's observed files are offered
+// to resolution, so verified local bytes are imported instead of downloaded.
 func (s *Service) resolveAdoptedLock(
 	ctx context.Context,
 	root string,
@@ -420,9 +417,14 @@ func (s *Service) resolveAdoptedLock(
 	old *documentpkg.Lock,
 	opts InitOptions,
 	observed *workspace.Workspace,
+	runtimeObserved *runtimeObservation,
 	releases []install.AdoptedRelease,
 	reportedMissing map[string]struct{},
 ) (*documentpkg.Lock, error) {
+	var localRuntime []install.AdoptedRuntimeFile
+	if runtimeObserved != nil {
+		localRuntime = runtimeObserved.files
+	}
 	resolved, resolution, err := s.install.Resolve(
 		ctx,
 		root,
@@ -433,6 +435,7 @@ func (s *Service) resolveAdoptedLock(
 			Trace:        opts.Trace,
 			Materialize:  opts.Materialize,
 			Adopted:      releases,
+			LocalRuntime: localRuntime,
 		},
 	)
 	if observed != nil && resolution != nil {
@@ -479,7 +482,7 @@ func (s *Service) publishInitialization(
 	runtimeObserved *runtimeObservation,
 	observed *workspace.Workspace,
 	opts InitOptions,
-	preconditions install.AdoptionPreconditions,
+	documents install.WorkspaceDocuments,
 ) (*InitResult, error) {
 	configurationPath := filepath.Join(root, filepath.FromSlash(config.WorkspaceFilename))
 	if err := workspacewrite.SafePath(root, config.WorkspaceFilename); err != nil {
@@ -549,7 +552,7 @@ func (s *Service) publishInitialization(
 			return manifestFile.Snapshot(manifest)
 		},
 		ManifestMerge: manifestMerge,
-		Preconditions: preconditions,
+		Preconditions: documents,
 	})
 	if adoptErr != nil && !errors.As(adoptErr, &committedErr) {
 		return initResult(observed), adoptErr

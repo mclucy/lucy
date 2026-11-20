@@ -17,6 +17,7 @@ import (
 // file whose bytes or mode changed after discovery fails adoption instead of
 // entering the receipt with a stale baseline.
 func adoptPackages(
+	files *os.Root,
 	root string,
 	opts AdoptOptions,
 	tracked map[string]bool,
@@ -40,34 +41,38 @@ func adoptPackages(
 		if tracked[strings.ToLower(cleanRel)] || installPathReserved(root, cleanRel) {
 			continue
 		}
-		info, statErr := os.Lstat(fullPath)
-		if statErr != nil || info.Mode()&os.ModeSymlink != 0 ||
-			!info.Mode().IsRegular() {
+		image, err := workspacewrite.ObserveInstallImage(files, cleanRel)
+		if err != nil || image == nil {
+			if pkg.ExpectedSHA256 != "" {
+				if err != nil {
+					return fmt.Errorf("inspect accepted package file %s: %w", cleanRel, err)
+				}
+				return fmt.Errorf(
+					"package file %s disappeared between discovery and adoption publication",
+					cleanRel,
+				)
+			}
 			if opts.Logger != nil {
 				opts.Logger.Debug(
-					"refuse non-regular or symlink package file",
+					"skip package file without an observed image",
 					"path", cleanRel,
 				)
 			}
 			continue
 		}
-		hashes, err := DigestFile(fullPath, nil)
-		if err != nil {
-			return err
-		}
-		if pkg.ExpectedSHA256 != "" &&
-			!strings.EqualFold(hashes["sha256"], pkg.ExpectedSHA256) {
-			return fmt.Errorf(
-				"package file %s changed between discovery and adoption publication",
-				cleanRel,
-			)
-		}
-		mode := uint32(info.Mode().Perm())
-		if pkg.ExpectedMode != 0 && mode != pkg.ExpectedMode {
-			return fmt.Errorf(
-				"package file %s changed mode between discovery and adoption publication",
-				cleanRel,
-			)
+		if pkg.ExpectedSHA256 != "" {
+			if !strings.EqualFold(image.SHA256, pkg.ExpectedSHA256) {
+				return fmt.Errorf(
+					"package file %s changed between discovery and adoption publication",
+					cleanRel,
+				)
+			}
+			if image.Mode != workspacewrite.EffectiveInstallMode(os.FileMode(pkg.ExpectedMode)) {
+				return fmt.Errorf(
+					"package file %s changed mode between discovery and adoption publication",
+					cleanRel,
+				)
+			}
 		}
 
 		packageID := pkg.PackageID
@@ -78,8 +83,7 @@ func adoptPackages(
 			cleanRel,
 			receipt.OriginPackage,
 			packageID,
-			hashes["sha256"],
-			mode,
+			image,
 		); err != nil {
 			return err
 		}
@@ -156,16 +160,11 @@ func adoptMCDRWrapper(
 		}
 		return nil
 	}
-	hashes, err := DigestFile(target, nil)
-	if err != nil {
-		return err
-	}
 	return ledger.claim(
 		relative,
 		receipt.OriginMCDR,
 		"",
-		hashes["sha256"],
-		uint32(info.Mode().Perm()),
+		workspacewrite.InstallBytesImage(data, info.Mode().Perm()),
 	)
 }
 

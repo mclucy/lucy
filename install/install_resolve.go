@@ -47,6 +47,8 @@ func (s *Service) resolveInstall(
 		Repository:     d.Server.Core.Repository,
 		FilePattern:    d.Server.Core.FilePattern,
 	}
+	localRuntime := newLocalRuntimeSource(root, opts.LocalRuntime)
+	acquire := localRuntime.acquire(ctx, store.materialize)
 	var core upstream.ServerProductResolution
 	canReuse := false
 	if old != nil {
@@ -77,7 +79,7 @@ func (s *Service) resolveInstall(
 		opts.Trace.phaseStarted("server")
 		start := time.Now()
 		var err error
-		core, err = s.source.ResolveServerProduct(ctx, coreReq, store.materialize)
+		core, err = s.source.ResolveServerProduct(ctx, coreReq, acquire)
 		if err != nil {
 			return nil, err
 		}
@@ -129,13 +131,24 @@ func (s *Service) resolveInstall(
 		ctx,
 		resolved.Server.Product,
 		resolved.Server.Artifact,
-		store.materialize,
+		acquire,
 	)
 	if moduleErr != nil {
 		s.logger.Warn(fmt.Errorf("read server core modules: %w", moduleErr))
 	} else {
 		resolved.Server.Artifact.Modules = coreModules
 	}
+	// A metadata resolver can pin the core and its inputs without acquiring
+	// them. Import any of those bytes the observed runtime proves anyway, so
+	// the lock stays replayable from the store and later staging needs no
+	// download. A reused core keeps every pin the old lock recorded and gains
+	// the SHA-256 the import proved, so an offline replay can address the
+	// store object.
+	proven, _, err := localRuntime.importServer(ctx, resolved.Server)
+	if err != nil {
+		return nil, err
+	}
+	resolved.Server = proven
 	var previousPackages []document.Package
 	if old != nil {
 		previousPackages = old.Packages
@@ -171,7 +184,7 @@ func (s *Service) resolveInstall(
 		Trace:              opts.Trace.resolveTrace(),
 	}
 	if len(opts.Adopted) > 0 {
-		cache, err := prepareAdoptedArtifacts(ctx, root, opts.Adopted, packageRequest.Target)
+		cache, err := prepareAdoptedArtifacts(ctx, root, opts.Adopted, &packageRequest.Target)
 		if err != nil {
 			return nil, err
 		}

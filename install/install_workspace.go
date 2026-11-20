@@ -61,8 +61,13 @@ type (
 		// selects them for their reference without a catalogue query, so a
 		// locally valid artifact stays managed when upstream offers no release
 		// for the target server.
-		Adopted     []AdoptedRelease
-		publishLock bool
+		Adopted []AdoptedRelease
+		// LocalRuntime lists the regular files of a selected observed runtime
+		// with the digest and mode initialization recorded. Resolution may
+		// reuse them only when the requested artifact's trusted digest proves
+		// they are the same bytes. It never substitutes a file by name or role.
+		LocalRuntime []AdoptedRuntimeFile
+		publishLock  bool
 		// SkipRegistration leaves the workspace unregistered. Staging callers
 		// set it because a staged tree is not yet a server; they register the
 		// workspace once its documents exist.
@@ -105,7 +110,7 @@ func (s *Service) syncInstall(ctx context.Context, root string, d *document.Mani
 		return nil, err
 	}
 	defer func() { resultErr = errors.Join(resultErr, writer.Close()) }()
-	baseManifest, baseLock, err := preflightLocked(root, d, old, opts, s.logger)
+	baseManifest, baseLock, documents, err := preflightLocked(root, d, old, opts, s.logger)
 	if err != nil {
 		return nil, err
 	}
@@ -125,7 +130,7 @@ func (s *Service) syncInstall(ctx context.Context, root string, d *document.Mani
 	if err != nil {
 		return nil, err
 	}
-	return s.stageInstall(ctx, root, manifest, resolved, store, opts, result)
+	return s.stageInstall(ctx, root, manifest, resolved, documents, store, opts, result)
 }
 
 // stageInstall materializes a resolved lock in the server directory and commits
@@ -136,6 +141,7 @@ func (s *Service) stageInstall(
 	root string,
 	d *document.Manifest,
 	resolved *document.Lock,
+	documents WorkspaceDocuments,
 	store *downloadStore,
 	opts Options,
 	result *Result,
@@ -181,7 +187,7 @@ func (s *Service) stageInstall(
 			// a partial manifest/lock publication rolls back.
 			if _, err := applyCommit(
 				root, "", manifest, resolved, opts.PublishManifest,
-				nil, nil, nil, false, installCommitMetadataOnly, s.logger,
+				nil, nil, nil, false, installCommitMetadataOnly, documents, s.logger,
 			); err != nil {
 				return nil, err
 			}
@@ -214,7 +220,7 @@ func (s *Service) stageInstall(
 		mcdrOutputs := mcdrWrapperOutputs(resolved)
 		counts, err := applyCommit(
 			root, stage, manifest, resolved, opts.PublishManifest, nil,
-			mcdrOutputs, mcdrOutputs, false, installCommitOverlay, s.logger,
+			mcdrOutputs, mcdrOutputs, false, installCommitOverlay, documents, s.logger,
 		)
 		if err != nil {
 			return nil, err
@@ -297,7 +303,7 @@ func (s *Service) stageInstall(
 	}
 	counts, err := applyCommit(
 		root, stage, d, resolved, opts.PublishManifest,
-		overwritePaths, stagedOutputs, mcdrOutputs, stagedBootstrap, installCommitReconcile, s.logger,
+		overwritePaths, stagedOutputs, mcdrOutputs, stagedBootstrap, installCommitReconcile, documents, s.logger,
 	)
 	if err != nil {
 		return nil, err

@@ -65,8 +65,8 @@ func (initializeTestSource) IdentifyPurpurBuild(
 func (initializeTestSource) ResolveArtifactsByHash(
 	_ context.Context,
 	artifacts []upstream.ArtifactFingerprint,
-) []upstream.ArtifactLookup {
-	return make([]upstream.ArtifactLookup, len(artifacts))
+) []upstream.ArtifactReleaseResolution {
+	return make([]upstream.ArtifactReleaseResolution, len(artifacts))
 }
 
 // initializeInstallSource resolves the requested runtime into a lock record
@@ -296,6 +296,40 @@ func TestInitializeWritesDeclarationForVanillaLayout(t *testing.T) {
 	server, _ := decoded["server"].(map[string]any)
 	if _, ok := server["entry_point"]; ok {
 		t.Fatalf("lock records an entry point:\n%s", data)
+	}
+}
+
+func TestInitializeResolvesFromCapturedLock(t *testing.T) {
+	root := t.TempDir()
+	writeVanillaTestJar(t, root, "server.jar", "1.20.1")
+	service := newInitializeTestService(t)
+	if _, err := service.Initialize(t.Context(), root, InitOptions{}); err != nil {
+		t.Fatalf("initial Initialize: %v", err)
+	}
+	path := filepath.Join(root, documentpkg.LockFilename)
+	captured := readFileBytes(t, path)
+	result, err := service.Initialize(t.Context(), root, InitOptions{
+		Force: true,
+		Trace: &install.Trace{
+			PhaseDone: func(phase install.PhaseInfo) {
+				if phase.Name == "adoption" {
+					if err := os.WriteFile(path, []byte("server: ["), 0o644); err != nil {
+						t.Fatal(err)
+					}
+				}
+			},
+			InputScale: func(_, _ int) {
+				if err := os.WriteFile(path, captured, 0o644); err != nil {
+					t.Fatal(err)
+				}
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("Initialize with a restored lock: %v", err)
+	}
+	if result.PublishedLock || string(readFileBytes(t, path)) != string(captured) {
+		t.Fatal("initialization replaced the captured lock")
 	}
 }
 

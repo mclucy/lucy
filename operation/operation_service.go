@@ -37,7 +37,7 @@ type Source interface {
 	ResolveArtifactsByHash(
 		ctx context.Context,
 		artifacts []upstream.ArtifactFingerprint,
-	) []upstream.ArtifactLookup
+	) []upstream.ArtifactReleaseResolution
 }
 
 // Service executes workspace operations with explicit installation, routing,

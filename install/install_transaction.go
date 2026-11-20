@@ -46,14 +46,14 @@ func stagedOutputPreserved(out bootstrap.Output) bool {
 func prunable(
 	entry receipt.Entry,
 	tracked map[string]bool,
-	sources map[string]string,
+	staged map[string]commitWrite,
 	stagedOutputs map[string]bootstrap.Output,
 	stagedBootstrap bool,
 ) (bool, error) {
 	if tracked[strings.ToLower(entry.Path)] {
 		return false, nil
 	}
-	if _, restaged := sources[entry.Path]; restaged {
+	if _, restaged := staged[entry.Path]; restaged {
 		return false, nil
 	}
 	if out, classified := stagedOutputs[entry.Path]; classified &&
@@ -83,16 +83,21 @@ func pruneTargets(
 	root string,
 	previous []receipt.Entry,
 	tracked map[string]bool,
-	sources map[string]string,
+	staged map[string]commitWrite,
 	stagedOutputs map[string]bootstrap.Output,
 	stagedBootstrap bool,
 ) (map[string]*workspacewrite.InstallImage, error) {
-	targets := map[string]*workspacewrite.InstallImage{}
+	files, err := os.OpenRoot(root)
+	if err != nil {
+		return nil, err
+	}
+	defer files.Close()
+	targets := make(map[string]*workspacewrite.InstallImage)
 	for _, old := range previous {
 		shouldPrune, err := prunable(
 			old,
 			tracked,
-			sources,
+			staged,
 			stagedOutputs,
 			stagedBootstrap,
 		)
@@ -102,71 +107,139 @@ func pruneTargets(
 		if !shouldPrune {
 			continue
 		}
-		p := filepath.Join(root, old.Path)
-		info, err := os.Lstat(p)
-		if errors.Is(err, os.ErrNotExist) {
+		current, err := workspacewrite.ObserveInstallImage(files, old.Path)
+		if err != nil {
+			if info, statErr := files.Lstat(old.Path); statErr == nil &&
+				!info.Mode().IsRegular() {
+				return nil, fmt.Errorf("owned output is not a regular file: %s", old.Path)
+			}
+			return nil, err
+		}
+		if current == nil {
 			targets[old.Path] = nil
 			continue
 		}
-		if err != nil {
-			return nil, err
-		}
-		if info.Mode()&os.ModeSymlink != 0 || !info.Mode().IsRegular() {
-			return nil, fmt.Errorf("owned output is not a regular file: %s", old.Path)
-		}
-		actual, err := DigestFile(p, nil)
-		if err != nil {
-			return nil, err
-		}
-		observed := workspacewrite.InstallImage{
-			SHA256: actual["sha256"],
-			Mode:   workspacewrite.EffectiveInstallMode(info.Mode().Perm()),
-		}
-		if !strings.EqualFold(observed.SHA256, old.SHA256) {
+		if !matchesReceipt(old, current) {
 			return nil, fmt.Errorf("modified owned output cannot be pruned: %s", old.Path)
 		}
-		if old.Mode != 0 &&
-			workspacewrite.EffectiveInstallMode(os.FileMode(old.Mode)) != observed.Mode {
-			return nil, fmt.Errorf("modified owned output cannot be pruned: %s", old.Path)
-		}
-		targets[old.Path] = &observed
+		targets[old.Path] = current
 	}
 	return targets, nil
 }
 
-// applyCommit publishes the staged installation. stagedOutputs classifies
-// every non-package file the stage is allowed to contain, including method
-// bootstrap outputs validated before packages joined the stage and explicit
-// wrapper outputs. mcdrOutputs identifies the subset produced by the
-// MCDReforged wrapper so those entries carry their own receipt origin.
-// stagedBootstrap reports whether the bootstrap contract ran for this
-// operation; when false its established outputs are preserved and
-// revalidated against the freshly read receipt, so drift between the
-// currency check and the commit aborts before anything is written. The
-// commit never inspects the stage tree against the bootstrap contract,
-// because that tree also contains package and wrapper files that are not
-// bootstrap outputs.
-func applyCommit(root, stage string, d *document.Manifest, l *document.Lock, publish bool, overwritePaths map[string]bool, stagedOutputs, mcdrOutputs map[string]bootstrap.Output, stagedBootstrap bool, mode installCommitMode, logger *log.Logger) (FileChanges, error) {
-	var counts FileChanges
-	resultErr := applyCommitFiles(root, stage, d, l, publish, overwritePaths, stagedOutputs, mcdrOutputs, stagedBootstrap, mode, &counts, logger)
-	return counts, resultErr
+// installOutputExpectation is the image one path must hold at the commit
+// point. compareMode is false for a legacy receipt entry whose zero mode is a
+// wildcard rather than observed evidence.
+type installOutputExpectation struct {
+	image       *workspacewrite.InstallImage
+	compareMode bool
 }
 
-func applyCommitFiles(root, stage string, d *document.Manifest, l *document.Lock, publish bool, overwritePaths map[string]bool, stagedOutputs, mcdrOutputs map[string]bootstrap.Output, stagedBootstrap bool, mode installCommitMode, counts *FileChanges, logger *log.Logger) (resultErr error) {
+// verifyInstallOutputs checks the workspace at the commit point. A journaled
+// write must hold its after image and a journaled prune must stay absent, so a
+// path edited while the executor wrote another file is not mistaken for the
+// bytes the transaction published. A path the executor skipped because it
+// already matched is checked against its planned image. Entries the published
+// receipt carries forward are checked against their accepted baselines,
+// including legacy entries whose zero mode is a wildcard; a restaged or pruned
+// path is never compared with the baseline it replaced.
+func verifyInstallOutputs(
+	files *os.Root,
+	entries []workspacewrite.InstallJournalEntry,
+	staged map[string]commitWrite,
+	pruneExpected map[string]*workspacewrite.InstallImage,
+	retained []receipt.Entry,
+) error {
+	mutated := make(map[string]*workspacewrite.InstallImage, len(entries))
+	for _, entry := range entries {
+		// A nil after image records a journaled prune, so the same table
+		// expresses "must hold these bytes" and "must stay absent".
+		mutated[entry.Path] = entry.After
+	}
+	expected := make(
+		map[string]installOutputExpectation,
+		len(staged)+len(pruneExpected)+len(retained),
+	)
+	for name, write := range staged {
+		expected[name] = installOutputExpectation{
+			image:       write.after,
+			compareMode: true,
+		}
+	}
+	for name, image := range pruneExpected {
+		expected[name] = installOutputExpectation{
+			image:       image,
+			compareMode: true,
+		}
+	}
+	for _, entry := range retained {
+		if _, planned := expected[entry.Path]; planned {
+			continue
+		}
+		expected[entry.Path] = installOutputExpectation{
+			image:       receiptImage(entry),
+			compareMode: entry.Mode != 0,
+		}
+	}
+	names := make([]string, 0, len(expected))
+	for name := range expected {
+		names = append(names, name)
+	}
+	slices.Sort(names)
+	for _, name := range names {
+		want := expected[name]
+		if after, journaled := mutated[name]; journaled {
+			want = installOutputExpectation{image: after, compareMode: true}
+		}
+		current, err := workspacewrite.ObserveInstallImage(files, name)
+		if err != nil {
+			return fmt.Errorf(
+				"inspect installation output %s before commit: %w",
+				name,
+				err,
+			)
+		}
+		if !workspacewrite.InstallImagesMatch(
+			current,
+			want.image,
+			want.compareMode,
+		) {
+			return fmt.Errorf(
+				"installation output %s changed before commit",
+				name,
+			)
+		}
+	}
+	return nil
+}
+
+// applyCommit publishes the staged installation against documents the caller
+// observed before the operation read or resolved anything, so an edit made
+// after observation fails the transaction instead of being overwritten.
+// stagedOutputs classifies every non-package file the stage is allowed to
+// contain, including method bootstrap outputs validated before packages joined
+// the stage and explicit wrapper outputs. mcdrOutputs identifies the subset
+// produced by the MCDReforged wrapper so those entries carry their own receipt
+// origin. stagedBootstrap reports whether the bootstrap contract ran for this
+// operation; when false its established outputs are preserved and revalidated
+// against the pinned receipt, so drift between the currency check and the
+// commit aborts before anything is written. The commit never inspects the stage
+// tree against the bootstrap contract, because that tree also contains package
+// and wrapper files that are not bootstrap outputs.
+func applyCommit(root, stage string, d *document.Manifest, l *document.Lock, publish bool, overwritePaths map[string]bool, stagedOutputs, mcdrOutputs map[string]bootstrap.Output, stagedBootstrap bool, mode installCommitMode, documents WorkspaceDocuments, logger *log.Logger) (FileChanges, error) {
 	reconcile := mode == installCommitReconcile
 	metadataOnly := mode == installCommitMetadataOnly
-	receiptPath := filepath.Join(root, receipt.Filename)
 	previous := receipt.New()
-	raw, err := os.ReadFile(receiptPath)
-	receiptExisted := err == nil
-	if receiptExisted {
-		parsed, err := receipt.Decode(bytes.NewReader(raw))
+	receiptPin, ok := documents.documents[receipt.Filename]
+	if !ok {
+		return FileChanges{}, fmt.Errorf("installation documents do not capture %s", receipt.Filename)
+	}
+	if receiptPin.image != nil {
+		parsed, err := receipt.Decode(bytes.NewReader(receiptPin.raw))
 		if err != nil {
-			return err
+			return FileChanges{}, err
 		}
 		previous = *parsed
-	} else if !os.IsNotExist(err) {
-		return err
 	}
 	if !stagedBootstrap {
 		// The currency check that skipped bootstrap staging predates
@@ -176,16 +249,15 @@ func applyCommitFiles(root, stage string, d *document.Manifest, l *document.Lock
 		// tree that no longer satisfies the contract.
 		retained, err := bootstrapCurrent(root, l, &previous, logger)
 		if err != nil {
-			return err
+			return FileChanges{}, err
 		}
 		if !retained {
-			return fmt.Errorf(
+			return FileChanges{}, fmt.Errorf(
 				"retained bootstrap outputs no longer satisfy the locked bootstrap contract; rerun the install to restage the server tree",
 			)
 		}
 	}
 	owned := map[string]receipt.Entry{}
-	observedBefore := map[string]*workspacewrite.InstallImage{}
 	for _, entry := range previous.Entries {
 		owned[entry.Path] = entry
 	}
@@ -195,11 +267,11 @@ func applyCommitFiles(root, stage string, d *document.Manifest, l *document.Lock
 	if reconcile {
 		bf, err := receipt.BootstrapFingerprint(l)
 		if err != nil {
-			return err
+			return FileChanges{}, err
 		}
 		pf, err := receipt.PackageFingerprint(l)
 		if err != nil {
-			return err
+			return FileChanges{}, err
 		}
 		if stagedBootstrap {
 			next.BootstrapFingerprint = bf
@@ -250,9 +322,8 @@ func applyCommitFiles(root, stage string, d *document.Manifest, l *document.Lock
 		}
 	}
 	tracked := trackedPaths(l)
-	sources := map[string]string{}
-	sourceImages := map[string]workspacewrite.InstallImage{}
-	err = func() error {
+	staged := make(map[string]commitWrite)
+	err := func() error {
 		if metadataOnly {
 			return nil
 		}
@@ -311,6 +382,7 @@ func applyCommitFiles(root, stage string, d *document.Manifest, l *document.Lock
 			if !isSeed {
 				fileMode = info.Mode().Perm()
 			}
+			var base *workspacewrite.InstallImage
 			targetInfo, err := os.Lstat(target)
 			switch {
 			case err == nil:
@@ -324,10 +396,11 @@ func applyCommitFiles(root, stage string, d *document.Manifest, l *document.Lock
 				if err != nil {
 					return err
 				}
-				observedBefore[relative] = &workspacewrite.InstallImage{
+				current := workspacewrite.InstallImage{
 					SHA256: actual["sha256"],
 					Mode:   workspacewrite.EffectiveInstallMode(targetInfo.Mode().Perm()),
 				}
+				base = &current
 				prior, isOwned := owned[relative]
 				if !isOwned {
 					switch {
@@ -354,30 +427,20 @@ func applyCommitFiles(root, stage string, d *document.Manifest, l *document.Lock
 							relative,
 						)
 					}
-				} else {
-					observed := workspacewrite.InstallImage{
-						SHA256: actual["sha256"],
-						Mode:   workspacewrite.EffectiveInstallMode(targetInfo.Mode().Perm()),
-					}
-					expected := observed
-					expected.SHA256 = prior.SHA256
-					if prior.Mode != 0 {
-						expected.Mode = workspacewrite.EffectiveInstallMode(os.FileMode(prior.Mode))
-					}
-					if !workspacewrite.InstallImagesEqual(&observed, &expected) {
-						if overwritePaths[relative] {
-							logger.Debug(
-								"overwriting modified output",
-								"path", relative,
-								"reason", "overwrite requested",
-							)
-						} else {
-							return fmt.Errorf("modified owned output conflict: %s", relative)
-						}
+				} else if !matchesReceipt(prior, &current) {
+					if overwritePaths[relative] {
+						logger.Debug(
+							"overwriting modified output",
+							"path", relative,
+							"reason", "overwrite requested",
+						)
+					} else {
+						return fmt.Errorf("modified owned output conflict: %s", relative)
 					}
 				}
 			case errors.Is(err, os.ErrNotExist):
-				observedBefore[relative] = nil
+				// The write's base stays nil so the planner records an absent
+				// precondition instead of dropping the path.
 			default:
 				return err
 			}
@@ -422,16 +485,21 @@ func applyCommitFiles(root, stage string, d *document.Manifest, l *document.Lock
 					next.Entries = append(next.Entries, entry)
 				}
 			}
-			sourceImages[relative] = workspacewrite.InstallImage{
+			after := workspacewrite.InstallImage{
 				SHA256: sha256,
 				Mode:   workspacewrite.EffectiveInstallMode(fileMode),
 			}
-			sources[relative] = p
+			staged[relative] = commitWrite{
+				path:   relative,
+				source: p,
+				base:   base,
+				after:  &after,
+			}
 			return nil
 		})
 	}()
 	if err != nil {
-		return err
+		return FileChanges{}, err
 	}
 	var pruneExpected map[string]*workspacewrite.InstallImage
 	if reconcile {
@@ -439,179 +507,74 @@ func applyCommitFiles(root, stage string, d *document.Manifest, l *document.Lock
 			root,
 			previous.Entries,
 			tracked,
-			sources,
+			staged,
 			stagedOutputs,
 			stagedBootstrap,
 		)
 		if err != nil {
-			return err
+			return FileChanges{}, err
 		}
 	}
-	receiptBytes, err := next.Snapshot()
-	if err != nil {
-		return err
-	}
-	lockPlan, err := installDocumentPlanFor(
-		root,
-		document.LockFilename,
-		0o644,
-		func() ([]byte, error) { return document.LockFile(root).Snapshot(l) },
-		l.MergeBytes,
+	documentWrites, err := documents.documentWrites(
+		documentCandidate{
+			name: document.LockFilename, mode: 0o644, publish: true,
+			snapshot: func() ([]byte, error) { return document.LockFile(root).Snapshot(l) },
+			merge:    l.MergeBytes,
+		},
+		documentCandidate{
+			name: receipt.Filename, mode: 0o600, publish: true,
+			snapshot: next.Snapshot,
+		},
+		documentCandidate{
+			name: document.ManifestFilename, mode: 0o644, publish: publish,
+			snapshot: func() ([]byte, error) { return document.ManifestFile(root).Snapshot(d) },
+			merge:    d.MergeBytes,
+		},
 	)
 	if err != nil {
-		return err
+		return FileChanges{}, err
 	}
-	var manifestPlan *installDocumentPlan
-	if publish {
-		manifestPlan, err = installDocumentPlanFor(
-			root,
-			document.ManifestFilename,
-			0o644,
-			func() ([]byte, error) { return document.ManifestFile(root).Snapshot(d) },
-			d.MergeBytes,
-		)
-		if err != nil {
-			return err
-		}
-	}
-	receiptMode, err := installFileMode(receiptPath, 0o600)
-	if err != nil {
-		return err
-	}
-	receiptAfter := workspacewrite.InstallBytesImage(receiptBytes, receiptMode)
-	var receiptBase *workspacewrite.InstallImage
-	if receiptExisted {
-		receiptBase = workspacewrite.InstallBytesImage(raw, receiptMode)
-	}
-	writes := make([]commitWrite, 0, len(sources)+3)
-	owners := make(map[string]struct{}, len(sources)+3)
-	claim := func(name string) error {
-		if _, exists := owners[name]; exists {
-			return fmt.Errorf("installation path %s has conflicting owners", name)
-		}
-		owners[name] = struct{}{}
-		return nil
-	}
-	for name, source := range sources {
+	writes := make([]commitWrite, 0, len(staged)+len(documentWrites))
+	for name, write := range staged {
 		if installPathReserved(root, name) {
-			return fmt.Errorf("staged output %s is reserved", name)
+			return FileChanges{}, fmt.Errorf("staged output %s is reserved", name)
 		}
-		if err := claim(name); err != nil {
-			return err
-		}
-		after := sourceImages[name]
-		writes = append(writes, commitWrite{
-			path:   name,
-			source: source,
-			base:   observedBefore[name],
-			after:  &after,
-		})
+		writes = append(writes, write)
 	}
-	documents := []commitWrite{
-		{
-			path:  document.LockFilename,
-			data:  lockPlan.Data,
-			base:  lockPlan.Base,
-			after: &lockPlan.Image,
-		},
-		{
-			path:  receipt.Filename,
-			data:  receiptBytes,
-			base:  receiptBase,
-			after: receiptAfter,
-		},
-	}
-	if publish {
-		documents = append(documents, commitWrite{
-			path:  document.ManifestFilename,
-			data:  manifestPlan.Data,
-			base:  manifestPlan.Base,
-			after: &manifestPlan.Image,
-		})
-	}
-	documentAfter := make(map[string]*workspacewrite.InstallImage, len(documents))
-	baseImages := make(map[string]*workspacewrite.InstallImage, len(documents))
-	for _, document := range documents {
-		if err := claim(document.path); err != nil {
-			return err
-		}
-		writes = append(writes, document)
-		documentAfter[document.path] = document.after
-		baseImages[document.path] = document.base
-	}
+	writes = append(writes, documentWrites...)
 	prunes := make([]commitPrune, 0, len(pruneExpected))
 	for name, expected := range pruneExpected {
 		if installPathMatchesReserved(root, name, document.ManifestFilename) {
-			return fmt.Errorf("installation receipt path %s is reserved", name)
-		}
-		if err := claim(name); err != nil {
-			return err
+			return FileChanges{}, fmt.Errorf("installation receipt path %s is reserved", name)
 		}
 		prunes = append(prunes, commitPrune{path: name, expected: expected})
 	}
+	// Verify every path the receipt will describe at the commit point: the
+	// executor's journaled after images, planned paths it did not journal,
+	// and accepted entries carried forward without restaging.
 	verify := func(
 		files *os.Root,
 		entries []workspacewrite.InstallJournalEntry,
 	) error {
-		mutated := make(map[string]struct{}, len(entries))
-		for _, entry := range entries {
-			mutated[entry.Path] = struct{}{}
-		}
-		for name, expected := range documentAfter {
-			current, err := workspacewrite.ObserveInstallImage(files, name)
-			if err != nil {
-				return err
-			}
-			compareMode := baseImages[name] != nil
-			if !workspacewrite.InstallImagesMatch(current, expected, compareMode) {
-				return fmt.Errorf(
-					"installation document %s changed before commit",
-					name,
-				)
-			}
-		}
-		for name, image := range sourceImages {
-			if _, changed := mutated[name]; changed {
-				continue
-			}
-			image := image
-			current, err := workspacewrite.ObserveInstallImage(files, name)
-			if err != nil {
-				return err
-			}
-			if !workspacewrite.InstallImagesEqual(current, &image) {
-				return fmt.Errorf(
-					"installation path %s changed before commit",
-					name,
-				)
-			}
-		}
-		for name, expected := range pruneExpected {
-			if _, changed := mutated[name]; changed {
-				continue
-			}
-			current, err := workspacewrite.ObserveInstallImage(files, name)
-			if err != nil {
-				return err
-			}
-			if !workspacewrite.InstallImagesEqual(current, expected) {
-				return fmt.Errorf(
-					"installation path %s changed before commit",
-					name,
-				)
-			}
-		}
-		return nil
+		return verifyInstallOutputs(
+			files,
+			entries,
+			staged,
+			pruneExpected,
+			next.Entries,
+		)
 	}
 	applied, err := executeCommit(root, commitRequest{
-		label:  "installation",
-		writes: writes,
-		prunes: prunes,
-		verify: verify,
+		label:     "installation",
+		writes:    writes,
+		prunes:    prunes,
+		documents: documents,
+		verify:    verify,
 	}, logger)
 	if err != nil {
-		return err
+		return FileChanges{}, err
 	}
+	var counts FileChanges
 	for _, entry := range applied {
 		if entry.After == nil {
 			if _, pruned := pruneExpected[entry.Path]; pruned {
@@ -619,7 +582,7 @@ func applyCommitFiles(root, stage string, d *document.Manifest, l *document.Lock
 			}
 			continue
 		}
-		if _, staged := sources[entry.Path]; !staged {
+		if _, restaged := staged[entry.Path]; !restaged {
 			continue
 		}
 		if entry.Before == nil {
@@ -631,9 +594,9 @@ func applyCommitFiles(root, stage string, d *document.Manifest, l *document.Lock
 	logger.Info(
 		"installation committed",
 		"root", root,
-		"files", len(sources),
+		"files", len(staged),
 		"pruned", counts.Removed,
 		"manifest-published", publish,
 	)
-	return nil
+	return counts, nil
 }

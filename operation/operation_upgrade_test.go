@@ -1,10 +1,12 @@
 package operation
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/mclucy/lucy/catalog"
 	"github.com/mclucy/lucy/document"
+	"github.com/mclucy/lucy/install"
 	serverpkg "github.com/mclucy/lucy/server"
 	"github.com/mclucy/lucy/upstream"
 	versionpkg "github.com/mclucy/lucy/version"
@@ -45,6 +47,42 @@ func TestSelectUpgradeOption(t *testing.T) {
 	}
 	if _, err := SelectUpgradeOption(result, "sha256:missing"); err == nil {
 		t.Fatal("SelectUpgradeOption(missing) error = nil, want a not-found error")
+	}
+}
+
+func TestVerifyRecoveredBaseRejectsRename(t *testing.T) {
+	root := t.TempDir()
+	manifest := &document.Manifest{
+		SchemaVersion: document.ManifestSchemaVersion,
+		Name:          "Previous name",
+		Server: document.ManifestServer{
+			Minecraft: "1.21.4",
+			Directory: ".",
+			Core: document.ManifestCore{
+				Product:        serverpkg.ProductMinecraft,
+				ProductVersion: "1.21.4",
+			},
+		},
+	}
+	fingerprint, err := manifest.Fingerprint()
+	if err != nil {
+		t.Fatal(err)
+	}
+	previousName := manifest.Name
+	manifest.Name = "New name"
+	if err := document.ManifestFile(root).Write(manifest); err != nil {
+		t.Fatal(err)
+	}
+	base, err := install.CaptureWorkspaceDocuments(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := verifyRecoveredBase(base, fingerprint, previousName, "", "upgrade"); err == nil ||
+		!strings.Contains(err.Error(), "manifest name changed") {
+		t.Fatalf("verifyRecoveredBase() error = %v, want a rename conflict", err)
+	}
+	if err := verifyRecoveredBase(base, fingerprint, manifest.Name, "", "upgrade"); err != nil {
+		t.Fatalf("verifyRecoveredBase() after retry: %v", err)
 	}
 }
 

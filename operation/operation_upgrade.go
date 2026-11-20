@@ -113,27 +113,20 @@ func (s *Service) PlanUpgrade(
 	if err := filetrack.RecoverLocked(root, s.logger); err != nil {
 		return nil, err
 	}
-	currentManifest, err := document.ManifestFile(root).Read()
+	// Recovery may have replaced documents, so capture their exact state now:
+	// this is the base every plan answers, and ApplyPlan may write nothing else.
+	baseDocuments, err := install.CaptureWorkspaceDocuments(root)
 	if err != nil {
 		return nil, err
 	}
-	currentManifestFingerprint, err := currentManifest.Fingerprint()
-	if err != nil {
+	if err := verifyRecoveredBase(
+		baseDocuments,
+		baseManifest,
+		d.Name,
+		baseLock,
+		"upgrade",
+	); err != nil {
 		return nil, err
-	}
-	if currentManifestFingerprint != baseManifest {
-		return nil, fmt.Errorf("manifest changed during upgrade planning; retry")
-	}
-	currentLock, err := document.LockFile(root).Read()
-	if err != nil {
-		return nil, err
-	}
-	currentLockFingerprint, err := currentLock.Fingerprint()
-	if err != nil {
-		return nil, err
-	}
-	if currentLockFingerprint != baseLock {
-		return nil, fmt.Errorf("lock changed during upgrade planning; retry")
 	}
 	roots, err := upgradeRoots(d, old)
 	if err != nil {
@@ -195,7 +188,7 @@ func (s *Service) PlanUpgrade(
 		return nil, err
 	}
 	if len(active) == 0 {
-		option, err := noopUpgradeOption(d, old, baseManifest, baseLock)
+		option, err := noopUpgradeOption(baseDocuments, d, old, baseManifest, baseLock)
 		if err != nil {
 			return nil, err
 		}
@@ -223,6 +216,7 @@ func (s *Service) PlanUpgrade(
 		option, err := s.resolveUpgradeOption(
 			ctx,
 			root,
+			baseDocuments,
 			d,
 			old,
 			baseManifest,

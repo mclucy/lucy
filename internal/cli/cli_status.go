@@ -96,14 +96,8 @@ func actionStatusLive(
 	ctx, stop := CommandContext(cmd)
 	defer stop()
 	root := inv.Directory
-	observed, identifyWarnings := identify.Packages(
-		ctx,
-		workspace.Observe(
-			root,
-			discovery.Request{Policy: discovery.PolicyPreferModified},
-		),
-		deps.Router.ResolveArtifactsByHash,
-	)
+	observed := workspace.Observe(root, discovery.Request{Policy: discovery.PolicyPreferModified})
+	identifyWarnings := identify.Packages(ctx, observed, deps.Router.ResolveArtifactsByHash, nil)
 	if err := ctx.Err(); err != nil {
 		return err
 	}

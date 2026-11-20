@@ -37,15 +37,18 @@ type commitPrune struct {
 	expected *workspacewrite.InstallImage
 }
 
-// commitRequest describes one recoverable transaction. verify runs after every
-// write and prune, before the commit point, and may refuse state the
-// transaction would otherwise publish. Callers own their policy; the executor
-// owns the journal, the rollback data, and the recovery contract.
+// commitRequest describes one recoverable transaction. documents pins the
+// workspace metadata a publication must not overwrite after observation;
+// verify runs after every write and prune, before the commit point, and may
+// refuse state the transaction would otherwise publish. Callers own their
+// policy; the executor owns the journal, the rollback data, the pinned
+// documents, and the recovery contract.
 type commitRequest struct {
-	label  string
-	writes []commitWrite
-	prunes []commitPrune
-	verify func(files *os.Root, entries []workspacewrite.InstallJournalEntry) error
+	label     string
+	writes    []commitWrite
+	prunes    []commitPrune
+	documents WorkspaceDocuments
+	verify    func(files *os.Root, entries []workspacewrite.InstallJournalEntry) error
 }
 
 // executeCommit applies a request as one journaled transaction and returns the
@@ -85,8 +88,20 @@ func executeCommit(
 	slices.SortFunc(changes, func(left, right change) int {
 		return strings.Compare(left.path, right.path)
 	})
-	if len(changes) == 0 {
+	if len(changes) == 0 && request.verify == nil &&
+		request.documents.documents == nil {
 		return nil, nil
+	}
+	files, err := os.OpenRoot(root)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { resultErr = errors.Join(resultErr, files.Close()) }()
+	if len(changes) == 0 {
+		return nil, runCommitVerify(files, request, nil)
+	}
+	if err := request.documents.verify(files, nil); err != nil {
+		return nil, err
 	}
 	names := make([]string, len(changes))
 	for i := range changes {
@@ -123,11 +138,6 @@ func executeCommit(
 			))
 		}
 	}()
-	files, err := os.OpenRoot(root)
-	if err != nil {
-		return nil, err
-	}
-	defer func() { resultErr = errors.Join(resultErr, files.Close()) }()
 	backupRelative := filepath.ToSlash(
 		filepath.Join(".lucy", filepath.Base(backup)),
 	)
@@ -194,7 +204,7 @@ func executeCommit(
 		)
 	}
 	if len(journal.Entries) == 0 {
-		return nil, nil
+		return nil, runCommitVerify(files, request, nil)
 	}
 	journalBytes, err := yaml.Marshal(journal)
 	if err != nil {
@@ -295,21 +305,22 @@ func executeCommit(
 			if copyErr != nil || closeErr != nil {
 				return nil, errors.Join(copyErr, closeErr)
 			}
-		} else if err := publishInstallBytes(
+		} else if err := fsutil.WriteRoot(
 			files,
 			change.path,
-			change.data,
-			entry.After,
-			entry,
+			bytes.NewReader(change.data),
+			fsutil.WriteOptions{
+				Mode:    os.FileMode(entry.After.Mode),
+				Replace: true,
+				Check:   installBeforeCheck(files, entry),
+			},
 		); err != nil {
 			return nil, err
 		}
 		applied = append(applied, entry)
 	}
-	if request.verify != nil {
-		if err := request.verify(files, journal.Entries); err != nil {
-			return nil, err
-		}
+	if err := runCommitVerify(files, request, journal.Entries); err != nil {
+		return nil, err
 	}
 	journal.Committed = true
 	committedBytes, err := yaml.Marshal(journal)
@@ -339,27 +350,25 @@ func executeCommit(
 	return applied, nil
 }
 
-func publishInstallBytes(
+// runCommitVerify runs the caller's policy and then rechecks pinned documents
+// at the commit point. The document check intentionally runs last: caller
+// verification may hash outputs for a while, and an edit made during that work
+// must still fail the transaction. It runs even when the transaction journaled
+// no changes, so a publication that writes nothing still revalidates what
+// callers observed.
+func runCommitVerify(
 	files *os.Root,
-	name string,
-	data []byte,
-	image *workspacewrite.InstallImage,
-	entry workspacewrite.InstallJournalEntry,
+	request commitRequest,
+	entries []workspacewrite.InstallJournalEntry,
 ) error {
-	return fsutil.WriteRoot(
-		files,
-		name,
-		bytes.NewReader(data),
-		fsutil.WriteOptions{
-			Mode:    os.FileMode(image.Mode),
-			Replace: true,
-			Check:   installBeforeCheck(files, entry),
-		},
-	)
+	if request.verify != nil {
+		if err := request.verify(files, entries); err != nil {
+			return err
+		}
+	}
+	return request.documents.verify(files, request.writes)
 }
 
-// installBeforeCheck guards a publication against an edit that happened after
-// the journal captured the before image.
 func installBeforeCheck(
 	files *os.Root,
 	entry workspacewrite.InstallJournalEntry,

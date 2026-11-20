@@ -441,15 +441,22 @@ func TestExplicitAdoptionThenInstallReplacesOwnedRuntimeAndPreservesAmbientFiles
 		t.Fatalf("prepare complete Fabric fixture: %v", err)
 	}
 	// Explicit adoption is the only path that grants ownership of the existing
-	// upstream runtime and identified package.
+	// upstream runtime and identified package. The fixture records the mode it
+	// actually wrote, because adoption compares observed modes exactly.
+	ambientPath := filepath.Join(root, "server", "mods", "ambient.jar")
+	ambientInfo, err := os.Stat(ambientPath)
+	if err != nil {
+		t.Fatalf("stat adopted package: %v", err)
+	}
 	if err := install.AdoptExistingWorkspace(root, install.AdoptOptions{
 		Manifest:    manifest,
 		Lock:        adopted,
 		PublishLock: true,
 		Packages: []install.AdoptedPackage{{
-			Path:           filepath.Join(root, "server", "mods", "ambient.jar"),
+			Path:           ambientPath,
 			PackageID:      "modrinth:ambient",
 			ExpectedSHA256: installTestDigest(ambient),
+			ExpectedMode:   uint32(ambientInfo.Mode().Perm()),
 		}},
 	}); err != nil {
 		t.Fatalf("explicit adoption: %v", err)

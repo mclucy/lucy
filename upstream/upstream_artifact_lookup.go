@@ -23,31 +23,19 @@ func (e ProviderError) Unwrap() error {
 	return e.Err
 }
 
-// ArtifactLookup is the result of a hash lookup on the upstream mappers.
-// Ref is zero when no mapper matched the artifact. Errors holds the failure
-// of each mapper. A lookup with errors is incomplete, not a miss.
-type ArtifactLookup struct {
-	Ref    catalog.VersionedRef
-	Errors []ProviderError
-}
-
-// Matched reports whether some mapper identified the artifact.
-func (l ArtifactLookup) Matched() bool { return l.Ref.Name != "" }
-
-// Complete reports whether every attempted mapper finished without failure.
-func (l ArtifactLookup) Complete() bool { return len(l.Errors) == 0 }
-
-// ArtifactReleaseResolution is the outcome of identifying one fingerprint.
-// Release and Provider are set only when a mapper reported a match and the
-// accept filter, when present, allowed it. Errors holds the failures reported
-// for this fingerprint, including failures from mappers that ran before a
-// later one matched it.
+// ArtifactReleaseResolution records the outcome of identifying one fingerprint.
+// A match includes the release and provider so callers can reuse the result.
+// Errors records failed attempts even when a later mapper finds a match. An
+// unmatched result with errors is an incomplete lookup, not a clean miss.
 type ArtifactReleaseResolution struct {
 	Release  Release
 	Matched  bool
 	Provider catalog.Provider
 	Errors   []ProviderError
 }
+
+// Complete reports whether every attempted mapper finished without failure.
+func (r ArtifactReleaseResolution) Complete() bool { return len(r.Errors) == 0 }
 
 // LookupArtifactReleases resolves fingerprints to published releases in input
 // order. It returns one resolution per input, or nil when there are none.

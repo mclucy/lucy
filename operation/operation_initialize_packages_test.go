@@ -61,10 +61,10 @@ func (s packageMapperTestSource) GetArtifactReleaseMapper(
 func (s packageMapperTestSource) ResolveArtifactsByHash(
 	_ context.Context,
 	artifacts []upstream.ArtifactFingerprint,
-) []upstream.ArtifactLookup {
-	lookups := make([]upstream.ArtifactLookup, len(artifacts))
+) []upstream.ArtifactReleaseResolution {
+	lookups := make([]upstream.ArtifactReleaseResolution, len(artifacts))
 	for i := range lookups {
-		lookup := upstream.ArtifactLookup{}
+		lookup := upstream.ArtifactReleaseResolution{}
 		for _, provider := range packageMapperProviders {
 			mapper, ok := s.mappers[provider]
 			if !ok || mapper.err == nil {
@@ -327,9 +327,8 @@ func TestInitializeLeavesPackageUnmanagedWithoutMapper(t *testing.T) {
 	readFileBytes(t, filepath.Join(root, "mods", "example.jar"))
 }
 
-// A failed lookup is not a user-facing warning by itself. Without a provider
-// that identifies the file, the file stays unmanaged and the report names it
-// once.
+// A failed lookup leaves packages unmanaged and reports the provider failure
+// once per affected file, including files without a descriptor.
 func TestInitializeLeavesPackageUnmanagedWhenHashLookupFails(t *testing.T) {
 	_, result := initializePackageMapperResult(t, packageMapperTestSource{
 		unidentified: true,
@@ -342,19 +341,22 @@ func TestInitializeLeavesPackageUnmanagedWhenHashLookupFails(t *testing.T) {
 			},
 		},
 	})
-	unmanaged := false
-	for _, warning := range result.Warnings {
-		message := warning.Error()
-		if strings.Contains(message, "modrinth unavailable") {
-			t.Errorf("warning %q reports a provider lookup failure", message)
+	for _, filename := range []string{"example.jar", "unidentified.jar"} {
+		count := 0
+		for _, warning := range result.Warnings {
+			message := warning.Error()
+			if !strings.Contains(message, "mods/"+filename+" left unmanaged") {
+				continue
+			}
+			count++
+			if !strings.Contains(message, "provider hash lookup incomplete") ||
+				!strings.Contains(message, "modrinth unavailable") {
+				t.Errorf("warning for %s = %q, want the provider failure", filename, message)
+			}
 		}
-		if strings.Contains(message, "example.jar") &&
-			strings.Contains(message, "left unmanaged") {
-			unmanaged = true
+		if count != 1 {
+			t.Errorf("warnings = %v, want one unmanaged warning for %s", result.Warnings, filename)
 		}
-	}
-	if !unmanaged {
-		t.Fatalf("warnings = %v, want the unmanaged package warning", result.Warnings)
 	}
 	if got := len(result.Document.Server.Packages[catalog.EcosystemFabric]); got != 0 {
 		t.Fatalf("manifest packages = %d, want none", got)

@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 
 	"github.com/mclucy/lucy/install"
+	"github.com/mclucy/lucy/internal/workspacewrite"
 	serverpkg "github.com/mclucy/lucy/server"
 	"github.com/mclucy/lucy/version"
 	"github.com/mclucy/lucy/workspace"
@@ -98,14 +99,7 @@ func (o *runtimeObservation) sameMembership(files []discovery.File) bool {
 }
 
 func verifyRuntimeFileBaseline(observed install.AdoptedRuntimeFile) error {
-	info, err := os.Lstat(observed.Path)
-	if err != nil || !info.Mode().IsRegular() {
-		return fmt.Errorf(
-			"runtime file %s changed during initialization",
-			observed.Path,
-		)
-	}
-	hashes, err := install.DigestFile(observed.Path, nil)
+	current, err := observeRuntimeFile(observed.Path)
 	if err != nil {
 		return fmt.Errorf(
 			"digest runtime file %s: %w",
@@ -113,14 +107,29 @@ func verifyRuntimeFileBaseline(observed install.AdoptedRuntimeFile) error {
 			err,
 		)
 	}
-	if hashes["sha256"] != observed.ExpectedSHA256 ||
-		uint32(info.Mode().Perm()) != observed.ExpectedMode {
+	want := &workspacewrite.InstallImage{
+		SHA256: observed.ExpectedSHA256,
+		Mode:   observed.ExpectedMode,
+	}
+	if current == nil ||
+		!workspacewrite.InstallImagesEqual(current, want) {
 		return fmt.Errorf(
 			"runtime file %s changed during initialization",
 			observed.Path,
 		)
 	}
 	return nil
+}
+
+// observeRuntimeFile reports the exact content and mode of one regular file.
+// A nil image means the path is absent; a non-regular path is an error.
+func observeRuntimeFile(path string) (*workspacewrite.InstallImage, error) {
+	files, err := os.OpenRoot(filepath.Dir(path))
+	if err != nil {
+		return nil, err
+	}
+	defer files.Close()
+	return workspacewrite.ObserveInstallImage(files, filepath.Base(path))
 }
 
 // adoptedRuntimeFiles captures the digest and mode of every file the selected
@@ -155,7 +164,7 @@ func adoptedRuntimeFiles(
 			Path:           f.Path,
 			Role:           f.Role,
 			ExpectedSHA256: hashes["sha256"],
-			ExpectedMode:   uint32(info.Mode().Perm()),
+			ExpectedMode:   workspacewrite.EffectiveInstallMode(info.Mode().Perm()),
 		})
 	}
 	return files, nil

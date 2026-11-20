@@ -37,15 +37,24 @@ type packageAdopter struct {
 	served   map[catalog.Ecosystem]struct{}
 	mappers  []upstream.ArtifactReleaseMapper
 
-	packages  []install.AdoptedPackage
-	releases  []install.AdoptedRelease
+	accepted  []acceptedPackage
 	index     map[string]int
-	claims    map[string]string
 	conflicts map[string]bool
 
 	target       resolve.Target
 	moduleClaims map[resolve.ModuleIdentity]moduleClaim
-	claimKeys    []string
+}
+
+// acceptedPackage is one installed file adoption manages. The embedded
+// release is the resolver input; PackageID and Mode complete the receipt
+// entry. A conflict invalidates this record so the file contributes neither
+// a receipt entry nor a resolver candidate. The record keeps its index while
+// invalid, so the module claims of accepted files stay addressable.
+type acceptedPackage struct {
+	install.AdoptedRelease
+	PackageID string
+	Mode      uint32
+	valid     bool
 }
 
 // moduleClaim names the recorded package that answers one module identity.
@@ -87,13 +96,15 @@ type adoptionProposal struct {
 // adoptInstalledPackages adds requirements for the packages discovery
 // identified and returns the ownership claims installation must record,
 // together with the releases resolution selects for them and the absent
-// modules the adoption report already named.
+// modules the adoption report already named. known holds the resolutions an
+// earlier identification pass obtained for these paths, so adoption never
+// resends them to the provider chain.
 func (s *Service) adoptInstalledPackages(
 	ctx context.Context,
 	root string,
 	manifest *documentpkg.Manifest,
 	observed *workspace.Workspace,
-	matches map[string]upstream.ArtifactReleaseResolution,
+	known map[string]upstream.ArtifactReleaseResolution,
 ) (
 	packages []install.AdoptedPackage,
 	releases []install.AdoptedRelease,
@@ -117,7 +128,6 @@ func (s *Service) adoptInstalledPackages(
 		served:    servedEcosystemSet(manifest, observed),
 		mappers:   mappers,
 		index:     map[string]int{},
-		claims:    map[string]string{},
 		conflicts: map[string]bool{},
 		target: resolve.Target{
 			Product:     manifest.Server.Core.Product,
@@ -146,7 +156,7 @@ func (s *Service) adoptInstalledPackages(
 			return nil, nil, nil, 0, proposal.fatal
 		}
 	}
-	resolutions := adopter.lookupReleases(ctx, proposals, matches)
+	resolutions := adopter.lookupReleases(ctx, proposals, known)
 	if err := ctx.Err(); err != nil {
 		return nil, nil, nil, 0, err
 	}
@@ -164,15 +174,30 @@ func (s *Service) adoptInstalledPackages(
 	for _, proposal := range proposals {
 		adopter.apply(proposal)
 	}
+	if observed != nil {
+		for _, path := range observed.UnidentifiedPackageFiles {
+			if lookupErrors := known[path].Errors; len(lookupErrors) != 0 {
+				adopter.warn("%v", incompleteHashLookupWarning("package", path, lookupErrors))
+			}
+		}
+	}
 	reportedMissing = adopter.reportMissingModules(proposals)
-	packages = slices.DeleteFunc(
-		adopter.packages,
-		func(pkg install.AdoptedPackage) bool { return pkg.Path == "" },
-	)
-	releases = slices.DeleteFunc(
-		adopter.releases,
-		func(release install.AdoptedRelease) bool { return release.Reference == "" },
-	)
+	// Derive the receipt entries and the resolver input from the accepted
+	// records in one pass; an invalidated record contributes to neither.
+	packages = make([]install.AdoptedPackage, 0, len(adopter.accepted))
+	releases = make([]install.AdoptedRelease, 0, len(adopter.accepted))
+	for _, accepted := range adopter.accepted {
+		if !accepted.valid {
+			continue
+		}
+		packages = append(packages, install.AdoptedPackage{
+			Path:           accepted.Path,
+			PackageID:      accepted.PackageID,
+			ExpectedSHA256: accepted.SHA256,
+			ExpectedMode:   accepted.Mode,
+		})
+		releases = append(releases, accepted.AdoptedRelease)
+	}
 	s.logger.Debug(
 		"recognized existing packages",
 		"count", len(packages),
@@ -285,23 +310,29 @@ func (a *packageAdopter) prepare(
 	return proposal
 }
 
-// lookupReleases sends one batched hash lookup for every prepared file. A
-// provider identifies a package only by a named release, so a mapper that
-// matched without a project name leaves the file to the next provider.
+// lookupReleases resolves the prepared files identification has not already
+// resolved. A path an earlier pass resolved, including a clean miss or a
+// provider failure, is reused as is, so each file enters the provider chain at
+// most once. The remaining files share one batched lookup. A provider
+// identifies a package only by a named release, so a mapper that matched
+// without a project name leaves the file to the next provider.
 func (a *packageAdopter) lookupReleases(
 	ctx context.Context,
 	proposals []adoptionProposal,
-	matches map[string]upstream.ArtifactReleaseResolution,
+	known map[string]upstream.ArtifactReleaseResolution,
 ) []upstream.ArtifactReleaseResolution {
 	resolutions := make([]upstream.ArtifactReleaseResolution, len(proposals))
 	fingerprints := make([]upstream.ArtifactFingerprint, 0, len(proposals))
 	positions := make([]int, 0, len(proposals))
 	for i := range proposals {
 		if !proposals[i].mapped {
+			// MCDR uses its own catalogue to match releases, but can retain
+			// diagnostics from an earlier lookup without querying mappers.
+			resolutions[i].Errors = known[proposals[i].pkg.Path].Errors
 			continue
 		}
-		if match, ok := matches[proposals[i].pkg.Path]; ok {
-			resolutions[i] = match
+		if resolution, ok := known[proposals[i].pkg.Path]; ok {
+			resolutions[i] = resolution
 			continue
 		}
 		positions = append(positions, i)
@@ -317,9 +348,7 @@ func (a *packageAdopter) lookupReleases(
 		func(release upstream.Release) bool { return release.Ref.Name != "" },
 	)
 	for j, position := range positions {
-		if j < len(found) {
-			resolutions[position] = found[j]
-		}
+		resolutions[position] = found[j]
 	}
 	return resolutions
 }
@@ -347,12 +376,7 @@ func (a *packageAdopter) complete(
 		a.adoptMapped(ctx, proposal, resolution)
 		return
 	}
-	ecosystem := proposal.pkg.ID.Ecosystem
-	if ecosystem == catalog.EcosystemMCDR {
-		a.probeDescriptor(ctx, proposal, catalog.EcosystemMCDR)
-		return
-	}
-	a.probeDescriptor(ctx, proposal, ecosystem)
+	a.probeDescriptor(ctx, proposal, resolution.Errors)
 }
 
 // probeDescriptor classifies a file no provider identified. Adoption needs a
@@ -360,9 +384,10 @@ func (a *packageAdopter) complete(
 func (a *packageAdopter) probeDescriptor(
 	ctx context.Context,
 	proposal *adoptionProposal,
-	ecosystem catalog.Ecosystem,
+	lookupErrors []upstream.ProviderError,
 ) {
 	p := proposal.pkg
+	ecosystem := p.ID.Ecosystem
 	if ecosystem != catalog.EcosystemMCDR {
 		if _, ok := a.served[ecosystem]; !ok {
 			var adopted bool
@@ -412,7 +437,11 @@ func (a *packageAdopter) probeDescriptor(
 	}
 	proposal.modules = modules
 	if ecosystem == catalog.EcosystemMCDR {
-		a.probeMCDR(ctx, proposal, modules, ecosystem)
+		a.probeMCDR(ctx, proposal, lookupErrors)
+		return
+	}
+	if len(lookupErrors) != 0 {
+		proposal.warnings = append(proposal.warnings, incompleteHashLookupWarning("package", p.Path, lookupErrors))
 		return
 	}
 	proposal.warnings = append(proposal.warnings, a.importWarning(
@@ -426,12 +455,10 @@ func (a *packageAdopter) probeDescriptor(
 func (a *packageAdopter) probeMCDR(
 	ctx context.Context,
 	proposal *adoptionProposal,
-	modules []catalog.DescriptorModule,
-	ecosystem catalog.Ecosystem,
+	lookupErrors []upstream.ProviderError,
 ) {
 	p := proposal.pkg
-	proposal.modules = modules
-	moduleID := modules[0].ID
+	moduleID := proposal.modules[0].ID
 	if a.manifest.MCDR == nil {
 		proposal.warnings = append(proposal.warnings, fmt.Errorf(
 			"plugin %s left unmanaged: MCDReforged is not configured",
@@ -456,11 +483,11 @@ func (a *packageAdopter) probeMCDR(
 		catalog.RegistryMCDR,
 		moduleID,
 		string(a.manifest.Server.Minecraft),
-		ecosystem,
+		catalog.EcosystemMCDR,
 	)
 	if err != nil {
 		proposal.warnings = append(proposal.warnings, fmt.Errorf(
-			"plugin %s left unmanaged: %w",
+			"plugin %s left unmanaged: MCDReforged catalogue lookup failed: %w",
 			p.Path,
 			err,
 		))
@@ -490,10 +517,22 @@ func (a *packageAdopter) probeMCDR(
 		proposal.matched = true
 		return
 	}
+	if len(lookupErrors) != 0 {
+		proposal.warnings = append(proposal.warnings, incompleteHashLookupWarning("plugin", p.Path, lookupErrors))
+		return
+	}
 	proposal.warnings = append(proposal.warnings, fmt.Errorf(
 		"plugin %s left unmanaged: no listed release matches its bytes",
 		p.Path,
 	))
+}
+
+func incompleteHashLookupWarning(kind, path string, failures []upstream.ProviderError) error {
+	reasons := make([]string, len(failures))
+	for i, failure := range failures {
+		reasons[i] = failure.Error()
+	}
+	return fmt.Errorf("%s %s left unmanaged: provider hash lookup incomplete: %s", kind, path, strings.Join(reasons, "; "))
 }
 
 // adoptMapped records an installed package a provider identified by content
@@ -765,9 +804,6 @@ func (a *packageAdopter) apply(proposal adoptionProposal) {
 	if !proposal.matched {
 		return
 	}
-	if _, claimed := a.claims[proposal.pkg.Path]; claimed {
-		return
-	}
 	if a.conflicts[proposal.key] {
 		a.warn(
 			"package %s left unmanaged: several installed files identify the same project",
@@ -855,7 +891,7 @@ func (a *packageAdopter) resolveModuleCollisions(
 		if resolve.ModuleOrder(collision.prior.module, collision.module) >= 0 {
 			a.warnModuleCollision(
 				proposal.pkg.Path,
-				a.packages[collision.prior.index].Path,
+				a.accepted[collision.prior.index].Path,
 				collision.identity,
 				proposal.ecosystem,
 			)
@@ -873,7 +909,7 @@ func (a *packageAdopter) resolveModuleCollisions(
 	}
 	paths := make([]string, len(displaced))
 	for i, collision := range displaced {
-		paths[i] = a.packages[collision.prior.index].Path
+		paths[i] = a.accepted[collision.prior.index].Path
 	}
 	for _, collision := range displaced {
 		a.unclaim(collision.prior.index)
@@ -912,24 +948,22 @@ func (a *packageAdopter) warnModuleCollision(
 	)
 }
 
-// unclaim drops a recorded package, its module claims, and its requirement.
+// unclaim invalidates a recorded package and removes its project index,
+// module claims, and requirement.
 func (a *packageAdopter) unclaim(index int) {
-	if index < 0 || index >= len(a.packages) {
+	if index < 0 || index >= len(a.accepted) {
 		return
 	}
-	path := a.packages[index].Path
-	a.packages[index] = install.AdoptedPackage{}
-	release := a.releases[index]
-	a.releases[index] = install.AdoptedRelease{}
-	if index < len(a.claimKeys) {
-		delete(a.index, a.claimKeys[index])
-		a.claimKeys[index] = ""
+	accepted := &a.accepted[index]
+	if !accepted.valid {
+		return
 	}
-	delete(a.claims, path)
-	if release.Ecosystem == catalog.EcosystemMCDR {
-		delete(a.manifest.MCDR.Packages, release.Reference)
+	accepted.valid = false
+	delete(a.index, packageKey(accepted.Ecosystem, accepted.PackageID))
+	if accepted.Ecosystem == catalog.EcosystemMCDR {
+		delete(a.manifest.MCDR.Packages, accepted.Reference)
 	} else {
-		delete(a.manifest.Server.Packages[release.Ecosystem], release.Reference)
+		delete(a.manifest.Server.Packages[accepted.Ecosystem], accepted.Reference)
 	}
 	a.dropModuleClaims(index)
 }
@@ -951,45 +985,26 @@ func (a *packageAdopter) markConflict(key string) string {
 	if !exists {
 		return ""
 	}
-	delete(a.index, key)
-	if index >= len(a.packages) {
-		return ""
-	}
-	prior := a.packages[index].Path
-	delete(a.claims, prior)
-	a.packages[index] = install.AdoptedPackage{}
-	release := a.releases[index]
-	a.releases[index] = install.AdoptedRelease{}
-	if index < len(a.claimKeys) {
-		a.claimKeys[index] = ""
-	}
-	if release.Ecosystem == catalog.EcosystemMCDR {
-		delete(a.manifest.MCDR.Packages, release.Reference)
-	} else {
-		delete(a.manifest.Server.Packages[release.Ecosystem], release.Reference)
-	}
-	a.dropModuleClaims(index)
+	prior := a.accepted[index].Path
+	a.unclaim(index)
 	return prior
 }
 
 func (a *packageAdopter) record(proposal adoptionProposal) {
-	index := len(a.packages)
+	index := len(a.accepted)
 	a.index[proposal.key] = index
-	a.claims[proposal.pkg.Path] = proposal.key
-	a.claimKeys = append(a.claimKeys, proposal.key)
-	a.packages = append(a.packages, install.AdoptedPackage{
-		Path:           proposal.pkg.Path,
-		PackageID:      proposal.packageID,
-		ExpectedSHA256: proposal.sha256,
-		ExpectedMode:   proposal.mode,
-	})
-	a.releases = append(a.releases, install.AdoptedRelease{
-		Reference: proposal.reference,
-		Ecosystem: proposal.ecosystem,
-		Candidate: proposal.candidate,
-		Path:      proposal.pkg.Path,
-		SHA256:    proposal.sha256,
-		Analysis:  proposal.analysis,
+	a.accepted = append(a.accepted, acceptedPackage{
+		AdoptedRelease: install.AdoptedRelease{
+			Reference: proposal.reference,
+			Ecosystem: proposal.ecosystem,
+			Candidate: proposal.candidate,
+			Path:      proposal.pkg.Path,
+			SHA256:    proposal.sha256,
+			Analysis:  proposal.analysis,
+		},
+		PackageID: proposal.packageID,
+		Mode:      proposal.mode,
+		valid:     true,
 	})
 	for _, module := range proposal.modules {
 		if !nativeModule(module) {

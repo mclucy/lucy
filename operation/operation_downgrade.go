@@ -97,27 +97,20 @@ func (s *Service) Downgrade(
 	if err := filetrack.RecoverLocked(root, s.logger); err != nil {
 		return nil, err
 	}
-	currentManifest, err := document.ManifestFile(root).Read()
+	// Recovery may have replaced documents, so capture their exact state now:
+	// this is the base the plan answers, and ApplyPlan may write nothing else.
+	baseDocuments, err := install.CaptureWorkspaceDocuments(root)
 	if err != nil {
 		return nil, err
 	}
-	currentManifestFingerprint, err := currentManifest.Fingerprint()
-	if err != nil {
+	if err := verifyRecoveredBase(
+		baseDocuments,
+		baseManifest,
+		d.Name,
+		baseLock,
+		"downgrade",
+	); err != nil {
 		return nil, err
-	}
-	if currentManifestFingerprint != baseManifest {
-		return nil, fmt.Errorf("manifest changed during downgrade planning; retry")
-	}
-	currentLock, err := document.LockFile(root).Read()
-	if err != nil {
-		return nil, err
-	}
-	currentLockFingerprint, err := currentLock.Fingerprint()
-	if err != nil {
-		return nil, err
-	}
-	if currentLockFingerprint != baseLock {
-		return nil, fmt.Errorf("lock changed during downgrade planning; retry")
 	}
 	targets, err := s.selectDowngradeTargets(ctx, d, old, args, ecosystem, steps)
 	if err != nil {
@@ -216,10 +209,10 @@ func (s *Service) Downgrade(
 	}
 	publishManifest := true
 	plan, err := install.PlanFromResolution(
+		baseDocuments,
 		nextManifest,
 		old,
 		resolved,
-		baseManifest,
 		publishManifest,
 	)
 	if err != nil {
