@@ -45,7 +45,6 @@ func (s *Service) stagePackages(root, stage string, resolved *document.Lock, sto
 	const phase = "package staging"
 	started := time.Now()
 	opts.Trace.phaseStarted(phase)
-	var progress sync.Mutex
 	completed := 0
 	err := runStagingJobs(store.ctx, len(jobs), store.injected != nil, func(i int) error {
 		j := jobs[i]
@@ -57,10 +56,10 @@ func (s *Service) stagePackages(root, stage string, resolved *document.Lock, sto
 		if err := fsutil.AtomicCopyFile(source.Path, filepath.Join(stage, j.destination), 0o644); err != nil {
 			return err
 		}
-		progress.Lock()
+		store.progressMu.Lock()
 		completed++
 		opts.Trace.ReportPhaseProgress(phase, completed, len(jobs))
-		progress.Unlock()
+		store.progressMu.Unlock()
 		return nil
 	})
 	if err != nil {

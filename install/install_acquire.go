@@ -38,8 +38,8 @@ type downloadStore struct {
 	logger      *log.Logger
 	githubProxy string
 	injected    func(*catalog.Artifact) (artifact.MaterializedFile, error)
-	verified    sync.Map // cas.Digest -> *objectVerification
-	progressMu  sync.Mutex
+	verified    sync.Map   // cas.Digest -> *objectVerification
+	progressMu  sync.Mutex // concurrent staging and fetch reports
 }
 
 // A pinned object can be requested by several staging workers. Only one
