@@ -204,16 +204,7 @@ func verifyAdoptedOutputs(
 		}
 		current, err := workspacewrite.ObserveInstallImage(files, path)
 		if err != nil {
-			if want == nil {
-				return fmt.Errorf(
-					"adopted output %s appeared before publication",
-					path,
-				)
-			}
-			return fmt.Errorf(
-				"adopted output %s is no longer a regular file",
-				path,
-			)
+			return fmt.Errorf("inspect adopted output %s before publication: %w", path, err)
 		}
 		switch {
 		case want == nil:

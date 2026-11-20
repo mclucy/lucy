@@ -227,6 +227,13 @@ func (l *adoptionLedger) claim(
 	packageID string,
 	observed *workspacewrite.InstallImage,
 ) error {
+	if observed.Mode == 0 {
+		return fmt.Errorf(
+			"cannot adopt %s with mode 0000: the receipt cannot record it as an observed mode",
+			path,
+		)
+	}
+
 	if prior, exists := l.entries[path]; exists {
 		if prior.Origin != origin || prior.Package != packageID {
 			return fmt.Errorf(

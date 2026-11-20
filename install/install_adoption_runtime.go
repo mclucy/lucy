@@ -132,7 +132,7 @@ func bootstrapImage(out bootstrap.Output) *workspacewrite.InstallImage {
 // file. Every capture uses the observed permission mode, including zero.
 func adoptedImage(file AdoptedRuntimeFile) *workspacewrite.InstallImage {
 	return &workspacewrite.InstallImage{
-		SHA256: file.ExpectedSHA256,
+		SHA256: strings.ToLower(file.ExpectedSHA256),
 		Mode:   file.ExpectedMode,
 	}
 }

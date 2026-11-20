@@ -43,28 +43,31 @@ func adoptPackages(
 		}
 		image, err := workspacewrite.ObserveInstallImage(files, cleanRel)
 		if err != nil || image == nil {
+			if pkg.ExpectedSHA256 != "" {
+				if err != nil {
+					return fmt.Errorf("inspect accepted package file %s: %w", cleanRel, err)
+				}
+				return fmt.Errorf(
+					"package file %s disappeared between discovery and adoption publication",
+					cleanRel,
+				)
+			}
 			if opts.Logger != nil {
 				opts.Logger.Debug(
-					"refuse non-regular or symlink package file",
+					"skip package file without an observed image",
 					"path", cleanRel,
 				)
 			}
 			continue
 		}
 		if pkg.ExpectedSHA256 != "" {
-			expected := &workspacewrite.InstallImage{
-				SHA256: pkg.ExpectedSHA256,
-				Mode: workspacewrite.EffectiveInstallMode(
-					os.FileMode(pkg.ExpectedMode),
-				),
+			if !strings.EqualFold(image.SHA256, pkg.ExpectedSHA256) {
+				return fmt.Errorf(
+					"package file %s changed between discovery and adoption publication",
+					cleanRel,
+				)
 			}
-			if !workspacewrite.InstallImagesEqual(image, expected) {
-				if !strings.EqualFold(image.SHA256, pkg.ExpectedSHA256) {
-					return fmt.Errorf(
-						"package file %s changed between discovery and adoption publication",
-						cleanRel,
-					)
-				}
+			if image.Mode != workspacewrite.EffectiveInstallMode(os.FileMode(pkg.ExpectedMode)) {
 				return fmt.Errorf(
 					"package file %s changed mode between discovery and adoption publication",
 					cleanRel,
@@ -157,18 +160,11 @@ func adoptMCDRWrapper(
 		}
 		return nil
 	}
-	hashes, err := DigestFile(target, nil)
-	if err != nil {
-		return err
-	}
 	return ledger.claim(
 		relative,
 		receipt.OriginMCDR,
 		"",
-		&workspacewrite.InstallImage{
-			SHA256: hashes["sha256"],
-			Mode:   workspacewrite.EffectiveInstallMode(info.Mode().Perm()),
-		},
+		workspacewrite.InstallBytesImage(data, info.Mode().Perm()),
 	)
 }
 
