@@ -165,6 +165,11 @@ func (s *Service) adoptInstalledPackages(
 	if err := ctx.Err(); err != nil {
 		return nil, nil, nil, 0, err
 	}
+	for i := range proposals {
+		if err := proposals[i].fatal; err != nil {
+			return nil, nil, nil, 0, err
+		}
+	}
 	for _, proposal := range proposals {
 		adopter.apply(proposal)
 	}
