@@ -155,7 +155,9 @@ func failMatchedFile(
 // exactFiles resolves fingerprints through POST /v1/fingerprints/432 in
 // bounded batches. A match is kept only when its file fingerprint was
 // requested and the record carries file identity. A fingerprint the API omits
-// stays a miss.
+// stays a miss, unless the batch carries a match it cannot correlate: that
+// match proves the batch matched something, so any input it leaves undetermined
+// is an incomplete lookup rather than a clean miss.
 func (p *Provider) exactFiles(
 	ctx context.Context,
 	fingerprints []uint32,
@@ -173,6 +175,7 @@ func (p *Provider) exactFiles(
 		for _, fingerprint := range batch {
 			wanted[fingerprint] = struct{}{}
 		}
+		uncorrelated := 0
 		for _, match := range matches {
 			if match.File.FileFingerprint == nil {
 				// Without the file's own fingerprint there is no proven way to
@@ -187,7 +190,9 @@ func (p *Provider) exactFiles(
 							match.File.ID,
 						),
 					)
+					continue
 				}
+				uncorrelated++
 				continue
 			}
 			fingerprint := uint32(*match.File.FileFingerprint)
@@ -210,6 +215,32 @@ func (p *Provider) exactFiles(
 				continue
 			}
 			files[fingerprint] = match.File
+		}
+		if uncorrelated == 0 {
+			continue
+		}
+		// The batch matched at least one file, but this record cannot be tied
+		// to an input. Correlated matches stay matchable and inputs with a
+		// more specific error keep it; the rest are undetermined, not missing.
+		for _, fingerprint := range batch {
+			if _, matched := files[fingerprint]; matched {
+				continue
+			}
+			if indexes := indexByFingerprint[fingerprint]; len(indexes) > 0 &&
+				results[indexes[0]].Err != nil {
+				continue
+			}
+			failFingerprint(
+				results,
+				indexByFingerprint,
+				fingerprint,
+				fmt.Errorf(
+					"curseforge: %d exact matches in a batch of %d fingerprints carry no file fingerprint, so fingerprint %d cannot be correlated",
+					uncorrelated,
+					len(batch),
+					fingerprint,
+				),
+			)
 		}
 	}
 	return files
