@@ -573,24 +573,21 @@ func (p *Provider) fillReleases(
 	slices.Sort(modIDs)
 
 	mods := make(map[int32]modResponse, len(modIDs))
+	modErrors := make(map[int32]error)
 	var throttle error
 	for batch := range slices.Chunk(modIDs, lookupBatchSize) {
 		if throttle != nil {
-			failModsBatch(batch, throttle, files, indexByFingerprint, results)
+			failModsBatch(batch, throttle, modErrors)
 			continue
 		}
-		throttle = p.resolveModsBatch(
-			ctx,
-			batch,
-			0,
-			mods,
-			files,
-			indexByFingerprint,
-			results,
-		)
+		throttle = p.resolveModsBatch(ctx, batch, 0, mods, modErrors)
 	}
 
 	for fingerprint, file := range files {
+		if err := modErrors[file.ModId]; err != nil {
+			failFingerprint(results, indexByFingerprint, fingerprint, err)
+			continue
+		}
 		mod, ok := mods[file.ModId]
 		if !ok {
 			if throttle != nil {
@@ -600,7 +597,6 @@ func (p *Provider) fillReleases(
 					fingerprint,
 					throttle,
 				)
-				delete(files, fingerprint)
 				continue
 			}
 			failFingerprint(
@@ -613,7 +609,6 @@ func (p *Provider) fillReleases(
 					file.ID,
 				),
 			)
-			delete(files, fingerprint)
 			continue
 		}
 		release := p.releaseFromCurseForgeFile(&mod, &file)
@@ -623,30 +618,14 @@ func (p *Provider) fillReleases(
 				Matched: true,
 			}
 		}
-		delete(files, fingerprint)
 	}
 }
 
-// failModsBatch reports err for the matched files of one project batch and
-// drops them. It is used for batches that are never requested because an
-// earlier batch was throttled.
-func failModsBatch(
-	batch []int32,
-	err error,
-	files map[uint32]fileResponse,
-	indexByFingerprint map[uint32][]int,
-	results []upstream.ArtifactReleaseLookup,
-) {
-	wanted := make(map[int32]struct{}, len(batch))
+// failModsBatch records one error per project. The release pass correlates
+// those errors with their fingerprints without scanning files for each batch.
+func failModsBatch(batch []int32, err error, modErrors map[int32]error) {
 	for _, modID := range batch {
-		wanted[modID] = struct{}{}
-	}
-	for fingerprint, file := range files {
-		if _, ok := wanted[file.ModId]; !ok {
-			continue
-		}
-		failFingerprint(results, indexByFingerprint, fingerprint, err)
-		delete(files, fingerprint)
+		modErrors[modID] = err
 	}
 }
 
@@ -660,9 +639,7 @@ func (p *Provider) resolveModsBatch(
 	batch []int32,
 	depth int,
 	mods map[int32]modResponse,
-	files map[uint32]fileResponse,
-	indexByFingerprint map[uint32][]int,
-	results []upstream.ArtifactReleaseLookup,
+	modErrors map[int32]error,
 ) error {
 	found, err := p.getModsByIds(ctx, batch)
 	if err != nil {
@@ -676,18 +653,10 @@ func (p *Provider) resolveModsBatch(
 				batch[:middle],
 				depth+1,
 				mods,
-				files,
-				indexByFingerprint,
-				results,
+				modErrors,
 			)
 			if throttle != nil {
-				failModsBatch(
-					batch[middle:],
-					throttle,
-					files,
-					indexByFingerprint,
-					results,
-				)
+				failModsBatch(batch[middle:], throttle, modErrors)
 				return throttle
 			}
 			return p.resolveModsBatch(
@@ -695,12 +664,10 @@ func (p *Provider) resolveModsBatch(
 				batch[middle:],
 				depth+1,
 				mods,
-				files,
-				indexByFingerprint,
-				results,
+				modErrors,
 			)
 		}
-		failModsBatch(batch, err, files, indexByFingerprint, results)
+		failModsBatch(batch, err, modErrors)
 		if retry.Throttled(err) {
 			return err
 		}
