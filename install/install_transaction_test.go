@@ -32,6 +32,15 @@ func transactionTestWrite(t *testing.T, root, relative string, data []byte) {
 	}
 }
 
+func transactionTestDocuments(t *testing.T, root string) WorkspaceDocuments {
+	t.Helper()
+	documents, err := CaptureWorkspaceDocuments(root)
+	if err != nil {
+		t.Fatalf("CaptureWorkspaceDocuments() error = %v", err)
+	}
+	return documents
+}
+
 // An accepted entry whose file is already absent must stay in the prune plan
 // as a nil precondition. Dropping it from the plan would leave the journal and
 // the pre-commit check blind to the path, so a file that reappeared would no
@@ -54,7 +63,7 @@ func TestPruneTargetsKeepsAbsentEntryAsPrecondition(t *testing.T) {
 	}
 
 	targets, err := pruneTargets(
-		root, previous, map[string]bool{}, map[string]string{}, nil, false,
+		root, previous, map[string]bool{}, nil, nil, false,
 	)
 	if err != nil {
 		t.Fatalf("plan prunes: %v", err)
@@ -138,7 +147,7 @@ func TestApplyCommitRetainedBootstrapDriftAborts(t *testing.T) {
 	// undrifted tree must still commit through the retained path.
 	stage := t.TempDir()
 	if _, err := applyCommit(
-		root, stage, nil, lock, false, nil, nil, nil, false, installCommitOverlay, nil,
+		root, stage, nil, lock, false, nil, nil, nil, false, installCommitOverlay, transactionTestDocuments(t, root), nil,
 	); err != nil {
 		t.Fatalf("overlay commit over current bootstrap: %v", err)
 	}
@@ -153,7 +162,7 @@ func TestApplyCommitRetainedBootstrapDriftAborts(t *testing.T) {
 		t.Fatalf("remove retained output: %v", err)
 	}
 	_, err = applyCommit(
-		root, stage, nil, lock, false, nil, nil, nil, false, installCommitOverlay, nil,
+		root, stage, nil, lock, false, nil, nil, nil, false, installCommitOverlay, transactionTestDocuments(t, root), nil,
 	)
 	if err == nil || !strings.Contains(err.Error(), "bootstrap") {
 		t.Fatalf("commit over drifted retained bootstrap outputs: %v", err)

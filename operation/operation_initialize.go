@@ -57,7 +57,7 @@ func (s *Service) initialize(ctx context.Context, root string, opts InitOptions,
 	// Pin the recovered documents before resolution reads the workspace.
 	// Adoption publishes the manifest, lock, and receipt as one transaction
 	// and refuses to overwrite bytes that changed in between.
-	preconditions, err := install.CaptureAdoptionPreconditions(root)
+	documents, err := install.CaptureWorkspaceDocuments(root)
 	if err != nil {
 		return nil, err
 	}
@@ -172,7 +172,7 @@ func (s *Service) initialize(ctx context.Context, root string, opts InitOptions,
 		runtimeObserved,
 		observed,
 		opts,
-		preconditions,
+		documents,
 	)
 }
 
@@ -490,7 +490,7 @@ func (s *Service) publishInitialization(
 	runtimeObserved *runtimeObservation,
 	observed *workspace.Workspace,
 	opts InitOptions,
-	preconditions install.AdoptionPreconditions,
+	documents install.WorkspaceDocuments,
 ) (*InitResult, error) {
 	configurationPath := filepath.Join(root, filepath.FromSlash(config.WorkspaceFilename))
 	if err := workspacewrite.SafePath(root, config.WorkspaceFilename); err != nil {
@@ -560,7 +560,7 @@ func (s *Service) publishInitialization(
 			return manifestFile.Snapshot(manifest)
 		},
 		ManifestMerge: manifestMerge,
-		Preconditions: preconditions,
+		Preconditions: documents,
 	})
 	if adoptErr != nil && !errors.As(adoptErr, &committedErr) {
 		return initResult(observed), adoptErr

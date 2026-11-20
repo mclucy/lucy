@@ -193,15 +193,14 @@ func (s *Service) ApplyPlan(
 		return nil, err
 	}
 	defer func() { resultErr = errors.Join(resultErr, writer.Close()) }()
-	preflightOptions := opts
-	preflightOptions.PublishManifest = plan.PublishManifest
-	if _, _, err := preflightLocked(root, plan.Manifest, plan.Previous, preflightOptions, s.logger); err != nil {
+	opts.PublishManifest = plan.PublishManifest
+	baseManifest, baseLock, documents, err := preflightLocked(
+		root, plan.Manifest, plan.Previous, opts, s.logger,
+	)
+	if err != nil {
 		return nil, err
 	}
-	if err := checkPlannedDocuments(plan); err != nil {
-		return nil, err
-	}
-	if err := checkPlannedState(root, plan); err != nil {
+	if err := plan.checkBase(baseManifest, baseLock, documents); err != nil {
 		return nil, err
 	}
 	if err := s.registerServer(root, plan.Result); err != nil {
@@ -230,9 +229,8 @@ func (s *Service) ApplyPlan(
 		result.applyChanges(plan.Previous, plan.Resolved, plan.Manifest)
 	}
 	store := s.newDownloadStore(ctx, opts, result)
-	opts.PublishManifest = plan.PublishManifest
 	opts.publishLock = plan.PublishLock
-	diagnostics, err := s.stageInstall(ctx, root, plan.Manifest, plan.Resolved, store, opts, result)
+	diagnostics, err := s.stageInstall(ctx, root, plan.Manifest, plan.Resolved, documents, store, opts, result)
 	result.Diagnostics = diagnostics
 	return result, err
 }

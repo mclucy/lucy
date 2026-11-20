@@ -26,6 +26,7 @@ var errAdoptionOutputConflict = errors.New(
 // A current tree also records its bootstrap fingerprint; an inconclusive tree
 // claims only outputs that attribution and discovery agree on.
 func adoptRuntime(
+	files *os.Root,
 	root string,
 	opts AdoptOptions,
 	tracked map[string]bool,
@@ -48,7 +49,9 @@ func adoptRuntime(
 	}
 
 	if check.Current {
-		if err := verifyCurrentRuntime(root, check.Outputs, baselines, tracked); err != nil {
+		if err := claimBootstrapOutputs(
+			files, root, check.Outputs, baselines, tracked, ledger,
+		); err != nil {
 			return err
 		}
 		fingerprint, err := receipt.BootstrapFingerprint(opts.Lock)
@@ -64,7 +67,7 @@ func adoptRuntime(
 				"outputs", len(check.Outputs),
 			)
 		}
-		return claimBootstrapOutputs(check.Outputs, ledger)
+		return nil
 	}
 
 	if opts.Logger != nil {
@@ -73,7 +76,7 @@ func adoptRuntime(
 			"reason", check.Reason,
 		)
 	}
-	return adoptInconclusiveRuntime(root, opts, check.Outputs, baselines, tracked, ledger)
+	return adoptInconclusiveRuntime(files, root, opts, check.Outputs, tracked, ledger)
 }
 
 // runtimeBaselines indexes the digest and mode captured for each observed
@@ -117,68 +120,29 @@ func observedVersionConflicts(observed, locked versionpkg.Version) bool {
 	return observed != locked
 }
 
-// verifyCurrentRuntime rechecks every managed runtime output against its
-// observed bytes, mode, and the baseline captured for the runtime selection.
-func verifyCurrentRuntime(
-	root string,
-	outputs []bootstrap.Output,
-	baselines map[string]AdoptedRuntimeFile,
-	tracked map[string]bool,
-) error {
-	for _, out := range outputs {
-		if !isManagedRuntimeOutput(out) {
-			continue
-		}
-		cleanRel := cleanWorkspacePath(out.Path)
-		if !workspacePathSafe(root, cleanRel) {
-			return fmt.Errorf(
-				"verified bootstrap output %s escapes the workspace",
-				out.Path,
-			)
-		}
-		if tracked[strings.ToLower(cleanRel)] || installPathReserved(root, cleanRel) {
-			return errAdoptionOutputConflict
-		}
-		if err := verifyOutputBaseline(root, cleanRel, out.SHA256, out.Mode); err != nil {
-			return fmt.Errorf("%w: %v", errAdoptionOutputConflict, err)
-		}
-		if observed, ok := baselines[filepath.Clean(
-			filepath.Join(root, filepath.FromSlash(cleanRel)),
-		)]; ok {
-			if !strings.EqualFold(observed.ExpectedSHA256, out.SHA256) ||
-				(observed.ExpectedMode != 0 && observed.ExpectedMode != out.Mode) {
-				return errAdoptionOutputConflict
-			}
-		}
+// bootstrapImage returns the exact state a managed bootstrap output records.
+func bootstrapImage(out bootstrap.Output) *workspacewrite.InstallImage {
+	return &workspacewrite.InstallImage{
+		SHA256: out.SHA256,
+		Mode:   workspacewrite.EffectiveInstallMode(os.FileMode(out.Mode)),
 	}
-	return nil
 }
 
-func claimBootstrapOutputs(outputs []bootstrap.Output, ledger *adoptionLedger) error {
-	for _, out := range outputs {
-		if !isManagedRuntimeOutput(out) {
-			continue
-		}
-		cleanRel := cleanWorkspacePath(out.Path)
-		if err := ledger.claim(
-			cleanRel,
-			receipt.OriginBootstrap,
-			"",
-			out.SHA256,
-			out.Mode,
-		); err != nil {
-			return err
-		}
+// adoptedImage returns the exact state captured for one discovered runtime
+// file. Every capture uses the observed permission mode, including zero.
+func adoptedImage(file AdoptedRuntimeFile) *workspacewrite.InstallImage {
+	return &workspacewrite.InstallImage{
+		SHA256: file.ExpectedSHA256,
+		Mode:   file.ExpectedMode,
 	}
-	return nil
 }
 
-// adoptInconclusiveRuntime records ownership of files the bootstrap contract
-// cannot prove current. It refuses outputs that conflict with workspace state
-// and claims discovery runtime files only inside declared managed scopes.
-func adoptInconclusiveRuntime(
+// claimBootstrapOutputs rechecks every managed bootstrap output against the
+// contract and its observed baseline, then records its ownership. The
+// baseline map is nil when no runtime selection was observed.
+func claimBootstrapOutputs(
+	files *os.Root,
 	root string,
-	opts AdoptOptions,
 	outputs []bootstrap.Output,
 	baselines map[string]AdoptedRuntimeFile,
 	tracked map[string]bool,
@@ -197,27 +161,50 @@ func adoptInconclusiveRuntime(
 				out.Path,
 			)
 		}
-		if err := verifyOutputBaseline(root, cleanRel, out.SHA256, out.Mode); err != nil {
-			return fmt.Errorf(
-				"verified bootstrap output %s changed during adoption: %w",
-				out.Path,
-				err,
-			)
+		expected := bootstrapImage(out)
+		if err := verifyOutputBaseline(files, cleanRel, expected); err != nil {
+			return fmt.Errorf("%w: %v", errAdoptionOutputConflict, err)
+		}
+		if observed, ok := baselines[filepath.Clean(
+			filepath.Join(root, filepath.FromSlash(cleanRel)),
+		)]; ok && !workspacewrite.InstallImagesEqual(
+			expected, adoptedImage(observed),
+		) {
+			return errAdoptionOutputConflict
 		}
 		if err := ledger.claim(
 			cleanRel,
 			receipt.OriginBootstrap,
 			"",
-			out.SHA256,
-			out.Mode,
+			expected,
 		); err != nil {
 			return err
 		}
+	}
+	return nil
+}
+
+// adoptInconclusiveRuntime records ownership of files the bootstrap contract
+// cannot prove current. It refuses outputs that conflict with workspace state
+// and claims discovery runtime files only inside declared managed scopes.
+func adoptInconclusiveRuntime(
+	files *os.Root,
+	root string,
+	opts AdoptOptions,
+	outputs []bootstrap.Output,
+	tracked map[string]bool,
+	ledger *adoptionLedger,
+) error {
+	if err := claimBootstrapOutputs(
+		files, root, outputs, nil, tracked, ledger,
+	); err != nil {
+		return err
 	}
 
 	if opts.Runtime == nil {
 		return nil
 	}
+	baselines := runtimeBaselines(opts)
 	specs := bootstrap.OutputSpecs(opts.Lock.Server)
 	serverDir := cleanWorkspacePath(opts.Lock.Server.Directory)
 	if serverDir == "." {
@@ -245,15 +232,11 @@ func adoptInconclusiveRuntime(
 				continue
 			}
 		}
-		if !observed || baseline.ExpectedSHA256 == "" || baseline.ExpectedMode == 0 {
+		if !observed || baseline.ExpectedSHA256 == "" {
 			return fmt.Errorf("runtime file %s has no observed baseline", cleanRel)
 		}
-		if err := verifyOutputBaseline(
-			root,
-			cleanRel,
-			baseline.ExpectedSHA256,
-			baseline.ExpectedMode,
-		); err != nil {
+		expected := adoptedImage(baseline)
+		if err := verifyOutputBaseline(files, cleanRel, expected); err != nil {
 			return fmt.Errorf(
 				"runtime file %s changed between discovery and adoption publication: %w",
 				cleanRel,
@@ -264,8 +247,7 @@ func adoptInconclusiveRuntime(
 			cleanRel,
 			receipt.OriginBootstrap,
 			"",
-			baseline.ExpectedSHA256,
-			baseline.ExpectedMode,
+			expected,
 		); err != nil {
 			return err
 		}
@@ -273,23 +255,21 @@ func adoptInconclusiveRuntime(
 	return nil
 }
 
-// verifyOutputBaseline checks that an output still has the observed digest and
-// permission bits.
-func verifyOutputBaseline(root, rel, expectedSHA256 string, expectedMode uint32) error {
-	target := filepath.Join(root, filepath.FromSlash(rel))
-	info, err := os.Lstat(target)
-	if err != nil {
-		return fmt.Errorf("inspect %s: %w", rel, err)
+// verifyOutputBaseline checks that an output still has the observed exact
+// content and permission bits.
+func verifyOutputBaseline(
+	files *os.Root,
+	rel string,
+	expected *workspacewrite.InstallImage,
+) error {
+	current, err := workspacewrite.ObserveInstallImage(files, rel)
+	switch {
+	case err != nil:
+		return fmt.Errorf("%s is not a regular file: %w", rel, err)
+	case current == nil:
+		return fmt.Errorf("inspect %s: file is absent", rel)
 	}
-	if info.Mode()&os.ModeSymlink != 0 || !info.Mode().IsRegular() {
-		return fmt.Errorf("%s is not a regular file", rel)
-	}
-	hashes, err := DigestFile(target, nil)
-	if err != nil {
-		return fmt.Errorf("digest %s: %w", rel, err)
-	}
-	if !strings.EqualFold(hashes["sha256"], expectedSHA256) ||
-		uint32(info.Mode().Perm()) != expectedMode {
+	if !workspacewrite.InstallImagesEqual(current, expected) {
 		return fmt.Errorf("%s changed", rel)
 	}
 	return nil

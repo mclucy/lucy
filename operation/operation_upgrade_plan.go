@@ -22,6 +22,7 @@ import (
 func (s *Service) resolveUpgradeOption(
 	ctx context.Context,
 	root string,
+	baseDocuments install.WorkspaceDocuments,
 	d *document.Manifest,
 	old *document.Lock,
 	baseManifest string,
@@ -173,7 +174,7 @@ func (s *Service) resolveUpgradeOption(
 		}
 	}
 	publishManifest := finalFingerprint != baseManifest
-	plan, err := install.PlanFromResolution(finalManifest, old, resolved, baseManifest, publishManifest)
+	plan, err := install.PlanFromResolution(baseDocuments, finalManifest, old, resolved, publishManifest)
 	if err != nil {
 		return UpgradeOption{}, err
 	}
@@ -217,13 +218,46 @@ func selectedRootPackage(packages []document.Package, root upgradeRoot) *documen
 	return nil
 }
 
+// verifyRecoveredBase fails when journal recovery left different documents
+// than the early manifest and lock the caller selected its roots from.
+func verifyRecoveredBase(
+	baseDocuments install.WorkspaceDocuments,
+	manifestFingerprint string,
+	lockFingerprint string,
+	action string,
+) error {
+	recoveredManifest, recoveredLock, err := baseDocuments.Decode()
+	if err != nil {
+		return err
+	}
+	recoveredManifestFingerprint, recoveredLockFingerprint := "", ""
+	if recoveredManifest != nil {
+		if recoveredManifestFingerprint, err = recoveredManifest.Fingerprint(); err != nil {
+			return err
+		}
+	}
+	if recoveredLock != nil {
+		if recoveredLockFingerprint, err = recoveredLock.Fingerprint(); err != nil {
+			return err
+		}
+	}
+	if recoveredManifestFingerprint != manifestFingerprint {
+		return fmt.Errorf("manifest changed during %s planning; retry", action)
+	}
+	if recoveredLockFingerprint != lockFingerprint {
+		return fmt.Errorf("lock changed during %s planning; retry", action)
+	}
+	return nil
+}
+
 func noopUpgradeOption(
+	baseDocuments install.WorkspaceDocuments,
 	d *document.Manifest,
 	old *document.Lock,
 	baseManifest string,
 	baseLock string,
 ) (UpgradeOption, error) {
-	plan, err := install.PlanFromResolution(d, old, old, baseManifest, false)
+	plan, err := install.PlanFromResolution(baseDocuments, d, old, old, false)
 	if err != nil {
 		return UpgradeOption{}, err
 	}

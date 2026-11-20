@@ -1,7 +1,6 @@
 package install
 
 import (
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -13,65 +12,61 @@ import (
 	"github.com/mclucy/lucy/receipt"
 )
 
-// adoptionExpectation is one receipt entry and whether its file was present
-// when adoption observed it. Absent entries keep ownership; present entries
-// must still match at the publication recheck.
-type adoptionExpectation struct {
-	entry   receipt.Entry
-	present bool
+// receiptImage returns the content and normalized permission mode an accepted
+// receipt entry records. A zero mode predates mode recording, so callers match
+// it without permission evidence.
+func receiptImage(entry receipt.Entry) *workspacewrite.InstallImage {
+	return &workspacewrite.InstallImage{
+		SHA256: strings.ToLower(entry.SHA256),
+		Mode:   workspacewrite.EffectiveInstallMode(os.FileMode(entry.Mode)),
+	}
 }
 
-// adoptionProtected is a pinned document the transaction either rewrites or
-// treats as a read-only commit precondition. Both kinds must still match at
-// the commit point, so an external edit cannot leave published documents
-// describing a different lock.
-type adoptionProtected struct {
-	name  string
-	image *workspacewrite.InstallImage
+// matchesReceipt reports whether current still satisfies an accepted receipt
+// entry. A zero mode is a legacy wildcard; every other mode is exact.
+func matchesReceipt(entry receipt.Entry, current *workspacewrite.InstallImage) bool {
+	return workspacewrite.InstallImagesMatch(
+		current,
+		receiptImage(entry),
+		entry.Mode != 0,
+	)
 }
 
 // verifyExistingBaseline checks that a receipt entry still describes the file
-// it protects and reports whether that file was present. Content and
-// permission changes fail closed; a missing file keeps its ownership record
-// for later repair.
+// it protects and returns the observed image. Content and permission changes
+// fail closed; a missing file returns a nil image and keeps its ownership
+// record for later repair.
 func verifyExistingBaseline(
-	root, cleanPath string,
+	files *os.Root,
+	cleanPath string,
 	entry receipt.Entry,
-) (bool, error) {
-	target := filepath.Join(root, filepath.FromSlash(cleanPath))
-	info, err := os.Lstat(target)
-	if errors.Is(err, os.ErrNotExist) {
-		return false, nil
-	}
+) (*workspacewrite.InstallImage, error) {
+	current, err := workspacewrite.ObserveInstallImage(files, cleanPath)
 	if err != nil {
-		return false, fmt.Errorf("inspect existing managed path %s: %w", cleanPath, err)
+		return nil, fmt.Errorf("inspect existing managed path %s: %w", cleanPath, err)
 	}
-	if info.Mode()&os.ModeSymlink != 0 || !info.Mode().IsRegular() {
-		return false, fmt.Errorf("existing managed path %s is not a regular file", cleanPath)
+	if current == nil {
+		return nil, nil
 	}
 	if entry.SHA256 == "" {
-		return false, fmt.Errorf(
+		return nil, fmt.Errorf(
 			"existing managed path %s has no accepted baseline; remove its receipt entry before re-initializing",
 			cleanPath,
 		)
 	}
-	actual, err := DigestFile(target, nil)
-	if err != nil {
-		return false, fmt.Errorf("digest existing managed path %s: %w", cleanPath, err)
+	if matchesReceipt(entry, current) {
+		return current, nil
 	}
-	if !strings.EqualFold(actual["sha256"], entry.SHA256) {
-		return false, fmt.Errorf(
+	if !strings.EqualFold(current.SHA256, entry.SHA256) {
+		return nil, fmt.Errorf(
 			"locally modified managed output %s cannot be re-initialized without explicit conflict resolution",
 			cleanPath,
 		)
 	}
-	if entry.Mode != 0 && uint32(info.Mode().Perm()) != entry.Mode {
-		return false, fmt.Errorf(
-			"managed output %s changed mode from %#o to %#o; resolve the modification before re-initializing",
-			cleanPath, entry.Mode, info.Mode().Perm(),
-		)
-	}
-	return true, nil
+	return nil, fmt.Errorf(
+		"managed output %s changed mode from %#o to %#o; resolve the modification before re-initializing",
+		cleanPath, entry.Mode, current.Mode,
+	)
 }
 
 // managedRuntimeScope reports whether serverRel falls inside a managed runtime
@@ -193,54 +188,56 @@ func packageSetObserved(
 	return true
 }
 
-// verifyAdoptedOutputs rechecks the files adoption observed. A present file
-// that changed, disappeared, or changed mode after planning must not enter the
-// receipt with a stale baseline. A file that was already missing keeps its
-// ownership record for later repair; a path that reappears is not treated as
-// newly observed evidence.
-func verifyAdoptedOutputs(root string, expected []adoptionExpectation) error {
-	for _, want := range expected {
-		entry := want.entry
-		if err := workspacewrite.SafePath(root, entry.Path); err != nil {
+// verifyAdoptedOutputs rechecks the exact images adoption observed. A present
+// file that changed, disappeared, or changed mode after planning must not
+// enter the receipt with a stale baseline. A file that was already missing
+// keeps its ownership record for later repair, but a path that reappears
+// before the commit point is a conflict, not observed evidence.
+func verifyAdoptedOutputs(
+	files *os.Root,
+	root string,
+	expected map[string]*workspacewrite.InstallImage,
+) error {
+	for path, want := range expected {
+		if err := workspacewrite.SafePath(root, path); err != nil {
 			return err
 		}
-		target := filepath.Join(root, filepath.FromSlash(entry.Path))
-		info, err := os.Lstat(target)
-		if errors.Is(err, os.ErrNotExist) {
-			if !want.present {
-				continue
+		current, err := workspacewrite.ObserveInstallImage(files, path)
+		if err != nil {
+			if want == nil {
+				return fmt.Errorf(
+					"adopted output %s appeared before publication",
+					path,
+				)
 			}
 			return fmt.Errorf(
-				"adopted output %s disappeared before publication",
-				entry.Path,
-			)
-		}
-		if err != nil {
-			return err
-		}
-		if !want.present {
-			continue
-		}
-		if info.Mode()&os.ModeSymlink != 0 || !info.Mode().IsRegular() {
-			return fmt.Errorf(
 				"adopted output %s is no longer a regular file",
-				entry.Path,
+				path,
 			)
 		}
-		hashes, err := DigestFile(target, nil)
-		if err != nil {
-			return err
-		}
-		if !strings.EqualFold(hashes["sha256"], entry.SHA256) {
+		switch {
+		case want == nil:
+			if current != nil {
+				return fmt.Errorf(
+					"adopted output %s appeared before publication",
+					path,
+				)
+			}
+		case current == nil:
+			return fmt.Errorf(
+				"adopted output %s disappeared before publication",
+				path,
+			)
+		case workspacewrite.InstallImagesEqual(current, want):
+		case !strings.EqualFold(current.SHA256, want.SHA256):
 			return fmt.Errorf(
 				"adopted output %s changed before publication",
-				entry.Path,
+				path,
 			)
-		}
-		if entry.Mode != 0 && uint32(info.Mode().Perm()) != entry.Mode {
+		default:
 			return fmt.Errorf(
 				"adopted output %s changed mode before publication",
-				entry.Path,
+				path,
 			)
 		}
 	}

@@ -17,6 +17,7 @@ import (
 // file whose bytes or mode changed after discovery fails adoption instead of
 // entering the receipt with a stale baseline.
 func adoptPackages(
+	files *os.Root,
 	root string,
 	opts AdoptOptions,
 	tracked map[string]bool,
@@ -40,9 +41,8 @@ func adoptPackages(
 		if tracked[strings.ToLower(cleanRel)] || installPathReserved(root, cleanRel) {
 			continue
 		}
-		info, statErr := os.Lstat(fullPath)
-		if statErr != nil || info.Mode()&os.ModeSymlink != 0 ||
-			!info.Mode().IsRegular() {
+		image, err := workspacewrite.ObserveInstallImage(files, cleanRel)
+		if err != nil || image == nil {
 			if opts.Logger != nil {
 				opts.Logger.Debug(
 					"refuse non-regular or symlink package file",
@@ -51,23 +51,25 @@ func adoptPackages(
 			}
 			continue
 		}
-		hashes, err := DigestFile(fullPath, nil)
-		if err != nil {
-			return err
-		}
-		if pkg.ExpectedSHA256 != "" &&
-			!strings.EqualFold(hashes["sha256"], pkg.ExpectedSHA256) {
-			return fmt.Errorf(
-				"package file %s changed between discovery and adoption publication",
-				cleanRel,
-			)
-		}
-		mode := uint32(info.Mode().Perm())
-		if pkg.ExpectedMode != 0 && mode != pkg.ExpectedMode {
-			return fmt.Errorf(
-				"package file %s changed mode between discovery and adoption publication",
-				cleanRel,
-			)
+		if pkg.ExpectedSHA256 != "" {
+			expected := &workspacewrite.InstallImage{
+				SHA256: pkg.ExpectedSHA256,
+				Mode: workspacewrite.EffectiveInstallMode(
+					os.FileMode(pkg.ExpectedMode),
+				),
+			}
+			if !workspacewrite.InstallImagesEqual(image, expected) {
+				if !strings.EqualFold(image.SHA256, pkg.ExpectedSHA256) {
+					return fmt.Errorf(
+						"package file %s changed between discovery and adoption publication",
+						cleanRel,
+					)
+				}
+				return fmt.Errorf(
+					"package file %s changed mode between discovery and adoption publication",
+					cleanRel,
+				)
+			}
 		}
 
 		packageID := pkg.PackageID
@@ -78,8 +80,7 @@ func adoptPackages(
 			cleanRel,
 			receipt.OriginPackage,
 			packageID,
-			hashes["sha256"],
-			mode,
+			image,
 		); err != nil {
 			return err
 		}
@@ -164,8 +165,10 @@ func adoptMCDRWrapper(
 		relative,
 		receipt.OriginMCDR,
 		"",
-		hashes["sha256"],
-		uint32(info.Mode().Perm()),
+		&workspacewrite.InstallImage{
+			SHA256: hashes["sha256"],
+			Mode:   workspacewrite.EffectiveInstallMode(info.Mode().Perm()),
+		},
 	)
 }
 

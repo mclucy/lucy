@@ -10,6 +10,7 @@ import (
 	"github.com/mclucy/lucy/catalog"
 	"github.com/mclucy/lucy/document"
 	"github.com/mclucy/lucy/internal/workspacewrite"
+	"github.com/mclucy/lucy/receipt"
 	serverpkg "github.com/mclucy/lucy/server"
 	versionpkg "github.com/mclucy/lucy/version"
 )
@@ -89,7 +90,7 @@ func TestResolveReplaysUnchangedLock(t *testing.T) {
 func TestPreflightRejectsExpectedManifestMismatch(t *testing.T) {
 	root, d, lock := testWorkspace(t)
 	holdWorkspaceLock(t, root)
-	_, _, err := preflightLocked(
+	_, _, _, err := preflightLocked(
 		root,
 		d,
 		lock,
@@ -104,7 +105,7 @@ func TestPreflightRejectsExpectedManifestMismatch(t *testing.T) {
 func TestPreflightRejectsExpectedLockMismatch(t *testing.T) {
 	root, d, lock := testWorkspace(t)
 	holdWorkspaceLock(t, root)
-	_, _, err := preflightLocked(
+	_, _, _, err := preflightLocked(
 		root,
 		d,
 		lock,
@@ -127,7 +128,7 @@ func TestPreflightAcceptsExpectedFingerprints(t *testing.T) {
 	if err != nil {
 		t.Fatalf("lockfile.Fingerprint() error = %v", err)
 	}
-	if _, _, err := preflightLocked(
+	if _, _, _, err := preflightLocked(
 		root,
 		d,
 		lock,
@@ -141,18 +142,15 @@ func TestPreflightAcceptsExpectedFingerprints(t *testing.T) {
 	}
 }
 
-// TestPlanFromResolutionFingerprintsWorkspaceState keeps the on-disk baseline
-// distinct from intended publication edits, so ApplyPlan does not mistake the
-// intended edit for drift.
-func TestPlanFromResolutionFingerprintsWorkspaceState(t *testing.T) {
+// TestPlanFromResolutionUsesCapturedBase keeps the on-disk baseline distinct
+// from intended publication edits, so ApplyPlan does not mistake the intended
+// edit for drift. It also pins the checks ApplyPlan performs once against the
+// already-decoded capture instead of storing duplicate fingerprints.
+func TestPlanFromResolutionUsesCapturedBase(t *testing.T) {
 	root, d, lock := testWorkspace(t)
-	onDisk, err := document.ManifestFile(root).Read()
+	base, err := CaptureWorkspaceDocuments(root)
 	if err != nil {
-		t.Fatalf("manifest.Read() error = %v", err)
-	}
-	baseFingerprint, err := onDisk.Fingerprint()
-	if err != nil {
-		t.Fatalf("manifest.Fingerprint() error = %v", err)
+		t.Fatalf("CaptureWorkspaceDocuments() error = %v", err)
 	}
 	d.Server.Java = &document.ManifestJava{Version: 17}
 	finalFingerprint, err := d.Fingerprint()
@@ -161,19 +159,32 @@ func TestPlanFromResolutionFingerprintsWorkspaceState(t *testing.T) {
 	}
 	resolved := *lock
 	resolved.ManifestFingerprint = finalFingerprint
-	plan, err := PlanFromResolution(d, lock, &resolved, baseFingerprint, true)
+	plan, err := PlanFromResolution(base, d, lock, &resolved, true)
 	if err != nil {
 		t.Fatalf("PlanFromResolution() error = %v", err)
 	}
-	if plan.BaseManifestFingerprint != baseFingerprint {
-		t.Fatalf(
-			"plan base manifest fingerprint = %q, want on-disk %q",
-			plan.BaseManifestFingerprint,
-			baseFingerprint,
-		)
+	if err := checkBaseAt(t, root, plan); err != nil {
+		t.Fatalf("checkBase() error = %v, want a plan the workspace satisfies", err)
 	}
-	if err := checkPlannedState(root, plan); err != nil {
-		t.Fatalf("checkPlannedState() error = %v, want a plan the workspace satisfies", err)
+	if _, err := PlanFromResolution(WorkspaceDocuments{}, d, lock, &resolved, true); err == nil {
+		t.Fatal("PlanFromResolution() accepted a plan without a workspace capture")
+	}
+	stale := *lock
+	stale.ManifestFingerprint = "sha256:stale"
+	plan, err = PlanFromResolution(base, d, &stale, &resolved, true)
+	if err != nil {
+		t.Fatalf("PlanFromResolution() error = %v", err)
+	}
+	documents, err := CaptureWorkspaceDocuments(root)
+	if err != nil {
+		t.Fatalf("CaptureWorkspaceDocuments() error = %v", err)
+	}
+	manifest, currentLock, err := documents.Decode()
+	if err != nil {
+		t.Fatalf("documents.Decode() error = %v", err)
+	}
+	if err := plan.checkBase(manifest, currentLock, documents); err == nil {
+		t.Fatal("checkBase() accepted a previous lock that is not the captured base")
 	}
 }
 
@@ -213,23 +224,38 @@ func testPlanFixture(
 	lock *document.Lock,
 ) *Plan {
 	t.Helper()
-	manifestFingerprint, _, err := workspaceFingerprints(root)
+	base, err := CaptureWorkspaceDocuments(root)
 	if err != nil {
-		t.Fatalf("workspaceFingerprints() error = %v", err)
+		t.Fatalf("CaptureWorkspaceDocuments() error = %v", err)
 	}
-	plan, err := PlanFromResolution(d, lock, lock, manifestFingerprint, false)
+	plan, err := PlanFromResolution(base, d, lock, lock, false)
 	if err != nil {
 		t.Fatalf("PlanFromResolution() error = %v", err)
 	}
 	return plan
 }
 
-func TestCheckPlannedStateRejectsChanges(t *testing.T) {
+// checkBaseAt captures the workspace the way ApplyPlan does, so the
+// test exercises the same observation the plan check consumes.
+func checkBaseAt(t *testing.T, root string, plan *Plan) error {
+	t.Helper()
+	documents, err := CaptureWorkspaceDocuments(root)
+	if err != nil {
+		t.Fatalf("CaptureWorkspaceDocuments() error = %v", err)
+	}
+	manifest, lock, err := documents.Decode()
+	if err != nil {
+		t.Fatalf("documents.Decode() error = %v", err)
+	}
+	return plan.checkBase(manifest, lock, documents)
+}
+
+func TestPlanCheckBaseRejectsChanges(t *testing.T) {
 	t.Run("unchanged", func(t *testing.T) {
 		root, d, lock := testWorkspace(t)
 		plan := testPlanFixture(t, root, d, lock)
-		if err := checkPlannedState(root, plan); err != nil {
-			t.Fatalf("checkPlannedState() error = %v", err)
+		if err := checkBaseAt(t, root, plan); err != nil {
+			t.Fatalf("checkBase() error = %v", err)
 		}
 	})
 
@@ -240,8 +266,8 @@ func TestCheckPlannedStateRejectsChanges(t *testing.T) {
 		if err := document.ManifestFile(root).Write(d); err != nil {
 			t.Fatalf("manifest.Write() error = %v", err)
 		}
-		if err := checkPlannedState(root, plan); err == nil {
-			t.Fatal("checkPlannedState() error = nil, want a manifest-change error")
+		if err := checkBaseAt(t, root, plan); err == nil {
+			t.Fatal("checkBase() error = nil, want a manifest-change error")
 		}
 	})
 
@@ -251,8 +277,22 @@ func TestCheckPlannedStateRejectsChanges(t *testing.T) {
 		if err := os.Remove(filepath.Join(root, document.ManifestFilename)); err != nil {
 			t.Fatalf("remove manifest: %v", err)
 		}
-		if err := checkPlannedState(root, plan); err == nil {
-			t.Fatal("checkPlannedState() error = nil, want a manifest-disappeared error")
+		if err := checkBaseAt(t, root, plan); err == nil {
+			t.Fatal("checkBase() error = nil, want a manifest-disappeared error")
+		}
+	})
+
+	t.Run("manifest appeared", func(t *testing.T) {
+		root, d, lock := testWorkspace(t)
+		if err := os.Remove(filepath.Join(root, document.ManifestFilename)); err != nil {
+			t.Fatalf("remove manifest: %v", err)
+		}
+		plan := testPlanFixture(t, root, d, lock)
+		if err := document.ManifestFile(root).Write(d); err != nil {
+			t.Fatalf("manifest.Write() error = %v", err)
+		}
+		if err := checkBaseAt(t, root, plan); err == nil {
+			t.Fatal("checkBase() error = nil, want a manifest-appeared error")
 		}
 	})
 
@@ -263,19 +303,37 @@ func TestCheckPlannedStateRejectsChanges(t *testing.T) {
 		if err := document.LockFile(root).Write(lock); err != nil {
 			t.Fatalf("lockfile.Write() error = %v", err)
 		}
-		if err := checkPlannedState(root, plan); err == nil {
-			t.Fatal("checkPlannedState() error = nil, want a lock-change error")
+		if err := checkBaseAt(t, root, plan); err == nil {
+			t.Fatal("checkBase() error = nil, want a lock-change error")
 		}
 	})
 
-	t.Run("manifest appeared", func(t *testing.T) {
-		root, _, _ := testWorkspace(t)
-		plan := &Plan{
-			Resolved:            &document.Lock{},
-			BaseLockFingerprint: "sha256:base",
+	t.Run("lock removed", func(t *testing.T) {
+		root, d, lock := testWorkspace(t)
+		plan := testPlanFixture(t, root, d, lock)
+		if err := os.Remove(filepath.Join(root, document.LockFilename)); err != nil {
+			t.Fatalf("remove lock: %v", err)
 		}
-		if err := checkPlannedState(root, plan); err == nil {
-			t.Fatal("checkPlannedState() error = nil, want a manifest-appeared error")
+		if err := checkBaseAt(t, root, plan); err == nil {
+			t.Fatal("checkBase() error = nil, want a lock-disappeared error")
+		}
+	})
+
+	t.Run("receipt changed", func(t *testing.T) {
+		root, d, lock := testWorkspace(t)
+		path := filepath.Join(root, filepath.FromSlash(receipt.Filename))
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatalf("create receipt directory: %v", err)
+		}
+		if err := os.WriteFile(path, []byte("first"), 0o644); err != nil {
+			t.Fatalf("write receipt: %v", err)
+		}
+		plan := testPlanFixture(t, root, d, lock)
+		if err := os.WriteFile(path, []byte("second"), 0o644); err != nil {
+			t.Fatalf("write receipt: %v", err)
+		}
+		if err := checkBaseAt(t, root, plan); err == nil {
+			t.Fatal("checkBase() error = nil, want a receipt-change error")
 		}
 	})
 }

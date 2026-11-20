@@ -12,7 +12,7 @@ cd path/to/server
 lucy init
 ```
 
-Init detects the installed server software, Minecraft version, and supported mods and plugins, and checks the versions against the official release lists. It may download server files into `.lucy`, but it does not install or start the server, accept the EULA, or migrate a world. To create a new server instead, use [`lucy create`](/commands/create).
+Init detects the installed server software, Minecraft version, mods, and plugins, and checks their release information. It saves local files that match the lock to the artifact store for later installs. It can still download missing artifacts, but it does not change runtime files, start the server, accept the EULA, or migrate a world. To set up a new server, use [`lucy create`](/commands/create).
 
 ## Choose a server
 
