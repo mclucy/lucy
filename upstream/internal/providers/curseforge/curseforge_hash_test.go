@@ -5,6 +5,7 @@ import (
 	"crypto/sha1"
 	"encoding/json/v2"
 	"errors"
+	"fmt"
 	"io"
 	"math"
 	"net/http"
@@ -111,7 +112,7 @@ func releaseFile(fingerprint uint32) fileResponse {
 	}
 }
 
-func TestReleasesByHashUncorrelatedMatchMarksUndeterminedInputsIncomplete(
+func TestReleasesByHashUncorrelatedMatchIsNotCached(
 	t *testing.T,
 ) {
 	t.Parallel()
@@ -123,10 +124,12 @@ func TestReleasesByHashUncorrelatedMatchMarksUndeterminedInputsIncomplete(
 	)
 
 	requests := 0
+	fingerprintRequests := 0
 	transport := roundTripFunc(func(request *http.Request) (*http.Response, error) {
 		requests++
 		switch request.URL.Path {
 		case "/v1/fingerprints/432":
+			fingerprintRequests++
 			payload, err := io.ReadAll(request.Body)
 			if err != nil {
 				t.Errorf("read fingerprint request: %v", err)
@@ -142,6 +145,10 @@ func TestReleasesByHashUncorrelatedMatchMarksUndeterminedInputsIncomplete(
 				)
 			}
 			resp := fingerprintResponse{}
+			if fingerprintRequests > 1 {
+				resp.Data.ExactMatches = []fingerprintMatch{{File: releaseFile(matchedFingerprint)}}
+				return jsonResponse(t, resp), nil
+			}
 			resp.Data.ExactMatches = []fingerprintMatch{
 				{File: releaseFile(matchedFingerprint)},
 				// Correlated by fingerprint but missing file identity.
@@ -171,12 +178,13 @@ func TestReleasesByHashUncorrelatedMatchMarksUndeterminedInputsIncomplete(
 	})
 
 	provider := newHashTestProvider(t, transport)
-	results := provider.ReleasesByHash(t.Context(), []upstream.ArtifactFingerprint{
+	artifacts := []upstream.ArtifactFingerprint{
 		fixedFingerprint(matchedFingerprint),
 		fixedFingerprint(malformedFingerprint),
 		fixedFingerprint(missingOne),
 		fixedFingerprint(missingTwo),
-	})
+	}
+	results := provider.ReleasesByHash(t.Context(), artifacts)
 
 	if len(results) != 4 {
 		t.Fatalf("results = %d, want 4", len(results))
@@ -202,6 +210,16 @@ func TestReleasesByHashUncorrelatedMatchMarksUndeterminedInputsIncomplete(
 				i-2,
 				results[i],
 			)
+		}
+	}
+
+	fresh := provider.ReleasesByHash(t.Context(), artifacts)
+	if fingerprintRequests != 2 || !fresh[0].Matched || fresh[0].Err != nil {
+		t.Fatalf("second lookup = %+v, fingerprint requests = %d, want a fresh match", fresh, fingerprintRequests)
+	}
+	for i, result := range fresh[1:] {
+		if result.Matched || result.Err != nil {
+			t.Fatalf("second lookup, input %d = %+v, want a clean miss", i+1, result)
 		}
 	}
 }
@@ -509,6 +527,51 @@ func TestReleasesByHashRefetchRequiresCompleteAuthoritativeDetail(
 			"aliased authoritative detail = %+v, want a fingerprint error",
 			results[3],
 		)
+	}
+}
+
+func TestReleasesByHashRefetchDoesNotCacheOmittedFiles(t *testing.T) {
+	t.Parallel()
+	firstFile := releaseFile(1111)
+	secondFile := wireFingerprintFile(200, firstFile.ModId, 2222)
+	requests := 0
+	provider := newHashTestProvider(t, roundTripFunc(func(request *http.Request) (*http.Response, error) {
+		switch request.URL.Path {
+		case "/v1/fingerprints/432":
+			resp := fingerprintResponse{}
+			for _, file := range []fileResponse{firstFile, secondFile} {
+				file.FileName = "" // Require a separate file-details lookup.
+				resp.Data.ExactMatches = append(resp.Data.ExactMatches, fingerprintMatch{File: file})
+			}
+			return jsonResponse(t, resp), nil
+		case "/v1/mods/files":
+			requests++
+			files := []fileResponse{firstFile}
+			if requests > 1 {
+				files = append(files, secondFile)
+			}
+			return jsonResponse(t, filesDataResponse{Data: files}), nil
+		case "/v1/mods":
+			return jsonResponse(t, modsDataResponse{
+				Data: []modResponse{{ID: firstFile.ModId, Slug: "alpha"}},
+			}), nil
+		default:
+			return nil, fmt.Errorf("unexpected request %s %s", request.Method, request.URL.Path)
+		}
+	}))
+
+	artifacts := []upstream.ArtifactFingerprint{fixedFingerprint(1111), fixedFingerprint(2222)}
+	results := provider.ReleasesByHash(t.Context(), artifacts)
+	if !results[0].Matched || results[0].Err != nil {
+		t.Fatalf("present file = %+v, want a release", results[0])
+	}
+	if results[1].Matched || results[1].Err == nil || !strings.Contains(results[1].Err.Error(), "exact file 200 is missing") {
+		t.Fatalf("omitted file = %+v, want an incomplete lookup", results[1])
+	}
+
+	results = provider.ReleasesByHash(t.Context(), artifacts)
+	if requests != 2 || !results[1].Matched || results[1].Err != nil {
+		t.Fatalf("corrected file = %+v, file requests = %d, want a fresh match", results[1], requests)
 	}
 }
 
