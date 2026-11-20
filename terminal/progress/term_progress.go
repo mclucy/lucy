@@ -27,7 +27,9 @@ type Options struct {
 type Renderer interface {
 	// PhaseStarted announces a long-running stage.
 	PhaseStarted(text string)
-	// PhaseDone reports that the stage ended and prints it permanently.
+	// PhaseDone ends the stage and prints text permanently. An empty text
+	// ends the stage silently, so a phase whose outcome has no prose does
+	// not leave a stale live area behind.
 	PhaseDone(text string, elapsed time.Duration)
 	// Status replaces the live status line. Non-interactive renderers print it
 	// at most once per heartbeat interval.

@@ -31,13 +31,20 @@ type installOutput struct {
 	noted bool
 
 	phase           string
+	phaseCount      int
+	phaseTotal      int
 	resolved        int
 	pending         int
 	rejected        int
 	rejectedProject string
-	fetchedBase     int64
-	fetchedCurrent  int64
-	fetchedFiles    int
+	fetchedBytes    int64
+	// activeFetches keeps received bytes per transfer name. Archive workers
+	// may start and finish several transfers interleaved, so one current
+	// transfer cannot attribute the bytes that end. Transfers that share a
+	// name use a FIFO slot each; a producer that passes the logical artifact
+	// path gives every slot a distinct key and exact accounting.
+	activeFetches map[string][]int64
+	fetchedFiles  int
 }
 
 func newInstallOutput(cmd *cobra.Command, inv *Invocation) *installOutput {
@@ -54,6 +61,7 @@ func newInstallOutput(cmd *cobra.Command, inv *Invocation) *installOutput {
 func (o *installOutput) Trace() *install.Trace {
 	trace := &install.Trace{
 		PhaseStarted:  o.phaseStarted,
+		PhaseProgress: o.phaseProgress,
 		PhaseDone:     o.phaseDone,
 		FetchStarted:  o.fetchStarted,
 		FetchProgress: o.fetchProgress,
@@ -73,6 +81,8 @@ func (o *installOutput) Trace() *install.Trace {
 func (o *installOutput) phaseStarted(name string) {
 	o.inv.TelemetryObservation.PhaseStart(name)
 	o.phase = name
+	o.phaseCount = 0
+	o.phaseTotal = 0
 	o.resolved = 0
 	o.pending = 0
 	o.rejected = 0
@@ -81,33 +91,64 @@ func (o *installOutput) phaseStarted(name string) {
 	o.renderer.PhaseStarted(phaseLabel(name))
 }
 
+// phaseProgress reports bounded work inside the active phase. A late update
+// from a phase that already ended is dropped, so a status line can never
+// outlive the completion that replaced it.
+func (o *installOutput) phaseProgress(name string, count, total int) {
+	if name != o.phase {
+		return
+	}
+	o.phaseCount = count
+	o.phaseTotal = total
+	o.updateStatus()
+}
+
 func (o *installOutput) phaseDone(phase install.PhaseInfo) {
 	o.inv.TelemetryObservation.PhaseDone(phase.Name, phase.Elapsed)
 	o.inv.TelemetryObservation.ObservePhaseCount(phase.Name, phase.Count, phase.Total)
 	o.phase = ""
-	text := phaseText(phase)
-	if text == "" {
-		return
-	}
-	o.renderer.PhaseDone(text, phase.Elapsed)
+	o.phaseCount = 0
+	o.phaseTotal = 0
+	// An empty text ends the phase without printing: a phase whose outcome
+	// has no prose must still clear the live area.
+	o.renderer.PhaseDone(phaseText(phase), phase.Elapsed)
 }
 
 func (o *installOutput) fetchStarted(name string, size int64) {
-	o.fetchedCurrent = 0
+	if o.activeFetches == nil {
+		o.activeFetches = map[string][]int64{}
+	}
+	o.activeFetches[name] = append(o.activeFetches[name], 0)
 	o.renderer.Download(name, 0, size)
 	o.updateStatus()
 }
 
 func (o *installOutput) fetchProgress(name string, read, total int64) {
-	o.fetchedCurrent = read
+	if o.activeFetches == nil {
+		o.activeFetches = map[string][]int64{}
+	}
+	slots := o.activeFetches[name]
+	if len(slots) == 0 {
+		slots = []int64{read}
+	} else {
+		slots[len(slots)-1] = read
+	}
+	o.activeFetches[name] = slots
 	o.renderer.Download(name, read, total)
 	o.updateStatus()
 }
 
-func (o *installOutput) fetchDone(string, bool) {
+func (o *installOutput) fetchDone(name string, _ bool) {
 	o.inv.TelemetryObservation.ObserveFetchDone()
-	o.fetchedBase += o.fetchedCurrent
-	o.fetchedCurrent = 0
+	if slots := o.activeFetches[name]; len(slots) > 0 {
+		o.fetchedBytes += slots[0]
+		slots = slots[1:]
+		if len(slots) == 0 {
+			delete(o.activeFetches, name)
+		} else {
+			o.activeFetches[name] = slots
+		}
+	}
 	o.fetchedFiles++
 	o.renderer.DownloadDone()
 	o.updateStatus()
@@ -133,6 +174,18 @@ func (o *installOutput) updateStatus() {
 	o.renderer.Status(o.statusText())
 }
 
+// activeBytes sums the transfers still running. Completed transfers move into
+// fetchedBytes, so interleaved archive workers never double count.
+func (o *installOutput) activeBytes() int64 {
+	var bytes int64
+	for _, slots := range o.activeFetches {
+		for _, read := range slots {
+			bytes += read
+		}
+	}
+	return bytes
+}
+
 func (o *installOutput) statusText() string {
 	var parts []string
 	if o.phase == "packages" {
@@ -149,7 +202,17 @@ func (o *installOutput) statusText() string {
 		}
 		parts = append(parts, label)
 	}
-	if fetched := o.fetchedBase + o.fetchedCurrent; fetched > 0 {
+	if o.phaseTotal > 0 {
+		switch o.phase {
+		case "classification":
+			parts = append(parts, fmt.Sprintf("%d of %d mod files", o.phaseCount, o.phaseTotal))
+		case "package staging":
+			parts = append(parts, fmt.Sprintf("%d of %d packages", o.phaseCount, o.phaseTotal))
+		case "processors":
+			parts = append(parts, fmt.Sprintf("%d of %d processors", o.phaseCount, o.phaseTotal))
+		}
+	}
+	if fetched := o.fetchedBytes + o.activeBytes(); fetched > 0 {
 		parts = append(parts, style.FormatBytesDecimal(fetched)+" fetched")
 	}
 	if o.rejectedProject != "" {
@@ -355,8 +418,16 @@ func phaseLabel(name string) string {
 		return "Resolving server"
 	case "packages":
 		return "Resolving packages"
+	case "identification":
+		return "Identifying the installed server"
+	case "adoption":
+		return "Adopting installed packages"
 	case "python environment":
 		return "Preparing Python environment"
+	case "package staging":
+		return "Staging packages"
+	case "bootstrap snapshot":
+		return "Restoring the bootstrap snapshot"
 	case "install":
 		return "Installing"
 	case "download pack":
@@ -365,6 +436,12 @@ func phaseLabel(name string) string {
 		return "Downloading the archive"
 	case "files":
 		return "Writing server files"
+	case "classification":
+		return "Classifying installed mods"
+	case "loader preparation":
+		return "Preparing the loader"
+	case "processors":
+		return "Running installer processors"
 	case "loader installer":
 		return "Running the loader installer"
 	default:
@@ -397,8 +474,59 @@ func phaseText(phase install.PhaseInfo) string {
 			)
 		}
 		return fmt.Sprintf("Resolved %d packages", phase.Count)
+	case "identification":
+		return "Identified the installed server"
+	case "classification":
+		if phase.Total == 0 {
+			return ""
+		}
+		if phase.Count == phase.Total {
+			if phase.Count == 1 {
+				return "Kept 1 mod file"
+			}
+			return fmt.Sprintf("Kept all %d mod files", phase.Count)
+		}
+		return fmt.Sprintf(
+			"Kept %d of %d mod files",
+			phase.Count,
+			phase.Total,
+		)
+	case "loader preparation":
+		return "Prepared the loader"
+	case "bootstrap snapshot":
+		return fmt.Sprintf("Restored %d bootstrap files without running the installer", phase.Count)
+	case "processors":
+		if phase.Count == 0 {
+			return ""
+		}
+		if phase.Total > 0 && phase.Count < phase.Total {
+			return fmt.Sprintf(
+				"Ran %d of %d installer processors",
+				phase.Count,
+				phase.Total,
+			)
+		}
+		if phase.Count == 1 {
+			return "Ran 1 installer processor"
+		}
+		return fmt.Sprintf("Ran %d installer processors", phase.Count)
 	case "python environment":
 		return "Prepared Python environment"
+	case "package staging":
+		if phase.Count == 0 {
+			return ""
+		}
+		if phase.Total > 0 && phase.Count < phase.Total {
+			return fmt.Sprintf(
+				"Staged %d of %d packages",
+				phase.Count,
+				phase.Total,
+			)
+		}
+		if phase.Count == 1 {
+			return "Staged 1 package"
+		}
+		return fmt.Sprintf("Staged %d packages", phase.Count)
 	case "download pack":
 		return "Downloaded the modpack"
 	case "download archive":
