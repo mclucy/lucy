@@ -350,21 +350,23 @@ func executeCommit(
 	return applied, nil
 }
 
-// runCommitVerify rechecks pinned documents and the caller's policy at the
-// commit point. It runs even when the transaction journaled no changes, so a
-// publication that writes nothing still revalidates what callers observed.
+// runCommitVerify runs the caller's policy and then rechecks pinned documents
+// at the commit point. The document check intentionally runs last: caller
+// verification may hash outputs for a while, and an edit made during that work
+// must still fail the transaction. It runs even when the transaction journaled
+// no changes, so a publication that writes nothing still revalidates what
+// callers observed.
 func runCommitVerify(
 	files *os.Root,
 	request commitRequest,
 	entries []workspacewrite.InstallJournalEntry,
 ) error {
-	if err := request.documents.verify(files, request.writes); err != nil {
-		return err
+	if request.verify != nil {
+		if err := request.verify(files, entries); err != nil {
+			return err
+		}
 	}
-	if request.verify == nil {
-		return nil
-	}
-	return request.verify(files, entries)
+	return request.documents.verify(files, request.writes)
 }
 
 func installBeforeCheck(

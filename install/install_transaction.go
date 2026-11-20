@@ -127,6 +127,92 @@ func pruneTargets(
 	return targets, nil
 }
 
+// installOutputExpectation is the image one path must hold at the commit
+// point. compareMode is false for a legacy receipt entry whose zero mode is a
+// wildcard rather than observed evidence.
+type installOutputExpectation struct {
+	image       *workspacewrite.InstallImage
+	compareMode bool
+}
+
+// verifyInstallOutputs checks the workspace at the commit point. A journaled
+// write must hold its after image and a journaled prune must stay absent, so a
+// path edited while the executor wrote another file is not mistaken for the
+// bytes the transaction published. A path the executor skipped because it
+// already matched is checked against its planned image. Entries the published
+// receipt carries forward are checked against their accepted baselines,
+// including legacy entries whose zero mode is a wildcard; a restaged or pruned
+// path is never compared with the baseline it replaced.
+func verifyInstallOutputs(
+	files *os.Root,
+	entries []workspacewrite.InstallJournalEntry,
+	staged map[string]commitWrite,
+	pruneExpected map[string]*workspacewrite.InstallImage,
+	retained []receipt.Entry,
+) error {
+	mutated := make(map[string]*workspacewrite.InstallImage, len(entries))
+	for _, entry := range entries {
+		// A nil after image records a journaled prune, so the same table
+		// expresses "must hold these bytes" and "must stay absent".
+		mutated[entry.Path] = entry.After
+	}
+	expected := make(
+		map[string]installOutputExpectation,
+		len(staged)+len(pruneExpected)+len(retained),
+	)
+	for name, write := range staged {
+		expected[name] = installOutputExpectation{
+			image:       write.after,
+			compareMode: true,
+		}
+	}
+	for name, image := range pruneExpected {
+		expected[name] = installOutputExpectation{
+			image:       image,
+			compareMode: true,
+		}
+	}
+	for _, entry := range retained {
+		if _, planned := expected[entry.Path]; planned {
+			continue
+		}
+		expected[entry.Path] = installOutputExpectation{
+			image:       receiptImage(entry),
+			compareMode: entry.Mode != 0,
+		}
+	}
+	names := make([]string, 0, len(expected))
+	for name := range expected {
+		names = append(names, name)
+	}
+	slices.Sort(names)
+	for _, name := range names {
+		want := expected[name]
+		if after, journaled := mutated[name]; journaled {
+			want = installOutputExpectation{image: after, compareMode: true}
+		}
+		current, err := workspacewrite.ObserveInstallImage(files, name)
+		if err != nil {
+			return fmt.Errorf(
+				"inspect installation output %s before commit: %w",
+				name,
+				err,
+			)
+		}
+		if !workspacewrite.InstallImagesMatch(
+			current,
+			want.image,
+			want.compareMode,
+		) {
+			return fmt.Errorf(
+				"installation output %s changed before commit",
+				name,
+			)
+		}
+	}
+	return nil
+}
+
 // applyCommit publishes the staged installation against documents the caller
 // observed before the operation read or resolved anything, so an edit made
 // after observation fails the transaction instead of being overwritten.
@@ -463,43 +549,20 @@ func applyCommit(root, stage string, d *document.Manifest, l *document.Lock, pub
 		}
 		prunes = append(prunes, commitPrune{path: name, expected: expected})
 	}
-	// Paths the executor does not journal are skipped by its own recheck, so
-	// compare them here against the images the plan expects.
+	// Verify every path the receipt will describe at the commit point: the
+	// executor's journaled after images, planned paths it did not journal,
+	// and accepted entries carried forward without restaging.
 	verify := func(
 		files *os.Root,
 		entries []workspacewrite.InstallJournalEntry,
 	) error {
-		mutated := make(map[string]struct{}, len(entries))
-		for _, entry := range entries {
-			mutated[entry.Path] = struct{}{}
-		}
-		check := func(name string, expected *workspacewrite.InstallImage) error {
-			if _, changed := mutated[name]; changed {
-				return nil
-			}
-			current, err := workspacewrite.ObserveInstallImage(files, name)
-			if err != nil {
-				return err
-			}
-			if !workspacewrite.InstallImagesEqual(current, expected) {
-				return fmt.Errorf(
-					"installation path %s changed before commit",
-					name,
-				)
-			}
-			return nil
-		}
-		for name, write := range staged {
-			if err := check(name, write.after); err != nil {
-				return err
-			}
-		}
-		for name, expected := range pruneExpected {
-			if err := check(name, expected); err != nil {
-				return err
-			}
-		}
-		return nil
+		return verifyInstallOutputs(
+			files,
+			entries,
+			staged,
+			pruneExpected,
+			next.Entries,
+		)
 	}
 	applied, err := executeCommit(root, commitRequest{
 		label:     "installation",
