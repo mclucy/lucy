@@ -299,6 +299,40 @@ func TestInitializeWritesDeclarationForVanillaLayout(t *testing.T) {
 	}
 }
 
+func TestInitializeResolvesFromCapturedLock(t *testing.T) {
+	root := t.TempDir()
+	writeVanillaTestJar(t, root, "server.jar", "1.20.1")
+	service := newInitializeTestService(t)
+	if _, err := service.Initialize(t.Context(), root, InitOptions{}); err != nil {
+		t.Fatalf("initial Initialize: %v", err)
+	}
+	path := filepath.Join(root, documentpkg.LockFilename)
+	captured := readFileBytes(t, path)
+	result, err := service.Initialize(t.Context(), root, InitOptions{
+		Force: true,
+		Trace: &install.Trace{
+			PhaseDone: func(phase install.PhaseInfo) {
+				if phase.Name == "adoption" {
+					if err := os.WriteFile(path, []byte("server: ["), 0o644); err != nil {
+						t.Fatal(err)
+					}
+				}
+			},
+			InputScale: func(_, _ int) {
+				if err := os.WriteFile(path, captured, 0o644); err != nil {
+					t.Fatal(err)
+				}
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("Initialize with a restored lock: %v", err)
+	}
+	if result.PublishedLock || string(readFileBytes(t, path)) != string(captured) {
+		t.Fatal("initialization replaced the captured lock")
+	}
+}
+
 // Initialization reads the workspace and writes declarations; the files it
 // observed, including an existing receipt, stay byte-for-byte intact.
 func TestInitializePreservesReceiptAndObservedFiles(t *testing.T) {
