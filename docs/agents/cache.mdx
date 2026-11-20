@@ -9,6 +9,8 @@ Metadata and artifacts have separate policy limits and lifetimes. The default me
 
 A read-only POST lookup opts into caching explicitly. Its key digests the method, URL, request body, and request headers, so two lookup bodies never share a response and a response fetched under one credential is never served for another. A POST that changes remote state stays outside the cache.
 
+Metadata requests that specify an upstream digest check it on both cache hits and fresh responses. A cached response that fails the digest check is fetched again. CurseForge responses with uncorrelatable exact matches or omitted file IDs are not cached. Other matches in the response can still identify their inputs.
+
 The cache client owns its HTTP client, policy, and diagnostic logger. Command composition supplies the disk root explicitly. Each instance initializes its index lazily; separate invocations can share cached objects without sharing transport or provider configuration. Metadata and artifact requests receive the caller's context, including cache-hit reads and copies. Configured TTL policy governs requests without an explicit override. Closing waits for cache operations and releases an opened store without initializing an unused one.
 
 ## Publication and verification
