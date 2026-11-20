@@ -299,9 +299,8 @@ func (c *Client) CachedGetBytes(
 	return res.Data, nil
 }
 
-// CachedGetRequest fetches bytes from url and returns the HTTP status code
-// separately from transport/read/cache errors. Non-2xx responses are not
-// cached.
+// CachedGetRequest fetches bytes from url. Non-2xx responses are not cached
+// and retain their status and headers even if reading the body fails.
 func (c *Client) CachedGetRequest(
 	ctx context.Context,
 	url string,
@@ -310,11 +309,11 @@ func (c *Client) CachedGetRequest(
 	return c.cachedBytesRequest(ctx, http.MethodGet, url, nil, url, 0, opts, nil)
 }
 
-// CachedPostRequest fetches bytes from url with a read-only POST body and
-// returns the HTTP status code separately from transport/read/cache errors.
-// Only use it for read-only requests whose credentials are explicit in opts.
-// The cache key includes the URL, body, and headers. Only a 200 response that
-// passes validate is cached. The validator may decode the data for the caller.
+// CachedPostRequest fetches bytes from url with a read-only POST body.
+// Non-2xx responses retain their status and headers even if reading fails.
+// Pass all request headers explicitly. Use provider-issued API tokens, not
+// passwords. The key partitions responses by URL, body, and headers; it does
+// not authenticate a caller. Only a validated 200 response is cached.
 func (c *Client) CachedPostRequest(
 	ctx context.Context,
 	url string,
@@ -439,17 +438,14 @@ func (c *Client) cachedBytesRequest(
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		errorBody, err := readLimitedBytes(contextReader{ctx, resp.Body}, maxBytes)
-		if err != nil {
-			return nil, err
-		}
-		if err := ctx.Err(); err != nil {
-			return nil, err
+		if err == nil {
+			err = ctx.Err()
 		}
 		return &BytesResponse{
 			StatusCode: resp.StatusCode,
 			Data:       errorBody,
 			Header:     resp.Header,
-		}, nil
+		}, err
 	}
 
 	stage := c.newByteStage()
