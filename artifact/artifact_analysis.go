@@ -47,11 +47,9 @@ func (a *Analyses) File(path string) *Analysis {
 	}
 	file := &Analysis{path: path}
 	file.initial = sync.OnceValues(func() (os.FileInfo, error) { return os.Stat(path) })
-	file.info = sync.OnceValues(func() ([]PackageInfo, error) {
-		return readObserved(file, func() ([]PackageInfo, error) { return readInfo(path, &file.inputs) })
-	})
-	file.hash = sync.OnceValues(func() (analysisHashes, error) { return readObserved(file, file.readHashes) })
-	file.murmur = sync.OnceValues(func() (uint32, error) { return readObserved(file, File{Path: path}.MurmurHash) })
+	file.info = file.observe(func() ([]PackageInfo, error) { return readInfo(path, &file.inputs) })
+	file.hash = file.observe(file.readHashes)
+	file.murmur = file.observe(File{Path: path}.MurmurHash)
 	if a != nil {
 		actual, _ := a.files.LoadOrStore(path, file)
 		return actual.(*Analysis)
@@ -94,10 +92,8 @@ func (a *Analysis) Descriptor(ctx context.Context, loader catalog.Ecosystem, min
 	if view, ok := a.views.Load(key); ok {
 		return view.(func() (DescriptorView, error))()
 	}
-	read := sync.OnceValues(func() (DescriptorView, error) {
-		modules, err := readObserved(a, func() ([]catalog.DescriptorModule, error) {
-			return readModulesFor(ctx, a.path, loader, minecraft, &a.inputs)
-		})
+	read := a.observe(func() (DescriptorView, error) {
+		modules, err := readModulesFor(ctx, a.path, loader, minecraft, &a.inputs)
 		if err != nil {
 			return DescriptorView{}, err
 		}
@@ -108,22 +104,35 @@ func (a *Analysis) Descriptor(ctx context.Context, loader catalog.Ecosystem, min
 	return view.(func() (DescriptorView, error))()
 }
 
-// Observe one filesystem version across the independent reads that contribute
-// evidence. Publication also checks the digest, because metadata is not a
-// content proof.
-func readObserved[T any](a *Analysis, read func() (T, error)) (T, error) {
-	var zero T
-	if err := a.checkFile(); err != nil {
-		return zero, err
+// Observe one filesystem version across the reads that contribute evidence.
+// A cached result still needs a version check before it can be reused.
+func (a *Analysis) observe[T any](read func() (T, error)) func() (T, error) {
+	var once sync.Once
+	var value T
+	var readErr error
+	return func() (T, error) {
+		firstRead := false
+		once.Do(func() {
+			firstRead = true
+			if readErr = a.checkFile(); readErr != nil {
+				return
+			}
+			value, readErr = read()
+			if readErr == nil {
+				readErr = a.checkFile()
+			}
+		})
+		var zero T
+		if readErr != nil {
+			return zero, readErr
+		}
+		if !firstRead {
+			if err := a.checkFile(); err != nil {
+				return zero, err
+			}
+		}
+		return value, nil
 	}
-	result, err := read()
-	if err != nil {
-		return zero, err
-	}
-	if err := a.checkFile(); err != nil {
-		return zero, err
-	}
-	return result, nil
 }
 
 func (a *Analysis) checkFile() error {
