@@ -50,3 +50,46 @@ func (p *Provider) getModFileById(
 	}
 	return &resp.Data, nil
 }
+
+// getModFilesByIds returns many files in one POST /v1/mods/files request.
+// Files the API does not know are omitted; a 404 response means the same, not
+// a failed lookup.
+// Docs: https://docs.curseforge.com/rest-api/#get-files
+func (p *Provider) getModFilesByIds(
+	ctx context.Context,
+	fileIDs []int32,
+) ([]fileResponse, error) {
+	if len(fileIDs) == 0 {
+		return nil, nil
+	}
+	payload := struct {
+		FileIds []int32 `json:"fileIds"`
+	}{FileIds: fileIDs}
+	var resp filesDataResponse
+	if err := p.post(ctx, baseUrl+"/v1/mods/files", payload, &resp); err != nil {
+		if isNotFound(err) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return resp.Data, nil
+}
+
+// hasSHA1 reports whether the file record carries a SHA-1 digest.
+func (f fileResponse) hasSHA1() bool {
+	for _, h := range f.Hashes {
+		if h.Algo == 1 && h.Digest != "" {
+			return true
+		}
+	}
+	return false
+}
+
+// completeForRelease reports whether an inline file record already carries the
+// identity and release details a release conversion needs. An incomplete
+// record is refetched through POST /v1/mods/files, which returns the
+// authoritative file schema.
+func (f fileResponse) completeForRelease() bool {
+	return f.ID != 0 && f.ModId != 0 && f.DisplayName != "" &&
+		f.FileName != "" && f.hasSHA1() && len(f.GameVersions) > 0
+}

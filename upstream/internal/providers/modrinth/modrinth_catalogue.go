@@ -18,14 +18,24 @@ func (p *Provider) Candidates(ctx context.Context, project, minecraft string, lo
 	if err != nil {
 		return nil, err
 	}
-	var out []upstream.Candidate
+	eligible := make([]*versionResponse, 0, len(versions))
 	for _, v := range versions {
+		if v == nil {
+			continue
+		}
 		if v.Status != "" && v.Status != "listed" {
 			continue
 		}
 		if !slices.Contains(v.GameVersions, minecraft) || !versionSupportsLoader(v, loader) {
 			continue
 		}
+		eligible = append(eligible, v)
+	}
+	// Resolving every pinned dependency version in one fan-out keeps the
+	// catalogue from requesting the same version once per candidate.
+	dependencies := p.pinnedVersionLookup(ctx, eligible)
+	var out []upstream.Candidate
+	for _, v := range eligible {
 		// Modrinth infers the first file as primary when no file carries the
 		// flag, so a version without a marked primary still must produce a
 		// primary candidate instead of losing every candidate to the check
@@ -35,7 +45,14 @@ func (p *Provider) Candidates(ctx context.Context, project, minecraft string, lo
 			if f.FileType != "" {
 				continue
 			}
-			c, err := p.candidateFromVersion(ctx, v, f, f.IsPrimary || (unmarked && i == 0), false)
+			c, err := p.candidateFromVersion(
+				ctx,
+				v,
+				f,
+				f.IsPrimary || (unmarked && i == 0),
+				false,
+				dependencies,
+			)
 			if err != nil {
 				return nil, err
 			}
@@ -49,17 +66,18 @@ func (p *Provider) Candidates(ctx context.Context, project, minecraft string, lo
 }
 
 // candidateFromVersion builds the candidate for one file of a version. The
-// caller owns the primary flag; the helper resolves a dependency whose
-// project is carried by its version through the version endpoint. A hash
-// identification keeps the matched release when that metadata is incomplete,
-// because the installed bytes already establish the release; a catalogue
-// listing treats the failure as fatal.
+// caller owns the primary flag. lookup resolves a dependency whose project is
+// carried by its version; nil reads the version endpoint per dependency. A
+// hash identification keeps the matched release when that metadata is
+// incomplete, because the installed bytes already establish the release; a
+// catalogue listing treats the failure as fatal.
 func (p *Provider) candidateFromVersion(
 	ctx context.Context,
 	v *versionResponse,
 	f fileResponse,
 	primary bool,
 	tolerateIncompleteDependencies bool,
+	lookup versionByIdLookup,
 ) (upstream.Candidate, error) {
 	hashes := map[string]string{}
 	if f.Hashes.Sha512 != "" {
@@ -85,7 +103,7 @@ func (p *Provider) candidateFromVersion(
 	for _, d := range v.Dependencies {
 		projectID := d.ProjectId
 		if projectID == "" && d.VersionId != "" {
-			pinned, e := p.getVersionById(ctx, d.VersionId)
+			pinned, e := p.resolveVersionById(ctx, lookup, d.VersionId)
 			if e != nil {
 				if ctx.Err() != nil {
 					return upstream.Candidate{}, ctx.Err()

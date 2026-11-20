@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"encoding/json/v2"
 	"fmt"
+	"maps"
 	"slices"
 	"strings"
 
@@ -14,8 +15,13 @@ import (
 )
 
 // https://docs.modrinth.com/api/operations/versionfromhash/
+// https://docs.modrinth.com/api/operations/versionsfromhashes/
+// https://docs.modrinth.com/api/operations/getversions/
+// https://docs.modrinth.com/api/operations/getprojects/
 
 const versionFileURLPrefix = "https://api.modrinth.com/v2/version_file/"
+
+var _ upstream.ArtifactBatchReleaseMapper = (*Provider)(nil)
 
 // ReleaseByHash identifies an installed artifact by its SHA-1 hash and
 // returns the release it was published as, in one lookup. A hash Modrinth
@@ -69,12 +75,22 @@ func (p *Provider) ReleaseByHash(
 		return upstream.Release{}, false, nil
 	}
 
-	candidate, err := p.candidateFromVersion(ctx, &ver, file, true, true)
+	candidate, err := p.candidateFromVersion(ctx, &ver, file, true, true, nil)
 	if err != nil {
 		return upstream.Release{}, false, err
 	}
 
-	release := upstream.Release{
+	return p.releaseFromVersion(project, &ver, candidate), true, nil
+}
+
+// releaseFromVersion labels the release with the project's slug and side
+// labels and the version's compatibility tags.
+func (p *Provider) releaseFromVersion(
+	project *projectResponse,
+	ver *versionResponse,
+	candidate upstream.Candidate,
+) upstream.Release {
+	return upstream.Release{
 		Ref: catalog.VersionedRef{
 			Name:      catalog.Name(project.Slug),
 			Provider:  p.Provider(),
@@ -87,7 +103,112 @@ func (p *Provider) ReleaseByHash(
 		ServerSide:        upstream.ServerSide(project.ServerSide),
 		ClientSide:        project.ClientSide,
 	}
-	return release, true, nil
+}
+
+// ReleasesByHash resolves fingerprints in input order. SHA-1 digests are
+// looked up in bounded batches through POST /v2/version_files, matched
+// projects in one bounded GET /v2/projects fan-out, and their pinned
+// dependency versions in one bounded GET /v2/versions fan-out. A digest the
+// API omits is a miss with no error; a failed request records its error
+// against every input whose digest that batch carried.
+func (p *Provider) ReleasesByHash(
+	ctx context.Context,
+	artifacts []upstream.ArtifactFingerprint,
+) []upstream.ArtifactReleaseLookup {
+	lookups := make([]upstream.ArtifactReleaseLookup, len(artifacts))
+	if len(artifacts) == 0 {
+		return lookups
+	}
+	// One fingerprint keeps the original single-hash path, which is the
+	// query the endpoint offers for it.
+	if len(artifacts) == 1 {
+		release, matched, err := p.ReleaseByHash(ctx, artifacts[0])
+		lookups[0] = upstream.ArtifactReleaseLookup{
+			Release: release,
+			Matched: matched,
+			Err:     err,
+		}
+		return lookups
+	}
+	if err := ctx.Err(); err != nil {
+		for i := range lookups {
+			lookups[i].Err = err
+		}
+		return lookups
+	}
+
+	hashes := make([]string, len(artifacts))
+	resolved := make([]bool, len(artifacts))
+	unique := make([]string, 0, len(artifacts))
+	for i, artifact := range artifacts {
+		digest, err := artifact.SHA1()
+		if err != nil {
+			lookups[i].Err = err
+			continue
+		}
+		hashes[i] = hex.EncodeToString(digest[:])
+		resolved[i] = true
+		unique = append(unique, hashes[i])
+	}
+
+	versions := make(map[string]versionResponse, len(unique))
+	versionErrors := make(map[string]error)
+	for batch := range slices.Chunk(batchIds(unique), batchSize) {
+		found, err := p.versionFilesByHash(ctx, batch)
+		if err != nil {
+			for _, hash := range batch {
+				versionErrors[hash] = err
+			}
+			continue
+		}
+		maps.Copy(versions, found)
+	}
+
+	matched := make([]*versionResponse, 0, len(versions))
+	projectIds := make([]string, 0, len(versions))
+	for _, ver := range versions {
+		matched = append(matched, &ver)
+		if ver.ProjectId != "" {
+			projectIds = append(projectIds, ver.ProjectId)
+		}
+	}
+	projects, projectErrors := p.getProjectsByIds(ctx, projectIds)
+	dependencies := p.pinnedVersionLookup(ctx, matched)
+
+	for i := range artifacts {
+		if !resolved[i] {
+			continue
+		}
+		hash := hashes[i]
+		ver, ok := versions[hash]
+		if !ok {
+			lookups[i].Err = versionErrors[hash]
+			continue
+		}
+		if ver.ProjectId == "" {
+			continue
+		}
+		project := projects[ver.ProjectId]
+		if project == nil {
+			lookups[i].Err = projectErrors[ver.ProjectId]
+			if lookups[i].Err == nil {
+				lookups[i].Err = fmt.Errorf("%w: %s", ErrNoProject, ver.ProjectId)
+			}
+			continue
+		}
+		file, ok := fileBySha1(ver.Files, hash)
+		if !ok {
+			continue
+		}
+		candidate, err := p.candidateFromVersion(ctx, &ver, file, true, true, dependencies)
+		if err != nil {
+			lookups[i].Err = err
+			continue
+		}
+		lookups[i].Release = p.releaseFromVersion(project, &ver, candidate)
+		lookups[i].Matched = true
+	}
+	return lookups
 }
 
 // fileBySha1 picks the file whose sha1 equals hash, case-insensitive. The

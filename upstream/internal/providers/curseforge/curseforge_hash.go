@@ -1,16 +1,11 @@
 package curseforge
 
 import (
-	"bytes"
 	"context"
-	"encoding/json/v2"
-	"errors"
 	"fmt"
-	"net/http"
+	"slices"
 
 	"github.com/mclucy/lucy/catalog"
-	"github.com/mclucy/lucy/internal/fn"
-	"github.com/mclucy/lucy/internal/fsutil"
 	"github.com/mclucy/lucy/upstream"
 	"github.com/mclucy/lucy/version"
 )
@@ -20,17 +15,22 @@ type fingerprintRequest struct {
 	Fingerprints []uint32 `json:"fingerprints"`
 }
 
+// fingerprintMatch is one exact fingerprint match. The response's top-level
+// ID is a project identity the official schema leaves unspecified, so matching
+// correlates on the file's own fileFingerprint and takes project ownership
+// from its modId.
+type fingerprintMatch struct {
+	ID   int32        `json:"id"`
+	File fileResponse `json:"file"`
+}
+
 // fingerprintResponse wraps the /v1/fingerprints/432 response.
 // Verified against https://docs.curseforge.com/rest-api/#get-fingerprints-matches
+// Only exactMatches are decoded: partial and fuzzy matches do not describe the
+// exact artifact on disk and must never stand in for one.
 type fingerprintResponse struct {
 	Data struct {
-		ExactMatches []struct {
-			ID   uint32 `json:"id"`
-			File struct {
-				ID    int32 `json:"id"`
-				ModId int32 `json:"modId"`
-			} `json:"file"`
-		} `json:"exactMatches"`
+		ExactMatches []fingerprintMatch `json:"exactMatches"`
 	} `json:"data"`
 }
 
@@ -45,103 +45,404 @@ func (p *Provider) ReleaseByHash(
 	bool,
 	error,
 ) {
-	fingerprint, err := artifact.MurmurHash()
-	if err != nil {
-		return upstream.Release{}, false, err
+	lookups := p.ReleasesByHash(
+		ctx,
+		[]upstream.ArtifactFingerprint{artifact},
+	)
+	result := lookups[0]
+	return result.Release, result.Matched, result.Err
+}
+
+// ReleasesByHash resolves every fingerprint into the release it was published
+// as, returning one result per input in input order.
+//
+// Fingerprints are deduplicated and looked up in bounded batches, so identical
+// inputs share one lookup and the number of requests does not grow with a
+// project's file count. Only exact matches count. An unknown fingerprint is a
+// miss, not an error; a failed batch is an error for every input it covered.
+// An exact match whose file or project details cannot be completed is an
+// incomplete lookup, reported as an error rather than a miss.
+func (p *Provider) ReleasesByHash(
+	ctx context.Context,
+	artifacts []upstream.ArtifactFingerprint,
+) []upstream.ArtifactReleaseLookup {
+	results := make([]upstream.ArtifactReleaseLookup, len(artifacts))
+	if len(artifacts) == 0 {
+		return results
 	}
-	match, err := p.fingerprintMatch(ctx, fingerprint)
-	if err != nil {
-		if errors.Is(err, ErrProjectNotFound) {
-			return upstream.Release{}, false, nil
+	if err := ctx.Err(); err != nil {
+		for i := range results {
+			results[i].Err = err
 		}
-		return upstream.Release{}, false, err
+		return results
 	}
 
-	mod, err := p.getModById(ctx, match.ModId)
-	if err != nil {
-		return upstream.Release{}, false, err
+	unique, indexByFingerprint := fingerprintIndex(artifacts, results)
+	files := p.exactFiles(ctx, unique, indexByFingerprint, results)
+	p.refetchIncompleteFiles(ctx, files, indexByFingerprint, results)
+	p.fillReleases(ctx, files, indexByFingerprint, results)
+	return results
+}
+
+// fingerprintIndex computes every artifact fingerprint and records computation
+// failures on their results. It returns the distinct fingerprints in first-seen
+// order and maps each fingerprint to the input positions that asked for it.
+func fingerprintIndex(
+	artifacts []upstream.ArtifactFingerprint,
+	results []upstream.ArtifactReleaseLookup,
+) ([]uint32, map[uint32][]int) {
+	unique := make([]uint32, 0, len(artifacts))
+	indexByFingerprint := make(map[uint32][]int, len(artifacts))
+	for i, artifact := range artifacts {
+		fingerprint, err := artifact.MurmurHash()
+		if err != nil {
+			results[i].Err = err
+			continue
+		}
+		if _, ok := indexByFingerprint[fingerprint]; !ok {
+			unique = append(unique, fingerprint)
+		}
+		indexByFingerprint[fingerprint] = append(
+			indexByFingerprint[fingerprint],
+			i,
+		)
 	}
-	file, err := p.getModFileById(ctx, match.ModId, match.FileId)
-	if err != nil {
-		return upstream.Release{}, false, err
+	return unique, indexByFingerprint
+}
+
+// failFingerprints records one batch error for every input that asked for any
+// of fingerprints.
+func failFingerprints(
+	results []upstream.ArtifactReleaseLookup,
+	indexByFingerprint map[uint32][]int,
+	fingerprints []uint32,
+	err error,
+) {
+	for _, fingerprint := range fingerprints {
+		failFingerprint(results, indexByFingerprint, fingerprint, err)
+	}
+}
+
+// failFingerprint records one error for every input that asked for fingerprint.
+func failFingerprint(
+	results []upstream.ArtifactReleaseLookup,
+	indexByFingerprint map[uint32][]int,
+	fingerprint uint32,
+	err error,
+) {
+	for _, i := range indexByFingerprint[fingerprint] {
+		results[i].Err = err
+	}
+}
+
+// failMatchedFile records err for every input whose exact match resolved to
+// fingerprints and drops those matches so they cannot produce a release. A
+// matched artifact whose details cannot be completed is an incomplete lookup,
+// not a clean miss.
+func failMatchedFile(
+	results []upstream.ArtifactReleaseLookup,
+	indexByFingerprint map[uint32][]int,
+	files map[uint32]fileResponse,
+	fingerprints []uint32,
+	err error,
+) {
+	for _, fingerprint := range fingerprints {
+		failFingerprint(results, indexByFingerprint, fingerprint, err)
+		delete(files, fingerprint)
+	}
+}
+
+// exactFiles resolves fingerprints through POST /v1/fingerprints/432 in
+// bounded batches. A match is kept only when its file fingerprint was
+// requested and the record carries file identity. A fingerprint the API omits
+// stays a miss.
+func (p *Provider) exactFiles(
+	ctx context.Context,
+	fingerprints []uint32,
+	indexByFingerprint map[uint32][]int,
+	results []upstream.ArtifactReleaseLookup,
+) map[uint32]fileResponse {
+	files := make(map[uint32]fileResponse, len(fingerprints))
+	for batch := range slices.Chunk(fingerprints, lookupBatchSize) {
+		matches, err := p.fingerprintMatches(ctx, batch)
+		if err != nil {
+			failFingerprints(results, indexByFingerprint, batch, err)
+			continue
+		}
+		wanted := make(map[uint32]struct{}, len(batch))
+		for _, fingerprint := range batch {
+			wanted[fingerprint] = struct{}{}
+		}
+		for _, match := range matches {
+			if match.File.FileFingerprint == nil {
+				// Without the file's own fingerprint there is no proven way to
+				// attribute this match unless the batch named a single input.
+				if len(batch) == 1 {
+					failFingerprint(
+						results,
+						indexByFingerprint,
+						batch[0],
+						fmt.Errorf(
+							"curseforge: exact match for file %d has no fingerprint",
+							match.File.ID,
+						),
+					)
+				}
+				continue
+			}
+			fingerprint := uint32(*match.File.FileFingerprint)
+			if _, ok := wanted[fingerprint]; !ok {
+				continue
+			}
+			if match.File.ID == 0 || match.File.ModId == 0 {
+				failFingerprint(
+					results,
+					indexByFingerprint,
+					fingerprint,
+					fmt.Errorf(
+						"curseforge: exact fingerprint match for file %d is missing file identity",
+						match.File.ID,
+					),
+				)
+				continue
+			}
+			if _, seen := files[fingerprint]; seen {
+				continue
+			}
+			files[fingerprint] = match.File
+		}
+	}
+	return files
+}
+
+// refetchIncompleteFiles replaces inline match records that lack release
+// details with authoritative records from POST /v1/mods/files, batched by file
+// ID. Once a refetch is required, an omitted or contradictory authoritative
+// record is an incomplete lookup for that input, never a fallback to partial
+// inline data and never a clean miss.
+func (p *Provider) refetchIncompleteFiles(
+	ctx context.Context,
+	files map[uint32]fileResponse,
+	indexByFingerprint map[uint32][]int,
+	results []upstream.ArtifactReleaseLookup,
+) {
+	fileIDs := make([]int32, 0, len(files))
+	fingerprintsByFileID := make(map[int32][]uint32, len(files))
+	for fingerprint, file := range files {
+		if file.completeForRelease() {
+			continue
+		}
+		if _, ok := fingerprintsByFileID[file.ID]; !ok {
+			fileIDs = append(fileIDs, file.ID)
+		}
+		fingerprintsByFileID[file.ID] = append(
+			fingerprintsByFileID[file.ID],
+			fingerprint,
+		)
+	}
+	// The request order must not depend on map iteration order.
+	slices.Sort(fileIDs)
+
+	for batch := range slices.Chunk(fileIDs, lookupBatchSize) {
+		authoritativeFiles, err := p.getModFilesByIds(ctx, batch)
+		if err != nil {
+			for _, fileID := range batch {
+				failMatchedFile(
+					results,
+					indexByFingerprint,
+					files,
+					fingerprintsByFileID[fileID],
+					err,
+				)
+			}
+			continue
+		}
+
+		authoritative := make(map[int32]fileResponse, len(authoritativeFiles))
+		for _, file := range authoritativeFiles {
+			authoritative[file.ID] = file
+		}
+		for _, fileID := range batch {
+			fingerprints := fingerprintsByFileID[fileID]
+			file, ok := authoritative[fileID]
+			if !ok {
+				failMatchedFile(
+					results,
+					indexByFingerprint,
+					files,
+					fingerprints,
+					fmt.Errorf(
+						"curseforge: exact file %d is missing from the mod files lookup",
+						fileID,
+					),
+				)
+				continue
+			}
+			if file.ModId == 0 {
+				failMatchedFile(
+					results,
+					indexByFingerprint,
+					files,
+					fingerprints,
+					fmt.Errorf(
+						"curseforge: file %d lookup returned no project identity",
+						fileID,
+					),
+				)
+				continue
+			}
+			for _, fingerprint := range fingerprints {
+				if file.FileFingerprint != nil &&
+					uint32(*file.FileFingerprint) != fingerprint {
+					failFingerprint(
+						results,
+						indexByFingerprint,
+						fingerprint,
+						fmt.Errorf(
+							"curseforge: file %d has fingerprint %d, exact match reported %d",
+							fileID,
+							uint32(*file.FileFingerprint),
+							fingerprint,
+						),
+					)
+					delete(files, fingerprint)
+					continue
+				}
+				exactModID := files[fingerprint].ModId
+				if file.ModId != exactModID {
+					failFingerprint(
+						results,
+						indexByFingerprint,
+						fingerprint,
+						fmt.Errorf(
+							"curseforge: file %d belongs to mod %d, exact match reported mod %d",
+							fileID,
+							file.ModId,
+							exactModID,
+						),
+					)
+					delete(files, fingerprint)
+					continue
+				}
+				files[fingerprint] = file
+			}
+		}
+	}
+}
+
+// fillReleases resolves each matched file's project through POST /v1/mods and
+// converts the pair into a release. An exact match whose project the API omits
+// is an incomplete lookup: the release has no project identity to name.
+func (p *Provider) fillReleases(
+	ctx context.Context,
+	files map[uint32]fileResponse,
+	indexByFingerprint map[uint32][]int,
+	results []upstream.ArtifactReleaseLookup,
+) {
+	modIDs := make([]int32, 0, len(files))
+	seen := make(map[int32]struct{}, len(files))
+	for _, file := range files {
+		if _, ok := seen[file.ModId]; ok {
+			continue
+		}
+		seen[file.ModId] = struct{}{}
+		modIDs = append(modIDs, file.ModId)
+	}
+	// The request order must not depend on map iteration order.
+	slices.Sort(modIDs)
+
+	mods := make(map[int32]modResponse, len(modIDs))
+	for batch := range slices.Chunk(modIDs, lookupBatchSize) {
+		found, err := p.getModsByIds(ctx, batch)
+		if err != nil {
+			wanted := make(map[int32]struct{}, len(batch))
+			for _, modID := range batch {
+				wanted[modID] = struct{}{}
+			}
+			for fingerprint, file := range files {
+				if _, ok := wanted[file.ModId]; !ok {
+					continue
+				}
+				failFingerprint(results, indexByFingerprint, fingerprint, err)
+				delete(files, fingerprint)
+			}
+			continue
+		}
+		for _, mod := range found {
+			mods[mod.ID] = mod
+		}
 	}
 
+	for fingerprint, file := range files {
+		mod, ok := mods[file.ModId]
+		if !ok {
+			failFingerprint(
+				results,
+				indexByFingerprint,
+				fingerprint,
+				fmt.Errorf(
+					"curseforge: project %d is missing from the mods lookup for exact file %d",
+					file.ModId,
+					file.ID,
+				),
+			)
+			continue
+		}
+		release := p.releaseFromCurseForgeFile(&mod, &file)
+		for _, i := range indexByFingerprint[fingerprint] {
+			results[i] = upstream.ArtifactReleaseLookup{
+				Release: release,
+				Matched: true,
+			}
+		}
+	}
+}
+
+// fingerprintMatches returns CurseForge's exact fingerprint matches for one
+// batch. Partial matches are discarded; a 404 response means no matches.
+// Docs: https://docs.curseforge.com/rest-api/#get-fingerprints-matches
+func (p *Provider) fingerprintMatches(
+	ctx context.Context,
+	fingerprints []uint32,
+) ([]fingerprintMatch, error) {
+	if len(fingerprints) == 0 {
+		return nil, nil
+	}
+	u := fmt.Sprintf("%s/v1/fingerprints/%d", baseUrl, minecraftGameId)
+	var resp fingerprintResponse
+	err := p.post(
+		ctx,
+		u,
+		fingerprintRequest{Fingerprints: fingerprints},
+		&resp,
+	)
+	if err != nil {
+		if isNotFound(err) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return resp.Data.ExactMatches, nil
+}
+
+// releaseFromCurseForgeFile converts a project and one of its exact files into
+// the release the file was published as.
+func (p *Provider) releaseFromCurseForgeFile(
+	mod *modResponse,
+	file *fileResponse,
+) upstream.Release {
 	gameVersions, loaders := splitGameVersions(file.GameVersions)
-	release := upstream.Release{
+	return upstream.Release{
 		Ref: catalog.VersionedRef{
 			Name:      catalog.Name(mod.Slug),
 			Provider:  p.Provider(),
 			Ecosystem: platformFromCurseForgeFile(mod, file),
 			Version:   version.Version(file.DisplayName),
 		},
-		Candidate:         candidateFromCurseForgeFile(match.ModId, *file),
+		Candidate:         candidateFromCurseForgeFile(mod.ID, *file),
 		MinecraftVersions: gameVersions,
 		Loaders:           loaders,
 	}
-	return release, true, nil
-}
-
-type fingerprintMatchResult struct {
-	ModId  int32
-	FileId int32
-}
-
-func (p *Provider) fingerprintMatch(
-	ctx context.Context,
-	fp uint32,
-) (fingerprintMatchResult, error) {
-	var zero fingerprintMatchResult
-	if p.apiKey == "" {
-		return zero, ErrNoApiKey
-	}
-	body, _ := json.Marshal(fingerprintRequest{Fingerprints: []uint32{fp}})
-	req, err := http.NewRequestWithContext(
-		ctx,
-		http.MethodPost,
-		baseUrl+"/v1/fingerprints/432",
-		bytes.NewReader(body),
-	)
-	if err != nil {
-		return zero, err
-	}
-	req.Header.Set("x-api-key", p.apiKey)
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Accept", "application/json")
-
-	p.logger.Debug("curseforge fingerprint lookup")
-	//nolint:bodyclose // CloseReader closes the response and logs close errors.
-	resp, err := p.network.Do(req)
-	if err != nil {
-		return zero, err
-	}
-	defer fn.CloseReader(resp.Body, p.logger.Warn)
-
-	if resp.StatusCode != http.StatusOK {
-		return zero, fmt.Errorf(
-			"curseforge: fingerprint lookup returned status %d",
-			resp.StatusCode,
-		)
-	}
-
-	const maxFingerprintResponseBytes = 4 * 1024 * 1024
-	raw, err := fsutil.CopyBytes(resp.Body, maxFingerprintResponseBytes)
-	if err != nil {
-		return zero, err
-	}
-
-	var result fingerprintResponse
-	if err := json.Unmarshal(raw, &result); err != nil {
-		return zero, ErrProjectNotFound
-	}
-	if len(result.Data.ExactMatches) == 0 {
-		return zero, ErrProjectNotFound
-	}
-
-	m := result.Data.ExactMatches[0]
-	return fingerprintMatchResult{
-		ModId:  m.File.ModId,
-		FileId: m.File.ID,
-	}, nil
 }
 
 func platformFromCurseForgeFile(

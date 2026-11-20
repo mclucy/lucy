@@ -54,6 +54,11 @@ type modDataResponse struct {
 	Data modResponse `json:"data"`
 }
 
+// modsDataResponse wraps the POST /v1/mods response. Unknown IDs are omitted.
+type modsDataResponse struct {
+	Data []modResponse `json:"data"`
+}
+
 type stringDataResponse struct {
 	Data string `json:"data"`
 }
@@ -184,6 +189,12 @@ type filesResponse struct {
 	Pagination pagination     `json:"pagination"`
 }
 
+// filesDataResponse wraps the POST /v1/mods/files response. Unknown IDs are
+// omitted.
+type filesDataResponse struct {
+	Data []fileResponse `json:"data"`
+}
+
 // fileResponse is the CurseForge File schema.
 type fileResponse struct {
 	ID            int32      `json:"id"`
@@ -204,6 +215,10 @@ type fileResponse struct {
 	Dependencies     []fileDependency `json:"dependencies"`
 	IsServerPack     *bool            `json:"isServerPack"`
 	ServerPackFileId *int32           `json:"serverPackFileId"`
+	// FileFingerprint is the CurseForge MurmurHash used to correlate a file
+	// with the fingerprint that was looked up. A pointer keeps a present zero
+	// fingerprint distinct from an absent field.
+	FileFingerprint *int64 `json:"fileFingerprint"`
 }
 
 type fileHash struct {
