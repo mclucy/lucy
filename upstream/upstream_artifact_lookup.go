@@ -23,16 +23,10 @@ func (e ProviderError) Unwrap() error {
 	return e.Err
 }
 
-// ArtifactReleaseResolution is the outcome of identifying one fingerprint on
-// the upstream mappers: the full matched release and its provider, or the
-// failures that kept the artifact unclaimed. A resolution with errors is
-// incomplete, not a miss. The release lets a caller that already paid for the
-// lookup reuse its identity instead of asking the provider chain again.
-//
-// Release and Provider are set only when a mapper reported a match and the
-// accept filter, when present, allowed it. Errors holds the failures reported
-// for this fingerprint, including failures from mappers that ran before a
-// later one matched it.
+// ArtifactReleaseResolution records the outcome of identifying one fingerprint.
+// A match includes the release and provider so callers can reuse the result.
+// Errors records failed attempts even when a later mapper finds a match. An
+// unmatched result with errors is an incomplete lookup, not a clean miss.
 type ArtifactReleaseResolution struct {
 	Release  Release
 	Matched  bool
