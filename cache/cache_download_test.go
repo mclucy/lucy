@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"math"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -580,6 +581,7 @@ func TestReadLimitedBytesEnforcesLimit(t *testing.T) {
 		{name: "at limit", maximum: 4, wantData: content},
 		{name: "over limit", maximum: 3, wantErr: true},
 		{name: "unlimited", maximum: 0, wantData: content},
+		{name: "largest limit", maximum: math.MaxInt64, wantData: content},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -638,22 +640,64 @@ func TestCachedGetRequestDoesNotCacheNon2xx(t *testing.T) {
 	}
 }
 
-func TestCachedGetRequestRejectsOversizeResponse(t *testing.T) {
+func TestCachedGetRequestRetainsStatusAfterBodyReadFailure(t *testing.T) {
+	t.Parallel()
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Retry-After", "120")
+		w.Header().Set("Content-Length", "8")
+		w.WriteHeader(http.StatusTooManyRequests)
+		_, _ = io.WriteString(w, "short")
+	}))
+	t.Cleanup(server.Close)
+	client := installNetworkCache(t, DefaultCacheConfig())
+	response, err := client.CachedGetRequest(t.Context(), server.URL, BytesRequestOptions{Kind: KindMetadata})
+	if !errors.Is(err, io.ErrUnexpectedEOF) {
+		t.Fatalf("response body error = %v, want unexpected EOF", err)
+	}
+	if response == nil || response.StatusCode != http.StatusTooManyRequests || response.Header.Get("Retry-After") != "120" {
+		t.Fatalf("retained response = %+v, want HTTP 429 with Retry-After: 120", response)
+	}
+}
+
+func TestCachedGetRequestResponseLimit(t *testing.T) {
 	t.Parallel()
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_, _ = io.WriteString(w, "0123456789")
 	}))
 	t.Cleanup(server.Close)
-	client := installNetworkCache(t, DefaultCacheConfig())
-	if _, err := client.CachedGetRequest(
-		context.Background(),
-		server.URL+"/large",
-		BytesRequestOptions{Kind: KindMetadata, MaxBytes: 5},
-	); err == nil {
-		t.Fatal("oversize response was accepted")
-	}
-	if entries := client.All(); len(entries) != 0 {
-		t.Fatalf("oversize response produced %d entries", len(entries))
+	for _, tc := range []struct {
+		name    string
+		maximum int64
+		wantErr bool
+	}{
+		{name: "exceeds limit", maximum: 5, wantErr: true},
+		{name: "exact limit", maximum: 10},
+		{name: "largest limit", maximum: math.MaxInt64},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			client := installNetworkCache(t, DefaultCacheConfig())
+			response, err := client.CachedGetRequest(
+				t.Context(),
+				server.URL+"/large",
+				BytesRequestOptions{Kind: KindMetadata, MaxBytes: tc.maximum},
+			)
+			if tc.wantErr {
+				if err == nil {
+					t.Fatal("oversize response was accepted")
+				}
+				if entries := client.All(); len(entries) != 0 {
+					t.Fatalf("oversize response produced %d entries", len(entries))
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got := string(response.Data); got != "0123456789" {
+				t.Fatalf("response body = %q, want all ten bytes", got)
+			}
+		})
 	}
 }
 
