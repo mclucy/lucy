@@ -74,7 +74,7 @@ func bootstrapCurrent(root string, l *document.Lock, current *receipt.Receipt, l
 	}
 
 	serverDir := filepath.Join(root, filepath.FromSlash(l.Server.Directory))
-	checkResult, err := bootstrap.CheckExisting(serverDir, l.Server)
+	checkResult, err := bootstrap.Check(serverDir, l.Server, coreArtifactPath(l.Server))
 	if err != nil {
 		return false, err
 	}
@@ -114,7 +114,7 @@ func bootstrapCurrent(root string, l *document.Lock, current *receipt.Receipt, l
 		logger.Debug("bootstrap not current", "reason", "no bootstrap entries recorded in receipt")
 		return false, nil
 	}
-	for _, required := range requiredBootstrapOutputs(l.Server, specs, checkResult.Outputs) {
+	for _, required := range requiredBootstrapOutputs(checkResult.Outputs) {
 		if tracked[strings.ToLower(required)] {
 			continue
 		}
@@ -127,22 +127,11 @@ func bootstrapCurrent(root string, l *document.Lock, current *receipt.Receipt, l
 }
 
 // requiredBootstrapOutputs lists the workspace paths the receipt must own with
-// bootstrap origin: every managed exact output the contract declares and every
-// managed output CheckExisting verified, including dynamically attributed
-// ones. Seed, discard, and bootstrap-only material carries no such requirement.
-func requiredBootstrapOutputs(
-	locked document.LockedServer,
-	specs []bootstrap.OutputSpec,
-	outputs []bootstrap.Output,
-) []string {
-	var required []string
-	for _, spec := range specs {
-		if spec.Path == "" || spec.Policy != bootstrap.PolicyManaged ||
-			spec.Role == bootstrap.RoleBootstrapOnly {
-			continue
-		}
-		required = append(required, filepath.ToSlash(filepath.Join(locked.Directory, spec.Path)))
-	}
+// bootstrap origin: every managed runtime output the check proved, including
+// dynamically attributed and imported-layout ones. Seed, discard, and
+// bootstrap-only material carries no such requirement.
+func requiredBootstrapOutputs(outputs []bootstrap.Output) []string {
+	required := make([]string, 0, len(outputs))
 	for _, out := range outputs {
 		if out.Policy == bootstrap.PolicyManaged && out.Role != bootstrap.RoleBootstrapOnly {
 			required = append(required, out.Path)

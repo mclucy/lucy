@@ -10,15 +10,16 @@ import (
 )
 
 const (
-	flagInstallLockedName       = "locked"
-	flagInstallOfflineName      = "offline"
-	flagInstallWithOptionalName = "with-optional"
-	flagInstallAcceptBrokenName = "accept-broken"
-	flagInstallOverwriteName    = "overwrite"
-	flagInstallForceName        = "force"
-	flagInstallJavaName         = "java"
-	flagInstallJavaRepoName     = "add-java-repository"
-	flagInstallMCDRVenvName     = "mcdr-venv"
+	flagInstallLockedName           = "locked"
+	flagInstallOfflineName          = "offline"
+	flagInstallWithOptionalName     = "with-optional"
+	flagInstallAcceptBrokenName     = "accept-broken"
+	flagInstallOverwriteName        = "overwrite"
+	flagInstallForceName            = "force"
+	flagInstallJavaName             = "java"
+	flagInstallJavaRepoName         = "add-java-repository"
+	flagInstallMCDRVenvName         = "mcdr-venv"
+	flagInstallRefreshBootstrapName = "refresh-bootstrap"
 )
 
 func NewInstallCommand(
@@ -82,6 +83,11 @@ func NewInstallCommand(
 		false,
 		"Create an isolated MCDReforged Python environment instead of using the global MCDReforged executable",
 	)
+	cmd.Flags().Bool(
+		flagInstallRefreshBootstrapName,
+		false,
+		"Run bootstrap again instead of reusing the current runtime or a snapshot",
+	)
 	return cmd
 }
 
@@ -100,18 +106,20 @@ func actionInstall(
 	installJava, _ := cmd.Flags().GetBool(flagInstallJavaName)
 	addJavaRepository, _ := cmd.Flags().GetBool(flagInstallJavaRepoName)
 	mcdrVenv, _ := cmd.Flags().GetBool(flagInstallMCDRVenvName)
+	refreshBootstrap, _ := cmd.Flags().GetBool(flagInstallRefreshBootstrapName)
 	if addJavaRepository && !installJava {
 		return fmt.Errorf("--%s needs --%s", flagInstallJavaRepoName, flagInstallJavaName)
 	}
 
 	opts := install.Options{
-		Locked:          locked,
-		Offline:         offline,
-		AcceptBroken:    acceptBroken || force,
-		Overwrite:       overwrite || force,
-		WithOptional:    withOptional,
-		MCDRVenv:        mcdrVenv,
-		PublishManifest: false,
+		Locked:           locked,
+		Offline:          offline,
+		AcceptBroken:     acceptBroken || force,
+		Overwrite:        overwrite || force,
+		WithOptional:     withOptional,
+		MCDRVenv:         mcdrVenv,
+		PublishManifest:  false,
+		RefreshBootstrap: refreshBootstrap,
 	}
 
 	output := newInstallOutput(cmd, inv)

@@ -21,6 +21,7 @@ type treeVerifier struct {
 	staging   bool
 	cached    map[string]string
 	launcher  launcherCheck
+	coreFile  string
 	outputs   []Output
 	seen      map[string]bool
 	reason    string
@@ -34,6 +35,7 @@ func newTreeVerifier(
 	staging bool,
 	cachedDigests map[string]string,
 	launcher launcherCheck,
+	coreFile string,
 ) *treeVerifier {
 	return &treeVerifier{
 		serverDir: serverDir,
@@ -42,6 +44,7 @@ func newTreeVerifier(
 		staging:   staging,
 		cached:    cachedDigests,
 		launcher:  launcher,
+		coreFile:  coreFile,
 		seen:      make(map[string]bool),
 	}
 }
@@ -187,12 +190,50 @@ func (v *treeVerifier) verifyForgeInstaller() CheckResult {
 	if v.staging {
 		return v.result(CurrentnessCurrent, "")
 	}
-	// Existing Forge trees: dynamic processor outputs cannot be proven identical to lock artifacts without execution.
-	// Outputs retains the verified attributable launcher files and inputs for adoption.
-	return v.result(
-		CurrentnessInconclusive,
-		"Forge installer processor outputs cannot be verified against locked artifact pins without execution",
-	)
+	// An existing tree can be proven only against the digest the pinned
+	// installer declares for each output it wrote. Without the installer, or
+	// for an output the installer does not declare, the tree stays
+	// inconclusive; it is never reported current on partial evidence.
+	if v.coreFile == "" {
+		return v.result(
+			CurrentnessInconclusive,
+			"Forge installer processor outputs need the pinned installer to be verified without execution",
+		)
+	}
+	declared, err := forgeDeclaredIntegrity(v.serverDir, v.coreFile, v.locked)
+	if err != nil {
+		return v.result(
+			CurrentnessInconclusive,
+			fmt.Sprintf("cannot read Forge installer evidence: %v", err),
+		)
+	}
+	for rel, want := range declared {
+		if err := v.verifyForgeDeclared(rel, want); err != nil {
+			v.fail("%v", err)
+		}
+	}
+	if v.failed {
+		return v.mismatch()
+	}
+	proven := make(map[string]bool, len(declared)+len(v.locked.Inputs))
+	for rel := range declared {
+		proven[rel] = true
+	}
+	for _, input := range v.locked.Inputs {
+		proven[filepath.ToSlash(filepath.Clean(input.Path))] = true
+	}
+	unproven, err := v.unprovenForgeOutput(proven)
+	if err != nil {
+		v.fail("inspect Forge runtime libraries: %v", err)
+		return v.mismatch()
+	}
+	if unproven != "" {
+		return v.result(
+			CurrentnessInconclusive,
+			fmt.Sprintf("Forge installer declares no digest for %s", unproven),
+		)
+	}
+	return v.result(CurrentnessCurrent, "")
 }
 
 // verifyInputs verifies every locked input against its pinned digests. Forge
@@ -243,7 +284,28 @@ func (v *treeVerifier) verifyPinned(rel string, hashes map[string]string) (Outpu
 		v.fail("%s hash verification: %v", rel, err)
 		return Output{}, false
 	}
-	return v.output(rel, digest, uint32(info.Mode().Perm()), ""), true
+	out := v.output(rel, digest, uint32(info.Mode().Perm()), "")
+	out.Evidence = EvidenceLocked
+	return out, true
+}
+
+// matchesPinned reports whether rel is a regular file whose bytes satisfy every
+// pinned digest. It never records a failure, so a search across candidate core
+// files cannot poison the result.
+func (v *treeVerifier) matchesPinned(rel string, hashes map[string]string) (string, uint32, bool) {
+	if err := checkPathSafety(v.serverDir, rel, true); err != nil {
+		return "", 0, false
+	}
+	path := filepath.Join(v.serverDir, filepath.FromSlash(rel))
+	info, err := os.Lstat(path)
+	if err != nil || !info.Mode().IsRegular() {
+		return "", 0, false
+	}
+	digest, err := verifyArtifactHashes(path, hashes, v.cached[rel])
+	if err != nil {
+		return "", 0, false
+	}
+	return digest, uint32(info.Mode().Perm()), true
 }
 
 // collectRequiredOutput adds a required generated file to the verified outputs.
@@ -274,7 +336,9 @@ func (v *treeVerifier) collectOptionalOutput(rel string, policy OutputPolicy) {
 		v.fail("reading %s: %v", rel, err)
 		return
 	}
-	v.add(v.output(rel, digest, uint32(info.Mode().Perm()), policy))
+	out := v.output(rel, digest, uint32(info.Mode().Perm()), policy)
+	out.Evidence = EvidenceSemantic
+	v.add(out)
 }
 
 // verifyGeneratedOutput verifies one generated regular file. Its digest is not
@@ -298,7 +362,9 @@ func (v *treeVerifier) verifyGeneratedOutput(rel string, policy OutputPolicy) (O
 		v.fail("reading %s: %v", rel, err)
 		return Output{}, false
 	}
-	return v.output(rel, digest, uint32(info.Mode().Perm()), policy), true
+	out := v.output(rel, digest, uint32(info.Mode().Perm()), policy)
+	out.Evidence = EvidenceSemantic
+	return out, true
 }
 
 func (v *treeVerifier) output(rel, sha256 string, mode uint32, policy OutputPolicy) Output {

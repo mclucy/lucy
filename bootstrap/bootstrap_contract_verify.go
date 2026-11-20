@@ -21,19 +21,86 @@ import (
 // Discard and bootstrap-only files (e.g. Forge .bootstrap-data/, server-mappings.txt) are preserved in the result
 // with PolicyDiscard / RoleBootstrapOnly so callers omit them from committed runtime receipts.
 func ValidateStagedOutputs(stageRoot string, locked document.LockedServer) ([]Output, error) {
+	tree, err := contractTreeOutputs(stageRoot, locked)
+	if err != nil {
+		return nil, err
+	}
+	// cached digests avoid re-reading and re-hashing all files from disk a second time.
+	verification, err := newTreeVerifier(
+		tree.serverRoot, locked, tree.exact, true, tree.cached, tree.launcher, "",
+	).verify()
+	if err != nil {
+		return nil, fmt.Errorf("staged bootstrap verification error: %w", err)
+	}
+	if !verification.Current {
+		return nil, fmt.Errorf("staged bootstrap output failed verification: %s", verification.Reason)
+	}
+	evidence := make(map[string]Evidence, len(verification.Outputs))
+	for _, output := range verification.Outputs {
+		evidence[output.ServerPath] = output.Evidence
+	}
+	for i := range tree.outputs {
+		output := &tree.outputs[i]
+		output.Evidence = evidence[output.ServerPath]
+		if output.Evidence == "" && output.Role == RoleRuntime && output.Policy != PolicyDiscard {
+			output.Evidence = EvidenceExecuted
+		}
+	}
+	return tree.outputs, nil
+}
+
+// ValidateSnapshotOutputs classifies a runtime tree restored from a snapshot.
+// A snapshot stores only the runtime and seed zones, so stage-only inputs are
+// absent by design and the completeness of installer-declared outputs was
+// already proven when the snapshot was published. A definite conflict still
+// fails: the restored tree must satisfy the contract's pinned inputs, launcher
+// semantics, and path scopes. coreFile carries the same read-only installer
+// evidence the existing-tree check uses, so a tampered declared output is a
+// mismatch rather than an accepted restore.
+func ValidateSnapshotOutputs(stageRoot string, locked document.LockedServer, coreFile string) ([]Output, error) {
+	tree, err := contractTreeOutputs(stageRoot, locked)
+	if err != nil {
+		return nil, err
+	}
+	verification, err := newTreeVerifier(
+		tree.serverRoot, locked, tree.exact, false, tree.cached, tree.launcher, coreFile,
+	).verify()
+	if err != nil {
+		return nil, fmt.Errorf("restored bootstrap verification error: %w", err)
+	}
+	if verification.Status == CurrentnessMismatch {
+		return nil, fmt.Errorf("restored bootstrap output failed verification: %s", verification.Reason)
+	}
+	return tree.outputs, nil
+}
+
+// contractTree is the classified content of one server tree: the outputs the
+// commit needs, the digests already computed while walking, and the launcher
+// proof.
+type contractTree struct {
+	serverRoot string
+	exact      map[string]OutputSpec
+	launcher   launcherCheck
+	outputs    []Output
+	cached     map[string]string
+}
+
+// contractTreeOutputs validates the contract and walks the server tree under
+// stageRoot. Every file must fall in a declared exact path or bounded scope.
+// Discard and bootstrap-only files stay in the result so callers can omit them
+// from committed runtime receipts.
+func contractTreeOutputs(stageRoot string, locked document.LockedServer) (contractTree, error) {
 	exact, scopes, err := validateContract(locked)
 	if err != nil {
-		return nil, fmt.Errorf("invalid bootstrap output contract: %w", err)
+		return contractTree{}, fmt.Errorf("invalid bootstrap output contract: %w", err)
 	}
-
 	if err := checkPathSafety(stageRoot, locked.Directory, false); err != nil {
-		return nil, fmt.Errorf("unsafe server directory %q: %w", locked.Directory, err)
+		return contractTree{}, fmt.Errorf("unsafe server directory %q: %w", locked.Directory, err)
 	}
 	serverRoot := filepath.Join(stageRoot, locked.Directory)
 	if _, err := os.Stat(serverRoot); err != nil {
-		return nil, fmt.Errorf("staged server directory does not exist: %w", err)
+		return contractTree{}, fmt.Errorf("staged server directory does not exist: %w", err)
 	}
-
 	// The launcher proves whether run.sh invokes the root shim. Only that proof
 	// admits the shim into the contract, so unrelated root files stay unpermitted.
 	launcher := verifyLauncher(serverRoot, locked)
@@ -49,7 +116,6 @@ func ValidateStagedOutputs(stageRoot string, locked document.LockedServer) ([]Ou
 	var outputs []Output
 	seen := make(map[string]bool)
 	cachedDigests := make(map[string]string)
-
 	err = filepath.WalkDir(serverRoot, func(p string, d fs.DirEntry, walkErr error) error {
 		if walkErr != nil {
 			return walkErr
@@ -62,15 +128,12 @@ func ValidateStagedOutputs(stageRoot string, locked document.LockedServer) ([]Ou
 			return err
 		}
 		rel = filepath.ToSlash(filepath.Clean(rel))
-
 		if d.IsDir() {
 			return nil
 		}
-
 		if err := checkPathSafety(serverRoot, rel, true); err != nil {
 			return err
 		}
-
 		if seen[rel] {
 			return fmt.Errorf("duplicate staged output: %s", rel)
 		}
@@ -78,7 +141,6 @@ func ValidateStagedOutputs(stageRoot string, locked document.LockedServer) ([]Ou
 
 		var policy OutputPolicy
 		var role MaterialRole
-
 		if spec, ok := exact[rel]; ok {
 			policy = spec.Policy
 			role = spec.Role
@@ -96,18 +158,15 @@ func ValidateStagedOutputs(stageRoot string, locked document.LockedServer) ([]Ou
 				return fmt.Errorf("unpermitted output file %q outside declared bootstrap scope", rel)
 			}
 		}
-
 		digest, err := fileSHA256(p)
 		if err != nil {
 			return err
 		}
 		cachedDigests[rel] = digest
-
 		info, err := d.Info()
 		if err != nil {
 			return err
 		}
-
 		outputs = append(outputs, Output{
 			Path:       workspacePath(locked, rel),
 			ServerPath: rel,
@@ -119,22 +178,18 @@ func ValidateStagedOutputs(stageRoot string, locked document.LockedServer) ([]Ou
 		return nil
 	})
 	if err != nil {
-		return nil, err
+		return contractTree{}, err
 	}
-
-	// cachedDigests avoids re-reading and re-hashing all files from disk a second time.
-	verification, err := newTreeVerifier(serverRoot, locked, exact, true, cachedDigests, launcher).verify()
-	if err != nil {
-		return nil, fmt.Errorf("staged bootstrap verification error: %w", err)
-	}
-	if !verification.Current {
-		return nil, fmt.Errorf("staged bootstrap output failed verification: %s", verification.Reason)
-	}
-
 	slices.SortFunc(outputs, func(a, b Output) int {
 		return strings.Compare(a.Path, b.Path)
 	})
-	return outputs, nil
+	return contractTree{
+		serverRoot: serverRoot,
+		exact:      exact,
+		launcher:   launcher,
+		outputs:    outputs,
+		cached:     cachedDigests,
+	}, nil
 }
 
 // CheckExisting checks whether an existing server directory already satisfies the locked bootstrap contract
@@ -152,6 +207,16 @@ func ValidateStagedOutputs(stageRoot string, locked document.LockedServer) ([]Ou
 // in Outputs so adoption can preserve them without claiming full bootstrap currentness.
 // Definite conflicts and hash mismatches return CurrentnessMismatch.
 func CheckExisting(serverDir string, locked document.LockedServer) (CheckResult, error) {
+	return Check(serverDir, locked, "")
+}
+
+// Check verifies an existing or restored server tree against the locked
+// bootstrap contract. coreFile, when supplied, is the materialized core
+// artifact the lock pins: a Forge installer that declares processor outputs or
+// a Paperclip jar that names its extracted libraries differently from the
+// staged layout. It is read-only evidence and may be empty; without it a check
+// proves only what the lock pins and the generated launchers declare.
+func Check(serverDir string, locked document.LockedServer, coreFile string) (CheckResult, error) {
 	exact, _, err := validateContract(locked)
 	if err != nil {
 		return CheckResult{
@@ -161,5 +226,8 @@ func CheckExisting(serverDir string, locked document.LockedServer) (CheckResult,
 		}, err
 	}
 	// Existing trees prove a root shim against the same canonical copy that staging uses.
-	return newTreeVerifier(serverDir, locked, exact, false, nil, verifyLauncher(serverDir, locked)).verify()
+	return newTreeVerifier(
+		serverDir, locked, exact, false, nil,
+		verifyLauncher(serverDir, locked), coreFile,
+	).verify()
 }

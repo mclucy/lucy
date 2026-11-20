@@ -13,10 +13,10 @@ import (
 	"github.com/mclucy/lucy/artifact"
 	"github.com/mclucy/lucy/artifactstore"
 	"github.com/mclucy/lucy/bootstrap"
+	"github.com/mclucy/lucy/bootstrap/snapshot"
 	"github.com/mclucy/lucy/catalog"
 	"github.com/mclucy/lucy/document"
 	"github.com/mclucy/lucy/filetrack"
-	"github.com/mclucy/lucy/internal/fsutil"
 	"github.com/mclucy/lucy/internal/workspacewrite"
 	"github.com/mclucy/lucy/javaruntime"
 	"github.com/mclucy/lucy/upstream"
@@ -42,6 +42,9 @@ type (
 		// ExpectedLock pins the lock fingerprint the caller planned from.
 		// Preflight checks it against the recovered lock for the same reason.
 		ExpectedLock string
+		// RefreshBootstrap skips the bootstrap snapshot cache, so the next
+		// install executes the method and publishes a fresh snapshot.
+		RefreshBootstrap bool
 		// ForceResolve resolves even when the manifest fingerprint matches the
 		// lock. Upgrade uses it because a lock can answer the manifest while
 		// still being older than the eligible versions.
@@ -148,6 +151,11 @@ func (s *Service) stageInstall(
 	bootstrapOK, current, err := installationCurrent(ctx, root, resolved, s.logger)
 	if err != nil {
 		return nil, err
+	}
+	// A refresh request executes the bootstrap method again and publishes a
+	// fresh snapshot, so the current-installation shortcuts must not answer it.
+	if opts.RefreshBootstrap {
+		bootstrapOK, current = false, false
 	}
 	// Publishing documents alone does not require an available MCDR runtime.
 	// An explicit venv request still reconciles the wrapper.
@@ -328,23 +336,93 @@ func (s *Service) stageServerTree(
 			}
 		}
 	}
-	core, err := store.materialize(&resolved.Server.Artifact)
+	materialized := make([]artifact.MaterializedFile, 1+len(resolved.Server.Inputs))
+	err := runStagingJobs(ctx, len(materialized), store.injected != nil, func(i int) error {
+		a := &resolved.Server.Artifact
+		label := a.Filename
+		if i > 0 {
+			input := &resolved.Server.Inputs[i-1]
+			if input.Embedded != "" {
+				return nil
+			}
+			a, label = &input.Artifact, input.Path
+		}
+		file, err := store.materializeFor(a, label)
+		materialized[i] = file
+		return err
+	})
 	if err != nil {
 		return nil, err
 	}
+	core := materialized[0]
 	resolved.Server.Artifact.Hashes = core.Hashes
-	inputs := map[string]string{}
+	inputs := make(map[string]string, len(resolved.Server.Inputs))
 	for i := range resolved.Server.Inputs {
-		input := &resolved.Server.Inputs[i]
-		if input.Embedded != "" {
-			continue
+		file := materialized[i+1]
+		if file.Path != "" {
+			input := &resolved.Server.Inputs[i]
+			input.Artifact.Hashes = file.Hashes
+			inputs[input.Path] = file.Path
 		}
-		materialized, err := store.materialize(&input.Artifact)
+	}
+
+	// The recipe key exists once every input has its store digest. A hit
+	// restores the checked output of the identical recipe and runs no
+	// processor; any failure falls back to a clean cold stage.
+	key, keyErr := snapshot.Key(resolved.Server)
+	if keyErr != nil {
+		s.logger.Debug("bootstrap snapshot unavailable", "reason", keyErr.Error())
+	}
+	var snapStore *artifactstore.Store
+	if keyErr == nil {
+		opened, err := openSnapshotStore()
 		if err != nil {
-			return nil, err
+			s.logger.Debug("bootstrap snapshot store unavailable", "reason", err.Error())
+		} else {
+			snapStore = opened
+			defer snapStore.Close()
 		}
-		input.Artifact.Hashes = materialized.Hashes
-		inputs[input.Path] = materialized.Path
+	}
+	if snapStore != nil && !opts.RefreshBootstrap {
+		lookupStarted := time.Now()
+		restored, err := restoreBootstrapSnapshot(ctx, snapStore, key, stage, resolved.Server, opts.Trace)
+		switch {
+		case err != nil:
+			s.logger.Warn(fmt.Errorf(
+				"bootstrap snapshot restore failed for %s; staging from scratch: %w",
+				key.Hex(), err,
+			))
+			if clearErr := clearServerRoot(stage, resolved.Server); clearErr != nil {
+				return nil, clearErr
+			}
+		case restored:
+			outputs, verifyErr := restoredServerOutputs(stage, resolved.Server, core.Path)
+			if verifyErr == nil {
+				s.logger.Info(
+					"bootstrap snapshot restored",
+					"key", key.Hex(),
+					"files", len(outputs),
+				)
+				opts.Trace.phaseDone(PhaseInfo{
+					Name:    "bootstrap snapshot",
+					Count:   len(outputs),
+					Elapsed: time.Since(lookupStarted),
+				})
+				return outputs, nil
+			}
+			s.logger.Warn(fmt.Errorf(
+				"restored bootstrap snapshot for %s failed verification; staging from scratch: %w",
+				key.Hex(), verifyErr,
+			))
+			if clearErr := clearServerRoot(stage, resolved.Server); clearErr != nil {
+				return nil, clearErr
+			}
+			// The manifest cannot be trusted for this key; drop it so the next
+			// operation does not repeat the same failed restore.
+			if removeErr := snapStore.RemoveSnapshot(key); removeErr != nil {
+				s.logger.Warn(fmt.Errorf("cannot drop failed bootstrap snapshot %s: %w", key.Hex(), removeErr))
+			}
+		}
 	}
 	if err := bootstrap.PrepareLocked(
 		ctx,
@@ -354,6 +432,7 @@ func (s *Service) stageServerTree(
 		inputs,
 		java,
 		opts.Trace.processOutput(),
+		opts.Trace.bootstrapProgress(),
 	); err != nil {
 		return nil, err
 	}
@@ -361,13 +440,19 @@ func (s *Service) stageServerTree(
 	// content in stage. This emits the output classification the commit
 	// uses, including discard and seed policy, without re-walking the tree
 	// after packages and wrapper files join it.
-	stagedOutputs, err := bootstrap.ValidateStagedOutputs(stage, resolved.Server)
+	outputs, err := stagedServerOutputs(stage, resolved.Server)
 	if err != nil {
 		return nil, err
 	}
-	outputs := make(map[string]bootstrap.Output, len(stagedOutputs))
-	for _, output := range stagedOutputs {
-		outputs[output.Path] = output
+	// Only a tree Lucy executed and checked here becomes a snapshot. Adoption
+	// never reaches this function, so an existing user tree is never stored.
+	if snapStore != nil {
+		if err := publishBootstrapSnapshot(ctx, snapStore, key, stage, resolved.Server, outputs); err != nil {
+			s.logger.Warn(fmt.Errorf(
+				"cannot publish bootstrap snapshot %s: %w",
+				key.Hex(), err,
+			))
+		}
 	}
 	s.logger.Debug(
 		"server tree prepared",
@@ -377,6 +462,58 @@ func (s *Service) stageServerTree(
 		"outputs", len(outputs),
 	)
 	return outputs, nil
+}
+
+// restoredServerOutputs validates a tree restored from a snapshot. Stage-only
+// inputs are absent from a snapshot by design, so this check proves the
+// runtime zone and seed zone rather than re-running the staging check.
+func restoredServerOutputs(stage string, server document.LockedServer, coreFile string) (map[string]bootstrap.Output, error) {
+	stagedOutputs, err := bootstrap.ValidateSnapshotOutputs(stage, server, coreFile)
+	if err != nil {
+		return nil, err
+	}
+	return indexServerOutputs(stagedOutputs), nil
+}
+
+// stagedServerOutputs validates the current staging tree against the locked
+// bootstrap contract and indexes the outputs by workspace path.
+func stagedServerOutputs(stage string, server document.LockedServer) (map[string]bootstrap.Output, error) {
+	stagedOutputs, err := bootstrap.ValidateStagedOutputs(stage, server)
+	if err != nil {
+		return nil, err
+	}
+	return indexServerOutputs(stagedOutputs), nil
+}
+
+func indexServerOutputs(stagedOutputs []bootstrap.Output) map[string]bootstrap.Output {
+	outputs := make(map[string]bootstrap.Output, len(stagedOutputs))
+	for _, output := range stagedOutputs {
+		outputs[output.Path] = output
+	}
+	return outputs
+}
+
+// clearServerRoot empties the server directory inside a private staging root.
+// A failed snapshot restore or verification leaves partial content that must
+// not merge with the cold stage that follows.
+func clearServerRoot(stage string, server document.LockedServer) error {
+	root, err := serverRootPath(stage, server)
+	if err != nil {
+		return err
+	}
+	entries, err := os.ReadDir(root)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	for _, entry := range entries {
+		if err := os.RemoveAll(filepath.Join(root, entry.Name())); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func requirePinnedArtifact(hashes map[string]string, name string) error {
@@ -420,49 +557,6 @@ func mcdrWrapperOutputs(resolved *document.Lock) map[string]bootstrap.Output {
 			Role:   bootstrap.RoleRuntime,
 		},
 	}
-}
-
-// stagePackages copies every enabled package into stage after rejecting
-// destinations two packages both claim or a package shares with a staged
-// bootstrap or wrapper output. It returns the destinations an overwrite may
-// replace.
-func (s *Service) stagePackages(
-	root string,
-	stage string,
-	resolved *document.Lock,
-	store *downloadStore,
-	stagedOutputs map[string]bootstrap.Output,
-	opts Options,
-) (map[string]bool, error) {
-	if err := rejectSharedDestinations(root, resolved, stagedOutputs); err != nil {
-		return nil, err
-	}
-	staged := 0
-	overwritePaths := map[string]bool{}
-	for i := range resolved.Packages {
-		p := &resolved.Packages[i]
-		if !p.Enabled() {
-			continue
-		}
-		destination, err := resolved.PackageDestination(p)
-		if err != nil {
-			return nil, err
-		}
-		if opts.Overwrite {
-			overwritePaths[filepath.ToSlash(destination)] = true
-		}
-		source, err := store.materialize(&p.Artifact)
-		if err != nil {
-			return nil, err
-		}
-		p.Artifact.Hashes = source.Hashes
-		if err := fsutil.AtomicCopyFile(source.Path, filepath.Join(stage, destination), 0o644); err != nil {
-			return nil, err
-		}
-		staged++
-	}
-	s.logger.Debug("packages staged", "active", staged, "recorded", len(resolved.Packages))
-	return overwritePaths, nil
 }
 
 func isFloating(v version.Version) bool {

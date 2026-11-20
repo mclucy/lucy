@@ -18,8 +18,9 @@ import (
 
 // PrepareLocked builds the server tree of a locked server in stage. java is the
 // Java executable for the bootstrap steps that run Java; it may be empty when
-// no runtime is installed, and only those steps fail then.
-func PrepareLocked(ctx context.Context, stage string, server document.LockedServer, corePath string, inputs map[string]string, java string, output io.Writer) error {
+// no runtime is installed, and only those steps fail then. progress reports
+// bounded stages such as the Forge processor count.
+func PrepareLocked(ctx context.Context, stage string, server document.LockedServer, corePath string, inputs map[string]string, java string, output io.Writer, progress Progress) error {
 	for _, part := range []string{server.Minecraft.String(), server.CoreVersion.String()} {
 		if part == "" || part == "." || part == ".." || strings.ContainsAny(part, "/\\") {
 			return fmt.Errorf("invalid locked server version %q", part)
@@ -73,7 +74,7 @@ func PrepareLocked(ctx context.Context, stage string, server document.LockedServ
 	case serverpkg.BootstrapMethodQuilt:
 		return prepareQuilt(root, server, corePath)
 	case serverpkg.BootstrapMethodForgeInstaller:
-		return prepareForgeInstaller(ctx, root, server, corePath, &installer.Reader, java, output)
+		return prepareForgeInstaller(ctx, root, server, corePath, &installer.Reader, java, output, progress)
 	default:
 		return fmt.Errorf("unsupported bootstrap adapter %q", server.Bootstrapper)
 	}

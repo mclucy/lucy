@@ -52,7 +52,11 @@ func OpenAt(directory string) (*Store, error) {
 	if err := createOperations(operations); err != nil {
 		return nil, errors.Join(fmt.Errorf("open artifact store operations: %w", err), store.Close())
 	}
-	return &Store{Store: store, operations: operations}, nil
+	snapshots := filepath.Join(directory, snapshotsDirectoryName)
+	if err := createSnapshots(snapshots); err != nil {
+		return nil, errors.Join(fmt.Errorf("open artifact store snapshots: %w", err), store.Close())
+	}
+	return &Store{Store: store, operations: operations, snapshots: snapshots}, nil
 }
 
 // Store is the artifact store's content-addressed storage. Object names never
@@ -61,6 +65,7 @@ func OpenAt(directory string) (*Store, error) {
 type Store struct {
 	*cas.Store
 	operations string
+	snapshots  string
 }
 
 // createOperations creates the private directory that holds the operation gate

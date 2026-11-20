@@ -1,6 +1,7 @@
 package artifactstore
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -8,6 +9,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/mclucy/lucy/bootstrap/snapshot"
 	"github.com/mclucy/lucy/cas"
 	"github.com/mclucy/lucy/catalog"
 	"github.com/mclucy/lucy/document"
@@ -17,10 +19,12 @@ import (
 )
 
 // Report describes one garbage collection. Bytes counts the reclaimed object
-// contents, not staging files cleaned separately.
+// contents, not staging files cleaned separately. SnapshotsRemoved counts
+// bootstrap snapshots no registered lock references, including unreadable ones.
 type Report struct {
-	Removed int   `json:"removed"`
-	Bytes   int64 `json:"bytes"`
+	Removed          int   `json:"removed"`
+	Bytes            int64 `json:"bytes"`
+	SnapshotsRemoved int   `json:"snapshots_removed"`
 }
 
 // GC removes objects that no registered server's lock pins. It refuses to
@@ -75,11 +79,19 @@ func (s *Store) GC(registry *serverregistry.Registry) (Report, error) {
 		return Report{}, errors.New("registered server set changed during collection; retry")
 	}
 
-	referenced, err := lockReferences(validated)
+	referenced, snapshotKeys, err := lockReferences(validated)
 	if err != nil {
 		return Report{}, err
 	}
+	snapshotReferences, snapshotsRemoved, err := s.SnapshotReferences(context.Background(), snapshotKeys)
+	if err != nil {
+		return Report{}, err
+	}
+	for digest := range snapshotReferences {
+		referenced[digest] = struct{}{}
+	}
 	var report Report
+	report.SnapshotsRemoved = snapshotsRemoved
 	removed, bytes, err := s.Store.Sweep(func() (map[cas.Digest]struct{}, func() error, error) {
 		return referenced, nil, nil
 	})
@@ -196,14 +208,15 @@ func displayEntry(entry serverregistry.Entry) string {
 	return entry.Path
 }
 
-func lockReferences(entries []serverregistry.Entry) (map[cas.Digest]struct{}, error) {
+func lockReferences(entries []serverregistry.Entry) (map[cas.Digest]struct{}, map[cas.Digest]struct{}, error) {
 	referenced := make(map[cas.Digest]struct{})
+	snapshotKeys := make(map[cas.Digest]struct{})
 	for _, entry := range entries {
 		journal := filepath.Join(entry.Path, workspacewrite.InstallJournalName)
 		if _, err := os.Lstat(journal); err == nil {
-			return nil, fmt.Errorf("registered server %s has an interrupted installation; run `lucy install` in that workspace before collecting", displayEntry(entry))
+			return nil, nil, fmt.Errorf("registered server %s has an interrupted installation; run `lucy install` in that workspace before collecting", displayEntry(entry))
 		} else if !errors.Is(err, os.ErrNotExist) {
-			return nil, fmt.Errorf("inspect installation journal for registered server %s: %w", displayEntry(entry), err)
+			return nil, nil, fmt.Errorf("inspect installation journal for registered server %s: %w", displayEntry(entry), err)
 		}
 		locked, err := document.LockFile(entry.Path).Read()
 		if errors.Is(err, os.ErrNotExist) {
@@ -211,16 +224,24 @@ func lockReferences(entries []serverregistry.Entry) (map[cas.Digest]struct{}, er
 			continue
 		}
 		if err != nil {
-			return nil, fmt.Errorf(
+			return nil, nil, fmt.Errorf(
 				"registered server %s has an unreadable lock: %w",
 				displayEntry(entry), err,
 			)
 		}
 		if err := addLockReferences(referenced, entry, locked); err != nil {
-			return nil, err
+			return nil, nil, err
 		}
+		key, err := snapshot.Key(locked.Server)
+		if err != nil {
+			return nil, nil, fmt.Errorf(
+				"server %s: bootstrap recipe key: %w",
+				displayEntry(entry), err,
+			)
+		}
+		snapshotKeys[key] = struct{}{}
 	}
-	return referenced, nil
+	return referenced, snapshotKeys, nil
 }
 
 func addLockReferences(

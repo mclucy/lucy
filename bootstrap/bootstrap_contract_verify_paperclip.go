@@ -4,25 +4,26 @@ import (
 	"archive/zip"
 	"bufio"
 	"bytes"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 )
 
-// verifyPaperclip verifies the patched server.jar and the Paperclip patch-only
-// metadata lists that describe the files it extracts beside it.
+// verifyPaperclip verifies the pinned Paperclip core and the metadata lists
+// that describe the files it extracts beside it. The core may sit under the
+// staged name or under the name an imported archive gave it; its pinned digest
+// decides, never its filename.
 func (v *treeVerifier) verifyPaperclip() CheckResult {
-	if out, ok := v.verifyPinned("server.jar", v.locked.Artifact.Hashes); ok {
-		out.Policy, out.Role = PolicyManaged, RoleRuntime
-		v.add(out)
-	}
+	coreRel, ok := v.paperclipCore()
 	v.verifyInputs()
 
-	if !v.failed {
-		zr, err := zip.OpenReader(filepath.Join(v.serverDir, "server.jar"))
+	if !v.failed && ok {
+		zr, err := zip.OpenReader(filepath.Join(v.serverDir, filepath.FromSlash(coreRel)))
 		if err != nil {
-			v.fail("opening Paperclip server.jar: %v", err)
+			v.fail("opening Paperclip core %s: %v", coreRel, err)
 		} else {
 			defer zr.Close()
 			if reason := v.verifyPaperclipMetadata(&zr.Reader); reason != "" {
@@ -34,6 +35,62 @@ func (v *treeVerifier) verifyPaperclip() CheckResult {
 		return v.mismatch()
 	}
 	return v.result(CurrentnessCurrent, "")
+}
+
+// paperclipCore locates the locked core artifact in the tree. The staged name
+// is tried first, then the locked filename, then any root file whose bytes
+// match the locked digests. A file under a candidate name that fails its
+// digests is a mismatch, not a reason to keep searching.
+func (v *treeVerifier) paperclipCore() (string, bool) {
+	candidates := []string{"server.jar"}
+	if name := filepath.ToSlash(filepath.Clean(v.locked.Filename)); name != "" &&
+		name != "." && filepath.IsLocal(filepath.FromSlash(name)) &&
+		!slices.Contains(candidates, name) {
+		candidates = append(candidates, name)
+	}
+	for _, rel := range candidates {
+		path := filepath.Join(v.serverDir, filepath.FromSlash(rel))
+		info, err := os.Lstat(path)
+		if err != nil {
+			if !errors.Is(err, os.ErrNotExist) {
+				v.fail("inspecting Paperclip core %s: %v", rel, err)
+				return "", false
+			}
+			continue
+		}
+		if !info.Mode().IsRegular() {
+			v.fail("Paperclip core %s is not a regular file", rel)
+			return "", false
+		}
+		out, ok := v.verifyPinned(rel, v.locked.Artifact.Hashes)
+		if !ok {
+			return "", false
+		}
+		out.Policy, out.Role = PolicyManaged, RoleRuntime
+		v.add(out)
+		return rel, true
+	}
+	entries, err := os.ReadDir(v.serverDir)
+	if err != nil {
+		v.fail("reading server directory for the Paperclip core: %v", err)
+		return "", false
+	}
+	for _, entry := range entries {
+		if !entry.Type().IsRegular() || slices.Contains(candidates, entry.Name()) {
+			continue
+		}
+		digest, mode, matches := v.matchesPinned(entry.Name(), v.locked.Artifact.Hashes)
+		if !matches {
+			continue
+		}
+		out := v.output(entry.Name(), digest, mode, "")
+		out.Policy, out.Role = PolicyManaged, RoleRuntime
+		out.Evidence = EvidenceLocked
+		v.add(out)
+		return entry.Name(), true
+	}
+	v.fail("locked Paperclip core artifact %s is not present at the server root", v.locked.Filename)
+	return "", false
 }
 
 // verifyPaperclipMetadata verifies the entries Paperclip extracts from its
@@ -194,6 +251,8 @@ func (v *treeVerifier) verifyKnownOutput(rel, expectedSHA256, label string) erro
 	if err != nil || !strings.EqualFold(actual, expectedSHA256) {
 		return fmt.Errorf("%s %s SHA256 mismatch", label, rel)
 	}
-	v.add(v.output(rel, actual, uint32(info.Mode().Perm()), PolicyManaged))
+	out := v.output(rel, actual, uint32(info.Mode().Perm()), PolicyManaged)
+	out.Evidence = EvidenceInstallerDeclared
+	v.add(out)
 	return nil
 }

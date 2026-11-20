@@ -19,9 +19,11 @@ Install places the files the lock lists. It removes files it installed or took o
 
 Installation stops when an existing unmanaged file occupies a package destination. Pass `--overwrite` to replace files already present at package destinations, such as mods or plugins from a manual setup. The last committed content hash in `.lucy/install.yaml` serves as a conflict baseline protecting local edits rather than a lockfile reproducibility pin, so locally modified files are never silently overwritten or pruned, and re-initialization preserves existing modification baselines. Seed files are initialized once when missing and remain user-owned; modifying a seed file never blocks installation or triggers replacement.
 
-Ownership is tracked exclusively in the installation receipt. If the receipt is missing or lost, existing workspace files are treated as unmanaged; matching file contents, directory scopes, or prior execution never grant implicit ownership. When an existing workspace is adopted in place through [`lucy init`](/commands/init), lucy records verified runtime files and packages into the receipt atomically without executing bootstrap installers, establishing exact ownership boundaries for subsequent installs.
+The installation receipt records which files Lucy owns. If the receipt is missing, Lucy does not replace unmanaged files simply because they are in a runtime directory. A bootstrap file that exactly matches a newly verified output can be recorded without replacement. Use [`lucy init`](/commands/init) to adopt an existing server without running an installer.
 
 Later installs reuse an adopted runtime when it still matches the lock and its managed files are unchanged.
+
+When the runtime needs preparation, Lucy can restore a verified bootstrap from another workspace that used the same server build and inputs. Use `--refresh-bootstrap` to run it again. This flag does not bypass protection for locally modified files.
 
 Installation also refuses a server whose mod dependencies cannot be satisfied; `--accept-broken` installs the declared packages anyway.
 
@@ -35,7 +37,7 @@ Files tracked with [`lucy file`](/commands/file) are not overwritten. If an immu
 
 ### Artifact store and download cache
 
-Lucy keeps one verified copy of each artifact in a per-user artifact store shared by every server. The lock pins the objects a server needs, so clearing the network cache does not remove installed artifacts. `lucy store list` shows the stored objects; `lucy store gc` reclaims objects that no registered server's lock references.
+Lucy keeps verified artifacts and reusable bootstrap files in a per-user store. Clearing the network cache leaves these files in place. `lucy store gc` removes objects and bootstrap snapshots that no registered server's lock needs.
 
 The network cache remains a separate, expiring copy of upstream responses and downloads. `lucy cache clear` empties it without touching the artifact store or the files in a server directory. Run an online install before relying on `--offline` when the artifact is not already in the store.
 

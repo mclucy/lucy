@@ -4,29 +4,26 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 
+	"github.com/mclucy/lucy/bootstrap/snapshot"
 	"github.com/mclucy/lucy/document"
 	"go.yaml.in/yaml/v4"
 )
 
-// BootstrapFingerprint digests the server-only resolution fields that determine
-// bootstrap execution and its output contract: product, method, core artifact,
-// inputs, and directory. Excludes Java requirement, tracked files, MCDR, and
-// packages so that package-only or environment changes do not invalidate an
-// unchanged bootstrap.
+// BootstrapFingerprint returns the bootstrap recipe key of a lock: the same
+// key the bootstrap snapshot cache uses, so a receipt answers exactly the
+// snapshot a fresh staging would look up. It hashes the method, method
+// revision, Minecraft version, core digest, and input digests only; the
+// workspace directory, artifact URLs, filenames, Java requirements, tracked
+// files, MCDR, and packages cannot invalidate an unchanged bootstrap.
 func BootstrapFingerprint(l *document.Lock) (string, error) {
 	if l == nil {
 		return "", nil
 	}
-	server := l.Server
-	server.Java = document.LockedJava{}
-	data, err := yaml.Marshal(struct {
-		Server document.LockedServer `yaml:"server"`
-	}{server})
+	key, err := snapshot.Key(l.Server)
 	if err != nil {
 		return "", err
 	}
-	sum := sha256.Sum256(data)
-	return hex.EncodeToString(sum[:]), nil
+	return key.Hex(), nil
 }
 
 // PackageFingerprint digests the package pins and wrapper runtime in the lock:
