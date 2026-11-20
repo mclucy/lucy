@@ -156,6 +156,10 @@ Only the name changes. The installed server, packages, worlds, configuration, an
   Create an isolated MCDReforged environment under the server directory instead of using the global `mcdreforged` command.
 </ParamField>
 
+<ParamField query="--refresh-bootstrap" type="boolean" default="false">
+  Run bootstrap again instead of reusing the current runtime or a saved snapshot. Protection for locally modified files still applies.
+</ParamField>
+
 `--json` prints a machine-readable result, and `--no-interactive` produces append-only output for CI logs. See [Global Flags](/commands/global-flags).
 
 See also [`lucy add`](/commands/add), [`lucy remove`](/commands/remove), and [`lucy file`](/commands/file).
