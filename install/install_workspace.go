@@ -61,8 +61,13 @@ type (
 		// selects them for their reference without a catalogue query, so a
 		// locally valid artifact stays managed when upstream offers no release
 		// for the target server.
-		Adopted     []AdoptedRelease
-		publishLock bool
+		Adopted []AdoptedRelease
+		// LocalRuntime lists the regular files of a selected observed runtime
+		// with the digest and mode initialization recorded. Resolution may
+		// reuse them only when the requested artifact's trusted digest proves
+		// they are the same bytes. It never substitutes a file by name or role.
+		LocalRuntime []AdoptedRuntimeFile
+		publishLock  bool
 		// SkipRegistration leaves the workspace unregistered. Staging callers
 		// set it because a staged tree is not yet a server; they register the
 		// workspace once its documents exist.

@@ -135,6 +135,17 @@ func (s *Service) Resolve(
 		return nil, result, err
 	}
 	if old != nil && !opts.WithOptional && old.ManifestFingerprint == fingerprint && adoptionMatchesLock(opts.Adopted, old) {
+		// Reuse must still leave the accepted local bytes replayable. Only
+		// adopted packages and runtime files whose trusted digest proves the
+		// requested artifact are imported; a missing artifact is not fetched
+		// merely because the lock was reused.
+		if _, err := prepareAdoptedArtifacts(ctx, absolute, opts.Adopted, nil); err != nil {
+			return nil, result, err
+		}
+		localRuntime := newLocalRuntimeSource(absolute, opts.LocalRuntime)
+		if _, err := localRuntime.importServer(ctx, old.Server); err != nil {
+			return nil, result, err
+		}
 		s.logger.Debug("lock resolution reused current lock", "reason", "manifest unchanged")
 		result.Mode = ModeReplay
 		result.Reason = "manifest unchanged; lock reused"

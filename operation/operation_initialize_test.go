@@ -65,8 +65,8 @@ func (initializeTestSource) IdentifyPurpurBuild(
 func (initializeTestSource) ResolveArtifactsByHash(
 	_ context.Context,
 	artifacts []upstream.ArtifactFingerprint,
-) []upstream.ArtifactLookup {
-	return make([]upstream.ArtifactLookup, len(artifacts))
+) []upstream.ArtifactReleaseResolution {
+	return make([]upstream.ArtifactReleaseResolution, len(artifacts))
 }
 
 // initializeInstallSource resolves the requested runtime into a lock record

@@ -110,7 +110,7 @@ func lookupArtifactUpstream(
 			providerErr.Err,
 		))
 	}
-	if !hashLookup.Matched() {
+	if !hashLookup.Matched {
 		if hashLookup.Complete() {
 			result.Warnings = append(
 				result.Warnings,
@@ -125,7 +125,7 @@ func lookupArtifactUpstream(
 		return result, nil
 	}
 
-	ref := hashLookup.Ref
+	ref := hashLookup.Release.Ref
 	result.Ref = &ref
 
 	providers, err := router.ResolveInfoProviders(ref.Ecosystem, ref.Provider)

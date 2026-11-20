@@ -99,11 +99,8 @@ func Load(
 	}
 
 	result.Origin = OriginLive
-	info, _ := identify.Packages(
-		ctx,
-		workspace.Observe(workDir, discovery.Request{}),
-		lookup,
-	)
+	info := workspace.Observe(workDir, discovery.Request{})
+	identify.Packages(ctx, info, lookup, nil)
 	if err := ctx.Err(); err != nil {
 		return result, err
 	}

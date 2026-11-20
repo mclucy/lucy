@@ -143,8 +143,8 @@ func (s *replaySource) IdentifyPurpurBuild(
 func (s *replaySource) ResolveArtifactsByHash(
 	_ context.Context,
 	artifacts []upstream.ArtifactFingerprint,
-) []upstream.ArtifactLookup {
-	return make([]upstream.ArtifactLookup, len(artifacts))
+) []upstream.ArtifactReleaseResolution {
+	return make([]upstream.ArtifactReleaseResolution, len(artifacts))
 }
 
 func (s *replaySource) Metadata(_ context.Context, endpoint string, _ any) error {

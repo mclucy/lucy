@@ -61,10 +61,10 @@ func (s packageMapperTestSource) GetArtifactReleaseMapper(
 func (s packageMapperTestSource) ResolveArtifactsByHash(
 	_ context.Context,
 	artifacts []upstream.ArtifactFingerprint,
-) []upstream.ArtifactLookup {
-	lookups := make([]upstream.ArtifactLookup, len(artifacts))
+) []upstream.ArtifactReleaseResolution {
+	lookups := make([]upstream.ArtifactReleaseResolution, len(artifacts))
 	for i := range lookups {
-		lookup := upstream.ArtifactLookup{}
+		lookup := upstream.ArtifactReleaseResolution{}
 		for _, provider := range packageMapperProviders {
 			mapper, ok := s.mappers[provider]
 			if !ok || mapper.err == nil {

@@ -1123,8 +1123,7 @@ func (s *Service) removeClientOnlyMods(
 		}
 		if file.kept {
 			resolution := resolutions[i]
-			if resolution.Matched && resolution.Release.Ref.Name != "" ||
-				!resolution.Matched && len(resolution.Errors) == 0 {
+			if !resolution.Matched || resolution.Release.Ref.Name != "" {
 				matches[file.path] = resolution
 			}
 			continue

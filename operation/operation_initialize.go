@@ -33,7 +33,7 @@ func (s *Service) Initialize(ctx context.Context, root string, opts InitOptions)
 	return s.initialize(ctx, root, opts, new(artifact.Analyses), nil)
 }
 
-func (s *Service) initialize(ctx context.Context, root string, opts InitOptions, analyses *artifact.Analyses, matches map[string]upstream.ArtifactReleaseResolution) (result *InitResult, resultErr error) {
+func (s *Service) initialize(ctx context.Context, root string, opts InitOptions, analyses *artifact.Analyses, known map[string]upstream.ArtifactReleaseResolution) (result *InitResult, resultErr error) {
 	root, err := filepath.Abs(root)
 	if err != nil {
 		return nil, err
@@ -99,11 +99,14 @@ func (s *Service) initialize(ctx context.Context, root string, opts InitOptions,
 
 	adoptionStarted := time.Now()
 	opts.Trace.ReportPhaseStarted("adoption")
-	var identificationErrors []error
-	observed, identificationErrors = identify.Packages(
+	if known == nil && len(observed.UnidentifiedPackageFiles) > 0 {
+		known = make(map[string]upstream.ArtifactReleaseResolution, len(observed.UnidentifiedPackageFiles))
+	}
+	identificationErrors := identify.Packages(
 		ctx,
 		observed,
 		s.source.ResolveArtifactsByHash,
+		known,
 	)
 	if err := ctx.Err(); err != nil {
 		return initResult(observed), err
@@ -130,7 +133,7 @@ func (s *Service) initialize(ctx context.Context, root string, opts InitOptions,
 		root,
 		manifest,
 		observed,
-		matches,
+		known,
 	)
 	if err != nil {
 		return initResult(observed), err
@@ -152,6 +155,7 @@ func (s *Service) initialize(ctx context.Context, root string, opts InitOptions,
 		old,
 		opts,
 		observed,
+		runtimeObserved,
 		adoptedReleases,
 		reportedMissing,
 	)
@@ -412,7 +416,8 @@ func readExistingLock(root string) (*documentpkg.Lock, error) {
 // the installed jars report but the catalogue metadata cannot satisfy become
 // warnings instead of a refusal, because adoption records the set the server
 // already runs. A missing module the adoption report already named with its
-// files does not warn again.
+// files does not warn again. The selected runtime's observed files are offered
+// to resolution, so verified local bytes are imported instead of downloaded.
 func (s *Service) resolveAdoptedLock(
 	ctx context.Context,
 	root string,
@@ -420,9 +425,14 @@ func (s *Service) resolveAdoptedLock(
 	old *documentpkg.Lock,
 	opts InitOptions,
 	observed *workspace.Workspace,
+	runtimeObserved *runtimeObservation,
 	releases []install.AdoptedRelease,
 	reportedMissing map[string]struct{},
 ) (*documentpkg.Lock, error) {
+	var localRuntime []install.AdoptedRuntimeFile
+	if runtimeObserved != nil {
+		localRuntime = runtimeObserved.files
+	}
 	resolved, resolution, err := s.install.Resolve(
 		ctx,
 		root,
@@ -433,6 +443,7 @@ func (s *Service) resolveAdoptedLock(
 			Trace:        opts.Trace,
 			Materialize:  opts.Materialize,
 			Adopted:      releases,
+			LocalRuntime: localRuntime,
 		},
 	)
 	if observed != nil && resolution != nil {

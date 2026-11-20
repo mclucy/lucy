@@ -126,59 +126,42 @@ func (r *Router) GetInfoFirstSuccess(
 	return upstream.Info{}, providerErrors, joinProviderErrors(providerErrors)
 }
 
-// ResolveArtifactByHash resolves an artifact's canonical upstream reference.
+// ResolveArtifactByHash resolves an artifact's canonical upstream release.
 // Mappers run in policy order; a failed or missing match does not stop later
 // mappers. Provider failures are returned for callers that surface warnings.
 func (r *Router) ResolveArtifactByHash(
 	ctx context.Context,
 	artifact upstream.ArtifactFingerprint,
-) upstream.ArtifactLookup {
-	result := upstream.ArtifactLookup{}
-	for _, mapper := range r.artifactReleaseMappers() {
-		release, ok, err := mapper.ReleaseByHash(ctx, artifact)
-		if err != nil {
-			result.Errors = append(result.Errors, upstream.ProviderError{
-				Provider: mapper.Provider(),
-				Err:      err,
-			})
-			continue
-		}
-		if ok && release.Ref.Name != "" {
-			result.Ref = release.Ref
-			return result
-		}
-	}
-	return result
+) upstream.ArtifactReleaseResolution {
+	resolutions := upstream.LookupArtifactReleases(
+		ctx,
+		[]upstream.ArtifactFingerprint{artifact},
+		r.artifactReleaseMappers(),
+		namedRelease,
+	)
+	return resolutions[0]
 }
 
-// ResolveArtifactsByHash resolves canonical upstream references for artifacts
+// ResolveArtifactsByHash resolves canonical upstream releases for artifacts
 // in input order. Only a named release is reported; provider failures stay
-// attached to the artifact they affected.
+// attached to the artifact they affected, including failures from mappers
+// that ran before a later one matched.
 func (r *Router) ResolveArtifactsByHash(
 	ctx context.Context,
 	artifacts []upstream.ArtifactFingerprint,
-) []upstream.ArtifactLookup {
-	resolutions := upstream.LookupArtifactReleases(
+) []upstream.ArtifactReleaseResolution {
+	return upstream.LookupArtifactReleases(
 		ctx,
 		artifacts,
 		r.artifactReleaseMappers(),
-		func(release upstream.Release) bool {
-			return release.Ref.Name != ""
-		},
+		namedRelease,
 	)
-	if len(resolutions) == 0 {
-		return nil
-	}
-	lookups := make([]upstream.ArtifactLookup, len(resolutions))
-	for i, resolution := range resolutions {
-		if len(resolution.Errors) > 0 {
-			lookups[i].Errors = resolution.Errors
-		}
-		if resolution.Matched {
-			lookups[i].Ref = resolution.Release.Ref
-		}
-	}
-	return lookups
+}
+
+// namedRelease accepts the release a mapper matched only when it names its
+// project, which is the identity resolution and adoption can use.
+func namedRelease(release upstream.Release) bool {
+	return release.Ref.Name != ""
 }
 
 func joinProviderErrors(providerErrors []upstream.ProviderError) error {
