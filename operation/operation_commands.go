@@ -141,7 +141,7 @@ func servedEcosystemSet(d *documentpkg.Manifest, observed *workspace.Workspace) 
 // so a returned module proves that loader loads the file.
 func servedEcosystemForFile(
 	ctx context.Context,
-	path string,
+	analysis *artifact.Analysis,
 	served map[catalog.Ecosystem]struct{},
 	minecraft string,
 ) (catalog.Ecosystem, bool) {
@@ -149,16 +149,11 @@ func servedEcosystemForFile(
 		if ecosystem == catalog.EcosystemMCDR {
 			continue
 		}
-		modules, err := artifact.ReadModulesFor(
-			ctx,
-			path,
-			ecosystem,
-			minecraft,
-		)
+		view, err := analysis.Descriptor(ctx, ecosystem, minecraft)
 		if err != nil {
 			continue
 		}
-		if len(modules) > 0 {
+		if len(view.Modules) > 0 {
 			return ecosystem, true
 		}
 	}

@@ -23,62 +23,56 @@ func discoverPackages(
 	searchPaths []string,
 	mcdrPluginDirs []string,
 	runtime catalog.Ecosystem,
+	analyses *artifact.Analyses,
 ) ([]DiscoveredPackage, []string, []error) {
 	idx := NewPackageIndex()
-	var (
-		mu           sync.Mutex
-		unidentified []string
-		warnings     []error
-	)
-	addWarning := func(err error) {
-		mu.Lock()
-		warnings = append(warnings, err)
-		mu.Unlock()
+	var unidentified []string
+	var warnings []error
+	readInfo := func(path string) (infos []artifact.PackageInfo, err error) {
+		if analyses == nil {
+			return artifact.ReadInfo(path)
+		}
+		return analyses.File(path).Info()
 	}
 
 	for _, searchPath := range searchPaths {
 		jarFiles, err := findJar(searchPath)
 		if err != nil {
-			addWarning(fmt.Errorf("cannot read the mod directory: %w", err))
+			warnings = append(warnings, fmt.Errorf("cannot read the mod directory: %w", err))
 			continue
 		}
 
+		packages := make([][]artifact.PackageInfo, len(jarFiles))
+		workers := min(8, len(jarFiles))
 		var wg sync.WaitGroup
-		for _, jarPath := range jarFiles {
+		for worker := range workers {
 			wg.Go(func() {
-				analyzed, err := artifact.ReadInfo(jarPath)
-				analyzed = artifact.PreferredPackageInfos(
-					analyzed,
-					runtime,
-				)
-
-				if err != nil || len(analyzed) == 0 {
-					// An unreadable descriptor leaves the package
-					// unidentified; the path is retained for a later
-					// identify step.
-					mu.Lock()
-					unidentified = append(unidentified, jarPath)
-					mu.Unlock()
-					return
+				for i := worker; i < len(jarFiles); i += workers {
+					infos, err := readInfo(jarFiles[i])
+					if err == nil {
+						packages[i] = artifact.PreferredPackageInfos(infos, runtime)
+					}
 				}
-				pkgs := artifactInfoToDiscoveredPackage(analyzed)
-
-				mu.Lock()
-				idx.Merge(pkgs)
-				mu.Unlock()
 			})
 		}
 		wg.Wait()
+		for i, infos := range packages {
+			if len(infos) == 0 {
+				unidentified = append(unidentified, jarFiles[i])
+				continue
+			}
+			idx.Merge(artifactInfoToDiscoveredPackage(infos))
+		}
 	}
 
 	for _, dir := range mcdrPluginDirs {
 		pluginFiles, err := findFileWithExt([]string{dir}, ".pyz", ".mcdr")
 		if err != nil {
-			addWarning(fmt.Errorf("cannot read the MCDR plugin directory: %w", err))
+			warnings = append(warnings, fmt.Errorf("cannot read the MCDR plugin directory: %w", err))
 			continue
 		}
 		for _, pluginFile := range pluginFiles {
-			analyzed, err := artifact.ReadInfo(pluginFile)
+			analyzed, err := readInfo(pluginFile)
 			analyzed = artifact.PreferredPackageInfos(
 				analyzed,
 				catalog.EcosystemMCDR,

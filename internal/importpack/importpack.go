@@ -47,7 +47,22 @@ type Plan struct {
 // Skipped lists the source paths of client-only entries that were not written.
 type Result struct {
 	Plan
-	Skipped []string
+	Skipped       []string
+	overridePaths map[string]struct{}
+}
+
+// RecordClientOnlyRemoval updates the counts after the caller removes files
+// that had been materialized but cannot run on a dedicated server.
+func (r *Result) RecordClientOnlyRemoval(paths []string) {
+	r.SkippedClient += len(paths)
+	r.ServerFiles -= len(paths)
+	r.Skipped = append(r.Skipped, paths...)
+	for _, path := range paths {
+		if _, ok := r.overridePaths[path]; ok {
+			r.Overrides--
+			delete(r.overridePaths, path)
+		}
+	}
 }
 
 // Progress receives facts about the downloads Materialize performs. Every hook

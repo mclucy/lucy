@@ -119,10 +119,10 @@ func (t Target) ModuleNamespace(d catalog.Ecosystem) catalog.Ecosystem {
 	return t.moduleNamespace(d)
 }
 
-// descriptorLoader returns the loader whose descriptor precedence reads an
+// DescriptorLoader returns the loader whose descriptor precedence reads an
 // artifact of a package in ecosystem. A runtime that loads the ecosystem
 // reads the artifact as its own loader would.
-func (t Target) descriptorLoader(ecosystem catalog.Ecosystem) catalog.Ecosystem {
+func (t Target) DescriptorLoader(ecosystem catalog.Ecosystem) catalog.Ecosystem {
 	if runtime, ok := t.PackageRuntime(); ok &&
 		slices.Contains(runtime.Loads(), ecosystem) {
 		return runtime

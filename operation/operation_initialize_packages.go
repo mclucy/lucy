@@ -10,6 +10,7 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"sync/atomic"
 
 	"github.com/mclucy/lucy/artifact"
 	"github.com/mclucy/lucy/catalog"
@@ -66,6 +67,7 @@ type moduleCollision struct {
 // parallel and apply in a deterministic order.
 type adoptionProposal struct {
 	pkg       workspace.DiscoveredPackage
+	analysis  *artifact.Analysis
 	ecosystem catalog.Ecosystem
 	key       string
 	reference string
@@ -91,6 +93,7 @@ func (s *Service) adoptInstalledPackages(
 	root string,
 	manifest *documentpkg.Manifest,
 	observed *workspace.Workspace,
+	matches map[string]upstream.ArtifactReleaseResolution,
 ) (
 	packages []install.AdoptedPackage,
 	releases []install.AdoptedRelease,
@@ -130,16 +133,9 @@ func (s *Service) adoptInstalledPackages(
 	}
 	unique := uniquePackages(discovered, adopter.served)
 	proposals := make([]adoptionProposal, len(unique))
-	limit := make(chan struct{}, packageProbeLimit)
-	var wg sync.WaitGroup
-	for i, p := range unique {
-		wg.Go(func() {
-			limit <- struct{}{}
-			defer func() { <-limit }()
-			proposals[i] = adopter.prepare(p)
-		})
-	}
-	wg.Wait()
+	parallelPackageProbes(ctx, len(unique), func(i int) {
+		proposals[i] = adopter.prepare(unique[i])
+	})
 	if err := ctx.Err(); err != nil {
 		return nil, nil, nil, 0, err
 	}
@@ -150,18 +146,13 @@ func (s *Service) adoptInstalledPackages(
 			return nil, nil, nil, 0, proposal.fatal
 		}
 	}
-	resolutions := adopter.lookupReleases(ctx, proposals)
+	resolutions := adopter.lookupReleases(ctx, proposals, matches)
 	if err := ctx.Err(); err != nil {
 		return nil, nil, nil, 0, err
 	}
-	for i := range proposals {
-		wg.Go(func() {
-			limit <- struct{}{}
-			defer func() { <-limit }()
-			adopter.complete(ctx, &proposals[i], resolutions[i])
-		})
-	}
-	wg.Wait()
+	parallelPackageProbes(ctx, len(proposals), func(i int) {
+		adopter.complete(ctx, &proposals[i], resolutions[i])
+	})
 	if err := ctx.Err(); err != nil {
 		return nil, nil, nil, 0, err
 	}
@@ -234,6 +225,23 @@ var packageMapperProviders = []catalog.Provider{
 // cannot rate-limit them.
 const packageProbeLimit = 8
 
+func parallelPackageProbes(ctx context.Context, count int, run func(int)) {
+	var next atomic.Int64
+	var wg sync.WaitGroup
+	for range min(count, packageProbeLimit) {
+		wg.Go(func() {
+			for ctx.Err() == nil {
+				i := int(next.Add(1) - 1)
+				if i >= count {
+					return
+				}
+				run(i)
+			}
+		})
+	}
+	wg.Wait()
+}
+
 // packageMappers returns the configured release mappers in trial order. A
 // provider without a configured mapper is skipped, not an error.
 func (s *Service) packageMappers() ([]upstream.ArtifactReleaseMapper, error) {
@@ -257,11 +265,11 @@ func (s *Service) packageMappers() ([]upstream.ArtifactReleaseMapper, error) {
 func (a *packageAdopter) prepare(
 	p workspace.DiscoveredPackage,
 ) adoptionProposal {
-	proposal := adoptionProposal{pkg: p}
+	proposal := adoptionProposal{pkg: p, analysis: a.observed.PackageAnalysis(p.Path)}
 	if p.ID.Ecosystem == catalog.EcosystemMCDR || len(a.mappers) == 0 {
 		return proposal
 	}
-	digests, err := install.DigestFile(p.Path, nil)
+	sha256, err := proposal.analysis.SHA256()
 	if err != nil {
 		proposal.fatal = fmt.Errorf("digest package %s: %w", p.Path, err)
 		return proposal
@@ -272,7 +280,7 @@ func (a *packageAdopter) prepare(
 		return proposal
 	}
 	proposal.mapped = true
-	proposal.sha256 = digests["sha256"]
+	proposal.sha256 = sha256
 	proposal.mode = uint32(info.Mode().Perm())
 	return proposal
 }
@@ -283,6 +291,7 @@ func (a *packageAdopter) prepare(
 func (a *packageAdopter) lookupReleases(
 	ctx context.Context,
 	proposals []adoptionProposal,
+	matches map[string]upstream.ArtifactReleaseResolution,
 ) []upstream.ArtifactReleaseResolution {
 	resolutions := make([]upstream.ArtifactReleaseResolution, len(proposals))
 	fingerprints := make([]upstream.ArtifactFingerprint, 0, len(proposals))
@@ -291,11 +300,12 @@ func (a *packageAdopter) lookupReleases(
 		if !proposals[i].mapped {
 			continue
 		}
+		if match, ok := matches[proposals[i].pkg.Path]; ok {
+			resolutions[i] = match
+			continue
+		}
 		positions = append(positions, i)
-		fingerprints = append(
-			fingerprints,
-			artifact.File{Path: proposals[i].pkg.Path},
-		)
+		fingerprints = append(fingerprints, proposals[i].analysis)
 	}
 	if len(fingerprints) == 0 {
 		return resolutions
@@ -358,7 +368,7 @@ func (a *packageAdopter) probeDescriptor(
 			var adopted bool
 			ecosystem, adopted = servedEcosystemForFile(
 				ctx,
-				p.Path,
+				proposal.analysis,
 				a.served,
 				string(a.manifest.Server.Minecraft),
 			)
@@ -373,12 +383,7 @@ func (a *packageAdopter) probeDescriptor(
 		}
 	}
 	proposal.ecosystem = ecosystem
-	modules, err := artifact.ReadModulesFor(
-		ctx,
-		p.Path,
-		ecosystem,
-		string(a.manifest.Server.Minecraft),
-	)
+	view, err := proposal.analysis.Descriptor(ctx, ecosystem, string(a.manifest.Server.Minecraft))
 	if err != nil {
 		proposal.warnings = append(proposal.warnings, fmt.Errorf(
 			"package %s left unmanaged: read descriptor: %w",
@@ -387,20 +392,21 @@ func (a *packageAdopter) probeDescriptor(
 		))
 		return
 	}
+	if view.ClientOnly {
+		proposal.warnings = append(proposal.warnings, fmt.Errorf(
+			"package %s left unmanaged: client-only %s",
+			p.Path,
+			ecosystem,
+		))
+		return
+	}
+	modules := view.Modules
 	if len(modules) == 0 {
 		proposal.warnings = append(proposal.warnings, a.importWarning(
 			importWarningNoServerModule,
 			p.Path,
 			"package %s left unmanaged: its descriptor declares no server-side module",
 			p.Path,
-		))
-		return
-	}
-	if modulesAreClientOnly(modules) {
-		proposal.warnings = append(proposal.warnings, fmt.Errorf(
-			"package %s left unmanaged: client-only %s",
-			p.Path,
-			ecosystem,
 		))
 		return
 	}
@@ -460,11 +466,13 @@ func (a *packageAdopter) probeMCDR(
 		))
 		return
 	}
+	sha256, err := proposal.analysis.SHA256()
+	if err != nil {
+		proposal.fatal = fmt.Errorf("digest package %s: %w", p.Path, err)
+		return
+	}
 	for _, candidate := range candidates {
-		if candidate.Hashes["sha256"] == "" {
-			continue
-		}
-		if _, err := install.DigestFile(p.Path, candidate.Hashes); err != nil {
+		if !strings.EqualFold(candidate.Hashes["sha256"], sha256) {
 			continue
 		}
 		info, err := os.Lstat(p.Path)
@@ -476,7 +484,7 @@ func (a *packageAdopter) probeMCDR(
 		proposal.key = packageKey(catalog.EcosystemMCDR, packageID)
 		proposal.packageID = packageID
 		proposal.reference = packageID
-		proposal.sha256 = candidate.Hashes["sha256"]
+		proposal.sha256 = sha256
 		proposal.mode = uint32(info.Mode().Perm())
 		proposal.candidate = candidate
 		proposal.matched = true
@@ -502,7 +510,7 @@ func (a *packageAdopter) adoptMapped(
 	p := proposal.pkg
 	release := resolution.Release
 	provider := resolution.Provider
-	ecosystem, local := a.descriptorEcosystem(ctx, p)
+	ecosystem, local := a.descriptorEcosystem(ctx, p, proposal.analysis)
 	if !local {
 		served, ok := a.releaseEcosystem(p, release)
 		if !ok {
@@ -518,7 +526,7 @@ func (a *packageAdopter) adoptMapped(
 	}
 	clientOnly, known, sideEcosystem, sideErr := a.descriptorSide(
 		ctx,
-		p.Path,
+		proposal.analysis,
 		ecosystem,
 		p.ID.Ecosystem,
 	)
@@ -553,12 +561,7 @@ func (a *packageAdopter) adoptMapped(
 	// must be readable and declare a server-visible module. A library
 	// archive is loaded by the loader but is not a package Lucy can
 	// resolve, so it stays unmanaged.
-	modules, readErr := artifact.ReadModulesFor(
-		ctx,
-		p.Path,
-		ecosystem,
-		string(a.manifest.Server.Minecraft),
-	)
+	view, readErr := proposal.analysis.Descriptor(ctx, ecosystem, string(a.manifest.Server.Minecraft))
 	if readErr != nil {
 		proposal.warnings = append(proposal.warnings, fmt.Errorf(
 			"package %s left unmanaged: read descriptor: %w",
@@ -567,6 +570,7 @@ func (a *packageAdopter) adoptMapped(
 		))
 		return
 	}
+	modules := view.Modules
 	if len(modules) == 0 {
 		// A descriptor without a server module is not evidence the server
 		// can load the file; resolution cannot satisfy the locked build.
@@ -606,8 +610,7 @@ func (a *packageAdopter) adoptMapped(
 		return
 	}
 	if release.Candidate.URL == "" {
-		// Resolution materializes the adopted release, so a release the
-		// provider cannot serve would abort the whole installation.
+		// A lock needs a source for replay when its store object is missing.
 		proposal.warnings = append(proposal.warnings, fmt.Errorf(
 			"package %s matched %s but its release has no download URL",
 			p.Path,
@@ -645,17 +648,13 @@ func (a *packageAdopter) adoptMapped(
 // cannot slip onto the server.
 func (a *packageAdopter) descriptorSide(
 	ctx context.Context,
-	path string,
+	analysis *artifact.Analysis,
 	ecosystem catalog.Ecosystem,
 	fileEcosystem catalog.Ecosystem,
 ) (clientOnly, known bool, sideEcosystem catalog.Ecosystem, err error) {
 	minecraft := string(a.manifest.Server.Minecraft)
-	clientOnly, known, err = artifact.ReadClientOnly(
-		ctx,
-		path,
-		ecosystem,
-		minecraft,
-	)
+	view, err := analysis.Descriptor(ctx, ecosystem, minecraft)
+	clientOnly, known = view.ClientOnly, view.Known
 	if err != nil || known || fileEcosystem == ecosystem ||
 		fileEcosystem == catalog.EcosystemUnspecified ||
 		fileEcosystem == catalog.EcosystemMCDR {
@@ -664,14 +663,9 @@ func (a *packageAdopter) descriptorSide(
 	if _, served := a.served[fileEcosystem]; !served {
 		return clientOnly, known, ecosystem, err
 	}
-	bridgedOnly, bridgedKnown, bridgedErr := artifact.ReadClientOnly(
-		ctx,
-		path,
-		fileEcosystem,
-		minecraft,
-	)
-	if bridgedErr == nil && bridgedKnown {
-		return bridgedOnly, true, fileEcosystem, nil
+	bridged, bridgedErr := analysis.Descriptor(ctx, fileEcosystem, minecraft)
+	if bridgedErr == nil && bridged.Known {
+		return bridged.ClientOnly, true, fileEcosystem, nil
 	}
 	return clientOnly, known, ecosystem, err
 }
@@ -682,6 +676,7 @@ func (a *packageAdopter) descriptorSide(
 func (a *packageAdopter) descriptorEcosystem(
 	ctx context.Context,
 	p workspace.DiscoveredPackage,
+	analysis *artifact.Analysis,
 ) (catalog.Ecosystem, bool) {
 	if _, served := a.served[p.ID.Ecosystem]; served &&
 		p.ID.Ecosystem != catalog.EcosystemMCDR {
@@ -689,7 +684,7 @@ func (a *packageAdopter) descriptorEcosystem(
 	}
 	return servedEcosystemForFile(
 		ctx,
-		p.Path,
+		analysis,
 		a.served,
 		string(a.manifest.Server.Minecraft),
 	)
@@ -992,6 +987,9 @@ func (a *packageAdopter) record(proposal adoptionProposal) {
 		Reference: proposal.reference,
 		Ecosystem: proposal.ecosystem,
 		Candidate: proposal.candidate,
+		Path:      proposal.pkg.Path,
+		SHA256:    proposal.sha256,
+		Analysis:  proposal.analysis,
 	})
 	for _, module := range proposal.modules {
 		if !nativeModule(module) {
@@ -1018,19 +1016,6 @@ func (a *packageAdopter) requirePackageMap(
 
 func packageKey(ecosystem catalog.Ecosystem, packageID string) string {
 	return string(ecosystem) + "\x00" + packageID
-}
-
-// modulesAreClientOnly reports whether every module serves the client only.
-func modulesAreClientOnly(modules []catalog.DescriptorModule) bool {
-	if len(modules) == 0 {
-		return false
-	}
-	for _, module := range modules {
-		if module.Side != catalog.SideClient {
-			return false
-		}
-	}
-	return true
 }
 
 // reportMissingModules warns about required descriptor modules that no

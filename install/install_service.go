@@ -134,7 +134,7 @@ func (s *Service) Resolve(
 	if err != nil {
 		return nil, result, err
 	}
-	if old != nil && !opts.WithOptional && old.ManifestFingerprint == fingerprint {
+	if old != nil && !opts.WithOptional && old.ManifestFingerprint == fingerprint && adoptionMatchesLock(opts.Adopted, old) {
 		s.logger.Debug("lock resolution reused current lock", "reason", "manifest unchanged")
 		result.Mode = ModeReplay
 		result.Reason = "manifest unchanged; lock reused"

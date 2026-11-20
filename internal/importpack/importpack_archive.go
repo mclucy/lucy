@@ -149,7 +149,16 @@ func materialize(
 	}
 	plan := lay.plan
 	plan.Bytes = m.budget.total()
-	return &Result{Plan: plan, Skipped: lay.skipped}, nil
+	result := &Result{Plan: plan, Skipped: lay.skipped}
+	if plan.Overrides > 0 {
+		result.overridePaths = make(map[string]struct{}, plan.Overrides)
+		for _, item := range lay.items {
+			if !item.dir && item.layer != layerBase {
+				result.overridePaths[item.rel] = struct{}{}
+			}
+		}
+	}
+	return result, nil
 }
 
 // openArchive checks the extension, the content signature, and the source size

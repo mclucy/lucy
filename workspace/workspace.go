@@ -20,6 +20,7 @@ import (
 	"errors"
 	"path/filepath"
 
+	"github.com/mclucy/lucy/artifact"
 	"github.com/mclucy/lucy/catalog"
 	"github.com/mclucy/lucy/document"
 	versionpkg "github.com/mclucy/lucy/version"
@@ -56,6 +57,8 @@ type Workspace struct {
 	// valid package.
 	UnidentifiedPackageFiles []string `json:"-"`
 
+	analyses *artifact.Analyses
+
 	// declared is the applicable declaration derived from the manifest and
 	// lock, if any. Later selections keep its authority.
 	declared *discovery.Declaration
@@ -74,12 +77,24 @@ type Workspace struct {
 // Selection happens before package observation so package directories always
 // belong to the runtime that the observation reports.
 func Observe(root string, request discovery.Request) *Workspace {
-	return observe(root, request, true)
+	return ObserveWithAnalyses(root, request, nil)
 }
 
-// observe is the shared observation pipeline. withPackages is false only for
-// activity checks, which need the selected runtime but not package files.
-func observe(root string, request discovery.Request, withPackages bool) *Workspace {
+// ObserveWithAnalyses reuses package evidence from an enclosing operation.
+func ObserveWithAnalyses(root string, request discovery.Request, analyses *artifact.Analyses) *Workspace {
+	ws := ObserveRuntime(root, request)
+	ws.analyses = analyses
+	ws.observePackages()
+	return ws
+}
+
+// PackageAnalysis returns local evidence for a path in this observation.
+func (ws *Workspace) PackageAnalysis(path string) *artifact.Analysis {
+	return ws.analyses.File(path)
+}
+
+// ObserveRuntime observes the runtime without opening the package files.
+func ObserveRuntime(root string, request discovery.Request) *Workspace {
 	anchor, err := filepath.Abs(root)
 	if err != nil {
 		return &Workspace{}
@@ -102,9 +117,6 @@ func observe(root string, request discovery.Request, withPackages bool) *Workspa
 	request.Declared = declaration
 	ws.selectionErr = ws.Discovery.Select(request)
 
-	if withPackages {
-		ws.observePackages()
-	}
 	return ws
 }
 
@@ -149,6 +161,7 @@ func (ws *Workspace) observePackages() {
 		ws.PackageDirs(),
 		mcdrPluginDirs(ws.Wrappers),
 		runtime,
+		ws.analyses,
 	)
 	ws.Packages, ws.UnidentifiedPackageFiles = packages, unidentified
 	ws.Warnings = append(ws.Warnings, warnings...)

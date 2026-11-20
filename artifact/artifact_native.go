@@ -30,42 +30,28 @@ func ReadModulesFor(
 	loader catalog.Ecosystem,
 	minecraft string,
 ) ([]catalog.DescriptorModule, error) {
-	modules, err := readModulesFor(ctx, filename, loader, minecraft)
+	modules, err := readModulesFor(ctx, filename, loader, minecraft, nil)
 	if err != nil {
 		return nil, err
 	}
 	return normalizeModules(modules), nil
 }
 
-// ReadClientOnly reports whether every module the loader's descriptor declares
-// stays off a dedicated server. known is false when no descriptor for loader
-// declares a module, because a jar the loader has no descriptor for is not
-// evidence of a client-only package. A module that declares no side answers
-// not-client-only, so another loader's client-only descriptor cannot remove a
-// jar this loader accepts. The traversal matches ReadModulesFor, so a
-// client-only descriptor does not contribute its bundled archives.
-func ReadClientOnly(
-	ctx context.Context,
-	filename string,
-	loader catalog.Ecosystem,
-	minecraft string,
-) (clientOnly, known bool, err error) {
-	modules, err := readModulesFor(ctx, filename, loader, minecraft)
-	if err != nil {
-		return false, false, err
-	}
+// descriptorSideResult distinguishes an unknown side from a descriptor that
+// permits the server to load the artifact.
+func descriptorSideResult(modules []catalog.DescriptorModule) (clientOnly, known bool) {
 	if len(modules) == 0 {
-		return false, false, nil
+		return false, false
 	}
 	for _, module := range modules {
 		if module.Side != catalog.SideClient {
 			// Forge and NeoForge descriptors carry no mod-level side, and a
 			// Fabric or Quilt parent without an environment stays server-side.
 			// A module without a client side is not evidence either way.
-			return false, true, nil
+			return false, true
 		}
 	}
-	return true, true, nil
+	return true, true
 }
 
 // readModulesFor reads every module the descriptor declares without filtering
@@ -75,6 +61,7 @@ func readModulesFor(
 	filename string,
 	loader catalog.Ecosystem,
 	minecraft string,
+	inputs *descriptorInputs,
 ) ([]catalog.DescriptorModule, error) {
 	if strings.EqualFold(filepath.Ext(filename), ".py") {
 		return inspectPython(ctx, filename)
@@ -92,7 +79,7 @@ func readModulesFor(
 		return nil, err
 	}
 	defer z.Close()
-	return inspectArchive(&z.Reader, loader, "", 0, minecraft)
+	return inspectArchive(&z.Reader, loader, "", 0, minecraft, inputs)
 }
 
 // normalizeModules makes descriptor order independent of map iteration. The
@@ -231,48 +218,56 @@ var descriptorDecoders = map[catalog.Ecosystem]func(
 	*zip.Reader,
 	string,
 	string,
+	*descriptorInputs,
 ) (*decodedDescriptor, error){
 	catalog.EcosystemQuilt: func(
 		z *zip.Reader,
 		member, _ string,
+		inputs *descriptorInputs,
 	) (*decodedDescriptor, error) {
-		return decodeQuiltDescriptor(z, member, false)
+		return decodeQuiltDescriptor(z, member, false, inputs)
 	},
 	catalog.EcosystemFabric: func(
 		z *zip.Reader,
 		member, _ string,
+		inputs *descriptorInputs,
 	) (*decodedDescriptor, error) {
-		return decodeFabricDescriptor(z, member, false)
+		return decodeFabricDescriptor(z, member, false, inputs)
 	},
 	catalog.EcosystemForge: func(
 		z *zip.Reader,
 		member, _ string,
+		inputs *descriptorInputs,
 	) (*decodedDescriptor, error) {
-		return decodeForgeDescriptor(z, member, false)
+		return decodeForgeDescriptor(z, member, false, inputs)
 	},
 	catalog.EcosystemNeoForge: func(
 		z *zip.Reader,
 		member, minecraft string,
+		inputs *descriptorInputs,
 	) (*decodedDescriptor, error) {
-		return decodeNeoForgeDescriptor(z, member, false, minecraft)
+		return decodeNeoForgeDescriptor(z, member, false, minecraft, inputs)
 	},
 	catalog.EcosystemBukkit: func(
 		z *zip.Reader,
 		member, _ string,
+		inputs *descriptorInputs,
 	) (*decodedDescriptor, error) {
-		return decodeBukkitDescriptor(z, member)
+		return decodeBukkitDescriptor(z, member, inputs)
 	},
 	catalog.EcosystemPaper: func(
 		z *zip.Reader,
 		member, _ string,
+		inputs *descriptorInputs,
 	) (*decodedDescriptor, error) {
-		return decodeBukkitDescriptor(z, member)
+		return decodeBukkitDescriptor(z, member, inputs)
 	},
 	catalog.EcosystemMCDR: func(
 		z *zip.Reader,
 		member, _ string,
+		inputs *descriptorInputs,
 	) (*decodedDescriptor, error) {
-		return decodeMCDRDescriptor(z, member)
+		return decodeMCDRDescriptor(z, member, inputs)
 	},
 }
 
@@ -284,11 +279,12 @@ func inspectArchive(
 	member string,
 	depth int,
 	minecraft string,
+	inputs *descriptorInputs,
 ) ([]catalog.DescriptorModule, error) {
 	if depth > 16 {
 		return nil, fmt.Errorf("nested archive depth exceeds 16")
 	}
-	decoded, err := decodeArchiveDescriptor(z, loader, member, minecraft)
+	decoded, err := decodeArchiveDescriptor(z, loader, member, minecraft, inputs)
 	if err != nil {
 		return nil, err
 	}
@@ -322,6 +318,7 @@ func inspectArchive(
 			path,
 			depth+1,
 			minecraft,
+			nil,
 		)
 		if err != nil {
 			return nil, err
@@ -338,13 +335,14 @@ func decodeArchiveDescriptor(
 	loader catalog.Ecosystem,
 	member string,
 	minecraft string,
+	inputs *descriptorInputs,
 ) (*decodedDescriptor, error) {
 	for _, ecosystem := range loader.Loads() {
 		decoder, ok := descriptorDecoders[ecosystem]
 		if !ok {
 			continue
 		}
-		decoded, err := decoder(z, member, minecraft)
+		decoded, err := decoder(z, member, minecraft, inputs)
 		if err != nil {
 			return nil, err
 		}
@@ -369,7 +367,11 @@ else: raise ValueError("missing static PLUGIN_METADATA")`
 	if err != nil {
 		return nil, fmt.Errorf("inspect Python plugin metadata: %w", err)
 	}
-	decoded, err := mcdrDecodedDescriptor(nil, data, "")
+	descriptor, err := parseMCDRPluginFile(data)
+	if err != nil {
+		return nil, err
+	}
+	decoded, err := mcdrDecodedDescriptor(nil, descriptor, "")
 	if err != nil {
 		return nil, err
 	}

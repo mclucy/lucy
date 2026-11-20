@@ -736,7 +736,7 @@ func Packages(request PackagesRequest) ([]document.Package, []error, error) {
 				}
 			}
 			var modules []catalog.DescriptorModule
-			descriptorLoader := target.descriptorLoader(r.key.ecosystem)
+			descriptorLoader := target.DescriptorLoader(r.key.ecosystem)
 			key := analysisKeyFor(candidate, descriptorLoader, target.Minecraft)
 			entry, cached := cache.get(key, a.Hashes)
 			if cached {
@@ -748,12 +748,11 @@ func Packages(request PackagesRequest) ([]document.Package, []error, error) {
 					return hardFail(err)
 				}
 				a.Hashes = materialized.Hashes
-				modules, err = artifact.ReadModulesFor(
-					ctx,
-					materialized.Path,
-					descriptorLoader,
-					string(target.Minecraft),
-				)
+				if prior, ok := cache.get(key, a.Hashes); ok {
+					modules = prior.modules
+				} else {
+					modules, err = artifact.ReadModulesFor(ctx, materialized.Path, descriptorLoader, string(target.Minecraft))
+				}
 				if err != nil {
 					explained = false
 					// A descriptor the reader cannot interpret rejects this
