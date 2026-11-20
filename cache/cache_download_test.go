@@ -640,6 +640,51 @@ func TestCachedGetRequestDoesNotCacheNon2xx(t *testing.T) {
 	}
 }
 
+func TestCachedPostRequestVerifiesExpectedHashOnHit(t *testing.T) {
+	t.Parallel()
+	for _, algorithm := range []HashAlgorithm{HashSHA1, HashSHA256, HashSHA512} {
+		t.Run(algorithm.String(), func(t *testing.T) {
+			t.Parallel()
+			const oldBody, newBody = "old response", "new response"
+			var corrected atomic.Bool
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				body := oldBody
+				if corrected.Load() {
+					body = newBody
+				}
+				_, _ = io.WriteString(w, body)
+			}))
+			t.Cleanup(server.Close)
+			client := installNetworkCache(t, DefaultCacheConfig())
+			opts := BytesRequestOptions{Kind: KindMetadata, HashAlgorithm: algorithm}
+			fetch := func() (*BytesResponse, error) {
+				return client.CachedPostRequest(t.Context(), server.URL, []byte(`{}`), opts, nil)
+			}
+
+			if _, err := fetch(); err != nil {
+				t.Fatal(err)
+			}
+			opts.ExpectedHash = digestHex(t, algorithm, []byte(oldBody))
+			response, err := fetch()
+			if err != nil || !response.CacheHit || string(response.Data) != oldBody {
+				t.Fatalf("matching cached response = %+v, err = %v", response, err)
+			}
+
+			opts.ExpectedHash = digestHex(t, algorithm, []byte(newBody))
+			response, err = fetch()
+			if response != nil || err == nil || !strings.Contains(err.Error(), "integrity verification failed") {
+				t.Fatalf("mismatching response = %+v, err = %v, want an integrity error", response, err)
+			}
+
+			corrected.Store(true)
+			response, err = fetch()
+			if err != nil || response.CacheHit || string(response.Data) != newBody {
+				t.Fatalf("replacement response = %+v, err = %v, want fresh corrected bytes", response, err)
+			}
+		})
+	}
+}
+
 func TestCachedGetRequestRetainsStatusAfterBodyReadFailure(t *testing.T) {
 	t.Parallel()
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
