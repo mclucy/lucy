@@ -2,18 +2,10 @@ package routing
 
 import (
 	"context"
-	"fmt"
 	"strings"
 
 	"github.com/mclucy/lucy/version"
 )
-
-type purpurVersionInfo struct {
-	Builds struct {
-		Latest string   `json:"latest"`
-		All    []string `json:"all"`
-	} `json:"builds"`
-}
 
 type purpurBuildInfo struct {
 	Build   string `json:"build"`
@@ -21,37 +13,47 @@ type purpurBuildInfo struct {
 	MD5     string `json:"md5"`
 }
 
+type purpurVersionInfo struct {
+	Builds struct {
+		Latest purpurBuildInfo   `json:"latest"`
+		All    []purpurBuildInfo `json:"all"`
+	} `json:"builds"`
+}
+
 // IdentifyPurpurBuild matches a Purpur jar digest against the published builds
-// for a Minecraft version. The Purpur API exposes only MD5 digests, so init
-// walks builds from newest to oldest until one matches.
+// for a Minecraft version. The detailed version document carries every build's
+// MD5 in one response, so init walks builds from newest to oldest until one
+// matches. Failed builds omit the digest, and an empty digest never matches.
 func (r *Router) IdentifyPurpurBuild(
 	ctx context.Context,
 	minecraft version.Version,
 	md5 string,
 ) (version.Version, bool, error) {
+	if md5 == "" {
+		return "", false, nil
+	}
 	base := "https://api.purpurmc.org/v2/purpur/" + minecraft.String()
 	var listed purpurVersionInfo
-	if err := r.Metadata(ctx, base, &listed); err != nil {
+	if err := r.Metadata(ctx, base+"?detailed=true", &listed); err != nil {
 		return "", false, err
 	}
 	builds := listed.Builds.All
-	if len(builds) == 0 && listed.Builds.Latest != "" {
-		builds = []string{listed.Builds.Latest}
+	if len(builds) == 0 {
+		builds = []purpurBuildInfo{listed.Builds.Latest}
 	}
 	for index := len(builds) - 1; index >= 0; index-- {
 		build := builds[index]
-		var detail purpurBuildInfo
-		if err := r.Metadata(ctx, base+"/"+build, &detail); err != nil {
-			return "", false, fmt.Errorf("Purpur build %s: %w", build, err)
-		}
-		if detail.Version != "" && detail.Version != minecraft.String() {
+		if build.Build == "" {
 			continue
 		}
-		if strings.EqualFold(detail.MD5, md5) {
-			if detail.Build != "" {
-				build = detail.Build
-			}
-			return version.Version(build), true, nil
+		if build.Version != "" && build.Version != minecraft.String() {
+			continue
+		}
+		if build.MD5 == "" {
+			continue
+		}
+		if strings.EqualFold(build.MD5, md5) {
+			return version.Version(build.Build), true, nil
 		}
 	}
 	return "", false, nil
