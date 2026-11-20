@@ -736,11 +736,17 @@ func (p *Provider) fingerprintMatches(
 	}
 	u := fmt.Sprintf("%s/v1/fingerprints/%d", baseUrl, minecraftGameId)
 	var resp fingerprintResponse
-	err := p.readPost(
+	err := p.readPostValidated(
 		ctx,
 		u,
 		fingerprintRequest{Fingerprints: fingerprints},
 		&resp,
+		func() error {
+			if resp.Data.ExactMatches == nil {
+				return fmt.Errorf("curseforge: fingerprint response has no exactMatches array")
+			}
+			return nil
+		},
 	)
 	if err != nil {
 		if isNotFound(err) {

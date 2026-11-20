@@ -66,6 +66,18 @@ func (p *Provider) readPost(
 	url string,
 	payload, dest any,
 ) error {
+	return p.readPostValidated(ctx, url, payload, dest, nil)
+}
+
+// readPostValidated is readPost with an envelope check that runs before a 200
+// response is cached. validate may reject a body whose envelope cannot be
+// trusted. Incomplete lookup responses are not cached.
+func (p *Provider) readPostValidated(
+	ctx context.Context,
+	url string,
+	payload, dest any,
+	validate func() error,
+) error {
 	if p.apiKey == "" {
 		return retry.Permanent(ErrNoApiKey)
 	}
@@ -97,6 +109,11 @@ func (p *Provider) readPost(
 			func(raw []byte) error {
 				if err := json.Unmarshal(raw, dest); err != nil {
 					return retry.Permanent(fmt.Errorf("curseforge: failed to parse response: %w", err))
+				}
+				if validate != nil {
+					if err := validate(); err != nil {
+						return retry.Permanent(err)
+					}
 				}
 				return nil
 			},
