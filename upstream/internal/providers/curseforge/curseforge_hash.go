@@ -3,6 +3,7 @@ package curseforge
 import (
 	"context"
 	"fmt"
+	"math"
 	"slices"
 
 	"github.com/mclucy/lucy/catalog"
@@ -153,11 +154,12 @@ func failMatchedFile(
 }
 
 // exactFiles resolves fingerprints through POST /v1/fingerprints/432 in
-// bounded batches. A match is kept only when its file fingerprint was
-// requested and the record carries file identity. A fingerprint the API omits
-// stays a miss, unless the batch carries a match it cannot correlate: that
-// match proves the batch matched something, so any input it leaves undetermined
-// is an incomplete lookup rather than a clean miss.
+// bounded batches. A match is kept only when its wire fingerprint is in the
+// uint32 fingerprint space, names a requested input, and the record carries
+// file identity. A fingerprint the API omits stays a miss, unless the batch
+// carries a match it cannot correlate: such a match proves the batch matched
+// something, so any input it leaves undetermined is an incomplete lookup
+// rather than a clean miss.
 func (p *Provider) exactFiles(
 	ctx context.Context,
 	fingerprints []uint32,
@@ -195,8 +197,21 @@ func (p *Provider) exactFiles(
 				uncorrelated++
 				continue
 			}
-			fingerprint := uint32(*match.File.FileFingerprint)
+			wireFingerprint := *match.File.FileFingerprint
+			if wireFingerprint < 0 || wireFingerprint > math.MaxUint32 {
+				// The official schema carries the fingerprint as int64. A value
+				// outside the uint32 fingerprint space names no input this
+				// batch requested; narrowing it first could alias another
+				// input's fingerprint and misattribute the record.
+				uncorrelated++
+				continue
+			}
+			fingerprint := uint32(wireFingerprint)
 			if _, ok := wanted[fingerprint]; !ok {
+				// The response carries a record this batch did not request. It
+				// cannot be attributed, so it proves the batch matched
+				// something rather than that the remaining inputs are misses.
+				uncorrelated++
 				continue
 			}
 			if match.File.ID == 0 || match.File.ModId == 0 {
@@ -248,9 +263,9 @@ func (p *Provider) exactFiles(
 
 // refetchIncompleteFiles replaces inline match records that lack release
 // details with authoritative records from POST /v1/mods/files, batched by file
-// ID. Once a refetch is required, an omitted or contradictory authoritative
-// record is an incomplete lookup for that input, never a fallback to partial
-// inline data and never a clean miss.
+// ID. Once a refetch is required, an omitted, incomplete or contradictory
+// authoritative record is an incomplete lookup for that input, never a
+// fallback to partial inline data and never a clean miss.
 func (p *Provider) refetchIncompleteFiles(
 	ctx context.Context,
 	files map[uint32]fileResponse,
@@ -324,7 +339,7 @@ func (p *Provider) refetchIncompleteFiles(
 			}
 			for _, fingerprint := range fingerprints {
 				if file.FileFingerprint != nil &&
-					uint32(*file.FileFingerprint) != fingerprint {
+					*file.FileFingerprint != int64(fingerprint) {
 					failFingerprint(
 						results,
 						indexByFingerprint,
@@ -332,7 +347,7 @@ func (p *Provider) refetchIncompleteFiles(
 						fmt.Errorf(
 							"curseforge: file %d has fingerprint %d, exact match reported %d",
 							fileID,
-							uint32(*file.FileFingerprint),
+							*file.FileFingerprint,
 							fingerprint,
 						),
 					)
@@ -350,6 +365,19 @@ func (p *Provider) refetchIncompleteFiles(
 							fileID,
 							file.ModId,
 							exactModID,
+						),
+					)
+					delete(files, fingerprint)
+					continue
+				}
+				if !file.completeForRelease() {
+					failFingerprint(
+						results,
+						indexByFingerprint,
+						fingerprint,
+						fmt.Errorf(
+							"curseforge: file %d lookup returned incomplete release details",
+							fileID,
 						),
 					)
 					delete(files, fingerprint)
