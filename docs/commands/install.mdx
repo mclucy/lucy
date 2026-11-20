@@ -19,7 +19,7 @@ Install places the files the lock lists. It removes files it installed or took o
 
 Installation stops when an unmanaged file occupies a package destination; pass `--overwrite` to replace files already there. The receipt hash in `.lucy/install.yaml` is a conflict baseline, not a reproducibility pin, so locally modified files are never silently overwritten or pruned, and re-initialization preserves those baselines. Seed files are user-owned: modifying one never blocks installation or triggers replacement.
 
-Without a receipt, unmanaged files are not replaced. A bootstrap file exactly matching a verified output is recorded without replacement. Use [`lucy init`](/commands/init) to adopt an existing server without running installers.
+If the receipt is missing, files in a runtime directory remain unmanaged and are not replaced. A bootstrap file exactly matching a verified output can be recorded without replacement. Use [`lucy init`](/commands/init) to adopt an existing server without running installers.
 
 Later installs reuse an adopted runtime when it still matches the lock and its managed files are unchanged.
 

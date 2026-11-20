@@ -21,7 +21,7 @@ Server preparation operates in an installation staging tree. It copies or extrac
 
 Paperclip and installer processors execute Java when there is no reusable snapshot. Processor outputs with expected hashes are checked. Fabric and Quilt generate launchers from their locked classpaths.
 
-A bootstrap snapshot records checked runtime files and seeds, keyed by adapter revision, locked versions, and input content and destinations. It excludes workspace location, artifact URLs, and package revisions. Restoring verifies objects and the runtime contract; an unusable snapshot falls back to a cold install. Adopted user trees never populate the cache.
+A bootstrap snapshot records checked runtime files and seeds, keyed by adapter revision, locked versions, and input content and destinations. It excludes workspace location, artifact URLs, and package revisions. Restoring verifies objects and the runtime contract; an unusable snapshot falls back to a cold install. Adopted user trees never populate the snapshot cache.
 
 Subprocess output never enters error messages; it streams to terminal progress and a per-command log under `installer` in the platform log directory. Each command's header is recorded even when it prints nothing, and both stdout and stderr reach the file. The log is bounded to 64 MiB and discarded on success; a failure keeps it and names its path and size. Truncation or a write failure is reported.
 
