@@ -4,7 +4,7 @@ set -euo pipefail
 # Posts the release announcement to the Discord webhook. Discord rejects an embed
 # description over 4096 characters, and the release body repeats installation
 # instructions that the embed already carries, so the announcement keeps the
-# changelog and links out for the rest.
+# visible changelog and links out for the rest.
 
 : "${GITHUB_REPOSITORY:?GITHUB_REPOSITORY is not set}"
 : "${RUNNER_TEMP:?RUNNER_TEMP is not set}"
@@ -14,7 +14,12 @@ tag="${INPUT_TAG:-${GITHUB_REF_NAME}}"
 gh release view "${tag}" --repo "${GITHUB_REPOSITORY}" \
   --json body,url,isPrerelease > "${RUNNER_TEMP}/release.json"
 jq -r '.body' "${RUNNER_TEMP}/release.json" > "${RUNNER_TEMP}/notes.md"
-sed -n '/^## Installation$/q;p' \
+# Discord renders no collapsibles, so the hidden release section is dropped.
+sed -n \
+  -e '/^## Installation$/q' \
+  -e '/^<details>/,/^<\/details>$/d' \
+  -e '/^### $/d' \
+  -e 'p' \
   "${RUNNER_TEMP}/notes.md" > "${RUNNER_TEMP}/changelog.md"
 
 # Mentions stay inert: changelog entries carry author handles, and an
