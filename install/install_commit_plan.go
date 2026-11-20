@@ -3,6 +3,7 @@ package install
 import (
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -37,28 +38,40 @@ var workspaceDocumentNames = [...]string{
 // CaptureWorkspaceDocuments records the current state of the documents an
 // operation may publish. The caller must hold the workspace writer lock and
 // must run journal recovery first, so the captured state is the recovered one.
-func CaptureWorkspaceDocuments(root string) (WorkspaceDocuments, error) {
+func CaptureWorkspaceDocuments(root string) (captured WorkspaceDocuments, resultErr error) {
 	root, err := filepath.Abs(root)
 	if err != nil {
 		return WorkspaceDocuments{}, err
 	}
-	documents := make(map[string]workspaceDocument, len(workspaceDocumentNames))
+	files, err := os.OpenRoot(root)
+	if err != nil {
+		return WorkspaceDocuments{}, err
+	}
+	defer func() { resultErr = errors.Join(resultErr, files.Close()) }()
+	captured.documents = make(map[string]workspaceDocument, len(workspaceDocumentNames))
 	for _, name := range workspaceDocumentNames {
-		captured, err := captureWorkspaceDocument(root, name)
+		pinned, err := captureWorkspaceDocument(files, root, name)
 		if err != nil {
 			return WorkspaceDocuments{}, err
 		}
-		documents[name] = captured
+		captured.documents[name] = pinned
 	}
-	return WorkspaceDocuments{documents: documents}, nil
+	return captured, nil
 }
 
-func captureWorkspaceDocument(root, name string) (workspaceDocument, error) {
+// captureWorkspaceDocument opens one document through the workspace root and
+// reads the bytes and permission mode from that same handle, so the capture
+// cannot pair bytes from one file with metadata from another. The root
+// confines the open, and a replaced entry fails the identity recheck.
+func captureWorkspaceDocument(
+	files *os.Root,
+	root string,
+	name string,
+) (workspaceDocument, error) {
 	if err := workspacewrite.SafePath(root, name); err != nil {
 		return workspaceDocument{}, err
 	}
-	path := filepath.Join(root, filepath.FromSlash(name))
-	info, err := os.Lstat(path)
+	info, err := files.Lstat(name)
 	switch {
 	case errors.Is(err, os.ErrNotExist):
 		return workspaceDocument{}, nil
@@ -71,14 +84,28 @@ func captureWorkspaceDocument(root, name string) (workspaceDocument, error) {
 			name,
 		)
 	}
-	raw, err := os.ReadFile(path)
+	file, err := files.Open(name)
 	if err != nil {
 		return workspaceDocument{}, err
 	}
-	mode := info.Mode().Perm()
+	opened, err := file.Stat()
+	if err != nil {
+		return workspaceDocument{}, errors.Join(err, file.Close())
+	}
+	if !opened.Mode().IsRegular() || !os.SameFile(info, opened) {
+		return workspaceDocument{}, errors.Join(
+			fmt.Errorf("workspace document %s changed while capturing it", name),
+			file.Close(),
+		)
+	}
+	raw, err := io.ReadAll(file)
+	closeErr := file.Close()
+	if err != nil || closeErr != nil {
+		return workspaceDocument{}, errors.Join(err, closeErr)
+	}
 	return workspaceDocument{
 		raw:   raw,
-		image: workspacewrite.InstallBytesImage(raw, mode),
+		image: workspacewrite.InstallBytesImage(raw, opened.Mode().Perm()),
 	}, nil
 }
 
