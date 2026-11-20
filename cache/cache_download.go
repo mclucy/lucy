@@ -13,6 +13,7 @@ import (
 	"hash"
 	"io"
 	"maps"
+	"math"
 	"net/http"
 	"net/url"
 	"os"
@@ -462,7 +463,7 @@ func (c *Client) cachedBytesRequest(
 
 	var bodyBuf bytes.Buffer
 	writers = append(writers, &bodyBuf)
-	limitedReader := io.LimitReader(contextReader{ctx, resp.Body}, maxBytes+1)
+	limitedReader := io.LimitReader(contextReader{ctx, resp.Body}, min(maxBytes, math.MaxInt64-1)+1)
 	if _, err := io.Copy(io.MultiWriter(writers...), limitedReader); err != nil {
 		return nil, fmt.Errorf("read failed: %w", err)
 	}

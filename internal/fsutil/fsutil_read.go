@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 )
 
 // MaxZipEntryBytes is the upper bound for reading a single entry from a JAR/ZIP
@@ -45,12 +46,11 @@ func ReadZipEntry(
 	return nil, false, nil
 }
 
-// CopyBytes reads r into memory. When maxBytes > 0, r is wrapped in
-// io.LimitReader(max+1) so reads fail if the stream exceeds the limit.
+// CopyBytes reads r into memory. A positive maxBytes rejects larger streams.
 func CopyBytes(r io.Reader, maxBytes int64) ([]byte, error) {
 	limited := r
 	if maxBytes > 0 {
-		limited = io.LimitReader(r, maxBytes+1)
+		limited = io.LimitReader(r, min(maxBytes, math.MaxInt64-1)+1)
 	}
 
 	var buf bytes.Buffer
