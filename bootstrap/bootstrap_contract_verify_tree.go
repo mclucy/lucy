@@ -208,6 +208,9 @@ func (v *treeVerifier) verifyForgeInstaller() CheckResult {
 		)
 	}
 	for rel, want := range declared {
+		if spec, ok := v.contract[rel]; ok && spec.Policy == PolicySeed {
+			continue
+		}
 		if err := v.verifyForgeDeclared(rel, want); err != nil {
 			v.fail("%v", err)
 		}
