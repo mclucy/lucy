@@ -4,6 +4,7 @@ import (
 	"archive/zip"
 	"bytes"
 	"context"
+	"crypto/sha1"
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
@@ -18,6 +19,7 @@ import (
 	"github.com/mclucy/lucy/filetrack"
 	"github.com/mclucy/lucy/install"
 	"github.com/mclucy/lucy/receipt"
+	serverpkg "github.com/mclucy/lucy/server"
 	"github.com/mclucy/lucy/serverregistry"
 	"github.com/mclucy/lucy/upstream"
 	"github.com/mclucy/lucy/version"
@@ -171,22 +173,31 @@ func (s *replaySource) ResolveServerProduct(
 	}, nil
 }
 
-// TestInitializeThenLockedInstallReplaysInEmptyWorkspace chains adoption and
-// installation in process: initialization detects a synthetic vanilla runtime,
-// writes its manifest and lock, records the runtime it adopted in the receipt,
-// and a locked install in an empty destination replays those documents without
-// resolving or rewriting them.
 func TestInitializeThenLockedInstallReplaysInEmptyWorkspace(t *testing.T) {
+	t.Run("fresh resolution", func(t *testing.T) {
+		testInitializedLockReplaysOffline(t, false)
+	})
+	t.Run("current SHA-1 lock", func(t *testing.T) {
+		testInitializedLockReplaysOffline(t, true)
+	})
+}
+
+func testInitializedLockReplaysOffline(t *testing.T, reuseLock bool) {
+	t.Helper()
 	isolateOperationHome(t)
 	core := operationTestMiniVanillaJar(t, "1.21.4")
-	source := &replaySource{core: catalog.Artifact{
+	coreArtifact := catalog.Artifact{
 		Provider:  catalog.ProviderMojang,
 		ProjectID: "minecraft",
 		Version:   "1.21.4",
 		Filename:  "server.jar",
 		URL:       "https://example.invalid/server.jar",
 		Hashes:    map[string]string{"sha256": operationTestDigest(core)},
-	}}
+	}
+	source := &replaySource{}
+	if !reuseLock {
+		source.core = coreArtifact
+	}
 	tracker := filetrack.NewService(&http.Client{}, nil)
 	registry := operationTestRegistry(t)
 	installer := install.NewService(source, nil, tracker, nil, registry, nil, "")
@@ -194,7 +205,46 @@ func TestInitializeThenLockedInstallReplaysInEmptyWorkspace(t *testing.T) {
 
 	sourceRoot := t.TempDir()
 	operationTestWrite(t, sourceRoot, "server.jar", core, 0o644)
-	if _, err := service.Initialize(t.Context(), sourceRoot, InitOptions{}); err != nil {
+	opts := InitOptions{}
+	if reuseLock {
+		manifest := &document.Manifest{
+			SchemaVersion: document.ManifestSchemaVersion,
+			Server: document.ManifestServer{
+				Minecraft: "1.21.4",
+				Directory: ".",
+				Core: document.ManifestCore{
+					Product:        serverpkg.ProductMinecraft,
+					ProductVersion: "1.21.4",
+				},
+			},
+		}
+		if err := document.ManifestFile(sourceRoot).Write(manifest); err != nil {
+			t.Fatalf("write existing manifest: %v", err)
+		}
+		fingerprint, err := manifest.Fingerprint()
+		if err != nil {
+			t.Fatal(err)
+		}
+		coreArtifact.Hashes = map[string]string{"sha1": fmt.Sprintf("%x", sha1.Sum(core))}
+		lock := &document.Lock{
+			SchemaVersion:       document.LockSchemaVersion,
+			ManifestFingerprint: fingerprint,
+			Server: document.LockedServer{
+				Minecraft:    "1.21.4",
+				Directory:    ".",
+				Product:      serverpkg.ProductMinecraft,
+				CoreVersion:  "1.21.4",
+				Artifact:     coreArtifact,
+				Bootstrapper: serverpkg.BootstrapMethodPlain,
+				Java:         document.LockedJava{Advisory: 21},
+			},
+		}
+		if err := document.LockFile(sourceRoot).Write(lock); err != nil {
+			t.Fatalf("write existing lock: %v", err)
+		}
+		opts.Force = true
+	}
+	if _, err := service.Initialize(t.Context(), sourceRoot, opts); err != nil {
 		t.Fatalf("Initialize() error = %v", err)
 	}
 	manifestBytes := operationTestRead(t, sourceRoot, document.ManifestFilename)
@@ -219,12 +269,14 @@ func TestInitializeThenLockedInstallReplaysInEmptyWorkspace(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read initialized lock: %v", err)
 	}
+	if reuseLock && lock.Server.Hashes["sha1"] != coreArtifact.Hashes["sha1"] {
+		t.Fatalf("initialization changed the original SHA-1 pin: %v", lock.Server.Hashes)
+	}
 
 	destination := t.TempDir()
 	operationTestWrite(t, destination, document.ManifestFilename, manifestBytes, 0o644)
 	operationTestWrite(t, destination, document.LockFilename, lockBytes, 0o644)
-	materialize := operationTestMaterializer(t, map[string][]byte{"server.jar": core})
-	options := install.Options{Locked: true, Offline: true, Materialize: materialize}
+	options := install.Options{Locked: true, Offline: true}
 	result, err := installer.Sync(t.Context(), destination, manifest, lock, options)
 	if err != nil {
 		t.Fatalf("install initialized lock: %v", err)
