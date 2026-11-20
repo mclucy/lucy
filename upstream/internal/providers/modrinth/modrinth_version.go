@@ -108,7 +108,11 @@ func dependencyVersionIds(versions ...*versionResponse) []string {
 
 // pinnedVersionLookup resolves every pinned dependency version across versions
 // in one bounded fan-out. A nil result means no version pins a dependency, so
-// the caller makes no request.
+// the caller makes no request. A failed batch reads that ID from the
+// single-version endpoint when a caller asks for it; the retry is remembered
+// so duplicate dependency edges share one request. A bulk result stays
+// authoritative, an ID the API omitted is not found, and a failed retry keeps
+// both causes.
 func (p *Provider) pinnedVersionLookup(
 	ctx context.Context,
 	versions []*versionResponse,
@@ -117,7 +121,12 @@ func (p *Provider) pinnedVersionLookup(
 	if len(ids) == 0 {
 		return nil
 	}
+	type attempt struct {
+		version *versionResponse
+		err     error
+	}
 	found, errs := p.getVersionsByIds(ctx, ids)
+	attempts := make(map[string]attempt)
 	return func(callCtx context.Context, id string) (*versionResponse, error) {
 		if err := callCtx.Err(); err != nil {
 			return nil, err
@@ -125,10 +134,19 @@ func (p *Provider) pinnedVersionLookup(
 		if v := found[id]; v != nil {
 			return v, nil
 		}
-		if err := errs[id]; err != nil {
-			return nil, err
+		batchErr := errs[id]
+		if batchErr == nil {
+			return nil, fmt.Errorf("%w: %s", ErrNoVersion, id)
 		}
-		return nil, fmt.Errorf("%w: %s", ErrNoVersion, id)
+		if prior, ok := attempts[id]; ok {
+			return prior.version, prior.err
+		}
+		v, err := p.getVersionById(callCtx, id)
+		if err != nil {
+			err = errors.Join(batchErr, err)
+		}
+		attempts[id] = attempt{version: v, err: err}
+		return v, err
 	}
 }
 
