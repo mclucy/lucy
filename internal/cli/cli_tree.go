@@ -54,7 +54,7 @@ func actionTree(
 		ctx,
 		inv.Directory,
 		forceLive,
-		deps.Router.ResolveArtifactByHash,
+		deps.Router.ResolveArtifactsByHash,
 	)
 	reportObservationFindings(loaded.Findings.Observation, output)
 	if err != nil {

@@ -53,24 +53,30 @@ func (s packageMapperTestSource) GetArtifactReleaseMapper(
 	}, true, nil
 }
 
-// ResolveArtifactByHash reports the mappers that fail, so identification sees
+// ResolveArtifactsByHash reports the mappers that fail, so identification sees
 // the incomplete lookups this source configures instead of an empty answer.
-func (s packageMapperTestSource) ResolveArtifactByHash(
-	context.Context,
-	upstream.ArtifactFingerprint,
-) upstream.ArtifactLookup {
-	lookup := upstream.ArtifactLookup{}
-	for _, provider := range packageMapperProviders {
-		mapper, ok := s.mappers[provider]
-		if !ok || mapper.err == nil {
-			continue
+// Every artifact gets the same failure set, matching what each mapper would
+// report for the package files this fixture serves.
+func (s packageMapperTestSource) ResolveArtifactsByHash(
+	_ context.Context,
+	artifacts []upstream.ArtifactFingerprint,
+) []upstream.ArtifactLookup {
+	lookups := make([]upstream.ArtifactLookup, len(artifacts))
+	for i := range lookups {
+		lookup := upstream.ArtifactLookup{}
+		for _, provider := range packageMapperProviders {
+			mapper, ok := s.mappers[provider]
+			if !ok || mapper.err == nil {
+				continue
+			}
+			lookup.Errors = append(lookup.Errors, upstream.ProviderError{
+				Provider: provider,
+				Err:      mapper.err,
+			})
 		}
-		lookup.Errors = append(lookup.Errors, upstream.ProviderError{
-			Provider: provider,
-			Err:      mapper.err,
-		})
+		lookups[i] = lookup
 	}
-	return lookup
+	return lookups
 }
 
 func (s packageMapperTestSource) Candidates(

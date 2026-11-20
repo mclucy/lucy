@@ -102,7 +102,7 @@ func actionStatusLive(
 			root,
 			discovery.Request{Policy: discovery.PolicyPreferModified},
 		),
-		deps.Router.ResolveArtifactByHash,
+		deps.Router.ResolveArtifactsByHash,
 	)
 	if err := ctx.Err(); err != nil {
 		return err
