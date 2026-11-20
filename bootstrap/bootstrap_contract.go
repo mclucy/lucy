@@ -124,6 +124,10 @@ type CheckResult struct {
 	Status  CurrentnessStatus
 	Reason  string
 	Outputs []Output
+	// RequiredOutputsVerified means the check identified and verified all
+	// required outputs. Generated files outside that set can still need a
+	// receipt baseline when Status is inconclusive.
+	RequiredOutputsVerified bool
 }
 
 // validateContract checks the locked server's bootstrap method, locked inputs, and declared outputs.

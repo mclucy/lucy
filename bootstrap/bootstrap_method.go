@@ -50,14 +50,3 @@ func Outputs(locked document.LockedServer) ([]string, error) {
 	slices.Sort(paths)
 	return paths, nil
 }
-
-// RequiredSeedOutputs reports the server-relative seed paths that are strictly
-// required for server launch bootability (e.g. user_jvm_args.txt for Forge).
-func RequiredSeedOutputs(locked document.LockedServer) []string {
-	switch locked.Bootstrapper {
-	case server.BootstrapMethodForgeInstaller:
-		return []string{"user_jvm_args.txt"}
-	default:
-		return nil
-	}
-}

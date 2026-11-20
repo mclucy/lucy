@@ -231,10 +231,12 @@ func (v *treeVerifier) verifyForgeInstaller() CheckResult {
 		return v.mismatch()
 	}
 	if unproven != "" {
-		return v.result(
+		result := v.result(
 			CurrentnessInconclusive,
 			fmt.Sprintf("Forge installer declares no digest for %s", unproven),
 		)
+		result.RequiredOutputsVerified = true
+		return result
 	}
 	return v.result(CurrentnessCurrent, "")
 }
@@ -405,10 +407,11 @@ func (v *treeVerifier) result(status CurrentnessStatus, reason string) CheckResu
 		return strings.Compare(a.Path, b.Path)
 	})
 	return CheckResult{
-		Current: status == CurrentnessCurrent,
-		Status:  status,
-		Reason:  reason,
-		Outputs: v.outputs,
+		Current:                 status == CurrentnessCurrent,
+		Status:                  status,
+		Reason:                  reason,
+		Outputs:                 v.outputs,
+		RequiredOutputsVerified: status == CurrentnessCurrent,
 	}
 }
 

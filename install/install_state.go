@@ -78,19 +78,9 @@ func bootstrapCurrent(root string, l *document.Lock, current *receipt.Receipt, l
 	if err != nil {
 		return false, err
 	}
-	switch checkResult.Status {
-	case bootstrap.CurrentnessCurrent:
-	case bootstrap.CurrentnessMismatch:
+	if !checkResult.RequiredOutputsVerified {
 		logger.Debug("bootstrap not current", "reason", checkResult.Reason)
 		return false, nil
-	case bootstrap.CurrentnessInconclusive:
-		for _, seedPath := range bootstrap.RequiredSeedOutputs(l.Server) {
-			p := filepath.Join(serverDir, filepath.FromSlash(seedPath))
-			if _, err := os.Stat(p); err != nil {
-				logger.Debug("bootstrap not current", "reason", "required launch seed missing", "path", seedPath)
-				return false, nil
-			}
-		}
 	}
 
 	tracked := trackedPaths(l)
@@ -114,7 +104,11 @@ func bootstrapCurrent(root string, l *document.Lock, current *receipt.Receipt, l
 		logger.Debug("bootstrap not current", "reason", "no bootstrap entries recorded in receipt")
 		return false, nil
 	}
-	for _, required := range requiredBootstrapOutputs(checkResult.Outputs) {
+	for _, output := range checkResult.Outputs {
+		if !isManagedRuntimeOutput(output) {
+			continue
+		}
+		required := output.Path
 		if tracked[strings.ToLower(required)] {
 			continue
 		}
@@ -124,20 +118,6 @@ func bootstrapCurrent(root string, l *document.Lock, current *receipt.Receipt, l
 		}
 	}
 	return true, nil
-}
-
-// requiredBootstrapOutputs lists the workspace paths the receipt must own with
-// bootstrap origin: every managed runtime output the check proved, including
-// dynamically attributed and imported-layout ones. Seed, discard, and
-// bootstrap-only material carries no such requirement.
-func requiredBootstrapOutputs(outputs []bootstrap.Output) []string {
-	required := make([]string, 0, len(outputs))
-	for _, out := range outputs {
-		if out.Policy == bootstrap.PolicyManaged && out.Role != bootstrap.RoleBootstrapOnly {
-			required = append(required, out.Path)
-		}
-	}
-	return required
 }
 
 // packagesCurrent reports whether recorded package entries match the lock's
