@@ -16,6 +16,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync"
 
 	"github.com/mclucy/lucy/cache"
 	"github.com/mclucy/lucy/internal/fsutil"
@@ -147,7 +148,7 @@ func materialize(
 		return nil, err
 	}
 	plan := lay.plan
-	plan.Bytes = m.budget.used
+	plan.Bytes = m.budget.total()
 	return &Result{Plan: plan, Skipped: lay.skipped}, nil
 }
 
@@ -595,24 +596,51 @@ func (a *archive) readEntry(e entry, limit int64) ([]byte, error) {
 	return data, errors.Join(readErr, r.Close())
 }
 
-// extract streams the bodies of the wanted entries to write, in container order.
-func (a *archive) extract(ctx context.Context, wanted map[int]*item, write func(*item, io.Reader) error) error {
-	found := 0
-	err := a.visit(ctx, true, func(ordinal int, _ visited, body io.Reader) error {
-		it, ok := wanted[ordinal]
-		if !ok {
-			return nil
+// extract streams the bodies of the wanted entries to write. Zip entries are
+// independent and run through the bounded file workers in container order; a
+// tar body is one stream and stays serial.
+func (a *archive) extract(
+	ctx context.Context,
+	wanted map[int]*item,
+	write func(context.Context, *item, io.Reader) error,
+) error {
+	if a.zip == nil {
+		found := 0
+		err := a.visit(ctx, true, func(ordinal int, _ visited, body io.Reader) error {
+			it, ok := wanted[ordinal]
+			if !ok {
+				return nil
+			}
+			found++
+			return write(ctx, it, body)
+		})
+		if err != nil {
+			return err
 		}
-		found++
-		return write(it, body)
+		if found != len(wanted) {
+			return fmt.Errorf("%s changed between scans: found %d of %d files", a.path, found, len(wanted))
+		}
+		return nil
+	}
+	ordered := make([]*item, 0, len(wanted))
+	for _, e := range a.entries {
+		if it, ok := wanted[e.ordinal]; ok {
+			ordered = append(ordered, it)
+		}
+	}
+	if len(ordered) != len(wanted) {
+		return fmt.Errorf("%s changed between scans: found %d of %d files", a.path, len(ordered), len(wanted))
+	}
+	return runFileJobs(ctx, len(ordered), func(ctx context.Context, index int) error {
+		it := ordered[index]
+		f := a.zip.File[it.ordinal]
+		r, err := f.Open()
+		if err != nil {
+			return fmt.Errorf("open %q: %w", f.Name, err)
+		}
+		writeErr := write(ctx, it, r)
+		return errors.Join(writeErr, r.Close())
 	})
-	if err != nil {
-		return err
-	}
-	if found != len(wanted) {
-		return fmt.Errorf("%s changed between scans: found %d of %d files", a.path, found, len(wanted))
-	}
-	return nil
 }
 
 func (a *archive) rootFile(name string) (entry, bool) {
@@ -824,13 +852,14 @@ func fileMode(exec bool) fs.FileMode {
 // materializer writes a layout beneath dest through an os.Root, so no write can
 // follow a link out of the destination.
 type materializer struct {
-	ctx      context.Context
-	dest     string
-	root     *os.Root
-	stage    string
-	network  *cache.Client
-	progress Progress
-	budget   *byteBudget
+	ctx        context.Context
+	dest       string
+	root       *os.Root
+	stage      string
+	network    *cache.Client
+	progress   Progress
+	progressMu sync.Mutex
+	budget     *byteBudget
 }
 
 func newMaterializer(
@@ -892,6 +921,7 @@ func (m *materializer) cleanup() {
 
 func (m *materializer) run(a *archive, lay *layout) error {
 	wanted := make(map[int]*item)
+	var downloads []*item
 	for _, it := range lay.items {
 		if err := m.ctx.Err(); err != nil {
 			return err
@@ -902,17 +932,26 @@ func (m *materializer) run(a *archive, lay *layout) error {
 			}
 			continue
 		}
-		if it.download == nil {
-			wanted[it.ordinal] = it
-		}
-	}
-	for _, it := range lay.items {
-		if it.dir || it.download == nil {
-			continue
-		}
-		if err := m.fetch(it); err != nil {
+		// Every parent directory exists before a worker starts, so concurrent
+		// writers never race on Mkdir and each owns one destination path.
+		if err := m.ensureDir(parentRel(it.rel)); err != nil {
 			return err
 		}
+		if it.download == nil {
+			wanted[it.ordinal] = it
+		} else {
+			downloads = append(downloads, it)
+		}
+	}
+	if len(downloads) > 0 {
+		if err := m.ensureStage(); err != nil {
+			return err
+		}
+	}
+	if err := runFileJobs(m.ctx, len(downloads), func(ctx context.Context, index int) error {
+		return m.fetch(ctx, downloads[index], index)
+	}); err != nil {
+		return err
 	}
 	return a.extract(m.ctx, wanted, m.writeFile)
 }
@@ -949,8 +988,8 @@ func (m *materializer) ensureDir(rel string) error {
 	return nil
 }
 
-func (m *materializer) writeFile(it *item, body io.Reader) error {
-	if err := m.ensureDir(parentRel(it.rel)); err != nil {
+func (m *materializer) writeFile(ctx context.Context, it *item, body io.Reader) error {
+	if err := ctx.Err(); err != nil {
 		return err
 	}
 	file, err := m.root.OpenFile(
@@ -961,12 +1000,30 @@ func (m *materializer) writeFile(it *item, body io.Reader) error {
 	if err != nil {
 		return fmt.Errorf("create %s: %w", it.rel, err)
 	}
-	_, copyErr := io.Copy(file, newChargedReader(m.ctx, body, m.budget))
+	_, copyErr := io.Copy(file, newChargedReader(ctx, body, m.budget))
 	chmodErr := file.Chmod(it.mode)
 	if err := errors.Join(copyErr, chmodErr, file.Close()); err != nil {
 		return fmt.Errorf("write %s: %w", it.rel, err)
 	}
 	return nil
+}
+
+func (m *materializer) reportStarted(name string, size int64) {
+	m.progressMu.Lock()
+	defer m.progressMu.Unlock()
+	m.progress.ReportStarted(name, size)
+}
+
+func (m *materializer) reportProgress(name string, read, total int64) {
+	m.progressMu.Lock()
+	defer m.progressMu.Unlock()
+	m.progress.ReportProgress(name, read, total)
+}
+
+func (m *materializer) reportDone(name string, fromCache bool) {
+	m.progressMu.Lock()
+	defer m.progressMu.Unlock()
+	m.progress.ReportDone(name, fromCache)
 }
 
 // ensureStage creates the private staging directory that holds downloads
@@ -985,12 +1042,16 @@ func (m *materializer) ensureStage() error {
 }
 
 // byteBudget bounds the bytes written to the destination across all sources.
+// Workers debit and refund it concurrently, so each operation takes the lock.
 type byteBudget struct {
+	mu   sync.Mutex
 	left int64
 	used int64
 }
 
 func (b *byteBudget) spend(n int64) error {
+	b.mu.Lock()
+	defer b.mu.Unlock()
 	if n > b.left {
 		return limitError("extraction exceeds the %d byte limit", maxExtractedBytes)
 	}
@@ -1000,8 +1061,24 @@ func (b *byteBudget) spend(n int64) error {
 }
 
 func (b *byteBudget) refund(n int64) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
 	b.left += n
 	b.used -= n
+}
+
+// remaining reports the bytes still available to one transfer. A caller uses it
+// only as an early bound; spend enforces the shared limit while the bytes move.
+func (b *byteBudget) remaining() int64 {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.left
+}
+
+func (b *byteBudget) total() int64 {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.used
 }
 
 // chargedReader debits every byte it returns from the budget before the

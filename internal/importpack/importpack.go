@@ -53,6 +53,9 @@ type Result struct {
 // Progress receives facts about the downloads Materialize performs. Every hook
 // is optional: a nil hook reports nothing. ReportDone runs after the file is
 // verified and written, fromCache when no bytes crossed the network.
+// Materialize may transfer independent files at once. It calls the hooks one at
+// a time, and the events of one file keep their order, but events of different
+// files interleave.
 type Progress struct {
 	FileStarted  func(name string, size int64)
 	FileProgress func(name string, read, total int64)

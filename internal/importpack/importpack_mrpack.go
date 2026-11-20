@@ -1,6 +1,7 @@
 package importpack
 
 import (
+	"context"
 	"crypto/sha1"
 	"crypto/sha512"
 	"encoding/hex"
@@ -13,6 +14,7 @@ import (
 	"path"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/mclucy/lucy/cache"
@@ -318,48 +320,59 @@ func buildMrpackLayout(a *archive) (*layout, error) {
 	return lay, nil
 }
 
-// fetch downloads one index file into a staging directory, verifies it, and
-// renames it to its destination. Each URL is tried in order until one yields
-// a verified file.
-func (m *materializer) fetch(it *item) error {
-	if err := m.ensureDir(parentRel(it.rel)); err != nil {
+// fetch downloads one index file into a private staging directory, verifies
+// it, and renames it to its destination. Each URL is tried in order until one
+// yields a verified file. The per-file stage directory keeps files that share
+// a base name from writing the same staging path.
+func (m *materializer) fetch(ctx context.Context, it *item, index int) error {
+	if err := ctx.Err(); err != nil {
 		return err
 	}
-	if err := m.ensureStage(); err != nil {
-		return err
+	dir := filepath.Join(m.stage, strconv.Itoa(index))
+	if err := os.Mkdir(dir, dirMode); err != nil {
+		return fmt.Errorf("prepare stage for %s: %w", it.rel, err)
 	}
 	var failures []error
 	for _, url := range it.download.urls {
-		if err := m.ctx.Err(); err != nil {
+		if err := ctx.Err(); err != nil {
 			return err
 		}
-		name, err := m.downloadFrom(url, it)
-		if err == nil {
-			staged := filepath.Join(filepath.Base(m.stage), name)
-			if err := m.root.Rename(staged, filepath.FromSlash(it.rel)); err != nil {
-				return fmt.Errorf("place %s: %w", it.rel, err)
-			}
-			return nil
+		staged, err := m.downloadFrom(ctx, url, it, dir)
+		if err != nil {
+			failures = append(failures, fmt.Errorf("%s: %w", url, err))
+			continue
 		}
-		failures = append(failures, fmt.Errorf("%s: %w", url, err))
+		rel, err := filepath.Rel(m.dest, staged)
+		if err != nil || !filepath.IsLocal(rel) {
+			return fmt.Errorf("place %s: %w", it.rel, ErrUnsafeEntry)
+		}
+		if err := m.root.Rename(rel, filepath.FromSlash(it.rel)); err != nil {
+			return fmt.Errorf("place %s: %w", it.rel, err)
+		}
+		return nil
 	}
 	return fmt.Errorf("download %s: no source produced a verified file: %w", it.rel, errors.Join(failures...))
 }
 
-// downloadFrom fetches url into the staging directory and returns the staged
-// file's name. Cache hits are verified here, because the cache checks digests
-// only when it stores an entry.
-func (m *materializer) downloadFrom(url string, it *item) (string, error) {
+// downloadFrom fetches url into dir and returns the staged file's path. Cache
+// hits are verified here, because the cache checks digests only when it stores
+// an entry.
+func (m *materializer) downloadFrom(
+	ctx context.Context,
+	url string,
+	it *item,
+	dir string,
+) (string, error) {
 	digest := it.download
 	name := path.Base(it.rel)
 	// A cache hit bypasses WrapReader, so the transfer limit must also bound
 	// the cache copy: the per-file limit and the remaining extraction budget.
-	limit := min(maxFileBytes, m.budget.left)
+	limit := min(maxFileBytes, m.budget.remaining())
 	if limit <= 0 {
 		return "", limitError("extraction exceeds the %d byte limit", maxExtractedBytes)
 	}
 	var attempt *chargedReader
-	res, err := m.network.CachedDownload(m.ctx, url, m.stage, cache.DownloadOptions{
+	res, err := m.network.CachedDownload(ctx, url, dir, cache.DownloadOptions{
 		Kind:          cache.KindArtifact,
 		ExpectedHash:  digest.digest,
 		HashAlgorithm: digest.algorithm,
@@ -367,10 +380,10 @@ func (m *materializer) downloadFrom(url string, it *item) (string, error) {
 		FileMode:      0o644,
 		MaxBytes:      limit,
 		WrapReader: func(r io.Reader, size int64) io.Reader {
-			attempt = newChargedReader(m.ctx, r, m.budget)
-			m.progress.ReportStarted(it.rel, size)
+			attempt = newChargedReader(ctx, r, m.budget)
+			m.reportStarted(it.rel, size)
 			return cache.ProgressReader(attempt, size, func(read, total int64) {
-				m.progress.ReportProgress(it.rel, read, total)
+				m.reportProgress(it.rel, read, total)
 			})
 		},
 	})
@@ -389,8 +402,8 @@ func (m *materializer) downloadFrom(url string, it *item) (string, error) {
 		_ = os.Remove(staged)
 		return "", closeErr
 	}
-	m.progress.ReportDone(it.rel, res.CacheHit)
-	return filepath.Base(staged), nil
+	m.reportDone(it.rel, res.CacheHit)
+	return staged, nil
 }
 
 func checkCachedStage(staged string, digest *mrpackFile, budget *byteBudget) error {
