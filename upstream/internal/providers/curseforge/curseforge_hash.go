@@ -2,6 +2,7 @@ package curseforge
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math"
 	"slices"
@@ -236,7 +237,8 @@ func (p *Provider) resolveFingerprintBatch(
 	files map[uint32]fileResponse,
 ) error {
 	matches, err := p.fingerprintMatches(ctx, batch)
-	if err != nil {
+	partial := errors.Is(err, errPartialLookupResponse)
+	if err != nil && !partial {
 		if len(batch) > 1 &&
 			depth < retry.MaxSplitDepth &&
 			ctx.Err() == nil &&
@@ -274,10 +276,6 @@ func (p *Provider) resolveFingerprintBatch(
 		}
 		return nil
 	}
-	wanted := make(map[uint32]struct{}, len(batch))
-	for _, fingerprint := range batch {
-		wanted[fingerprint] = struct{}{}
-	}
 	uncorrelated := 0
 	for _, match := range matches {
 		if match.File.FileFingerprint == nil {
@@ -296,14 +294,8 @@ func (p *Provider) resolveFingerprintBatch(
 			uncorrelated++
 			continue
 		}
-		wireFingerprint := *match.File.FileFingerprint
-		if wireFingerprint < 0 || wireFingerprint > math.MaxUint32 {
-			// Narrowing an invalid wire value could alias a requested fingerprint.
-			uncorrelated++
-			continue
-		}
-		fingerprint := uint32(wireFingerprint)
-		if _, ok := wanted[fingerprint]; !ok {
+		fingerprint, requested := match.requestedFingerprint(batch)
+		if !requested {
 			uncorrelated++
 			continue
 		}
@@ -343,7 +335,7 @@ func (p *Provider) resolveFingerprintBatch(
 			indexByFingerprint,
 			fingerprint,
 			fmt.Errorf(
-				"curseforge: %d exact matches in a batch of %d fingerprints carry no file fingerprint, so fingerprint %d cannot be correlated",
+				"curseforge: %d exact matches in a batch of %d fingerprints cannot be correlated, so fingerprint %d is undetermined",
 				uncorrelated,
 				len(batch),
 				fingerprint,
@@ -423,7 +415,7 @@ func (p *Provider) refetchFileBatch(
 	indexByFingerprint map[uint32][]int,
 	results []upstream.ArtifactReleaseLookup,
 ) error {
-	authoritativeFiles, err := p.getModFilesByIds(ctx, batch)
+	authoritative, err := p.getModFilesByIds(ctx, batch)
 	if err != nil {
 		if len(batch) > 1 &&
 			depth < retry.MaxSplitDepth &&
@@ -476,10 +468,6 @@ func (p *Provider) refetchFileBatch(
 		return nil
 	}
 
-	authoritative := make(map[int32]fileResponse, len(authoritativeFiles))
-	for _, file := range authoritativeFiles {
-		authoritative[file.ID] = file
-	}
 	for _, fileID := range batch {
 		fingerprints := fingerprintsByFileID[fileID]
 		file, ok := authoritative[fileID]
@@ -724,8 +712,8 @@ func (p *Provider) resolveModsBatch(
 	return nil
 }
 
-// fingerprintMatches returns CurseForge's exact fingerprint matches for one
-// batch. Partial matches are discarded; a 404 response means no matches.
+// fingerprintMatches returns CurseForge's exact matches for a sorted batch.
+// A 404 means no matches. A partial result must be correlated per input.
 // Docs: https://docs.curseforge.com/rest-api/#get-fingerprints-matches
 func (p *Provider) fingerprintMatches(
 	ctx context.Context,
@@ -736,25 +724,44 @@ func (p *Provider) fingerprintMatches(
 	}
 	u := fmt.Sprintf("%s/v1/fingerprints/%d", baseUrl, minecraftGameId)
 	var resp fingerprintResponse
-	err := p.readPostValidated(
+	err := p.readPost(
 		ctx,
 		u,
 		fingerprintRequest{Fingerprints: fingerprints},
 		&resp,
-		func() error {
+		func(resp *fingerprintResponse) error {
 			if resp.Data.ExactMatches == nil {
 				return fmt.Errorf("curseforge: fingerprint response has no exactMatches array")
+			}
+			for _, match := range resp.Data.ExactMatches {
+				if _, requested := match.requestedFingerprint(fingerprints); !requested ||
+					match.File.ID == 0 || match.File.ModId == 0 {
+					return errPartialLookupResponse
+				}
 			}
 			return nil
 		},
 	)
 	if err != nil {
+		if errors.Is(err, errPartialLookupResponse) {
+			return resp.Data.ExactMatches, err
+		}
 		if isNotFound(err) {
 			return nil, nil
 		}
 		return nil, err
 	}
 	return resp.Data.ExactMatches, nil
+}
+
+func (m *fingerprintMatch) requestedFingerprint(sorted []uint32) (uint32, bool) {
+	wire := m.File.FileFingerprint
+	if wire == nil || *wire < 0 || *wire > math.MaxUint32 {
+		return 0, false
+	}
+	fingerprint := uint32(*wire)
+	_, requested := slices.BinarySearch(sorted, fingerprint)
+	return fingerprint, requested
 }
 
 // releaseFromCurseForgeFile converts a project and one of its exact files into

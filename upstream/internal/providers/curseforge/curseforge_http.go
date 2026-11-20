@@ -61,22 +61,15 @@ func (p *Provider) get(ctx context.Context, url string, dest any) error {
 //
 // Only lookups may use it. A request that mutates remote state must go through
 // the transport directly so a repeated attempt cannot repeat the mutation.
-func (p *Provider) readPost(
+//
+// validate may reject decoded data before cache publication. A rejected
+// response still reaches dest so callers can handle a partial lookup.
+func (p *Provider) readPost[T any](
 	ctx context.Context,
 	url string,
-	payload, dest any,
-) error {
-	return p.readPostValidated(ctx, url, payload, dest, nil)
-}
-
-// readPostValidated is readPost with an envelope check that runs before a 200
-// response is cached. validate may reject a body whose envelope cannot be
-// trusted. Incomplete lookup responses are not cached.
-func (p *Provider) readPostValidated(
-	ctx context.Context,
-	url string,
-	payload, dest any,
-	validate func() error,
+	payload any,
+	dest *T,
+	validate func(*T) error,
 ) error {
 	if p.apiKey == "" {
 		return retry.Permanent(ErrNoApiKey)
@@ -107,11 +100,13 @@ func (p *Provider) readPostValidated(
 				MaxBytes: maxLookupResponseBytes,
 			},
 			func(raw []byte) error {
-				if err := json.Unmarshal(raw, dest); err != nil {
+				var decoded T
+				if err := json.Unmarshal(raw, &decoded); err != nil {
 					return retry.Permanent(fmt.Errorf("curseforge: failed to parse response: %w", err))
 				}
+				*dest = decoded
 				if validate != nil {
-					if err := validate(); err != nil {
+					if err := validate(dest); err != nil {
 						return retry.Permanent(err)
 					}
 				}
@@ -131,6 +126,10 @@ func (p *Provider) readPostValidated(
 	})
 	return lookupOutcome(outcome)
 }
+
+// errPartialLookupResponse prevents caching a decoded response while letting
+// its caller report outcomes for each input, including any usable matches.
+var errPartialLookupResponse = errors.New("curseforge: partial lookup response")
 
 // lookupAttempt retains the response status and retry headers even when
 // reading a non-2xx body failed, so the status still classifies the failure.
