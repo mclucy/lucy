@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync/atomic"
 	"testing"
 
 	"github.com/mclucy/lucy/cache"
@@ -215,7 +216,9 @@ func initializePackageMapperResult(
 		)
 	}
 	jar := readFileBytes(t, modPath)
+	var artifactDownloads atomic.Int32
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		artifactDownloads.Add(1)
 		_, _ = w.Write(jar)
 	}))
 	t.Cleanup(server.Close)
@@ -240,6 +243,9 @@ func initializePackageMapperResult(
 	)
 	if err != nil {
 		t.Fatalf("Initialize: %v", err)
+	}
+	if got := artifactDownloads.Load(); got != 0 {
+		t.Fatalf("initialization downloaded %d artifacts that were already installed", got)
 	}
 	return root, result
 }

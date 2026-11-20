@@ -26,7 +26,11 @@ func (r *neoforgeReader) Read(
 	zipRdr *zip.Reader,
 	filePath string,
 ) ([]PackageInfo, error) {
-	decoded, err := decodeNeoForgeDescriptor(zipRdr, "", true, "")
+	return r.readWithInputs(zipRdr, filePath, nil)
+}
+
+func (r *neoforgeReader) readWithInputs(zipRdr *zip.Reader, filePath string, inputs *descriptorInputs) ([]PackageInfo, error) {
+	decoded, err := decodeNeoForgeDescriptor(zipRdr, "", true, "", inputs)
 	if err != nil {
 		return nil, err
 	}
@@ -41,8 +45,9 @@ func decodeNeoForgeDescriptor(
 	member string,
 	packageView bool,
 	minecraft string,
+	inputs *descriptorInputs,
 ) (*decodedDescriptor, error) {
-	descriptor, err := readNeoforgeDescriptor(zipRdr, minecraft)
+	descriptor, err := readNeoforgeDescriptor(zipRdr, minecraft, inputs)
 	if err != nil {
 		return nil, err
 	}
@@ -81,7 +86,7 @@ func decodeNeoForgeDescriptor(
 			zipRdr,
 			jarjarMeta,
 			func(nested *zip.Reader) (*decodedModsToml, error) {
-				return readNeoforgeDescriptor(nested, minecraft)
+				return readNeoforgeDescriptor(nested, minecraft, nil)
 			},
 		)
 		origins = make(map[string]catalog.DependencyOrigin, len(embeddedModIDs))
@@ -134,18 +139,19 @@ func neoforgeServiceProvider(zipRdr *zip.Reader) bool {
 func readNeoforgeDescriptor(
 	zipRdr *zip.Reader,
 	minecraft string,
+	inputs *descriptorInputs,
 ) (*decodedModsToml, error) {
 	if minecraft == "" {
-		descriptor, err := readModsToml(zipRdr, neoforgeModsTomlPath)
+		descriptor, err := readModsToml(zipRdr, neoforgeModsTomlPath, inputs)
 		if err != nil || descriptor != nil {
 			return descriptor, err
 		}
-		return readModsToml(zipRdr, legacyNeoforgeModsTomlPath)
+		return readModsToml(zipRdr, legacyNeoforgeModsTomlPath, inputs)
 	}
 	if neoforgeReadsNeoDescriptor(minecraft) {
-		return readModsToml(zipRdr, neoforgeModsTomlPath)
+		return readModsToml(zipRdr, neoforgeModsTomlPath, inputs)
 	}
-	return readModsToml(zipRdr, legacyNeoforgeModsTomlPath)
+	return readModsToml(zipRdr, legacyNeoforgeModsTomlPath, inputs)
 }
 
 // neoforgeReadsNeoDescriptor reports whether the FML line for minecraft

@@ -9,7 +9,13 @@ import (
 	"github.com/mclucy/lucy/terminal/style"
 )
 
-const plainHeartbeat = 10 * time.Second
+const (
+	plainHeartbeat = 10 * time.Second
+	// plainStatusRepeat bounds how often an unchanged status line repeats.
+	// A long phase without counter updates still shows elapsed progress, but a
+	// silent minute does not flood an append-only log.
+	plainStatusRepeat = 30 * time.Second
+)
 
 // plain writes append-only lines. It suits pipes, logs, and CI, where a
 // redrawn area would only add noise.
@@ -44,52 +50,79 @@ func (p *plain) heartbeat() {
 			return
 		case <-ticker.C:
 			p.mu.Lock()
-			if !p.closed && p.status != "" && p.status != p.lastStatus {
-				p.lastStatus = p.status
-				p.lastPrint = time.Now()
-				line := "  " + p.status + p.elapsedSuffix()
-				if p.phase != "" {
-					line = "  " + p.phase + ": " + p.status + p.elapsedSuffix()
-				}
+			if p.closed || p.phase == "" {
 				p.mu.Unlock()
-				p.println(line)
 				continue
 			}
+			now := time.Now()
+			// A status that changed prints at the next heartbeat. An
+			// unchanged one repeats only after plainStatusRepeat, which
+			// still advances elapsed time for a silent phase.
+			if p.status == p.lastStatus && now.Sub(p.lastPrint) < plainStatusRepeat {
+				p.mu.Unlock()
+				continue
+			}
+			p.lastStatus = p.status
+			p.lastPrint = now
+			// The line is written while the state lock is held: PhaseDone
+			// clears the phase under the same lock and prints the completion
+			// under it, so a heartbeat can never land after its phase ended.
+			line := "  " + p.phase + p.elapsedSuffix(now)
+			if p.status != "" {
+				line = "  " + p.phase + ": " + p.status + p.elapsedSuffix(now)
+			}
+			p.writeLineLocked(line)
 			p.mu.Unlock()
 		}
 	}
 }
 
-func (p *plain) elapsedSuffix() string {
+func (p *plain) elapsedSuffix(now time.Time) string {
 	if p.phaseStart.IsZero() {
 		return ""
 	}
-	return p.theme.Muted(" (" + FormatElapsed(time.Since(p.phaseStart)) + ")")
+	return p.theme.Muted(" (" + FormatElapsed(now.Sub(p.phaseStart)) + ")")
 }
 
 func (p *plain) PhaseStarted(text string) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
+	if p.closed {
+		return
+	}
 	p.phase = text
 	p.phaseStart = time.Now()
 	p.status = ""
 	p.lastStatus = ""
+	p.lastPrint = p.phaseStart
+	if text != "" {
+		p.writeLineLocked(phaseStartLine(text, p.theme))
+	}
 }
 
 func (p *plain) PhaseDone(text string, elapsed time.Duration) {
 	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.closed {
+		return
+	}
 	p.phase = ""
 	p.phaseStart = time.Time{}
 	p.status = ""
 	p.lastStatus = ""
-	p.mu.Unlock()
-	p.println(phaseLine(text, elapsed, p.theme))
+	// An empty text ends the phase without a completion line.
+	if text != "" {
+		p.writeLineLocked(phaseLine(text, elapsed, p.theme))
+	}
 }
 
 func (p *plain) Status(text string) {
 	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.closed {
+		return
+	}
 	p.status = text
-	p.mu.Unlock()
 }
 
 func (p *plain) Download(string, int64, int64) {}
@@ -97,8 +130,13 @@ func (p *plain) Download(string, int64, int64) {}
 func (p *plain) DownloadDone() {}
 
 func (p *plain) Println(lines ...string) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.closed {
+		return
+	}
 	for _, line := range lines {
-		p.println(line)
+		p.writeLineLocked(line)
 	}
 }
 
@@ -116,9 +154,7 @@ func (p *plain) Close() {
 	<-p.done
 }
 
-func (p *plain) println(line string) {
-	p.mu.Lock()
-	defer p.mu.Unlock()
+func (p *plain) writeLineLocked(line string) {
 	if line == "" {
 		_, _ = io.WriteString(p.out, "\n")
 		return

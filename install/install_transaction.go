@@ -295,13 +295,21 @@ func applyCommitFiles(root, stage string, d *document.Manifest, l *document.Lock
 					return nil
 				}
 			}
-			hashes, err := DigestFile(p, nil)
-			if err != nil {
-				return err
+			sha256 := out.SHA256
+			if sha256 == "" {
+				hashes, err := DigestFile(p, nil)
+				if err != nil {
+					return err
+				}
+				sha256 = hashes["sha256"]
 			}
 			info, err := e.Info()
 			if err != nil {
 				return err
+			}
+			fileMode := os.FileMode(0o644)
+			if !isSeed {
+				fileMode = info.Mode().Perm()
 			}
 			targetInfo, err := os.Lstat(target)
 			switch {
@@ -322,14 +330,29 @@ func applyCommitFiles(root, stage string, d *document.Manifest, l *document.Lock
 				}
 				prior, isOwned := owned[relative]
 				if !isOwned {
-					if overwritePaths[relative] {
+					switch {
+					case overwritePaths[relative]:
 						logger.Debug(
 							"overwriting unowned output",
 							"path", relative,
 							"reason", "overwrite requested",
 						)
-					} else {
-						return fmt.Errorf("unowned output conflict: %s", relative)
+					case classified && !isPackage && strings.EqualFold(actual["sha256"], sha256):
+						// Retain the existing mode; adoption is not a replacement.
+						fileMode = targetInfo.Mode().Perm()
+						logger.Debug(
+							"adopting byte-identical unowned output",
+							"path", relative,
+							"sha256", actual["sha256"],
+						)
+					default:
+						if isPackage {
+							return fmt.Errorf("unowned output conflict: %s (rerun with --overwrite to replace it)", relative)
+						}
+						return fmt.Errorf(
+							"unowned output conflict: %s (move the conflicting file before retrying bootstrap)",
+							relative,
+						)
 					}
 				} else {
 					observed := workspacewrite.InstallImage{
@@ -358,9 +381,7 @@ func applyCommitFiles(root, stage string, d *document.Manifest, l *document.Lock
 			default:
 				return err
 			}
-			fileMode := os.FileMode(0o644)
 			if !isSeed {
-				fileMode = info.Mode().Perm()
 				origin := receipt.OriginBootstrap
 				if _, isMCDR := mcdrOutputs[relative]; isMCDR {
 					origin = receipt.OriginMCDR
@@ -376,7 +397,7 @@ func applyCommitFiles(root, stage string, d *document.Manifest, l *document.Lock
 				}
 				entry := receipt.Entry{
 					Path:    relative,
-					SHA256:  hashes["sha256"],
+					SHA256:  sha256,
 					Mode:    uint32(fileMode),
 					Origin:  origin,
 					Package: packageID,
@@ -402,7 +423,7 @@ func applyCommitFiles(root, stage string, d *document.Manifest, l *document.Lock
 				}
 			}
 			sourceImages[relative] = workspacewrite.InstallImage{
-				SHA256: hashes["sha256"],
+				SHA256: sha256,
 				Mode:   workspacewrite.EffectiveInstallMode(fileMode),
 			}
 			sources[relative] = p

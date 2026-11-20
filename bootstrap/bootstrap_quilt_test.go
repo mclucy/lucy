@@ -352,6 +352,7 @@ func newQuiltTestTree(t *testing.T) quiltTestTree {
 
 	if err := bootstrap.PrepareLocked(
 		t.Context(), stage, locked, corePath, sources, "", io.Discard,
+		bootstrap.Progress{},
 	); err != nil {
 		t.Fatalf("prepare Quilt tree: %v", err)
 	}

@@ -3,10 +3,13 @@ package bootstrap_test
 import (
 	"archive/zip"
 	"bytes"
+	"crypto/sha1"
+	"fmt"
 	"maps"
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/mclucy/lucy/bootstrap"
@@ -198,6 +201,40 @@ java @user_jvm_args.txt @libraries/net/minecraftforge/forge/1.21.11-61.2.0/unix_
 			}
 		})
 	}
+}
+
+func TestForgeInstallerEvidenceDoesNotPinSeedContents(t *testing.T) {
+	t.Parallel()
+	const args = "-Djava.net.preferIPv6Addresses=system\n"
+	root := writeForgeShimTree(t, "#!/usr/bin/env sh\n"+forgeShimTestLaunch, nil)
+	installer := filepath.Join(t.TempDir(), "installer.jar")
+	profile := fmt.Sprintf(`{"processors":[{"outputs":{
+		"{ROOT}/user_jvm_args.txt": "%x",
+		"{ROOT}/%s": "%x"
+	}}]}`, sha1.Sum([]byte("# installer default\n")), forgeShimTestArgs, sha1.Sum([]byte(args)))
+	jar := zipBytes(t, map[string][]byte{"install_profile.json": []byte(profile)})
+	if err := os.WriteFile(installer, jar, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	check := func(want bootstrap.CurrentnessStatus, reason string) {
+		t.Helper()
+		result, err := bootstrap.Check(root, forgeShimTestLock(), installer)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if result.Status != want || !strings.Contains(result.Reason, reason) {
+			t.Fatalf("currentness = %s (%s), want %s (%s)", result.Status, result.Reason, want, reason)
+		}
+	}
+	check(bootstrap.CurrentnessCurrent, "")
+	if err := os.WriteFile(filepath.Join(root, forgeShimTestArgs), []byte(args+"-Dother=true\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	check(bootstrap.CurrentnessMismatch, "sha1 mismatch")
+	if err := os.Remove(filepath.Join(root, "user_jvm_args.txt")); err != nil {
+		t.Fatal(err)
+	}
+	check(bootstrap.CurrentnessMismatch, "user_jvm_args.txt")
 }
 
 // forgeShimTestLock returns a Forge lock with no declared inputs.

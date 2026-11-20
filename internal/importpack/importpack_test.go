@@ -3,15 +3,25 @@ package importpack
 import (
 	"archive/tar"
 	"archive/zip"
+	"bytes"
 	"compress/gzip"
 	"context"
+	"crypto/sha512"
+	"encoding/hex"
 	"errors"
 	"io"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
+	"time"
 
+	"github.com/mclucy/lucy/cache"
 	"github.com/mclucy/lucy/server"
 )
 
@@ -440,5 +450,194 @@ func TestTarScanHonorsContextCancellation(t *testing.T) {
 	}
 	if calls != 1 {
 		t.Fatalf("visit callbacks = %d, want 1 after cancellation", calls)
+	}
+}
+
+func newImportCache(t *testing.T) *cache.Client {
+	t.Helper()
+	client := cache.New(
+		filepath.Join(t.TempDir(), "cache"),
+		cache.DefaultCacheConfig(),
+		http.DefaultClient,
+		nil,
+	)
+	t.Cleanup(func() { _ = client.Close() })
+	return client
+}
+
+// mrpackDownload returns an index download that expects payload's SHA-512.
+func mrpackDownload(rel string, payload []byte, urls ...string) *item {
+	sum := sha512.Sum512(payload)
+	return &item{
+		rel:  rel,
+		mode: 0o644,
+		download: &mrpackFile{
+			urls:      urls,
+			algorithm: cache.HashSHA512,
+			digest:    hex.EncodeToString(sum[:]),
+		},
+	}
+}
+
+func TestMrpackFailingDownloadDoesNotStarveAnother(t *testing.T) {
+	for _, mode := range []string{"content length", "streaming", "cache hit"} {
+		t.Run(mode, func(t *testing.T) {
+			const budget = 1000
+			payload := []byte(strings.Repeat("g", 600))
+			started := make(chan struct{})
+			finish := make(chan struct{})
+			release := sync.OnceFunc(func() { close(finish) })
+			defer release()
+			var requests atomic.Int64
+			mux := http.NewServeMux()
+			mux.HandleFunc("/truncated", func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Length", strconv.Itoa(len(payload)+1))
+				_, _ = w.Write(payload)
+				if err := http.NewResponseController(w).Flush(); err != nil {
+					t.Errorf("flush partial response: %v", err)
+					return
+				}
+				select {
+				case <-finish:
+				case <-r.Context().Done():
+				}
+			})
+			mux.HandleFunc("/good", func(w http.ResponseWriter, _ *http.Request) {
+				requests.Add(1)
+				if mode != "streaming" {
+					w.Header().Set("Content-Length", strconv.Itoa(len(payload)))
+				} else if err := http.NewResponseController(w).Flush(); err != nil {
+					t.Errorf("flush response headers: %v", err)
+					return
+				}
+				_, _ = w.Write(payload)
+			})
+			srv := httptest.NewServer(mux)
+			t.Cleanup(srv.Close)
+			ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+			defer cancel()
+
+			client := newImportCache(t)
+			good := mrpackDownload("mods/good.jar", payload, srv.URL+"/good")
+			if mode == "cache hit" {
+				warm := &materializer{network: client, budget: &byteBudget{left: budget}}
+				if _, err := warm.downloadFrom(ctx, good.download.urls[0], good, t.TempDir()); err != nil {
+					t.Fatalf("warm cache: %v", err)
+				}
+			}
+			bad := mrpackDownload("mods/truncated.jar", payload, srv.URL+"/truncated")
+			m := &materializer{
+				network: client,
+				budget:  &byteBudget{left: budget},
+				progress: Progress{FileProgress: func(name string, read, _ int64) {
+					if name == bad.rel && read == int64(len(payload)) {
+						close(started)
+					}
+				}},
+			}
+			failed := make(chan error, 1)
+			badDir := t.TempDir()
+			go func() {
+				_, err := m.downloadFrom(ctx, bad.download.urls[0], bad, badDir)
+				failed <- err
+			}()
+			select {
+			case <-started:
+			case err := <-failed:
+				t.Fatalf("first request finished before streaming: %v", err)
+			case <-ctx.Done():
+				t.Fatal("first response did not stream before the deadline")
+			}
+
+			path, err := m.downloadFrom(ctx, good.download.urls[0], good, t.TempDir())
+			if err != nil {
+				t.Fatalf("second download failed while the first attempt was in flight: %v", err)
+			}
+			release()
+			if err := <-failed; !errors.Is(err, io.ErrUnexpectedEOF) {
+				t.Fatalf("first download error = %v, want unexpected EOF", err)
+			}
+			data, err := os.ReadFile(path)
+			if err != nil || !bytes.Equal(data, payload) {
+				t.Fatalf("retained file has %d bytes, want %d verified bytes (read error: %v)", len(data), len(payload), err)
+			}
+			if got := m.budget.total(); got != int64(len(payload)) {
+				t.Fatalf("aggregate retained %d bytes, want %d", got, len(payload))
+			}
+			if got := requests.Load(); got != 1 {
+				t.Fatalf("requests for the good file = %d, want 1", got)
+			}
+		})
+	}
+}
+
+// TestMrpackDownloadStillEnforcesAggregate checks that charging on retention
+// keeps the shared limit: a file that does not fit after earlier files is
+// rejected and leaves nothing behind.
+func TestMrpackDownloadStillEnforcesAggregate(t *testing.T) {
+	payload := []byte(strings.Repeat("a", 600))
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Length", strconv.Itoa(len(payload)))
+		_, _ = w.Write(payload)
+	}))
+	defer srv.Close()
+
+	client := newImportCache(t)
+	download := mrpackDownload("mods/too-much.jar", payload, srv.URL+"/payload")
+	m := &materializer{
+		network: client,
+		budget:  &byteBudget{left: int64(len(payload)) - 1},
+	}
+	dir := t.TempDir()
+	if _, err := m.downloadFrom(t.Context(), srv.URL+"/payload", download, dir); !errors.Is(err, ErrLimitExceeded) {
+		t.Fatalf("download error = %v, want ErrLimitExceeded", err)
+	}
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 0 {
+		t.Fatalf("staged files after a rejected file = %v", entries)
+	}
+}
+
+func TestFetchTriesAnotherMirrorAfterAnOversizedResponse(t *testing.T) {
+	var mirrorHits atomic.Int64
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/oversized":
+			w.Header().Set("Content-Length", strconv.FormatInt(maxFileBytes+1, 10))
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte("partial"))
+		case "/mirror":
+			mirrorHits.Add(1)
+			_, _ = w.Write([]byte("x"))
+		}
+	}))
+	defer srv.Close()
+
+	m, err := newMaterializer(t.Context(), t.TempDir(), newImportCache(t), Progress{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer m.cleanup()
+	if err := m.ensureStage(); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(filepath.Join(m.dest, "mods"), dirMode); err != nil {
+		t.Fatal(err)
+	}
+	download := mrpackDownload(
+		"mods/mirror.jar",
+		[]byte("x"),
+		srv.URL+"/oversized",
+		srv.URL+"/mirror",
+	)
+	if err := m.fetch(t.Context(), download, 0); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(filepath.Join(m.dest, download.rel))
+	if err != nil || string(data) != "x" || mirrorHits.Load() != 1 {
+		t.Fatalf("verified mirror file = %q, error = %v, mirror requests = %d", data, err, mirrorHits.Load())
 	}
 }

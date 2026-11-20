@@ -1,17 +1,16 @@
 package modrinth
 
 import (
-	"bytes"
 	"context"
 	"encoding/json/v2"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
 	"slices"
 
 	"github.com/mclucy/lucy/cache"
-	"github.com/mclucy/lucy/internal/fn"
-	"github.com/mclucy/lucy/internal/fsutil"
+	"github.com/mclucy/lucy/upstream/internal/providers/retry"
 )
 
 // Modrinth documents no batch cap. One hundred keeps request URLs short and
@@ -43,57 +42,147 @@ type versionFilesRequest struct {
 	Algorithm string   `json:"algorithm"`
 }
 
-// versionFilesByHash maps each SHA-1 digest Modrinth knows to its version.
-// Hashes the API does not know are omitted, not reported as errors.
+type versionFileMatch struct {
+	version *versionResponse
+	file    fileResponse
+	err     error
+}
+
+// versionFilesByHash identifies returned matches against their requested
+// digests. An incomplete match is reported for its own digest and prevents
+// caching the response. A hash the API omits is a clean miss.
 func (p *Provider) versionFilesByHash(
 	ctx context.Context,
 	hashes []string,
-) (map[string]versionResponse, error) {
+) (map[string]versionFileMatch, error) {
 	body, err := json.Marshal(versionFilesRequest{
 		Hashes:    hashes,
 		Algorithm: "sha1",
 	})
 	if err != nil {
-		return nil, fmt.Errorf("modrinth: encode hash lookup: %w", err)
+		return nil, retry.Permanent(
+			fmt.Errorf("modrinth: encode hash lookup: %w", err),
+		)
 	}
-	req, err := http.NewRequestWithContext(
-		ctx,
-		http.MethodPost,
-		versionFilesUrl,
-		bytes.NewReader(body),
-	)
-	if err != nil {
-		return nil, fmt.Errorf("modrinth: create hash lookup request: %w", err)
-	}
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Accept", "application/json")
-	req.Header.Set("User-Agent", modrinthUserAgent)
+
+	headers := http.Header{}
+	headers.Set("Content-Type", "application/json")
+	headers.Set("Accept", "application/json")
+	headers.Set("User-Agent", modrinthUserAgent)
 
 	p.logger.Debug("modrinth api: POST " + versionFilesUrl)
 
-	//nolint:bodyclose // CloseReader closes the response and logs close errors.
-	resp, err := p.network.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("modrinth: request failed: %w", err)
+	var out map[string]versionFileMatch
+	var incomplete error
+	outcome := retry.Do(
+		ctx,
+		retry.Default,
+		func(ctx context.Context) retry.Attempt {
+			res, err := p.network.CachedPostRequest(
+				ctx,
+				versionFilesUrl,
+				body,
+				cache.BytesRequestOptions{
+					Kind:     cache.KindMetadata,
+					Headers:  headers,
+					MaxBytes: maxBatchResponseBytes,
+				},
+				func(raw []byte) error {
+					var versions map[string]*versionResponse
+					if err := json.Unmarshal(raw, &versions); err != nil {
+						return retry.Permanent(fmt.Errorf("modrinth: failed to parse response: %w", err))
+					}
+					if versions == nil {
+						return retry.Permanent(fmt.Errorf("%w: expected a hash-to-version object", ErrInvalidAPIResponse))
+					}
+					out = make(map[string]versionFileMatch, min(len(versions), len(hashes)))
+					incomplete = nil
+					for _, hash := range hashes {
+						version, ok := versions[hash]
+						if !ok {
+							continue
+						}
+						file, err := requireVersionFile(version, hash)
+						out[hash] = versionFileMatch{version: version, file: file, err: err}
+						if incomplete == nil {
+							incomplete = err
+						}
+					}
+					if incomplete != nil {
+						return retry.Permanent(incomplete)
+					}
+					return nil
+				},
+			)
+			if res != nil && res.StatusCode != http.StatusOK {
+				p.logger.Debug(
+					fmt.Sprintf(
+						"modrinth api: POST %s returned status %d",
+						versionFilesUrl,
+						res.StatusCode,
+					),
+				)
+			}
+			return lookupAttempt(res, err)
+		},
+	)
+	if incomplete != nil && errors.Is(outcome.Err, incomplete) {
+		// Cache admission failed, but each returned hash has its own result.
+		return out, nil
 	}
-	defer fn.CloseReader(resp.Body, p.logger.Warn)
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf(
-			"%w: status %d",
+	if outcome.Status == 0 {
+		if outcome.Err == nil {
+			return nil, fmt.Errorf("modrinth: hash lookup returned no response")
+		}
+		return nil, fmt.Errorf("modrinth: request failed: %w", outcome.Err)
+	}
+	if outcome.Status != http.StatusOK {
+		statusErr := fmt.Errorf(
+			"%w: %w",
 			ErrInvalidAPIResponse,
-			resp.StatusCode,
+			outcomeStatusError(outcome),
 		)
+		if outcome.Err != nil {
+			return nil, errors.Join(statusErr, outcome.Err)
+		}
+		return nil, statusErr
 	}
-	raw, err := fsutil.CopyBytes(resp.Body, maxBatchResponseBytes)
-	if err != nil {
-		return nil, fmt.Errorf("modrinth: failed to read response: %w", err)
-	}
-	out := make(map[string]versionResponse, len(hashes))
-	if err := json.Unmarshal(raw, &out); err != nil {
-		return nil, fmt.Errorf("modrinth: failed to parse response: %w", err)
+	if outcome.Err != nil {
+		return nil, fmt.Errorf("modrinth: request failed: %w", outcome.Err)
 	}
 	return out, nil
+}
+
+// lookupAttempt retains the response status and retry headers even when
+// reading a non-2xx body failed, so the status still classifies the failure.
+func lookupAttempt(res *cache.BytesResponse, err error) retry.Attempt {
+	attempt := retry.Attempt{Err: err}
+	if res != nil {
+		attempt.Status = res.StatusCode
+		attempt.RetryAfter = retry.RetryAfter(res.Header)
+	}
+	return attempt
+}
+
+// outcomeStatusError classifies a finished lookup's non-OK status. A retryable
+// status that asked for a delay becomes a ThrottledError so splitting and
+// later batches stop instead of reaching the provider early.
+func outcomeStatusError(outcome retry.Attempt) error {
+	if retry.TransientStatus(outcome.Status) && outcome.RetryAfter > 0 {
+		return &retry.ThrottledError{
+			Status:     outcome.Status,
+			RetryAfter: outcome.RetryAfter,
+		}
+	}
+	return &retry.StatusError{Status: outcome.Status}
+}
+
+// responseStatusError classifies one response that is not retried.
+func responseStatusError(res *cache.BytesResponse) error {
+	return outcomeStatusError(retry.Attempt{
+		Status:     res.StatusCode,
+		RetryAfter: retry.RetryAfter(res.Header),
+	})
 }
 
 // versionsByIdsUrl and projectsByIdsUrl serialize IDs as one JSON array in a
@@ -132,6 +221,10 @@ func (p *Provider) requestBytes(
 	)
 }
 
+// requestJSON decodes one GET response. A non-2xx status is classified even
+// when reading its body failed, so a 404 still names the caller's not-found
+// answer and a throttled response carries the delay that later requests must
+// observe.
 func (p *Provider) requestJSON(
 	ctx context.Context,
 	rawURL string,
@@ -139,18 +232,22 @@ func (p *Provider) requestJSON(
 	notFound error,
 ) error {
 	res, err := p.requestBytes(ctx, rawURL)
+	if res != nil && res.StatusCode != http.StatusOK {
+		if res.StatusCode == http.StatusNotFound && notFound != nil {
+			return notFound
+		}
+		statusErr := fmt.Errorf(
+			"%w: %w",
+			ErrInvalidAPIResponse,
+			responseStatusError(res),
+		)
+		if err != nil {
+			return errors.Join(statusErr, err)
+		}
+		return statusErr
+	}
 	if err != nil {
 		return fmt.Errorf("modrinth: request failed: %w", err)
-	}
-	if res.StatusCode == http.StatusNotFound && notFound != nil {
-		return notFound
-	}
-	if res.StatusCode != http.StatusOK {
-		return fmt.Errorf(
-			"%w: status %d",
-			ErrInvalidAPIResponse,
-			res.StatusCode,
-		)
 	}
 	if err := json.Unmarshal(res.Data, out); err != nil {
 		if notFound != nil {

@@ -64,9 +64,9 @@ Pass `--sha256` with the expected checksum of the archive, as 64 hexadecimal cha
 
 ## What gets reported
 
-After a successful import, lucy prints the workspace, the server product and Minecraft version, the number of server files written, the number of client-only files skipped, and the number of packages lucy manages. Files it does not recognize are listed as unmanaged, so you can decide whether to add them yourself. Review lines name anything that needs your attention.
+Import reports the number of server files it kept after filtering, the number of client-only files skipped, and the number of packages Lucy manages. It lists observed unmanaged package files for you to review.
 
-When import detects no server, the report states that no server was detected and gives the number of extracted files. It lists unmanaged files and review lines the same way, and omits the managed package count.
+When import detects no server, the report states that no server was detected and gives the number of extracted files. It lists unmanaged package files and review lines, and omits the managed package count.
 
 Imported packages are managed from then on, the same as packages recorded by `lucy init`. See [`lucy install`](/commands/install) for how later changes take effect.
 

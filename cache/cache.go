@@ -123,7 +123,8 @@ func (c *Client) Get(k string) (
 ) {
 	c.lifetime.RLock()
 	defer c.lifetime.RUnlock()
-	return c.cache().get(k)
+	hit, reader, filename, _, err = c.cache().get(k)
+	return hit, reader, filename, err
 }
 
 func (c *Client) GetBytes(k string) (hit bool, data []byte, err error) {

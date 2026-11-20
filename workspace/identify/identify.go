@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/mclucy/lucy/artifact"
 	"github.com/mclucy/lucy/catalog"
 	"github.com/mclucy/lucy/upstream"
 	"github.com/mclucy/lucy/version"
@@ -45,7 +44,7 @@ func Packages(
 
 	fingerprints := make([]upstream.ArtifactFingerprint, len(candidates))
 	for i, path := range candidates {
-		fingerprints[i] = artifact.File{Path: path}
+		fingerprints[i] = observed.PackageAnalysis(path)
 	}
 	lookups := lookup(ctx, fingerprints)
 

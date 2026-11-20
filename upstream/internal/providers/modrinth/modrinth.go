@@ -11,6 +11,7 @@ import (
 	"encoding/json/v2"
 	"errors"
 	"fmt"
+	"net/http"
 
 	"github.com/mclucy/lucy/cache"
 	"github.com/mclucy/lucy/catalog"
@@ -54,15 +55,19 @@ func (p *Provider) Search(ctx context.Context, q upstream.Query) (
 
 	p.logger.Debug("searching via modrinth api: " + searchUrl)
 	res, err := p.requestBytes(ctx, searchUrl)
+	if res != nil && res.StatusCode != http.StatusOK {
+		statusErr := fmt.Errorf(
+			"%w: %w",
+			ErrInvalidAPIResponse,
+			responseStatusError(res),
+		)
+		if err != nil {
+			return resp, errors.Join(statusErr, err)
+		}
+		return resp, statusErr
+	}
 	if err != nil {
 		return resp, fmt.Errorf("modrinth: search request failed: %w", err)
-	}
-	if res.StatusCode != 200 {
-		return resp, fmt.Errorf(
-			"%w: status %d",
-			ErrInvalidAPIResponse,
-			res.StatusCode,
-		)
 	}
 	result := &searchResultResponse{}
 	err = json.Unmarshal(res.Data, result)

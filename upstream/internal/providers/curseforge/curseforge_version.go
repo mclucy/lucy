@@ -2,6 +2,7 @@ package curseforge
 
 import (
 	"context"
+	"errors"
 	"strconv"
 )
 
@@ -52,13 +53,13 @@ func (p *Provider) getModFileById(
 }
 
 // getModFilesByIds returns many files in one POST /v1/mods/files request.
-// Files the API does not know are omitted; a 404 response means the same, not
-// a failed lookup.
+// An omitted file is left out of the result so the caller can report an error
+// for that file. Responses that omit requested files are not cached.
 // Docs: https://docs.curseforge.com/rest-api/#get-files
 func (p *Provider) getModFilesByIds(
 	ctx context.Context,
 	fileIDs []int32,
-) ([]fileResponse, error) {
+) (map[int32]fileResponse, error) {
 	if len(fileIDs) == 0 {
 		return nil, nil
 	}
@@ -66,13 +67,32 @@ func (p *Provider) getModFilesByIds(
 		FileIds []int32 `json:"fileIds"`
 	}{FileIds: fileIDs}
 	var resp filesDataResponse
-	if err := p.post(ctx, baseUrl+"/v1/mods/files", payload, &resp); err != nil {
+	var files map[int32]fileResponse
+	err := p.readPost(
+		ctx,
+		baseUrl+"/v1/mods/files",
+		payload,
+		&resp,
+		func(resp *filesDataResponse) error {
+			files = make(map[int32]fileResponse, len(resp.Data))
+			for _, file := range resp.Data {
+				files[file.ID] = file
+			}
+			for _, fileID := range fileIDs {
+				if _, ok := files[fileID]; !ok {
+					return errPartialLookupResponse
+				}
+			}
+			return nil
+		},
+	)
+	if err != nil && !errors.Is(err, errPartialLookupResponse) {
 		if isNotFound(err) {
 			return nil, nil
 		}
 		return nil, err
 	}
-	return resp.Data, nil
+	return files, nil
 }
 
 // hasSHA1 reports whether the file record carries a SHA-1 digest.

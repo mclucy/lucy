@@ -24,3 +24,9 @@ func FormatElapsed(elapsed time.Duration) string {
 func phaseLine(text string, elapsed time.Duration, theme style.Theme) string {
 	return theme.Success("✓") + " " + text + " " + theme.Muted("in "+FormatElapsed(elapsed))
 }
+
+// phaseStartLine announces a phase before it ends, so append-only output shows
+// a long stage from its first second instead of only at completion.
+func phaseStartLine(text string, theme style.Theme) string {
+	return theme.Note("›") + " " + theme.Accent(text)
+}

@@ -330,6 +330,9 @@ func importWorkspace(
 	opts.Trace = output.Trace()
 	opts.PromptRuntime = func(observed discovery.Result) (*discovery.Installation, error) {
 		output.EndProgress()
+		// The prompt owns the terminal while it runs; adoption and install
+		// phases still need a renderer after it returns.
+		defer output.RestartProgress()
 		return promptRuntime(ctx, cmd, inv, observed)
 	}
 	result, err := deps.Operations.Import(ctx, opts, deps.Network)

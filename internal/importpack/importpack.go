@@ -47,12 +47,30 @@ type Plan struct {
 // Skipped lists the source paths of client-only entries that were not written.
 type Result struct {
 	Plan
-	Skipped []string
+	Skipped       []string
+	overridePaths map[string]struct{}
+}
+
+// RecordClientOnlyRemoval updates the counts after the caller removes files
+// that had been materialized but cannot run on a dedicated server.
+func (r *Result) RecordClientOnlyRemoval(paths []string) {
+	r.SkippedClient += len(paths)
+	r.ServerFiles -= len(paths)
+	r.Skipped = append(r.Skipped, paths...)
+	for _, path := range paths {
+		if _, ok := r.overridePaths[path]; ok {
+			r.Overrides--
+			delete(r.overridePaths, path)
+		}
+	}
 }
 
 // Progress receives facts about the downloads Materialize performs. Every hook
 // is optional: a nil hook reports nothing. ReportDone runs after the file is
 // verified and written, fromCache when no bytes crossed the network.
+// Materialize may transfer independent files at once. It calls the hooks one at
+// a time, and the events of one file keep their order, but events of different
+// files interleave.
 type Progress struct {
 	FileStarted  func(name string, size int64)
 	FileProgress func(name string, read, total int64)

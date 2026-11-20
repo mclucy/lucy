@@ -108,8 +108,13 @@ func (o *Output) Progress() progress.Renderer {
 }
 
 // RestartProgress rebuilds the renderer after a command suspended it, for
-// example while a package manager owned the terminal.
+// example while a package manager owned the terminal. Closing the previous
+// renderer is idempotent, so a caller that already ended it pays nothing and a
+// caller that did not cannot leak its animation goroutine.
 func (o *Output) RestartProgress() {
+	if o.renderer != nil {
+		o.renderer.Close()
+	}
 	o.renderer = o.newProgress()
 }
 

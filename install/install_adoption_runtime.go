@@ -35,7 +35,7 @@ func adoptRuntime(
 		return nil
 	}
 	serverDir := filepath.Join(root, filepath.FromSlash(opts.Lock.Server.Directory))
-	check, checkErr := bootstrap.CheckExisting(serverDir, opts.Lock.Server)
+	check, checkErr := bootstrap.Check(serverDir, opts.Lock.Server, coreArtifactPath(opts.Lock.Server))
 	if checkErr != nil && opts.Runtime != nil {
 		return fmt.Errorf("verify existing server runtime: %w", checkErr)
 	}

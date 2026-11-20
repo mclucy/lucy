@@ -1,7 +1,6 @@
 package curseforge
 
 import (
-	"bytes"
 	"context"
 	"encoding/json/v2"
 	"errors"
@@ -9,8 +8,7 @@ import (
 	"net/http"
 
 	"github.com/mclucy/lucy/cache"
-	"github.com/mclucy/lucy/internal/fn"
-	"github.com/mclucy/lucy/internal/fsutil"
+	"github.com/mclucy/lucy/upstream/internal/providers/retry"
 )
 
 // Docs: https://docs.curseforge.com/rest-api/
@@ -41,12 +39,11 @@ func (p *Provider) get(ctx context.Context, url string, dest any) error {
 			Headers: headers,
 		},
 	)
+	if attempt := lookupAttempt(res, err); attempt.Status != http.StatusOK {
+		return lookupOutcome(attempt)
+	}
 	if err != nil {
 		return fmt.Errorf("curseforge: request failed: %w", err)
-	}
-
-	if res.StatusCode != http.StatusOK {
-		return ErrApiResponse(res.StatusCode)
 	}
 
 	if err := json.Unmarshal(res.Data, dest); err != nil {
@@ -56,59 +53,125 @@ func (p *Provider) get(ctx context.Context, url string, dest any) error {
 	return nil
 }
 
-// post performs an authenticated JSON POST to the CurseForge API and
-// unmarshals a 200 response into dest. Non-200 statuses are returned as
-// ApiResponseError so callers can tell a missing resource (404) from a failed
-// lookup. POST lookups are not cached: the cache keys responses by URL, while
-// these responses depend on the request body.
-func (p *Provider) post(
+// readPost performs an authenticated read-only JSON POST lookup to the
+// CurseForge API and unmarshals a 200 response into dest. Successful responses
+// are cached by URL, body, and credential. Transient statuses are retried with
+// bounded backoff. A final non-200 status is returned as ApiResponseError so
+// callers can tell a missing resource (404) from a failed lookup.
+//
+// Only lookups may use it. A request that mutates remote state must go through
+// the transport directly so a repeated attempt cannot repeat the mutation.
+//
+// validate may reject decoded data before cache publication. A rejected
+// response still reaches dest so callers can handle a partial lookup.
+func (p *Provider) readPost[T any](
 	ctx context.Context,
 	url string,
-	payload, dest any,
+	payload any,
+	dest *T,
+	validate func(*T) error,
 ) error {
 	if p.apiKey == "" {
-		return ErrNoApiKey
+		return retry.Permanent(ErrNoApiKey)
 	}
 
 	body, err := json.Marshal(payload)
 	if err != nil {
-		return fmt.Errorf("curseforge: failed to encode request: %w", err)
+		return retry.Permanent(
+			fmt.Errorf("curseforge: failed to encode request: %w", err),
+		)
 	}
+
+	headers := http.Header{}
+	headers.Set("x-api-key", p.apiKey)
+	headers.Set("Content-Type", "application/json")
+	headers.Set("Accept", "application/json")
 
 	p.logger.Debug("curseforge api: POST " + url)
 
-	req, err := http.NewRequestWithContext(
-		ctx,
-		http.MethodPost,
-		url,
-		bytes.NewReader(body),
-	)
-	if err != nil {
-		return fmt.Errorf("curseforge: request failed: %w", err)
-	}
-	req.Header.Set("x-api-key", p.apiKey)
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Accept", "application/json")
+	outcome := retry.Do(ctx, retry.Default, func(ctx context.Context) retry.Attempt {
+		res, err := p.network.CachedPostRequest(
+			ctx,
+			url,
+			body,
+			cache.BytesRequestOptions{
+				Kind:     cache.KindMetadata,
+				Headers:  headers,
+				MaxBytes: maxLookupResponseBytes,
+			},
+			func(raw []byte) error {
+				var decoded T
+				if err := json.Unmarshal(raw, &decoded); err != nil {
+					return retry.Permanent(fmt.Errorf("curseforge: failed to parse response: %w", err))
+				}
+				*dest = decoded
+				if validate != nil {
+					if err := validate(dest); err != nil {
+						return retry.Permanent(err)
+					}
+				}
+				return nil
+			},
+		)
+		if res != nil && res.StatusCode != http.StatusOK {
+			p.logger.Debug(
+				fmt.Sprintf(
+					"curseforge api: POST %s returned status %d",
+					url,
+					res.StatusCode,
+				),
+			)
+		}
+		return lookupAttempt(res, err)
+	})
+	return lookupOutcome(outcome)
+}
 
-	//nolint:bodyclose // CloseReader closes the response and logs close errors.
-	resp, err := p.network.Do(req)
-	if err != nil {
-		return fmt.Errorf("curseforge: request failed: %w", err)
-	}
-	defer fn.CloseReader(resp.Body, p.logger.Warn)
+// errPartialLookupResponse prevents caching a decoded response while letting
+// its caller report outcomes for each input, including any usable matches.
+var errPartialLookupResponse = errors.New("curseforge: partial lookup response")
 
-	if resp.StatusCode != http.StatusOK {
-		return ErrApiResponse(resp.StatusCode)
+// lookupAttempt retains the response status and retry headers even when
+// reading a non-2xx body failed, so the status still classifies the failure.
+func lookupAttempt(res *cache.BytesResponse, err error) retry.Attempt {
+	attempt := retry.Attempt{Err: err}
+	if res != nil {
+		attempt.Status = res.StatusCode
+		attempt.RetryAfter = retry.RetryAfter(res.Header)
 	}
+	return attempt
+}
 
-	raw, err := fsutil.CopyBytes(resp.Body, maxLookupResponseBytes)
-	if err != nil {
-		return fmt.Errorf("curseforge: failed to read response: %w", err)
+// lookupOutcome converts a finished lookup. A non-200 status that asked for a
+// delay becomes a ThrottledError so no smaller batch or later request is sent
+// before it passes. A final non-200 status keeps its meaning, so a 404 still
+// reads as a missing resource rather than a read failure, and any body read
+// failure stays in the error chain as diagnostics.
+func lookupOutcome(outcome retry.Attempt) error {
+	if outcome.Status == 0 {
+		if outcome.Err == nil {
+			return fmt.Errorf("curseforge: lookup returned no response")
+		}
+		return fmt.Errorf("curseforge: request failed: %w", outcome.Err)
 	}
-	if err := json.Unmarshal(raw, dest); err != nil {
-		return fmt.Errorf("curseforge: failed to parse response: %w", err)
+	if outcome.Status != http.StatusOK {
+		var statusErr error
+		if retry.TransientStatus(outcome.Status) && outcome.RetryAfter > 0 {
+			statusErr = &retry.ThrottledError{
+				Status:     outcome.Status,
+				RetryAfter: outcome.RetryAfter,
+			}
+		} else {
+			statusErr = ErrApiResponse(outcome.Status)
+		}
+		if outcome.Err != nil {
+			return errors.Join(statusErr, outcome.Err)
+		}
+		return statusErr
 	}
-
+	if outcome.Err != nil {
+		return fmt.Errorf("curseforge: request failed: %w", outcome.Err)
+	}
 	return nil
 }
 

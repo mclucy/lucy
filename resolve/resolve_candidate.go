@@ -390,32 +390,56 @@ type analysisEntry struct {
 // AnalysisCache reuses artifact analysis within one resolution session.
 type AnalysisCache struct {
 	entries map[analysisKey]analysisEntry
+	content map[analysisContentKey]analysisEntry
 }
 
 func NewAnalysisCache() *AnalysisCache {
-	return &AnalysisCache{entries: map[analysisKey]analysisEntry{}}
+	return &AnalysisCache{
+		entries: make(map[analysisKey]analysisEntry),
+		content: make(map[analysisContentKey]analysisEntry),
+	}
+}
+
+// RecordVerified records descriptor modules of an artifact whose bytes the
+// caller already verified and made available for replay.
+func (c *AnalysisCache) RecordVerified(candidate upstream.Candidate, target Target, ecosystem catalog.Ecosystem, modules []catalog.DescriptorModule, hashes map[string]string) {
+	key := analysisKeyFor(candidate, target.DescriptorLoader(ecosystem), target.Minecraft)
+	c.put(key, analysisEntry{modules: modules, hashes: hashes})
 }
 
 func (c *AnalysisCache) get(key analysisKey, expected map[string]string) (analysisEntry, bool) {
-	entry, ok := c.entries[key]
-	if !ok {
+	entry, hit := c.entries[key]
+	if hit && matchesAnalysisHashes(entry.hashes, expected) {
+		return analysisEntry{modules: cloneModules(entry.modules), hashes: entry.hashes}, true
+	}
+	if expected["sha256"] == "" {
 		return analysisEntry{}, false
 	}
+	entry, hit = c.content[key.contentKey(expected["sha256"])]
+	if !hit || !matchesAnalysisHashes(entry.hashes, expected) {
+		return analysisEntry{}, false
+	}
+	hashes := make(map[string]string, len(expected))
+	for algorithm := range expected {
+		hashes[algorithm] = entry.hashes[algorithm]
+	}
+	return analysisEntry{modules: cloneModules(entry.modules), hashes: hashes}, true
+}
+
+func matchesAnalysisHashes(actual, expected map[string]string) bool {
 	for algorithm, digest := range expected {
-		if actual, found := entry.hashes[algorithm]; !found || digest != "" && !strings.EqualFold(actual, digest) {
-			return analysisEntry{}, false
+		if value, found := actual[algorithm]; !found || digest != "" && !strings.EqualFold(value, digest) {
+			return false
 		}
 	}
-	return analysisEntry{
-		modules: cloneModules(entry.modules),
-		hashes:  entry.hashes,
-	}, true
+	return true
 }
 
 func (c *AnalysisCache) put(key analysisKey, entry analysisEntry) {
-	c.entries[key] = analysisEntry{
-		modules: cloneModules(entry.modules),
-		hashes:  entry.hashes,
+	entry.modules = cloneModules(entry.modules)
+	c.entries[key] = entry
+	if digest := entry.hashes["sha256"]; digest != "" {
+		c.content[key.contentKey(digest)] = entry
 	}
 }
 
@@ -424,6 +448,21 @@ type analysisKey struct {
 	project, release, file, url, filename string
 	loader                                catalog.Ecosystem
 	minecraft                             versionpkg.Version
+}
+
+type analysisContentKey struct {
+	digest, extension string
+	loader            catalog.Ecosystem
+	minecraft         versionpkg.Version
+}
+
+func (key analysisKey) contentKey(digest string) analysisContentKey {
+	return analysisContentKey{
+		digest:    strings.ToLower(digest),
+		extension: strings.ToLower(filepath.Ext(key.filename)),
+		loader:    key.loader,
+		minecraft: key.minecraft,
+	}
 }
 
 func analysisKeyFor(c upstream.Candidate, loader catalog.Ecosystem, minecraft versionpkg.Version) analysisKey {

@@ -42,6 +42,8 @@ const (
 	importDownloadPackPhase    = "download pack"
 	importDownloadArchivePhase = "download archive"
 	importFilesPhase           = "files"
+	importClassificationPhase  = "classification"
+	importLoaderPhase          = "loader preparation"
 )
 
 // importWarningCause groups file warnings that share one cause so the import
@@ -251,10 +253,6 @@ func (s *Service) importSource(
 	}
 	defer releaseSource()
 
-	plan, err := importpack.Inspect(ctx, sourcePath)
-	if err != nil {
-		return nil, err
-	}
 	if downloadPhase != "" {
 		opts.Trace.ReportPhase(install.PhaseInfo{
 			Name:    downloadPhase,
@@ -308,36 +306,54 @@ func (s *Service) importSource(
 	if err != nil {
 		return nil, err
 	}
-	opts.Trace.ReportPhase(install.PhaseInfo{
-		Name:    importFilesPhase,
-		Elapsed: time.Since(filesStarted),
-		Count:   materialized.ServerFiles,
-	})
+	filesElapsed := time.Since(filesStarted)
+	analyses := new(artifact.Analyses)
+	var matches map[string]upstream.ArtifactReleaseResolution
 	var removalWarnings []error
-	if plan.Format == importpack.FormatMrpack {
+	if materialized.Format == importpack.FormatMrpack {
 		// A client modpack marks its client-only files server-required, so the
 		// env declaration alone cannot exclude them from a server.
-		removed, warnings, err := s.removeClientOnlyMods(
+		classificationStarted := time.Now()
+		opts.Trace.ReportPhaseStarted(importClassificationPhase)
+		removed, warnings, classified, releases, err := s.removeClientOnlyMods(
 			ctx,
 			stage,
 			materialized.Product,
 			materialized.Minecraft,
+			analyses,
+			opts.Trace,
 		)
 		if err != nil {
 			return nil, err
 		}
 		removalWarnings = warnings
-		materialized.SkippedClient += len(removed)
-		materialized.ServerFiles -= len(removed)
-		materialized.Skipped = append(materialized.Skipped, removed...)
+		matches = releases
+		materialized.RecordClientOnlyRemoval(removed)
+		opts.Trace.ReportPhase(install.PhaseInfo{
+			Name:    importClassificationPhase,
+			Elapsed: time.Since(classificationStarted),
+			Count:   classified - len(removed),
+			Total:   classified,
+		})
 	}
+	opts.Trace.ReportPhase(install.PhaseInfo{
+		Name:    importFilesPhase,
+		Elapsed: filesElapsed,
+		Count:   materialized.ServerFiles,
+	})
 
 	var loaderWarnings []error
 	force := false
-	if plan.Format == importpack.FormatMrpack {
+	if materialized.Format == importpack.FormatMrpack {
+		loaderStarted := time.Now()
+		opts.Trace.ReportPhaseStarted(importLoaderPhase)
 		if err := s.installDeclaredLoader(ctx, stage, name, materialized, opts.Trace); err != nil {
 			return nil, err
 		}
+		opts.Trace.ReportPhase(install.PhaseInfo{
+			Name:    importLoaderPhase,
+			Elapsed: time.Since(loaderStarted),
+		})
 		force = true
 	} else {
 		loaderWarnings, err = s.runTreeInstaller(ctx, stage, opts.Trace)
@@ -347,7 +363,7 @@ func (s *Service) importSource(
 	}
 
 	stageRegistered = true
-	initResult, initErr := s.Initialize(ctx, stage, InitOptions{
+	initResult, initErr := s.initialize(ctx, stage, InitOptions{
 		Name:          name,
 		MCDRVersion:   opts.MCDRVersion,
 		Force:         force,
@@ -355,7 +371,7 @@ func (s *Service) importSource(
 		Expectation:   opts.Expectation,
 		PromptRuntime: opts.PromptRuntime,
 		Trace:         opts.Trace,
-	})
+	}, analyses, matches)
 	uninitialized := errors.Is(initErr, errNoServerDetected)
 	if initErr != nil && !uninitialized {
 		return nil, initErr
@@ -369,10 +385,11 @@ func (s *Service) importSource(
 			target,
 			name,
 			source,
-			plan.Format,
+			materialized.Format,
 			materialized,
 			loaderWarnings,
 			initResult,
+			analyses,
 		)
 		if err != nil {
 			return nil, err
@@ -383,7 +400,7 @@ func (s *Service) importSource(
 	manifest := initResult.Document
 	lock := initResult.Lock
 
-	observed := workspace.Observe(stage, discovery.Request{})
+	observed := workspace.ObserveWithAnalyses(stage, discovery.Request{}, analyses)
 	unmanaged, err := unmanagedImportFiles(stage, observed)
 	if err != nil {
 		return nil, err
@@ -414,7 +431,7 @@ func (s *Service) importSource(
 		Workspace:     target,
 		Initialized:   true,
 		Source:        source,
-		Format:        string(plan.Format),
+		Format:        string(materialized.Format),
 		Name:          manifest.Name,
 		Minecraft:     string(manifest.Server.Minecraft),
 		Product:       string(manifest.Server.Core.Product),
@@ -496,8 +513,9 @@ func publishUninitializedImport(
 	materialized *importpack.Result,
 	loaderWarnings []error,
 	initResult *InitResult,
+	analyses *artifact.Analyses,
 ) (*ImportResult, error) {
-	observed := workspace.Observe(stage, discovery.Request{})
+	observed := workspace.ObserveWithAnalyses(stage, discovery.Request{}, analyses)
 	unmanaged, err := unmanagedImportFilePaths(stage, observed)
 	if err != nil {
 		return nil, err
@@ -1024,14 +1042,16 @@ func (s *Service) removeClientOnlyMods(
 	stage string,
 	product serverpkg.Product,
 	minecraft string,
-) ([]string, []error, error) {
+	analyses *artifact.Analyses,
+	trace *install.Trace,
+) ([]string, []error, int, map[string]upstream.ArtifactReleaseResolution, error) {
 	modsDir := filepath.Join(stage, "mods")
 	entries, err := os.ReadDir(modsDir)
 	if errors.Is(err, os.ErrNotExist) {
-		return nil, nil, nil
+		return nil, nil, 0, nil, nil
 	}
 	if err != nil {
-		return nil, nil, fmt.Errorf("read imported mod directory: %w", err)
+		return nil, nil, 0, nil, fmt.Errorf("read imported mod directory: %w", err)
 	}
 	ecosystem := catalog.Ecosystem(product)
 	mappers, mapperErr := s.packageMappers()
@@ -1051,36 +1071,30 @@ func (s *Service) removeClientOnlyMods(
 		paths = append(paths, filepath.Join(modsDir, entry.Name()))
 	}
 	files := make([]importModFile, len(paths))
-	resolutions := s.importReleaseResolutions(ctx, paths, mappers)
-	limit := make(chan struct{}, packageProbeLimit)
-	var wg sync.WaitGroup
-	for i, path := range paths {
-		wg.Go(func() {
-			limit <- struct{}{}
-			defer func() { <-limit }()
-			files[i] = s.classifyImportMod(
-				ctx,
-				path,
-				ecosystem,
-				minecraft,
-				mappers,
-				resolutions[i],
-			)
-		})
-	}
-	wg.Wait()
+	resolutions := s.importReleaseResolutions(ctx, paths, mappers, analyses)
+	var progress sync.Mutex
+	completed := 0
+	parallelPackageProbes(ctx, len(paths), func(i int) {
+		path := paths[i]
+		files[i] = s.classifyImportMod(ctx, path, analyses.File(path), ecosystem, minecraft, mappers, resolutions[i])
+		progress.Lock()
+		completed++
+		trace.ReportPhaseProgress(importClassificationPhase, completed, len(paths))
+		progress.Unlock()
+	})
 	if err := ctx.Err(); err != nil {
-		return nil, nil, err
+		return nil, nil, 0, nil, err
 	}
 
 	keepRequiredMods(files)
 
 	var removed []string
 	var warnings []error
-	for _, file := range files {
+	matches := make(map[string]upstream.ArtifactReleaseResolution, len(paths))
+	for i, file := range files {
 		relative, err := filepath.Rel(stage, file.path)
 		if err != nil {
-			return removed, warnings, fmt.Errorf(
+			return removed, warnings, len(paths), nil, fmt.Errorf(
 				"relativize imported mod %s: %w",
 				file.path,
 				err,
@@ -1108,10 +1122,15 @@ func (s *Service) removeClientOnlyMods(
 			))
 		}
 		if file.kept {
+			resolution := resolutions[i]
+			if resolution.Matched && resolution.Release.Ref.Name != "" ||
+				!resolution.Matched && len(resolution.Errors) == 0 {
+				matches[file.path] = resolution
+			}
 			continue
 		}
 		if err := os.Remove(file.path); err != nil {
-			return removed, warnings, fmt.Errorf(
+			return removed, warnings, len(paths), nil, fmt.Errorf(
 				"remove client-only mod %s: %w",
 				file.path,
 				err,
@@ -1124,7 +1143,7 @@ func (s *Service) removeClientOnlyMods(
 		)
 		removed = append(removed, relative)
 	}
-	return removed, warnings, nil
+	return removed, warnings, len(paths), matches, nil
 }
 
 // classifyImportMod reads one archive and decides whether a dedicated server
@@ -1133,16 +1152,19 @@ func (s *Service) removeClientOnlyMods(
 func (s *Service) classifyImportMod(
 	ctx context.Context,
 	path string,
+	analysis *artifact.Analysis,
 	ecosystem catalog.Ecosystem,
 	minecraft string,
 	mappers []upstream.ArtifactReleaseMapper,
 	resolution upstream.ArtifactReleaseResolution,
 ) importModFile {
-	modules := importModules(ctx, path, ecosystem, minecraft)
+	infos, _ := analysis.Info()
+	loaders := descriptorLoaders(infos, ecosystem)
+	modules := importModules(ctx, analysis, loaders, minecraft)
 	if len(modules) == 0 {
 		// A descriptor that is client-only is filtered from the server view,
 		// but its identity still proves a kept file depends on it.
-		modules = importDescriptorIdentities(path)
+		modules = importDescriptorIdentities(infos)
 	}
 	file := importModFile{
 		path:    path,
@@ -1172,8 +1194,8 @@ func (s *Service) classifyImportMod(
 	}
 	reason, clientOnly := clientOnlyDescriptor(
 		ctx,
-		path,
-		ecosystem,
+		analysis,
+		loaders,
 		minecraft,
 	)
 	if clientOnly {
@@ -1185,7 +1207,7 @@ func (s *Service) classifyImportMod(
 	} else if !matched {
 		if project, found := s.catalogProjectSide(
 			ctx,
-			path,
+			infos,
 			mappers,
 		); found {
 			switch {
@@ -1203,11 +1225,7 @@ func (s *Service) classifyImportMod(
 
 // importDescriptorIdentities reads the package identities a client-only
 // descriptor still declares, so a kept file can be matched to its module.
-func importDescriptorIdentities(path string) []catalog.DescriptorModule {
-	infos, err := artifact.ReadInfo(path)
-	if err != nil {
-		return nil
-	}
+func importDescriptorIdentities(infos []artifact.PackageInfo) []catalog.DescriptorModule {
 	modules := make([]catalog.DescriptorModule, 0, len(infos))
 	for _, info := range infos {
 		if info.Ref.Name == "" {
@@ -1339,12 +1357,8 @@ func modulesProvide(
 // descriptorLoaders lists the loaders whose descriptor the file carries,
 // starting with the server loader. A file with no readable descriptor answers
 // only the server loader.
-func descriptorLoaders(path string, loader catalog.Ecosystem) []catalog.Ecosystem {
+func descriptorLoaders(infos []artifact.PackageInfo, loader catalog.Ecosystem) []catalog.Ecosystem {
 	loaders := []catalog.Ecosystem{loader}
-	infos, err := artifact.ReadInfo(path)
-	if err != nil {
-		return loaders
-	}
 	for _, info := range infos {
 		ecosystem := info.Ref.Ecosystem
 		if ecosystem == catalog.EcosystemUnspecified ||
@@ -1362,14 +1376,14 @@ func descriptorLoaders(path string, loader catalog.Ecosystem) []catalog.Ecosyste
 // so the dependencies that keep server-optional libraries stay visible.
 func importModules(
 	ctx context.Context,
-	path string,
-	loader catalog.Ecosystem,
+	analysis *artifact.Analysis,
+	loaders []catalog.Ecosystem,
 	minecraft string,
 ) []catalog.DescriptorModule {
-	for _, candidate := range descriptorLoaders(path, loader) {
-		modules, err := artifact.ReadModulesFor(ctx, path, candidate, minecraft)
-		if err == nil && len(modules) > 0 {
-			return modules
+	for _, candidate := range loaders {
+		view, err := analysis.Descriptor(ctx, candidate, minecraft)
+		if err == nil && len(view.Modules) > 0 {
+			return view.Modules
 		}
 	}
 	return nil
@@ -1381,24 +1395,19 @@ func importModules(
 // Fabric jar bridged by Connector) is checked with that descriptor's loader.
 func clientOnlyDescriptor(
 	ctx context.Context,
-	path string,
-	loader catalog.Ecosystem,
+	analysis *artifact.Analysis,
+	loaders []catalog.Ecosystem,
 	minecraft string,
 ) (string, bool) {
-	for _, candidate := range descriptorLoaders(path, loader) {
-		clientOnly, known, err := artifact.ReadClientOnly(
-			ctx,
-			path,
-			candidate,
-			minecraft,
-		)
-		if err != nil || !known {
+	for i, candidate := range loaders {
+		view, err := analysis.Descriptor(ctx, candidate, minecraft)
+		if err != nil || !view.Known {
 			continue
 		}
-		if clientOnly {
+		if view.ClientOnly {
 			return "client-only " + string(candidate), true
 		}
-		if candidate == loader {
+		if i == 0 {
 			// The server loader accepts the file, so another loader's
 			// client-only descriptor cannot remove it.
 			return "", false
@@ -1413,13 +1422,9 @@ func clientOnlyDescriptor(
 // different project cannot classify the file.
 func (s *Service) catalogProjectSide(
 	ctx context.Context,
-	path string,
+	infos []artifact.PackageInfo,
 	mappers []upstream.ArtifactReleaseMapper,
 ) (upstream.ProjectServerSide, bool) {
-	infos, err := artifact.ReadInfo(path)
-	if err != nil {
-		return upstream.ProjectServerSide{}, false
-	}
 	for _, info := range infos {
 		names := projectNameCandidates(info)
 		if len(names) == 0 {
@@ -1510,6 +1515,7 @@ func (s *Service) importReleaseResolutions(
 	ctx context.Context,
 	paths []string,
 	mappers []upstream.ArtifactReleaseMapper,
+	analyses *artifact.Analyses,
 ) []upstream.ArtifactReleaseResolution {
 	resolutions := make([]upstream.ArtifactReleaseResolution, len(paths))
 	if len(paths) == 0 || len(mappers) == 0 {
@@ -1517,7 +1523,7 @@ func (s *Service) importReleaseResolutions(
 	}
 	fingerprints := make([]upstream.ArtifactFingerprint, len(paths))
 	for i, path := range paths {
-		fingerprints[i] = artifact.File{Path: path}
+		fingerprints[i] = analyses.File(path)
 	}
 	found := upstream.LookupArtifactReleases(ctx, fingerprints, mappers, nil)
 	for i := 0; i < len(resolutions) && i < len(found); i++ {

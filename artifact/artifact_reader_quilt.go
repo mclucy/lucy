@@ -23,7 +23,11 @@ func (r *quiltReader) Read(
 	zipRdr *zip.Reader,
 	filePath string,
 ) ([]PackageInfo, error) {
-	decoded, err := decodeQuiltDescriptor(zipRdr, "", true)
+	return r.readWithInputs(zipRdr, filePath, nil)
+}
+
+func (r *quiltReader) readWithInputs(zipRdr *zip.Reader, filePath string, inputs *descriptorInputs) ([]PackageInfo, error) {
+	decoded, err := decodeQuiltDescriptor(zipRdr, "", true, inputs)
 	if err != nil {
 		return nil, err
 	}
@@ -36,8 +40,11 @@ func decodeQuiltDescriptor(
 	zipRdr *zip.Reader,
 	member string,
 	packageView bool,
+	inputs *descriptorInputs,
 ) (*decodedDescriptor, error) {
-	descriptor, err := readQuiltDescriptor(zipRdr)
+	descriptor, err := descriptorInput(inputs, quiltModPath, func() (*quiltModFile, error) {
+		return readQuiltDescriptor(zipRdr)
+	})
 	if err != nil || descriptor == nil {
 		return nil, err
 	}

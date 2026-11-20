@@ -3,6 +3,7 @@ package artifact
 import (
 	"archive/zip"
 	"bytes"
+	"slices"
 	"strings"
 
 	"github.com/mclucy/lucy/catalog"
@@ -22,7 +23,11 @@ func (r *fabricReader) Read(
 	zipRdr *zip.Reader,
 	filePath string,
 ) ([]PackageInfo, error) {
-	decoded, err := decodeFabricDescriptor(zipRdr, "", true)
+	return r.readWithInputs(zipRdr, filePath, nil)
+}
+
+func (r *fabricReader) readWithInputs(zipRdr *zip.Reader, filePath string, inputs *descriptorInputs) ([]PackageInfo, error) {
+	decoded, err := decodeFabricDescriptor(zipRdr, "", true, inputs)
 	if err != nil {
 		return nil, err
 	}
@@ -35,8 +40,11 @@ func decodeFabricDescriptor(
 	zipRdr *zip.Reader,
 	member string,
 	packageView bool,
+	inputs *descriptorInputs,
 ) (*decodedDescriptor, error) {
-	modInfo, err := readFabricDescriptor(zipRdr)
+	modInfo, err := descriptorInput(inputs, "fabric.mod.json", func() (*fileschema.FileFabricModIdentifier, error) {
+		return readFabricDescriptor(zipRdr)
+	})
 	if err != nil || modInfo == nil {
 		return nil, err
 	}
@@ -50,6 +58,9 @@ func decodeFabricDescriptor(
 		DescriptorPath: "fabric.mod.json",
 		Provides:       modInfo.Provides,
 		Side:           catalog.ParseSide(string(modInfo.Environment)),
+	}
+	if inputs != nil {
+		module.Provides = slices.Clone(module.Provides)
 	}
 	var origins map[string]catalog.DependencyOrigin
 	var embeddedNames map[string]struct{}

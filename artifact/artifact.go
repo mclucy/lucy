@@ -31,6 +31,10 @@ func supportedExt(ext string) bool {
 // archive may carry descriptors for several ecosystems, so callers select the
 // runtime identity with PreferredPackageInfos.
 func ReadInfo(filePath string) ([]PackageInfo, error) {
+	return readInfo(filePath, nil)
+}
+
+func readInfo(filePath string, inputs *descriptorInputs) ([]PackageInfo, error) {
 	ext := strings.ToLower(filepath.Ext(filePath))
 	if !supportedExt(ext) {
 		return nil, fmt.Errorf("unsupported artifact format: %s", ext)
@@ -55,12 +59,17 @@ func ReadInfo(filePath string) ([]PackageInfo, error) {
 	var results []PackageInfo
 
 	if ext == ".pyz" || ext == ".mcdr" {
-		mcdrReader := newMcdrReader()
-		return mcdrReader.Read(zipReader, filePath)
+		return new(mcdrReader).readWithInputs(zipReader, filePath, inputs)
 	}
 
 	for _, r := range readers {
-		infos, err := r.Read(zipReader, filePath)
+		var infos []PackageInfo
+		var err error
+		if reader, ok := r.(inputReader); ok && inputs != nil {
+			infos, err = reader.readWithInputs(zipReader, filePath, inputs)
+		} else {
+			infos, err = r.Read(zipReader, filePath)
+		}
 		if err != nil {
 			continue
 		}

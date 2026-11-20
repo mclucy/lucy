@@ -35,10 +35,14 @@ type liveSnapshot struct {
 }
 
 // livePrint asks the model to emit a permanent line above the live area. The
-// model closes done once the line is queued for rendering.
+// model closes done once the line is queued for rendering. snapshot is the
+// state the line was queued with: the line and the redraw it precedes describe
+// one instant, so an older snapshot can never redraw the finished phase below
+// its completion.
 type livePrint struct {
-	text string
-	done chan struct{}
+	text     string
+	snapshot liveSnapshot
+	done     chan struct{}
 }
 
 // live renders one animated area on stderr. Updates are coalesced by a ticker
@@ -95,15 +99,19 @@ func (l *live) tick() {
 			return
 		case <-ticker.C:
 			l.mu.Lock()
-			if !l.dirty || l.closed {
+			if l.closed || (!l.dirty && l.state.phase == "") {
 				l.mu.Unlock()
 				continue
 			}
 			l.dirty = false
 			l.frame++
-			snapshot := liveSnapshot{state: l.state, frame: l.frame}
+			// Send while the state lock is held. Program messages arrive in
+			// send order, so a snapshot captured for a phase that is ending
+			// cannot be queued after PhaseDone's completion line and redraw
+			// the finished phase below it. An active phase also animates when
+			// nothing else changed, which keeps long stages visibly alive.
+			l.program.Send(liveSnapshot{state: l.state, frame: l.frame})
 			l.mu.Unlock()
-			l.program.Send(snapshot)
 		}
 	}
 }
@@ -119,23 +127,31 @@ func (l *live) mutate(change func(*liveState)) {
 }
 
 func (l *live) PhaseStarted(text string) {
-	l.mutate(func(state *liveState) {
-		state.phase = text
-		state.status = ""
-		state.download = ""
-		state.read = 0
-		state.total = 0
-	})
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if l.closed {
+		return
+	}
+	// A live area belongs to one phase. Subprocess lines and any unterminated
+	// tail from the previous phase must not reappear under the new one.
+	l.state = liveState{phase: text}
+	l.partial.Reset()
+	l.dirty = true
 }
 
 func (l *live) PhaseDone(text string, elapsed time.Duration) {
-	l.mutate(func(state *liveState) {
-		state.phase = ""
-		state.status = ""
-		state.download = ""
-		state.read = 0
-		state.total = 0
-	})
+	l.mu.Lock()
+	if !l.closed {
+		l.state = liveState{}
+		l.partial.Reset()
+		l.dirty = true
+	}
+	l.mu.Unlock()
+	// An empty text ends the phase without printing, but the live area is
+	// still cleared above.
+	if text == "" {
+		return
+	}
 	l.Println(phaseLine(text, elapsed, l.theme))
 }
 
@@ -179,9 +195,10 @@ func (l *live) Println(lines ...string) {
 	// cannot quit the program while a permanent line is still in flight.
 	defer l.mu.Unlock()
 	done := make(chan struct{})
+	snapshot := liveSnapshot{state: l.state, frame: l.frame}
 	// Send, unlike Program.Println, returns when the program has stopped, so a
 	// late line cannot block shutdown.
-	l.program.Send(livePrint{text: text, done: done})
+	l.program.Send(livePrint{text: text, snapshot: snapshot, done: done})
 	select {
 	case <-done:
 	case <-l.done:
@@ -249,6 +266,12 @@ func (m *liveModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.state = msg.state
 		m.frame = msg.frame
 	case livePrint:
+		// Apply the state the line was queued with before emitting it. The
+		// model's previous view still holds the finished phase and its last
+		// subprocess lines; without this, bubbletea redraws them below the
+		// completion line.
+		m.state = msg.snapshot.state
+		m.frame = msg.snapshot.frame
 		return m, tea.Sequence(tea.Println(msg.text), func() tea.Msg {
 			close(msg.done)
 			return nil

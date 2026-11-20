@@ -49,7 +49,11 @@ func (r *bukkitReader) Read(
 	zipRdr *zip.Reader,
 	filePath string,
 ) ([]PackageInfo, error) {
-	decoded, err := decodeBukkitPackageDescriptor(zipRdr, "")
+	return r.readWithInputs(zipRdr, filePath, nil)
+}
+
+func (r *bukkitReader) readWithInputs(zipRdr *zip.Reader, filePath string, inputs *descriptorInputs) ([]PackageInfo, error) {
+	decoded, err := decodeBukkitPackageDescriptor(zipRdr, "", inputs)
 	if err != nil {
 		return nil, err
 	}
@@ -60,10 +64,12 @@ func (r *bukkitReader) Read(
 func decodeBukkitPackageDescriptor(
 	zipRdr *zip.Reader,
 	member string,
+	inputs *descriptorInputs,
 ) (*decodedDescriptor, error) {
 	descriptor, name, err := readBukkitPluginDescriptor(
 		zipRdr,
 		bukkitPluginDescriptorPath,
+		inputs,
 	)
 	if err != nil || descriptor == nil {
 		return nil, err
@@ -77,10 +83,12 @@ func decodeBukkitPackageDescriptor(
 func decodeBukkitDescriptor(
 	zipRdr *zip.Reader,
 	member string,
+	inputs *descriptorInputs,
 ) (*decodedDescriptor, error) {
 	descriptor, name, err := readBukkitPluginDescriptor(
 		zipRdr,
 		paperPluginDescriptorPath,
+		inputs,
 	)
 	if err != nil {
 		return nil, err
@@ -89,6 +97,7 @@ func decodeBukkitDescriptor(
 		descriptor, name, err = readBukkitPluginDescriptor(
 			zipRdr,
 			bukkitPluginDescriptorPath,
+			inputs,
 		)
 		if err != nil {
 			return nil, err
@@ -103,16 +112,24 @@ func decodeBukkitDescriptor(
 func readBukkitPluginDescriptor(
 	zipRdr *zip.Reader,
 	name string,
+	inputs *descriptorInputs,
 ) (*bukkitPluginDescriptor, string, error) {
+	descriptor, err := descriptorInput(inputs, name, func() (*bukkitPluginDescriptor, error) {
+		return parseBukkitPluginDescriptor(zipRdr, name)
+	})
+	return descriptor, name, err
+}
+
+func parseBukkitPluginDescriptor(zipRdr *zip.Reader, name string) (*bukkitPluginDescriptor, error) {
 	raw, err := readZipEntryBytes(zipRdr, name)
 	if err != nil || raw == nil {
-		return nil, name, err
+		return nil, err
 	}
 	descriptor := &bukkitPluginDescriptor{}
 	if err := yaml.Unmarshal(raw, descriptor); err != nil {
-		return nil, name, err
+		return nil, err
 	}
-	return descriptor, name, nil
+	return descriptor, nil
 }
 
 func bukkitDecodedDescriptor(

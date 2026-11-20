@@ -139,6 +139,11 @@ func (s *Service) resolveInstall(
 	var previousPackages []document.Package
 	if old != nil {
 		previousPackages = old.Packages
+		if len(opts.Adopted) > 0 {
+			previousPackages = slices.DeleteFunc(slices.Clone(previousPackages), func(pkg document.Package) bool {
+				return supersededByAdoption(pkg, opts.Adopted)
+			})
+		}
 	}
 	preserveLocked := old != nil &&
 		old.Server.Minecraft == resolved.Server.Minecraft &&
@@ -164,6 +169,13 @@ func (s *Service) resolveInstall(
 		ExpandDependencies: !opts.declaredOnly,
 		Logger:             s.logger,
 		Trace:              opts.Trace.resolveTrace(),
+	}
+	if len(opts.Adopted) > 0 {
+		cache, err := prepareAdoptedArtifacts(ctx, root, opts.Adopted, packageRequest.Target)
+		if err != nil {
+			return nil, err
+		}
+		packageRequest.Cache = cache
 	}
 	if s.source != nil || len(opts.Adopted) > 0 {
 		packageRequest.Candidates = func(

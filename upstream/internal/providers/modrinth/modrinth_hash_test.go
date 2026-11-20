@@ -4,10 +4,12 @@ import (
 	"crypto/sha1"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"net/http"
 	"strings"
 	"testing"
 
+	"github.com/mclucy/lucy/cache"
 	"github.com/mclucy/lucy/upstream"
 )
 
@@ -448,5 +450,253 @@ func TestReleasesByHashIncompleteMatchIsAnError(t *testing.T) {
 	}
 	if results[2].Matched || results[2].Err != nil {
 		t.Fatalf("omitted digest = %+v, want a clean miss", results[2])
+	}
+}
+
+func TestReleasesByHashRefetchesIncompleteBatch(t *testing.T) {
+	t.Parallel()
+	noProject, wrongFile, matched := hashFingerprint{0x01}, hashFingerprint{0x02}, hashFingerprint{0x03}
+	artifacts := []upstream.ArtifactFingerprint{noProject, wrongFile, matched, hashFingerprint{0x04}}
+	var posts int
+	transport := roundTripFunc(func(request *http.Request) (*http.Response, error) {
+		switch request.URL.Path {
+		case "/v2/version_files":
+			posts++
+			if posts > 1 {
+				return jsonResponse(t, map[string]versionResponse{}), nil
+			}
+			return jsonResponse(t, map[string]versionResponse{
+				noProject.hex(): {
+					Files: []fileResponse{fileWithSha1("orphan", "orphan.jar", noProject.hex(), true)},
+				},
+				wrongFile.hex(): {
+					ProjectId: "wrong-project",
+					Files:     []fileResponse{fileWithSha1("wrong", "wrong.jar", matched.hex(), true)},
+				},
+				matched.hex(): {
+					ID:            "matched-version",
+					ProjectId:     "matched-project",
+					VersionNumber: "1.2.3",
+					Files:         []fileResponse{fileWithSha1("matched", "matched.jar", matched.hex(), true)},
+				},
+			}), nil
+		case "/v2/projects":
+			return jsonResponse(t, []projectResponse{{ID: "matched-project", Slug: "matched"}}), nil
+		default:
+			return nil, fmt.Errorf("unexpected request %s %s", request.Method, request.URL)
+		}
+	})
+	client := cache.New(t.TempDir(), cache.DefaultCacheConfig(), &http.Client{Transport: transport}, nil)
+	t.Cleanup(func() { _ = client.Close() })
+	provider := New(client, nil)
+
+	first := provider.ReleasesByHash(t.Context(), artifacts)
+	for i := range 2 {
+		if first[i].Matched || !errors.Is(first[i].Err, ErrInvalidAPIResponse) {
+			t.Errorf("invalid match %d = %+v, want incomplete lookup", i, first[i])
+		}
+	}
+	if result := first[2]; result.Err != nil || !result.Matched || result.Release.Candidate.FileID != "matched" {
+		t.Errorf("valid match in incomplete batch = %+v", result)
+	}
+	if first[3].Matched || first[3].Err != nil {
+		t.Errorf("omitted match = %+v, want clean miss", first[3])
+	}
+	for range 2 {
+		for i, result := range provider.ReleasesByHash(t.Context(), artifacts) {
+			if result.Matched || result.Err != nil {
+				t.Errorf("refetched match %d = %+v, want clean miss", i, result)
+			}
+		}
+	}
+	if posts != 2 {
+		t.Errorf("POST requests = %d, want one incomplete and one cacheable response", posts)
+	}
+}
+
+func throttleResponse(retryAfter string) *http.Response {
+	return &http.Response{
+		StatusCode: http.StatusTooManyRequests,
+		Header:     http.Header{"Retry-After": []string{retryAfter}},
+		Body:       http.NoBody,
+	}
+}
+
+func TestReleaseByHashThrottleDoesNotWaitOrRetry(t *testing.T) {
+	t.Parallel()
+	requests := 0
+	transport := roundTripFunc(func(request *http.Request) (*http.Response, error) {
+		requests++
+		return throttleResponse("60"), nil
+	})
+
+	provider := newModrinthTestProvider(t, transport)
+	_, matched, err := provider.ReleaseByHash(
+		t.Context(),
+		hashFingerprint{0x21},
+	)
+	if err == nil || matched {
+		t.Fatalf("throttled hash lookup = (%v, %v), want an error", matched, err)
+	}
+	if !strings.Contains(err.Error(), "throttled") {
+		t.Fatalf("error = %v, want the throttle delay", err)
+	}
+	if requests != 1 {
+		t.Fatalf("requests = %d, want 1 (throttle must stop the lookup)", requests)
+	}
+}
+
+func TestReleasesByHashThrottleStopsSplitAndLaterBatches(t *testing.T) {
+	t.Parallel()
+	requests := 0
+	transport := roundTripFunc(func(request *http.Request) (*http.Response, error) {
+		requests++
+		if request.URL.Path != "/v2/version_files" {
+			t.Errorf("unexpected request %s %s", request.Method, request.URL)
+		}
+		return throttleResponse("60"), nil
+	})
+
+	provider := newModrinthTestProvider(t, transport)
+	artifacts := make([]upstream.ArtifactFingerprint, batchSize+1)
+	for i := range artifacts {
+		artifacts[i] = hashFingerprint{byte(i + 1)}
+	}
+	results := provider.ReleasesByHash(t.Context(), artifacts)
+
+	if requests != 1 {
+		t.Fatalf("requests = %d, want 1 (throttle must stop the lookup)", requests)
+	}
+	for i, result := range results {
+		if result.Matched || result.Err == nil ||
+			!strings.Contains(result.Err.Error(), "throttled") {
+			t.Fatalf(
+				"fingerprint %d = %+v, want a throttle error",
+				i,
+				result,
+			)
+		}
+	}
+}
+
+func TestReleasesByHashSplitStopsAfterThrottle(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		name         string
+		throttle     bool
+		wantRequests int
+	}{
+		{name: "transient failure splits", wantRequests: 5},
+		{name: "throttled child stops the split", throttle: true, wantRequests: 4},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			requests := 0
+			transport := roundTripFunc(func(request *http.Request) (*http.Response, error) {
+				requests++
+				if request.URL.Path != "/v2/version_files" {
+					t.Errorf("unexpected request %s %s", request.Method, request.URL)
+				}
+				if requests <= 3 {
+					return &http.Response{StatusCode: http.StatusServiceUnavailable, Body: http.NoBody}, nil
+				}
+				if tc.throttle {
+					return throttleResponse("60"), nil
+				}
+				return jsonResponse(t, map[string]versionResponse{}), nil
+			})
+			provider := newModrinthTestProvider(t, transport)
+			results := provider.ReleasesByHash(
+				t.Context(),
+				[]upstream.ArtifactFingerprint{hashFingerprint{0x31}, hashFingerprint{0x32}},
+			)
+			if requests != tc.wantRequests {
+				t.Fatalf("requests = %d, want %d", requests, tc.wantRequests)
+			}
+			for i, result := range results {
+				if tc.throttle {
+					if result.Matched || result.Err == nil || !strings.Contains(result.Err.Error(), "throttled") {
+						t.Fatalf("fingerprint %d = %+v, want a throttle error", i, result)
+					}
+				} else if result.Matched || result.Err != nil {
+					t.Fatalf("fingerprint %d = %+v, want a clean miss", i, result)
+				}
+			}
+		})
+	}
+}
+
+func TestPinnedVersionLookupStopsAfterThrottle(t *testing.T) {
+	t.Parallel()
+	requests := 0
+	transport := roundTripFunc(func(request *http.Request) (*http.Response, error) {
+		requests++
+		if request.URL.Path != "/v2/versions" {
+			t.Errorf("unexpected request %s %s", request.Method, request.URL)
+		}
+		return throttleResponse("60"), nil
+	})
+
+	provider := newModrinthTestProvider(t, transport)
+	lookup := provider.pinnedVersionLookup(
+		t.Context(),
+		[]*versionResponse{{
+			Dependencies: []dependenciesResponse{{
+				VersionId: "dependent-version",
+			}},
+		}},
+	)
+	if lookup == nil {
+		t.Fatal("expected a pinned version lookup")
+	}
+	version, err := lookup(t.Context(), "dependent-version")
+	if err == nil || version != nil {
+		t.Fatalf("throttled pinned lookup = (%v, %v), want an error", version, err)
+	}
+	if !strings.Contains(err.Error(), "throttled") {
+		t.Fatalf("error = %v, want the throttle delay", err)
+	}
+	if requests != 1 {
+		t.Fatalf(
+			"requests = %d, want 1 (no single-version fallback after a throttle)",
+			requests,
+		)
+	}
+}
+
+func TestGetProjectsByIdsStopsAfterThrottle(t *testing.T) {
+	t.Parallel()
+	requests := 0
+	transport := roundTripFunc(func(request *http.Request) (*http.Response, error) {
+		requests++
+		if request.URL.Path != "/v2/projects" {
+			t.Errorf("unexpected request %s %s", request.Method, request.URL)
+		}
+		return throttleResponse("60"), nil
+	})
+
+	ids := make([]string, batchSize+1)
+	for i := range ids {
+		ids[i] = fmt.Sprintf("project-%d", i)
+	}
+	provider := newModrinthTestProvider(t, transport)
+	projects, errs := provider.getProjectsByIds(t.Context(), ids)
+
+	if len(projects) != 0 {
+		t.Fatalf("projects = %v, want none", projects)
+	}
+	if len(errs) != len(ids) {
+		t.Fatalf("errors = %d, want %d", len(errs), len(ids))
+	}
+	if requests != 1 {
+		t.Fatalf(
+			"requests = %d, want 1 (later project batches must not be sent)",
+			requests,
+		)
+	}
+	for id, err := range errs {
+		if err == nil || !strings.Contains(err.Error(), "throttled") {
+			t.Fatalf("project %s error = %v, want a throttle error", id, err)
+		}
 	}
 }

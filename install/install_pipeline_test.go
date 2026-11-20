@@ -436,7 +436,7 @@ func TestExplicitAdoptionThenInstallReplacesOwnedRuntimeAndPreservesAmbientFiles
 		t.Context(), root, adopted.Server,
 		filepath.Join(sources, "loader.jar"),
 		map[string]string{"server.jar": filepath.Join(sources, "server.jar")},
-		"", nil,
+		"", nil, bootstrap.Progress{},
 	); err != nil {
 		t.Fatalf("prepare complete Fabric fixture: %v", err)
 	}

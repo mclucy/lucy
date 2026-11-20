@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/mclucy/lucy/artifact"
 	"github.com/mclucy/lucy/artifactstore"
 	"github.com/mclucy/lucy/catalog"
 	"github.com/mclucy/lucy/config"
@@ -18,6 +19,7 @@ import (
 	"github.com/mclucy/lucy/internal/workspacewrite"
 	"github.com/mclucy/lucy/resolve"
 	serverpkg "github.com/mclucy/lucy/server"
+	"github.com/mclucy/lucy/upstream"
 	"github.com/mclucy/lucy/version"
 	"github.com/mclucy/lucy/workspace"
 	"github.com/mclucy/lucy/workspace/discovery"
@@ -28,6 +30,10 @@ import (
 // runtime and packages, resolves the lock, and publishes the manifest, lock,
 // and installation receipt as one workspace transaction.
 func (s *Service) Initialize(ctx context.Context, root string, opts InitOptions) (result *InitResult, resultErr error) {
+	return s.initialize(ctx, root, opts, new(artifact.Analyses), nil)
+}
+
+func (s *Service) initialize(ctx context.Context, root string, opts InitOptions, analyses *artifact.Analyses, matches map[string]upstream.ArtifactReleaseResolution) (result *InitResult, resultErr error) {
 	root, err := filepath.Abs(root)
 	if err != nil {
 		return nil, err
@@ -65,10 +71,7 @@ func (s *Service) Initialize(ctx context.Context, root string, opts InitOptions)
 	// trace keeps the phase active instead of inventing an elapsed time.
 	opts.Trace.ReportPhaseStarted("identification")
 	identificationStarted := time.Now()
-	observed := workspace.Observe(
-		root,
-		discovery.Request{Expectation: opts.Expectation},
-	)
+	observed := workspace.ObserveWithAnalyses(root, discovery.Request{Expectation: opts.Expectation}, analyses)
 	if err := promptRuntime(opts, observed); err != nil {
 		return initResult(observed), err
 	}
@@ -127,6 +130,7 @@ func (s *Service) Initialize(ctx context.Context, root string, opts InitOptions)
 		root,
 		manifest,
 		observed,
+		matches,
 	)
 	if err != nil {
 		return initResult(observed), err
@@ -496,7 +500,7 @@ func (s *Service) publishInitialization(
 		// that may predate the ambiguity prompt or network identification.
 		// Installation membership binds the same observed runtime without
 		// turning a member path into a selection key.
-		fresh := workspace.Observe(root, discovery.Request{})
+		fresh := workspace.ObserveRuntime(root, discovery.Request{})
 		freshInstallation := fresh.Discovery.FindInstallation(runtimeObserved.members)
 		if err := runtimeObserved.verify(freshInstallation); err != nil {
 			return initResult(observed), err

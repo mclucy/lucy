@@ -135,7 +135,10 @@ func initializeWorkspace(
 	defer output.Close()
 	opts.Trace = output.Trace()
 	opts.PromptRuntime = func(observed discovery.Result) (*discovery.Installation, error) {
-		output.Close()
+		output.EndProgress()
+		// The prompt owns the terminal while it runs; later phases still need
+		// a renderer after it returns.
+		defer output.RestartProgress()
 		return promptRuntime(ctx, cmd, inv, observed)
 	}
 	result, err := deps.Operations.Initialize(ctx, inv.Directory, opts)

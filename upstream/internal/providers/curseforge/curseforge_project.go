@@ -88,7 +88,7 @@ func (p *Provider) getModsByIds(
 		ModIds []int32 `json:"modIds"`
 	}{ModIds: modIDs}
 	var resp modsDataResponse
-	if err := p.post(ctx, baseUrl+"/v1/mods", payload, &resp); err != nil {
+	if err := p.readPost(ctx, baseUrl+"/v1/mods", payload, &resp, nil); err != nil {
 		if isNotFound(err) {
 			return nil, nil
 		}

@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"crypto/sha1"
 	"encoding/json/v2"
+	"errors"
+	"fmt"
 	"io"
 	"math"
 	"net/http"
@@ -43,11 +45,37 @@ func jsonResponse(t *testing.T, body any) *http.Response {
 	}
 }
 
+func rawJSONResponse(body string) *http.Response {
+	return &http.Response{
+		StatusCode: http.StatusOK,
+		Header:     http.Header{"Content-Type": []string{"application/json"}},
+		Body:       io.NopCloser(strings.NewReader(body)),
+	}
+}
+
+type failingBody struct{}
+
+func (failingBody) Read([]byte) (int, error) {
+	return 0, errors.New("body read failed")
+}
+
+func (failingBody) Close() error {
+	return nil
+}
+
+func throttleHTTPResponse(retryAfter string) *http.Response {
+	return &http.Response{
+		StatusCode: http.StatusTooManyRequests,
+		Header:     http.Header{"Retry-After": []string{retryAfter}},
+		Body:       http.NoBody,
+	}
+}
+
 func newHashTestProvider(t *testing.T, transport http.RoundTripper) *Provider {
 	t.Helper()
 	client := cache.New(
 		t.TempDir(),
-		cache.Config{},
+		cache.DefaultCacheConfig(),
 		&http.Client{Transport: transport},
 		nil,
 	)
@@ -84,7 +112,7 @@ func releaseFile(fingerprint uint32) fileResponse {
 	}
 }
 
-func TestReleasesByHashUncorrelatedMatchMarksUndeterminedInputsIncomplete(
+func TestReleasesByHashUncorrelatedMatchIsNotCached(
 	t *testing.T,
 ) {
 	t.Parallel()
@@ -96,10 +124,12 @@ func TestReleasesByHashUncorrelatedMatchMarksUndeterminedInputsIncomplete(
 	)
 
 	requests := 0
+	fingerprintRequests := 0
 	transport := roundTripFunc(func(request *http.Request) (*http.Response, error) {
 		requests++
 		switch request.URL.Path {
 		case "/v1/fingerprints/432":
+			fingerprintRequests++
 			payload, err := io.ReadAll(request.Body)
 			if err != nil {
 				t.Errorf("read fingerprint request: %v", err)
@@ -115,6 +145,10 @@ func TestReleasesByHashUncorrelatedMatchMarksUndeterminedInputsIncomplete(
 				)
 			}
 			resp := fingerprintResponse{}
+			if fingerprintRequests > 1 {
+				resp.Data.ExactMatches = []fingerprintMatch{{File: releaseFile(matchedFingerprint)}}
+				return jsonResponse(t, resp), nil
+			}
 			resp.Data.ExactMatches = []fingerprintMatch{
 				{File: releaseFile(matchedFingerprint)},
 				// Correlated by fingerprint but missing file identity.
@@ -144,12 +178,13 @@ func TestReleasesByHashUncorrelatedMatchMarksUndeterminedInputsIncomplete(
 	})
 
 	provider := newHashTestProvider(t, transport)
-	results := provider.ReleasesByHash(t.Context(), []upstream.ArtifactFingerprint{
+	artifacts := []upstream.ArtifactFingerprint{
 		fixedFingerprint(matchedFingerprint),
 		fixedFingerprint(malformedFingerprint),
 		fixedFingerprint(missingOne),
 		fixedFingerprint(missingTwo),
-	})
+	}
+	results := provider.ReleasesByHash(t.Context(), artifacts)
 
 	if len(results) != 4 {
 		t.Fatalf("results = %d, want 4", len(results))
@@ -177,6 +212,16 @@ func TestReleasesByHashUncorrelatedMatchMarksUndeterminedInputsIncomplete(
 			)
 		}
 	}
+
+	fresh := provider.ReleasesByHash(t.Context(), artifacts)
+	if fingerprintRequests != 2 || !fresh[0].Matched || fresh[0].Err != nil {
+		t.Fatalf("second lookup = %+v, fingerprint requests = %d, want a fresh match", fresh, fingerprintRequests)
+	}
+	for i, result := range fresh[1:] {
+		if result.Matched || result.Err != nil {
+			t.Fatalf("second lookup, input %d = %+v, want a clean miss", i+1, result)
+		}
+	}
 }
 
 func TestReleasesByHashEmptyResponseIsAMiss(t *testing.T) {
@@ -187,20 +232,61 @@ func TestReleasesByHashEmptyResponseIsAMiss(t *testing.T) {
 		if request.URL.Path != "/v1/fingerprints/432" {
 			t.Errorf("unexpected request %s %s", request.Method, request.URL.Path)
 		}
-		return jsonResponse(t, fingerprintResponse{}), nil
+		return rawJSONResponse(
+			`{"data":{"exactMatches":[]}}`,
+		), nil
 	})
 
 	provider := newHashTestProvider(t, transport)
-	results := provider.ReleasesByHash(
-		t.Context(),
-		[]upstream.ArtifactFingerprint{fixedFingerprint(5555)},
-	)
-
-	if requests != 1 {
-		t.Fatalf("requests = %d, want 1", requests)
-	}
+	artifacts := []upstream.ArtifactFingerprint{fixedFingerprint(5555)}
+	results := provider.ReleasesByHash(t.Context(), artifacts)
 	if results[0].Matched || results[0].Err != nil {
 		t.Fatalf("empty response = %+v, want a clean miss", results[0])
+	}
+
+	cached := provider.ReleasesByHash(t.Context(), artifacts)
+	if requests != 1 {
+		t.Fatalf("requests = %d, want 1 (empty matches stay cached)", requests)
+	}
+	if cached[0].Matched || cached[0].Err != nil {
+		t.Fatalf("cached empty response = %+v, want a clean miss", cached[0])
+	}
+}
+
+func TestReleasesByHashIncompleteEnvelopeIsNotCached(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		name string
+		body string
+	}{
+		{name: "missing data", body: `{}`},
+		{name: "missing exact matches", body: `{"data":{}}`},
+		{name: "null exact matches", body: `{"data":{"exactMatches":null}}`},
+		{name: "non-array exact matches", body: `{"data":{"exactMatches":{}}}`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			requests := 0
+			provider := newHashTestProvider(t, roundTripFunc(func(request *http.Request) (*http.Response, error) {
+				requests++
+				if request.URL.Path != "/v1/fingerprints/432" {
+					t.Errorf("unexpected request %s %s", request.Method, request.URL.Path)
+				}
+				if requests == 1 {
+					return rawJSONResponse(tc.body), nil
+				}
+				return rawJSONResponse(`{"data":{"exactMatches":[]}}`), nil
+			}))
+			artifacts := []upstream.ArtifactFingerprint{fixedFingerprint(5555)}
+			first := provider.ReleasesByHash(t.Context(), artifacts)[0]
+			if first.Matched || first.Err == nil {
+				t.Fatalf("invalid envelope = %+v, want incomplete lookup", first)
+			}
+			second := provider.ReleasesByHash(t.Context(), artifacts)[0]
+			if second.Matched || second.Err != nil || requests != 2 {
+				t.Fatalf("lookup after malformed response = %+v, requests = %d, want a fresh miss", second, requests)
+			}
+		})
 	}
 }
 
@@ -440,6 +526,213 @@ func TestReleasesByHashRefetchRequiresCompleteAuthoritativeDetail(
 		t.Fatalf(
 			"aliased authoritative detail = %+v, want a fingerprint error",
 			results[3],
+		)
+	}
+}
+
+func TestReleasesByHashRefetchDoesNotCacheOmittedFiles(t *testing.T) {
+	t.Parallel()
+	firstFile := releaseFile(1111)
+	secondFile := wireFingerprintFile(200, firstFile.ModId, 2222)
+	requests := 0
+	provider := newHashTestProvider(t, roundTripFunc(func(request *http.Request) (*http.Response, error) {
+		switch request.URL.Path {
+		case "/v1/fingerprints/432":
+			resp := fingerprintResponse{}
+			for _, file := range []fileResponse{firstFile, secondFile} {
+				file.FileName = "" // Require a separate file-details lookup.
+				resp.Data.ExactMatches = append(resp.Data.ExactMatches, fingerprintMatch{File: file})
+			}
+			return jsonResponse(t, resp), nil
+		case "/v1/mods/files":
+			requests++
+			files := []fileResponse{firstFile}
+			if requests > 1 {
+				files = append(files, secondFile)
+			}
+			return jsonResponse(t, filesDataResponse{Data: files}), nil
+		case "/v1/mods":
+			return jsonResponse(t, modsDataResponse{
+				Data: []modResponse{{ID: firstFile.ModId, Slug: "alpha"}},
+			}), nil
+		default:
+			return nil, fmt.Errorf("unexpected request %s %s", request.Method, request.URL.Path)
+		}
+	}))
+
+	artifacts := []upstream.ArtifactFingerprint{fixedFingerprint(1111), fixedFingerprint(2222)}
+	results := provider.ReleasesByHash(t.Context(), artifacts)
+	if !results[0].Matched || results[0].Err != nil {
+		t.Fatalf("present file = %+v, want a release", results[0])
+	}
+	if results[1].Matched || results[1].Err == nil || !strings.Contains(results[1].Err.Error(), "exact file 200 is missing") {
+		t.Fatalf("omitted file = %+v, want an incomplete lookup", results[1])
+	}
+
+	results = provider.ReleasesByHash(t.Context(), artifacts)
+	if requests != 2 || !results[1].Matched || results[1].Err != nil {
+		t.Fatalf("corrected file = %+v, file requests = %d, want a fresh match", results[1], requests)
+	}
+}
+
+func TestReleasesByHashThrottleStopsSplitAndLaterBatches(t *testing.T) {
+	t.Parallel()
+	requests := 0
+	transport := roundTripFunc(func(request *http.Request) (*http.Response, error) {
+		requests++
+		if request.URL.Path != "/v1/fingerprints/432" {
+			t.Errorf("unexpected request %s %s", request.Method, request.URL.Path)
+		}
+		return throttleHTTPResponse("60"), nil
+	})
+
+	provider := newHashTestProvider(t, transport)
+	artifacts := make(
+		[]upstream.ArtifactFingerprint,
+		lookupBatchSize+1,
+	)
+	for i := range artifacts {
+		artifacts[i] = fixedFingerprint(uint32(i + 1))
+	}
+	results := provider.ReleasesByHash(t.Context(), artifacts)
+
+	if requests != 1 {
+		t.Fatalf("requests = %d, want 1 (throttle must stop the lookup)", requests)
+	}
+	for i, result := range results {
+		if result.Matched || result.Err == nil ||
+			!strings.Contains(result.Err.Error(), "throttled") {
+			t.Fatalf(
+				"fingerprint %d = %+v, want a throttle error",
+				i,
+				result,
+			)
+		}
+	}
+}
+
+func TestReleasesByHashProjectThrottlePreservesEarlierMatches(t *testing.T) {
+	t.Parallel()
+	projectRequests := 0
+	provider := newHashTestProvider(t, roundTripFunc(func(request *http.Request) (*http.Response, error) {
+		switch request.URL.Path {
+		case "/v1/fingerprints/432":
+			var payload fingerprintRequest
+			if err := json.UnmarshalRead(request.Body, &payload); err != nil {
+				return nil, err
+			}
+			var response fingerprintResponse
+			for _, fingerprint := range payload.Fingerprints {
+				id := int32(fingerprint)
+				response.Data.ExactMatches = append(response.Data.ExactMatches, fingerprintMatch{
+					File: wireFingerprintFile(id, id, int64(fingerprint)),
+				})
+			}
+			return jsonResponse(t, response), nil
+		case "/v1/mods":
+			projectRequests++
+			if projectRequests > 1 {
+				return throttleHTTPResponse("60"), nil
+			}
+			var payload struct {
+				ModIDs []int32 `json:"modIds"`
+			}
+			if err := json.UnmarshalRead(request.Body, &payload); err != nil {
+				return nil, err
+			}
+			mods := make([]modResponse, 0, len(payload.ModIDs))
+			for _, id := range payload.ModIDs {
+				mods = append(mods, modResponse{ID: id, Slug: "beta"})
+			}
+			return jsonResponse(t, modsDataResponse{Data: mods}), nil
+		default:
+			return nil, fmt.Errorf("unexpected request %s %s", request.Method, request.URL.Path)
+		}
+	}))
+	artifacts := make([]upstream.ArtifactFingerprint, 2*lookupBatchSize+1)
+	for i := range artifacts {
+		artifacts[i] = fixedFingerprint(i + 1)
+	}
+	results := provider.ReleasesByHash(t.Context(), artifacts)
+	if projectRequests != 2 {
+		t.Fatalf("made %d project requests, want one success and one throttle", projectRequests)
+	}
+	for i, result := range results {
+		if i < lookupBatchSize {
+			if !result.Matched || result.Err != nil {
+				t.Fatalf("input %d = %+v, want a release", i, result)
+			}
+			continue
+		}
+		if result.Matched || result.Err == nil || !strings.Contains(result.Err.Error(), "throttled") {
+			t.Fatalf("input %d = %+v, want a throttle error", i, result)
+		}
+	}
+}
+
+func TestReleasesByHashThrottledBodyReadErrorStopsRetries(t *testing.T) {
+	t.Parallel()
+	requests := 0
+	transport := roundTripFunc(func(request *http.Request) (*http.Response, error) {
+		requests++
+		return &http.Response{
+			StatusCode: http.StatusTooManyRequests,
+			Header:     http.Header{"Retry-After": []string{"60"}},
+			Body:       failingBody{},
+		}, nil
+	})
+
+	provider := newHashTestProvider(t, transport)
+	results := provider.ReleasesByHash(
+		t.Context(),
+		[]upstream.ArtifactFingerprint{
+			fixedFingerprint(1),
+			fixedFingerprint(2),
+		},
+	)
+
+	if requests != 1 {
+		t.Fatalf(
+			"requests = %d, want 1 (throttle status must survive a body read error)",
+			requests,
+		)
+	}
+	for i, result := range results {
+		if result.Matched || result.Err == nil ||
+			!strings.Contains(result.Err.Error(), "throttled") {
+			t.Fatalf(
+				"fingerprint %d = %+v, want a throttle error",
+				i,
+				result,
+			)
+		}
+	}
+}
+
+func TestReleasesByHash404WithBodyReadErrorIsAMiss(t *testing.T) {
+	t.Parallel()
+	requests := 0
+	transport := roundTripFunc(func(request *http.Request) (*http.Response, error) {
+		requests++
+		return &http.Response{
+			StatusCode: http.StatusNotFound,
+			Body:       failingBody{},
+		}, nil
+	})
+
+	provider := newHashTestProvider(t, transport)
+	results := provider.ReleasesByHash(
+		t.Context(),
+		[]upstream.ArtifactFingerprint{fixedFingerprint(5555)},
+	)
+
+	if requests != 1 {
+		t.Fatalf("requests = %d, want 1", requests)
+	}
+	if results[0].Matched || results[0].Err != nil {
+		t.Fatalf(
+			"404 with a failed body read = %+v, want a miss",
+			results[0],
 		)
 	}
 }

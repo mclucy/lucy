@@ -23,7 +23,11 @@ func (r *mcdrReader) Read(
 	zipRdr *zip.Reader,
 	filePath string,
 ) ([]PackageInfo, error) {
-	decoded, err := decodeMCDRDescriptor(zipRdr, "")
+	return r.readWithInputs(zipRdr, filePath, nil)
+}
+
+func (r *mcdrReader) readWithInputs(zipRdr *zip.Reader, filePath string, inputs *descriptorInputs) ([]PackageInfo, error) {
+	decoded, err := decodeMCDRDescriptor(zipRdr, "", inputs)
 	if err != nil {
 		return nil, err
 	}
@@ -33,12 +37,19 @@ func (r *mcdrReader) Read(
 func decodeMCDRDescriptor(
 	zipRdr *zip.Reader,
 	member string,
+	inputs *descriptorInputs,
 ) (*decodedDescriptor, error) {
-	raw, err := readZipEntryBytes(zipRdr, "mcdreforged.plugin.json")
-	if err != nil || raw == nil {
+	descriptor, err := descriptorInput(inputs, "mcdreforged.plugin.json", func() (*mcdrPluginFile, error) {
+		raw, err := readZipEntryBytes(zipRdr, "mcdreforged.plugin.json")
+		if err != nil || raw == nil {
+			return nil, err
+		}
+		return parseMCDRPluginFile(raw)
+	})
+	if err != nil || descriptor == nil {
 		return nil, err
 	}
-	return mcdrDecodedDescriptor(zipRdr, raw, member)
+	return mcdrDecodedDescriptor(zipRdr, descriptor, member)
 }
 
 // mcdrDescription is the plugin description. MCDR accepts one string or a map
@@ -76,15 +87,15 @@ type mcdrPluginFile struct {
 	RequirementsFile jsontext.Value           `json:"requirements_file"`
 }
 
-func mcdrDecodedDescriptor(
-	zipRdr *zip.Reader,
-	raw []byte,
-	member string,
-) (*decodedDescriptor, error) {
+func parseMCDRPluginFile(raw []byte) (*mcdrPluginFile, error) {
 	descriptor := &mcdrPluginFile{}
 	if err := unmarshalDescriptor(raw, descriptor); err != nil {
 		return nil, err
 	}
+	return descriptor, nil
+}
+
+func mcdrDecodedDescriptor(zipRdr *zip.Reader, descriptor *mcdrPluginFile, member string) (*decodedDescriptor, error) {
 	module := catalog.DescriptorModule{
 		ID:             descriptor.ID,
 		Version:        version.Version(descriptor.Version),

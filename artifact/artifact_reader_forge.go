@@ -23,7 +23,11 @@ func (r *forgeReader) Read(
 	zipRdr *zip.Reader,
 	filePath string,
 ) ([]PackageInfo, error) {
-	decoded, err := decodeForgeDescriptor(zipRdr, "", true)
+	return r.readWithInputs(zipRdr, filePath, nil)
+}
+
+func (r *forgeReader) readWithInputs(zipRdr *zip.Reader, filePath string, inputs *descriptorInputs) ([]PackageInfo, error) {
+	decoded, err := decodeForgeDescriptor(zipRdr, "", true, inputs)
 	if err != nil {
 		return nil, err
 	}
@@ -41,7 +45,14 @@ type decodedModsToml struct {
 func readModsToml(
 	zipRdr *zip.Reader,
 	name string,
+	inputs *descriptorInputs,
 ) (*decodedModsToml, error) {
+	return descriptorInput(inputs, name, func() (*decodedModsToml, error) {
+		return parseModsToml(zipRdr, name)
+	})
+}
+
+func parseModsToml(zipRdr *zip.Reader, name string) (*decodedModsToml, error) {
 	raw, err := readZipEntryBytes(zipRdr, name)
 	if err != nil || raw == nil {
 		return nil, err
@@ -63,8 +74,9 @@ func decodeForgeDescriptor(
 	zipRdr *zip.Reader,
 	member string,
 	packageView bool,
+	inputs *descriptorInputs,
 ) (*decodedDescriptor, error) {
-	descriptor, err := readModsToml(zipRdr, forgeModsTomlPath)
+	descriptor, err := readModsToml(zipRdr, forgeModsTomlPath, inputs)
 	if err != nil {
 		return nil, err
 	}
@@ -105,7 +117,7 @@ func decodeForgeDescriptor(
 			zipRdr,
 			jarjarMeta,
 			func(nested *zip.Reader) (*decodedModsToml, error) {
-				return readModsToml(nested, forgeModsTomlPath)
+				return readModsToml(nested, forgeModsTomlPath, nil)
 			},
 		)
 		origins = make(map[string]catalog.DependencyOrigin, len(embeddedModIDs))

@@ -4,6 +4,7 @@ import (
 	"io"
 	"time"
 
+	"github.com/mclucy/lucy/bootstrap"
 	"github.com/mclucy/lucy/document"
 	"github.com/mclucy/lucy/resolve"
 	"github.com/mclucy/lucy/server"
@@ -27,6 +28,7 @@ type PhaseInfo struct {
 // installs a Trace presents the facts; this package never formats them.
 type Trace struct {
 	PhaseStarted  func(name string)
+	PhaseProgress func(name string, count, total int)
 	PhaseDone     func(phase PhaseInfo)
 	FetchStarted  func(name string, size int64)
 	FetchProgress func(name string, read, total int64)
@@ -51,6 +53,36 @@ func (t *Trace) phaseStarted(name string) {
 func (t *Trace) phaseDone(phase PhaseInfo) {
 	if t != nil && t.PhaseDone != nil {
 		t.PhaseDone(phase)
+	}
+}
+
+func (t *Trace) progressPhase(name string, count, total int) {
+	if t != nil && t.PhaseProgress != nil {
+		t.PhaseProgress(name, count, total)
+	}
+}
+
+// ReportPhaseProgress publishes bounded progress inside a started stage.
+func (t *Trace) ReportPhaseProgress(name string, count, total int) {
+	t.progressPhase(name, count, total)
+}
+
+// bootstrapProgress adapts the bootstrap package's callback shape to this
+// operation's trace without either package importing the other.
+func (t *Trace) bootstrapProgress() bootstrap.Progress {
+	return bootstrap.Progress{
+		PhaseStarted: func(name string) { t.phaseStarted(name) },
+		PhaseProgress: func(name string, count, total int) {
+			t.progressPhase(name, count, total)
+		},
+		PhaseDone: func(name string, elapsed time.Duration, count, total int) {
+			t.phaseDone(PhaseInfo{
+				Name:    name,
+				Elapsed: elapsed,
+				Count:   count,
+				Total:   total,
+			})
+		},
 	}
 }
 
