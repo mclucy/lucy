@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -174,4 +175,347 @@ func TestApplyCommitRetainedBootstrapDriftAborts(t *testing.T) {
 	if !bytes.Equal(committed, after) {
 		t.Fatal("aborted commit still rewrote the receipt")
 	}
+}
+
+func transactionTestImage(
+	data []byte,
+	mode os.FileMode,
+) *workspacewrite.InstallImage {
+	return workspacewrite.InstallBytesImage(data, mode)
+}
+
+func transactionTestRoot(t *testing.T, root string) *os.Root {
+	t.Helper()
+	files, err := os.OpenRoot(root)
+	if err != nil {
+		t.Fatalf("os.OpenRoot() error = %v", err)
+	}
+	t.Cleanup(func() {
+		if err := files.Close(); err != nil {
+			t.Errorf("os.Root.Close() error = %v", err)
+		}
+	})
+	return files
+}
+
+// A captured document must be read through the workspace root instead of a
+// path that a symlink or directory can redirect. The capture is the baseline
+// every publication verifies against, so it may not follow a non-regular
+// entry to another file.
+func TestCaptureWorkspaceDocumentsRejectsNonRegularDocuments(t *testing.T) {
+	t.Run("symlink", func(t *testing.T) {
+		root := t.TempDir()
+		outside := filepath.Join(t.TempDir(), "manifest.yaml")
+		if err := os.WriteFile(outside, []byte("outside\n"), 0o644); err != nil {
+			t.Fatalf("write outside document: %v", err)
+		}
+		if err := os.Symlink(
+			outside,
+			filepath.Join(root, document.ManifestFilename),
+		); err != nil {
+			t.Skipf("symlinks unavailable: %v", err)
+		}
+		if _, err := CaptureWorkspaceDocuments(root); err == nil {
+			t.Fatal("CaptureWorkspaceDocuments() accepted a symlinked document")
+		}
+	})
+
+	t.Run("directory", func(t *testing.T) {
+		root := t.TempDir()
+		if err := os.Mkdir(
+			filepath.Join(root, document.ManifestFilename),
+			0o755,
+		); err != nil {
+			t.Fatalf("create document directory: %v", err)
+		}
+		if _, err := CaptureWorkspaceDocuments(root); err == nil {
+			t.Fatal("CaptureWorkspaceDocuments() accepted a directory as a document")
+		}
+	})
+}
+
+// Pinned documents must be rechecked after the caller's verifier has run.
+// Caller verification may spend time hashing outputs, and an edit made during
+// that work otherwise commits metadata that describes a different workspace.
+// The recheck must also run when the transaction journals no changes.
+func TestExecuteCommitRechecksDocumentsAfterVerifier(t *testing.T) {
+	manifest := []byte("server:\n  directory: .\n")
+	edited := []byte("server:\n  directory: .\n# edited while outputs were verified\n")
+	editManifest := func(
+		root string,
+	) func(*os.Root, []workspacewrite.InstallJournalEntry) error {
+		return func(*os.Root, []workspacewrite.InstallJournalEntry) error {
+			return os.WriteFile(
+				filepath.Join(root, document.ManifestFilename),
+				edited,
+				0o644,
+			)
+		}
+	}
+
+	t.Run("journaled write", func(t *testing.T) {
+		root := t.TempDir()
+		transactionTestWrite(
+			t, root, document.ManifestFilename, manifest,
+		)
+		if err := os.MkdirAll(filepath.Join(root, ".lucy"), 0o755); err != nil {
+			t.Fatalf("create workspace state directory: %v", err)
+		}
+		documents := transactionTestDocuments(t, root)
+		published := []byte("runtime output\n")
+		_, err := executeCommit(root, commitRequest{
+			label: "test",
+			writes: []commitWrite{{
+				path:  "mods/example.jar",
+				data:  published,
+				after: transactionTestImage(published, 0o644),
+			}},
+			documents: documents,
+			verify:    editManifest(root),
+		}, nil)
+		if err == nil || !strings.Contains(err.Error(), document.ManifestFilename) {
+			t.Fatalf(
+				"executeCommit() error = %v, want a pinned document recheck",
+				err,
+			)
+		}
+		raw, readErr := os.ReadFile(
+			filepath.Join(root, document.ManifestFilename),
+		)
+		if readErr != nil {
+			t.Fatalf("read externally edited manifest: %v", readErr)
+		}
+		if !bytes.Equal(raw, edited) {
+			t.Fatal("aborted commit overwrote the external edit")
+		}
+		if _, statErr := os.Stat(
+			filepath.Join(root, "mods", "example.jar"),
+		); !errors.Is(statErr, os.ErrNotExist) {
+			t.Fatalf("aborted commit left its journaled write: %v", statErr)
+		}
+	})
+
+	t.Run("no journaled change", func(t *testing.T) {
+		root := t.TempDir()
+		transactionTestWrite(
+			t, root, document.ManifestFilename, manifest,
+		)
+		documents := transactionTestDocuments(t, root)
+		_, err := executeCommit(root, commitRequest{
+			label:     "test",
+			documents: documents,
+			verify:    editManifest(root),
+		}, nil)
+		if err == nil || !strings.Contains(err.Error(), document.ManifestFilename) {
+			t.Fatalf(
+				"executeCommit() error = %v, want a pinned document recheck for a no-op commit",
+				err,
+			)
+		}
+		raw, readErr := os.ReadFile(
+			filepath.Join(root, document.ManifestFilename),
+		)
+		if readErr != nil {
+			t.Fatalf("read externally edited manifest: %v", readErr)
+		}
+		if !bytes.Equal(raw, edited) {
+			t.Fatal("no-op commit overwrote the external edit")
+		}
+	})
+}
+
+// Paths the executor journals are skipped by its pre-write recheck, so the
+// final verifier must compare a journaled write with its after image and a
+// journaled prune with absence. Otherwise an edit made while another file was
+// written leaves a receipt that no longer describes the workspace.
+func TestVerifyInstallOutputsChecksJournaledPaths(t *testing.T) {
+	published := []byte("published output\n")
+	previous := []byte("previous output\n")
+	publishedImage := transactionTestImage(published, 0o644)
+	previousImage := transactionTestImage(previous, 0o644)
+
+	t.Run("journaled write holds its after image", func(t *testing.T) {
+		root := t.TempDir()
+		transactionTestWrite(t, root, "mods/edited.jar", published)
+		staged := map[string]commitWrite{
+			"mods/edited.jar": {
+				path:  "mods/edited.jar",
+				after: publishedImage,
+			},
+		}
+		entries := []workspacewrite.InstallJournalEntry{{
+			Path:   "mods/edited.jar",
+			Before: previousImage,
+			After:  publishedImage,
+		}}
+		if err := verifyInstallOutputs(
+			transactionTestRoot(t, root), entries, staged, nil, nil,
+		); err != nil {
+			t.Fatalf("unchanged journaled write rejected: %v", err)
+		}
+		transactionTestWrite(t, root, "mods/edited.jar", []byte("external edit\n"))
+		if err := verifyInstallOutputs(
+			transactionTestRoot(t, root), entries, staged, nil, nil,
+		); err == nil || !strings.Contains(err.Error(), "mods/edited.jar") {
+			t.Fatalf("edited journaled write accepted: %v", err)
+		}
+	})
+
+	t.Run("journaled prune stays absent", func(t *testing.T) {
+		root := t.TempDir()
+		prunes := map[string]*workspacewrite.InstallImage{
+			"mods/pruned.jar": previousImage,
+		}
+		entries := []workspacewrite.InstallJournalEntry{{
+			Path:   "mods/pruned.jar",
+			Before: previousImage,
+		}}
+		if err := verifyInstallOutputs(
+			transactionTestRoot(t, root), entries, nil, prunes, nil,
+		); err != nil {
+			t.Fatalf("absent journaled prune rejected: %v", err)
+		}
+		transactionTestWrite(t, root, "mods/pruned.jar", previous)
+		if err := verifyInstallOutputs(
+			transactionTestRoot(t, root), entries, nil, prunes, nil,
+		); err == nil || !strings.Contains(err.Error(), "mods/pruned.jar") {
+			t.Fatalf("reappeared journaled prune accepted: %v", err)
+		}
+	})
+
+	t.Run("planned output without a journal entry holds its image", func(t *testing.T) {
+		root := t.TempDir()
+		transactionTestWrite(t, root, "mods/unchanged.jar", published)
+		staged := map[string]commitWrite{
+			"mods/unchanged.jar": {
+				path:  "mods/unchanged.jar",
+				base:  publishedImage,
+				after: publishedImage,
+			},
+		}
+		if err := verifyInstallOutputs(
+			transactionTestRoot(t, root), nil, staged, nil, nil,
+		); err != nil {
+			t.Fatalf("unchanged planned output rejected: %v", err)
+		}
+		transactionTestWrite(
+			t, root, "mods/unchanged.jar", []byte("external edit\n"),
+		)
+		if err := verifyInstallOutputs(
+			transactionTestRoot(t, root), nil, staged, nil, nil,
+		); err == nil || !strings.Contains(err.Error(), "mods/unchanged.jar") {
+			t.Fatalf("edited planned output accepted: %v", err)
+		}
+	})
+}
+
+// A receipt carried forward keeps claiming the entries it does not restage or
+// prune. The final verifier must check those entries against their accepted
+// baselines, honoring the legacy zero-mode wildcard, while a restaged or
+// pruned path is checked against its planned result instead.
+func TestVerifyInstallOutputsChecksRetainedEntries(t *testing.T) {
+	core := []byte("server core\n")
+	entry := receipt.Entry{
+		Path:   "server/server.jar",
+		SHA256: transactionTestDigest(core),
+		Mode:   0o644,
+		Origin: receipt.OriginBootstrap,
+	}
+
+	t.Run("retained output holds its baseline", func(t *testing.T) {
+		root := t.TempDir()
+		transactionTestWrite(t, root, entry.Path, core)
+		check := func() error {
+			return verifyInstallOutputs(
+				transactionTestRoot(t, root),
+				nil, nil, nil,
+				[]receipt.Entry{entry},
+			)
+		}
+		if err := check(); err != nil {
+			t.Fatalf("unchanged retained output rejected: %v", err)
+		}
+		transactionTestWrite(t, root, entry.Path, []byte("drift\n"))
+		if err := check(); err == nil || !strings.Contains(err.Error(), entry.Path) {
+			t.Fatalf("changed retained output accepted: %v", err)
+		}
+	})
+
+	t.Run("missing retained output fails", func(t *testing.T) {
+		root := t.TempDir()
+		if err := verifyInstallOutputs(
+			transactionTestRoot(t, root), nil, nil, nil,
+			[]receipt.Entry{entry},
+		); err == nil || !strings.Contains(err.Error(), entry.Path) {
+			t.Fatalf("missing retained output accepted: %v", err)
+		}
+	})
+
+	t.Run("legacy zero mode stays a wildcard", func(t *testing.T) {
+		root := t.TempDir()
+		transactionTestWrite(t, root, entry.Path, core)
+		legacy := entry
+		legacy.Mode = 0
+		if err := verifyInstallOutputs(
+			transactionTestRoot(t, root), nil, nil, nil,
+			[]receipt.Entry{legacy},
+		); err != nil {
+			t.Fatalf("legacy retained output rejected: %v", err)
+		}
+	})
+
+	t.Run("restaged path uses its new image", func(t *testing.T) {
+		root := t.TempDir()
+		updated := []byte("updated wrapper\n")
+		transactionTestWrite(t, root, "plugins/wrapper.py", updated)
+		staged := map[string]commitWrite{
+			"plugins/wrapper.py": {
+				path:  "plugins/wrapper.py",
+				after: transactionTestImage(updated, 0o644),
+			},
+		}
+		stale := receipt.Entry{
+			Path:   "plugins/wrapper.py",
+			SHA256: transactionTestDigest([]byte("stale wrapper\n")),
+			Mode:   0o644,
+			Origin: receipt.OriginBootstrap,
+		}
+		if err := verifyInstallOutputs(
+			transactionTestRoot(t, root), nil, staged, nil,
+			[]receipt.Entry{stale},
+		); err != nil {
+			t.Fatalf("restaged path compared with its old baseline: %v", err)
+		}
+	})
+
+	t.Run("pruned path uses absence", func(t *testing.T) {
+		root := t.TempDir()
+		previous := []byte("removed output\n")
+		removed := receipt.Entry{
+			Path:   "mods/removed.jar",
+			SHA256: transactionTestDigest(previous),
+			Mode:   0o644,
+			Origin: receipt.OriginPackage,
+		}
+		prunes := map[string]*workspacewrite.InstallImage{
+			removed.Path: transactionTestImage(previous, 0o644),
+		}
+		entries := []workspacewrite.InstallJournalEntry{{
+			Path:   removed.Path,
+			Before: transactionTestImage(previous, 0o644),
+		}}
+		if err := verifyInstallOutputs(
+			transactionTestRoot(t, root), entries, nil, prunes,
+			[]receipt.Entry{removed},
+		); err != nil {
+			t.Fatalf("absent pruned path rejected: %v", err)
+		}
+		transactionTestWrite(t, root, removed.Path, previous)
+		if err := verifyInstallOutputs(
+			transactionTestRoot(t, root), entries, nil, prunes,
+			[]receipt.Entry{removed},
+		); err == nil || !strings.Contains(err.Error(), removed.Path) {
+			t.Fatalf("reappeared pruned path accepted: %v", err)
+		}
+	})
 }
