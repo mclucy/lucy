@@ -8,6 +8,7 @@ import (
 
 	"github.com/mclucy/lucy/catalog"
 	"github.com/mclucy/lucy/upstream"
+	"github.com/mclucy/lucy/upstream/internal/providers/retry"
 	"github.com/mclucy/lucy/version"
 )
 
@@ -60,9 +61,11 @@ func (p *Provider) ReleaseByHash(
 // Fingerprints are deduplicated and looked up in bounded batches, so identical
 // inputs share one lookup and the number of requests does not grow with a
 // project's file count. Only exact matches count. An unknown fingerprint is a
-// miss, not an error; a failed batch is an error for every input it covered.
-// An exact match whose file or project details cannot be completed is an
-// incomplete lookup, reported as an error rather than a miss.
+// miss, not an error. A transient batch failure is retried with backoff and
+// then isolated by splitting the batch within a bounded split budget; a part
+// that still fails is an error for every input it covered. An exact match
+// whose file or project details cannot be completed is an incomplete lookup,
+// reported as an error rather than a miss.
 func (p *Provider) ReleasesByHash(
 	ctx context.Context,
 	artifacts []upstream.ArtifactFingerprint,
@@ -124,15 +127,17 @@ func failFingerprints(
 	}
 }
 
-// failFingerprint records one error for every input that asked for fingerprint.
+// failFingerprint records one error for every input that asked for fingerprint,
+// naming the fingerprint so a shared batch failure stays correlated per input.
 func failFingerprint(
 	results []upstream.ArtifactReleaseLookup,
 	indexByFingerprint map[uint32][]int,
 	fingerprint uint32,
 	err error,
 ) {
+	correlated := fmt.Errorf("fingerprint %d: %w", fingerprint, err)
 	for _, i := range indexByFingerprint[fingerprint] {
-		results[i].Err = err
+		results[i].Err = correlated
 	}
 }
 
@@ -167,98 +172,132 @@ func (p *Provider) exactFiles(
 	results []upstream.ArtifactReleaseLookup,
 ) map[uint32]fileResponse {
 	files := make(map[uint32]fileResponse, len(fingerprints))
+	// A request body independent of discovery order lets a repeated lookup
+	// reuse the cached response.
+	slices.Sort(fingerprints)
 	for batch := range slices.Chunk(fingerprints, lookupBatchSize) {
-		matches, err := p.fingerprintMatches(ctx, batch)
-		if err != nil {
-			failFingerprints(results, indexByFingerprint, batch, err)
-			continue
+		p.resolveFingerprintBatch(ctx, batch, 0, indexByFingerprint, results, files)
+	}
+	return files
+}
+
+// resolveFingerprintBatch resolves one request's fingerprints into files. A
+// batch that still fails after its retry budget is split in halves and retried
+// per part, so one transient failure cannot mark every input unresolved.
+// Permanent statuses, cancellation, and the split-depth budget end the split;
+// only the inputs carried by a failed part report that error.
+func (p *Provider) resolveFingerprintBatch(
+	ctx context.Context,
+	batch []uint32,
+	depth int,
+	indexByFingerprint map[uint32][]int,
+	results []upstream.ArtifactReleaseLookup,
+	files map[uint32]fileResponse,
+) {
+	matches, err := p.fingerprintMatches(ctx, batch)
+	if err != nil {
+		if len(batch) > 1 &&
+			depth < retry.MaxSplitDepth &&
+			ctx.Err() == nil &&
+			retry.Splittable(err) {
+			middle := len(batch) / 2
+			p.resolveFingerprintBatch(
+				ctx,
+				batch[:middle],
+				depth+1,
+				indexByFingerprint,
+				results,
+				files,
+			)
+			p.resolveFingerprintBatch(
+				ctx,
+				batch[middle:],
+				depth+1,
+				indexByFingerprint,
+				results,
+				files,
+			)
+			return
 		}
-		wanted := make(map[uint32]struct{}, len(batch))
-		for _, fingerprint := range batch {
-			wanted[fingerprint] = struct{}{}
-		}
-		uncorrelated := 0
-		for _, match := range matches {
-			if match.File.FileFingerprint == nil {
-				// Without the file's own fingerprint there is no proven way to
-				// attribute this match unless the batch named a single input.
-				if len(batch) == 1 {
-					failFingerprint(
-						results,
-						indexByFingerprint,
-						batch[0],
-						fmt.Errorf(
-							"curseforge: exact match for file %d has no fingerprint",
-							match.File.ID,
-						),
-					)
-					continue
-				}
-				uncorrelated++
-				continue
-			}
-			wireFingerprint := *match.File.FileFingerprint
-			if wireFingerprint < 0 || wireFingerprint > math.MaxUint32 {
-				// The official schema carries the fingerprint as int64. A value
-				// outside the uint32 fingerprint space names no input this
-				// batch requested; narrowing it first could alias another
-				// input's fingerprint and misattribute the record.
-				uncorrelated++
-				continue
-			}
-			fingerprint := uint32(wireFingerprint)
-			if _, ok := wanted[fingerprint]; !ok {
-				// The response carries a record this batch did not request. It
-				// cannot be attributed, so it proves the batch matched
-				// something rather than that the remaining inputs are misses.
-				uncorrelated++
-				continue
-			}
-			if match.File.ID == 0 || match.File.ModId == 0 {
+		failFingerprints(results, indexByFingerprint, batch, err)
+		return
+	}
+	wanted := make(map[uint32]struct{}, len(batch))
+	for _, fingerprint := range batch {
+		wanted[fingerprint] = struct{}{}
+	}
+	uncorrelated := 0
+	for _, match := range matches {
+		if match.File.FileFingerprint == nil {
+			if len(batch) == 1 {
 				failFingerprint(
 					results,
 					indexByFingerprint,
-					fingerprint,
+					batch[0],
 					fmt.Errorf(
-						"curseforge: exact fingerprint match for file %d is missing file identity",
+						"curseforge: exact match for file %d has no fingerprint",
 						match.File.ID,
 					),
 				)
 				continue
 			}
-			if _, seen := files[fingerprint]; seen {
-				continue
-			}
-			files[fingerprint] = match.File
-		}
-		if uncorrelated == 0 {
+			uncorrelated++
 			continue
 		}
-		// The batch matched at least one file, but this record cannot be tied
-		// to an input. Correlated matches stay matchable and inputs with a
-		// more specific error keep it; the rest are undetermined, not missing.
-		for _, fingerprint := range batch {
-			if _, matched := files[fingerprint]; matched {
-				continue
-			}
-			if indexes := indexByFingerprint[fingerprint]; len(indexes) > 0 &&
-				results[indexes[0]].Err != nil {
-				continue
-			}
+		wireFingerprint := *match.File.FileFingerprint
+		if wireFingerprint < 0 || wireFingerprint > math.MaxUint32 {
+			// Narrowing an invalid wire value could alias a requested fingerprint.
+			uncorrelated++
+			continue
+		}
+		fingerprint := uint32(wireFingerprint)
+		if _, ok := wanted[fingerprint]; !ok {
+			uncorrelated++
+			continue
+		}
+		if match.File.ID == 0 || match.File.ModId == 0 {
 			failFingerprint(
 				results,
 				indexByFingerprint,
 				fingerprint,
 				fmt.Errorf(
-					"curseforge: %d exact matches in a batch of %d fingerprints carry no file fingerprint, so fingerprint %d cannot be correlated",
-					uncorrelated,
-					len(batch),
-					fingerprint,
+					"curseforge: exact fingerprint match for file %d is missing file identity",
+					match.File.ID,
 				),
 			)
+			continue
 		}
+		if _, seen := files[fingerprint]; seen {
+			continue
+		}
+		files[fingerprint] = match.File
 	}
-	return files
+	if uncorrelated == 0 {
+		return
+	}
+	// The batch matched at least one file, but this record cannot be tied
+	// to an input. Correlated matches stay matchable and inputs with a
+	// more specific error keep it; the rest are undetermined, not missing.
+	for _, fingerprint := range batch {
+		if _, matched := files[fingerprint]; matched {
+			continue
+		}
+		if indexes := indexByFingerprint[fingerprint]; len(indexes) > 0 &&
+			results[indexes[0]].Err != nil {
+			continue
+		}
+		failFingerprint(
+			results,
+			indexByFingerprint,
+			fingerprint,
+			fmt.Errorf(
+				"curseforge: %d exact matches in a batch of %d fingerprints carry no file fingerprint, so fingerprint %d cannot be correlated",
+				uncorrelated,
+				len(batch),
+				fingerprint,
+			),
+		)
+	}
 }
 
 // refetchIncompleteFiles replaces inline match records that lack release
@@ -290,101 +329,150 @@ func (p *Provider) refetchIncompleteFiles(
 	slices.Sort(fileIDs)
 
 	for batch := range slices.Chunk(fileIDs, lookupBatchSize) {
-		authoritativeFiles, err := p.getModFilesByIds(ctx, batch)
-		if err != nil {
-			for _, fileID := range batch {
-				failMatchedFile(
-					results,
-					indexByFingerprint,
-					files,
-					fingerprintsByFileID[fileID],
-					err,
-				)
-			}
-			continue
-		}
+		p.refetchFileBatch(
+			ctx,
+			batch,
+			0,
+			fingerprintsByFileID,
+			files,
+			indexByFingerprint,
+			results,
+		)
+	}
+}
 
-		authoritative := make(map[int32]fileResponse, len(authoritativeFiles))
-		for _, file := range authoritativeFiles {
-			authoritative[file.ID] = file
+// refetchFileBatch replaces incomplete file records for one request batch. A
+// failed batch is split and retried per part while its failure is transient
+// and the split budget allows, so a permanent failure stays bounded and each
+// input reports its own outcome.
+func (p *Provider) refetchFileBatch(
+	ctx context.Context,
+	batch []int32,
+	depth int,
+	fingerprintsByFileID map[int32][]uint32,
+	files map[uint32]fileResponse,
+	indexByFingerprint map[uint32][]int,
+	results []upstream.ArtifactReleaseLookup,
+) {
+	authoritativeFiles, err := p.getModFilesByIds(ctx, batch)
+	if err != nil {
+		if len(batch) > 1 &&
+			depth < retry.MaxSplitDepth &&
+			ctx.Err() == nil &&
+			retry.Splittable(err) {
+			middle := len(batch) / 2
+			p.refetchFileBatch(
+				ctx,
+				batch[:middle],
+				depth+1,
+				fingerprintsByFileID,
+				files,
+				indexByFingerprint,
+				results,
+			)
+			p.refetchFileBatch(
+				ctx,
+				batch[middle:],
+				depth+1,
+				fingerprintsByFileID,
+				files,
+				indexByFingerprint,
+				results,
+			)
+			return
 		}
 		for _, fileID := range batch {
-			fingerprints := fingerprintsByFileID[fileID]
-			file, ok := authoritative[fileID]
-			if !ok {
-				failMatchedFile(
+			failMatchedFile(
+				results,
+				indexByFingerprint,
+				files,
+				fingerprintsByFileID[fileID],
+				err,
+			)
+		}
+		return
+	}
+
+	authoritative := make(map[int32]fileResponse, len(authoritativeFiles))
+	for _, file := range authoritativeFiles {
+		authoritative[file.ID] = file
+	}
+	for _, fileID := range batch {
+		fingerprints := fingerprintsByFileID[fileID]
+		file, ok := authoritative[fileID]
+		if !ok {
+			failMatchedFile(
+				results,
+				indexByFingerprint,
+				files,
+				fingerprints,
+				fmt.Errorf(
+					"curseforge: exact file %d is missing from the mod files lookup",
+					fileID,
+				),
+			)
+			continue
+		}
+		if file.ModId == 0 {
+			failMatchedFile(
+				results,
+				indexByFingerprint,
+				files,
+				fingerprints,
+				fmt.Errorf(
+					"curseforge: file %d lookup returned no project identity",
+					fileID,
+				),
+			)
+			continue
+		}
+		for _, fingerprint := range fingerprints {
+			if file.FileFingerprint != nil &&
+				*file.FileFingerprint != int64(fingerprint) {
+				failFingerprint(
 					results,
 					indexByFingerprint,
-					files,
-					fingerprints,
+					fingerprint,
 					fmt.Errorf(
-						"curseforge: exact file %d is missing from the mod files lookup",
+						"curseforge: file %d has fingerprint %d, exact match reported %d",
+						fileID,
+						*file.FileFingerprint,
+						fingerprint,
+					),
+				)
+				delete(files, fingerprint)
+				continue
+			}
+			exactModID := files[fingerprint].ModId
+			if file.ModId != exactModID {
+				failFingerprint(
+					results,
+					indexByFingerprint,
+					fingerprint,
+					fmt.Errorf(
+						"curseforge: file %d belongs to mod %d, exact match reported mod %d",
+						fileID,
+						file.ModId,
+						exactModID,
+					),
+				)
+				delete(files, fingerprint)
+				continue
+			}
+			if !file.completeForRelease() {
+				failFingerprint(
+					results,
+					indexByFingerprint,
+					fingerprint,
+					fmt.Errorf(
+						"curseforge: file %d lookup returned incomplete release details",
 						fileID,
 					),
 				)
+				delete(files, fingerprint)
 				continue
 			}
-			if file.ModId == 0 {
-				failMatchedFile(
-					results,
-					indexByFingerprint,
-					files,
-					fingerprints,
-					fmt.Errorf(
-						"curseforge: file %d lookup returned no project identity",
-						fileID,
-					),
-				)
-				continue
-			}
-			for _, fingerprint := range fingerprints {
-				if file.FileFingerprint != nil &&
-					*file.FileFingerprint != int64(fingerprint) {
-					failFingerprint(
-						results,
-						indexByFingerprint,
-						fingerprint,
-						fmt.Errorf(
-							"curseforge: file %d has fingerprint %d, exact match reported %d",
-							fileID,
-							*file.FileFingerprint,
-							fingerprint,
-						),
-					)
-					delete(files, fingerprint)
-					continue
-				}
-				exactModID := files[fingerprint].ModId
-				if file.ModId != exactModID {
-					failFingerprint(
-						results,
-						indexByFingerprint,
-						fingerprint,
-						fmt.Errorf(
-							"curseforge: file %d belongs to mod %d, exact match reported mod %d",
-							fileID,
-							file.ModId,
-							exactModID,
-						),
-					)
-					delete(files, fingerprint)
-					continue
-				}
-				if !file.completeForRelease() {
-					failFingerprint(
-						results,
-						indexByFingerprint,
-						fingerprint,
-						fmt.Errorf(
-							"curseforge: file %d lookup returned incomplete release details",
-							fileID,
-						),
-					)
-					delete(files, fingerprint)
-					continue
-				}
-				files[fingerprint] = file
-			}
+			files[fingerprint] = file
 		}
 	}
 }
@@ -412,24 +500,7 @@ func (p *Provider) fillReleases(
 
 	mods := make(map[int32]modResponse, len(modIDs))
 	for batch := range slices.Chunk(modIDs, lookupBatchSize) {
-		found, err := p.getModsByIds(ctx, batch)
-		if err != nil {
-			wanted := make(map[int32]struct{}, len(batch))
-			for _, modID := range batch {
-				wanted[modID] = struct{}{}
-			}
-			for fingerprint, file := range files {
-				if _, ok := wanted[file.ModId]; !ok {
-					continue
-				}
-				failFingerprint(results, indexByFingerprint, fingerprint, err)
-				delete(files, fingerprint)
-			}
-			continue
-		}
-		for _, mod := range found {
-			mods[mod.ID] = mod
-		}
+		p.resolveModsBatch(ctx, batch, 0, mods, files, indexByFingerprint, results)
 	}
 
 	for fingerprint, file := range files {
@@ -457,6 +528,64 @@ func (p *Provider) fillReleases(
 	}
 }
 
+// resolveModsBatch resolves one request's projects. A transient failure is
+// split and retried per part while the split budget allows, so one throttled
+// response does not discard every file in the batch; a permanent failure ends
+// the split and reports only the inputs that part carried.
+func (p *Provider) resolveModsBatch(
+	ctx context.Context,
+	batch []int32,
+	depth int,
+	mods map[int32]modResponse,
+	files map[uint32]fileResponse,
+	indexByFingerprint map[uint32][]int,
+	results []upstream.ArtifactReleaseLookup,
+) {
+	found, err := p.getModsByIds(ctx, batch)
+	if err != nil {
+		if len(batch) > 1 &&
+			depth < retry.MaxSplitDepth &&
+			ctx.Err() == nil &&
+			retry.Splittable(err) {
+			middle := len(batch) / 2
+			p.resolveModsBatch(
+				ctx,
+				batch[:middle],
+				depth+1,
+				mods,
+				files,
+				indexByFingerprint,
+				results,
+			)
+			p.resolveModsBatch(
+				ctx,
+				batch[middle:],
+				depth+1,
+				mods,
+				files,
+				indexByFingerprint,
+				results,
+			)
+			return
+		}
+		wanted := make(map[int32]struct{}, len(batch))
+		for _, modID := range batch {
+			wanted[modID] = struct{}{}
+		}
+		for fingerprint, file := range files {
+			if _, ok := wanted[file.ModId]; !ok {
+				continue
+			}
+			failFingerprint(results, indexByFingerprint, fingerprint, err)
+			delete(files, fingerprint)
+		}
+		return
+	}
+	for _, mod := range found {
+		mods[mod.ID] = mod
+	}
+}
+
 // fingerprintMatches returns CurseForge's exact fingerprint matches for one
 // batch. Partial matches are discarded; a 404 response means no matches.
 // Docs: https://docs.curseforge.com/rest-api/#get-fingerprints-matches
@@ -469,7 +598,7 @@ func (p *Provider) fingerprintMatches(
 	}
 	u := fmt.Sprintf("%s/v1/fingerprints/%d", baseUrl, minecraftGameId)
 	var resp fingerprintResponse
-	err := p.post(
+	err := p.readPost(
 		ctx,
 		u,
 		fingerprintRequest{Fingerprints: fingerprints},

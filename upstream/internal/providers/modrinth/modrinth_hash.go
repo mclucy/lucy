@@ -11,6 +11,7 @@ import (
 
 	"github.com/mclucy/lucy/catalog"
 	"github.com/mclucy/lucy/upstream"
+	"github.com/mclucy/lucy/upstream/internal/providers/retry"
 	versionpkg "github.com/mclucy/lucy/version"
 )
 
@@ -43,22 +44,39 @@ func (p *Provider) ReleaseByHash(
 
 	p.logger.Debug("modrinth hash lookup: " + u)
 
-	res, err := p.requestBytes(ctx, u)
-	if err != nil {
-		return upstream.Release{}, false, err
+	var data []byte
+	outcome := retry.Do(
+		ctx,
+		retry.Default,
+		func(ctx context.Context) retry.Attempt {
+			res, err := p.requestBytes(ctx, u)
+			if err != nil {
+				return retry.Attempt{Err: err}
+			}
+			if res.StatusCode == 200 {
+				data = res.Data
+			}
+			return retry.Attempt{
+				Status:     res.StatusCode,
+				RetryAfter: retry.RetryAfter(res.Header),
+			}
+		},
+	)
+	if outcome.Err != nil {
+		return upstream.Release{}, false, outcome.Err
 	}
-	if res.StatusCode == 404 {
+	if outcome.Status == 404 {
 		return upstream.Release{}, false, nil
 	}
-	if res.StatusCode != 200 {
+	if outcome.Status != 200 {
 		return upstream.Release{}, false, fmt.Errorf(
 			"modrinth: hash lookup returned status %d",
-			res.StatusCode,
+			outcome.Status,
 		)
 	}
 
 	var ver versionResponse
-	if err := json.Unmarshal(res.Data, &ver); err != nil {
+	if err := json.Unmarshal(data, &ver); err != nil {
 		return upstream.Release{}, false, err
 	}
 
@@ -108,10 +126,9 @@ func (p *Provider) releaseFromVersion(
 // looked up in bounded batches through POST /v2/version_files, matched
 // projects in one bounded GET /v2/projects fan-out, and their pinned
 // dependency versions in one bounded GET /v2/versions fan-out. A digest the
-// API omits is a miss with no error; a failed request records its error
-// against every input whose digest that batch carried. A returned entry
-// without a project or a file carrying the requested digest is an invalid
-// response for that input, not a miss.
+// API omits is a miss. Transient failures are retried with backoff and can
+// split into smaller batches. A returned entry without a project or a file
+// carrying the requested digest is an incomplete lookup, not a miss.
 func (p *Provider) ReleasesByHash(
 	ctx context.Context,
 	artifacts []upstream.ArtifactFingerprint,
@@ -155,12 +172,9 @@ func (p *Provider) ReleasesByHash(
 	versions := make(map[string]versionResponse, len(unique))
 	versionErrors := make(map[string]error)
 	for batch := range slices.Chunk(batchIds(unique), batchSize) {
-		found, err := p.versionFilesByHash(ctx, batch)
-		if err != nil {
-			for _, hash := range batch {
-				versionErrors[hash] = err
-			}
-			continue
+		found, batchErrors := p.versionFilesBatch(ctx, batch, 0)
+		for hash, err := range batchErrors {
+			versionErrors[hash] = err
 		}
 		maps.Copy(versions, found)
 	}
@@ -196,7 +210,13 @@ func (p *Provider) ReleasesByHash(
 		hash := hashes[i]
 		ver, ok := versions[hash]
 		if !ok {
-			lookups[i].Err = versionErrors[hash]
+			if err := versionErrors[hash]; err != nil {
+				lookups[i].Err = fmt.Errorf(
+					"modrinth: hash lookup for %s: %w",
+					hash,
+					err,
+				)
+			}
 			continue
 		}
 		if err := invalid[hash]; err != nil {
@@ -209,12 +229,22 @@ func (p *Provider) ReleasesByHash(
 			if lookups[i].Err == nil {
 				lookups[i].Err = fmt.Errorf("%w: %s", ErrNoProject, ver.ProjectId)
 			}
+			lookups[i].Err = fmt.Errorf(
+				"modrinth: project lookup for %s (hash %s): %w",
+				ver.ProjectId,
+				hash,
+				lookups[i].Err,
+			)
 			continue
 		}
 		file := matchedFiles[hash]
 		candidate, err := p.candidateFromVersion(ctx, &ver, file, true, true, dependencies)
 		if err != nil {
-			lookups[i].Err = err
+			lookups[i].Err = fmt.Errorf(
+				"modrinth: release for hash %s: %w",
+				hash,
+				err,
+			)
 			continue
 		}
 		lookups[i].Release = p.releaseFromVersion(project, &ver, candidate)
@@ -249,6 +279,47 @@ func requireVersionFile(
 		)
 	}
 	return file, nil
+}
+
+// versionFilesBatch resolves one batch of hashes. A batch that still fails
+// after its retry budget is split and retried per part while the failure is
+// transient, so one throttled response cannot leave every hash unresolved.
+// Errors stay attached to the hashes of the part that carried them.
+func (p *Provider) versionFilesBatch(
+	ctx context.Context,
+	hashes []string,
+	depth int,
+) (map[string]versionResponse, map[string]error) {
+	found, err := p.versionFilesByHash(ctx, hashes)
+	if err == nil {
+		return found, nil
+	}
+	if len(hashes) > 1 &&
+		depth < retry.MaxSplitDepth &&
+		ctx.Err() == nil &&
+		retry.Splittable(err) {
+		middle := len(hashes) / 2
+		leftFound, leftErrors := p.versionFilesBatch(ctx, hashes[:middle], depth+1)
+		rightFound, rightErrors := p.versionFilesBatch(ctx, hashes[middle:], depth+1)
+		mergedFound := make(
+			map[string]versionResponse,
+			len(leftFound)+len(rightFound),
+		)
+		maps.Copy(mergedFound, leftFound)
+		maps.Copy(mergedFound, rightFound)
+		mergedErrors := make(
+			map[string]error,
+			len(leftErrors)+len(rightErrors),
+		)
+		maps.Copy(mergedErrors, leftErrors)
+		maps.Copy(mergedErrors, rightErrors)
+		return mergedFound, mergedErrors
+	}
+	errorsByHash := make(map[string]error, len(hashes))
+	for _, hash := range hashes {
+		errorsByHash[hash] = err
+	}
+	return nil, errorsByHash
 }
 
 // fileBySha1 picks the file whose sha1 equals hash, case-insensitive. The

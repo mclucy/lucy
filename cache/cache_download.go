@@ -4,16 +4,21 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha1"
+	"crypto/sha256"
 	"crypto/sha512"
+	"encoding/binary"
 	"encoding/hex"
 	"errors"
 	"fmt"
 	"hash"
 	"io"
+	"maps"
 	"net/http"
 	"net/url"
 	"os"
 	"path/filepath"
+	"slices"
+	"strings"
 	"time"
 
 	"github.com/mclucy/lucy/cas"
@@ -55,6 +60,9 @@ type BytesResponse struct {
 	StatusCode int
 	Data       []byte
 	CacheHit   bool
+	// Header is the network response header, nil on a cache hit. Callers
+	// retrying a failed request read Retry-After from it.
+	Header http.Header
 }
 
 type DownloadResult struct {
@@ -299,6 +307,71 @@ func (c *Client) CachedGetRequest(
 	url string,
 	opts BytesRequestOptions,
 ) (*BytesResponse, error) {
+	return c.cachedBytesRequest(ctx, http.MethodGet, url, nil, url, 0, opts, nil)
+}
+
+// CachedPostRequest fetches bytes from url with a read-only POST body and
+// returns the HTTP status code separately from transport/read/cache errors.
+// Only use it for read-only requests whose credentials are explicit in opts.
+// The cache key includes the URL, body, and headers. Only a 200 response that
+// passes validate is cached. The validator may decode the data for the caller.
+func (c *Client) CachedPostRequest(
+	ctx context.Context,
+	url string,
+	body []byte,
+	opts BytesRequestOptions,
+	validate func([]byte) error,
+) (*BytesResponse, error) {
+	return c.cachedBytesRequest(
+		ctx,
+		http.MethodPost,
+		url,
+		body,
+		postRequestCacheKey(url, body, opts.Headers),
+		http.StatusOK,
+		opts,
+		validate,
+	)
+}
+
+// postRequestCacheKey digests every request input that changes what the server
+// answers. All headers participate so credentials and content negotiation are
+// isolated between cache entries.
+func postRequestCacheKey(url string, body []byte, headers http.Header) string {
+	digest := sha256.New()
+	write := func(data []byte) {
+		var length [8]byte
+		binary.LittleEndian.PutUint64(length[:], uint64(len(data)))
+		digest.Write(length[:])
+		digest.Write(data)
+	}
+	write([]byte(http.MethodPost))
+	write([]byte(url))
+	write(body)
+	for _, name := range slices.Sorted(maps.Keys(headers)) {
+		write([]byte(strings.ToLower(name)))
+		var count [8]byte
+		binary.LittleEndian.PutUint64(count[:], uint64(len(headers[name])))
+		digest.Write(count[:])
+		for _, value := range headers[name] {
+			write([]byte(value))
+		}
+	}
+	return "post:" + hex.EncodeToString(digest.Sum(nil))
+}
+
+// cachedBytesRequest is the shared fetch-and-cache path for cached GET and
+// opt-in read-only POST requests. cacheKey identifies the stored response;
+// cacheStatus, when nonzero, admits only that response status to the cache.
+func (c *Client) cachedBytesRequest(
+	ctx context.Context,
+	method, url string,
+	body []byte,
+	cacheKey string,
+	cacheStatus int,
+	opts BytesRequestOptions,
+	validate func([]byte) error,
+) (*BytesResponse, error) {
 	c.lifetime.RLock()
 	defer c.lifetime.RUnlock()
 	if err := ctx.Err(); err != nil {
@@ -308,7 +381,12 @@ func (c *Client) CachedGetRequest(
 		return nil, err
 	}
 
-	hit, data, err := c.cache().getBytesContext(ctx, url)
+	maxBytes := opts.MaxBytes
+	if maxBytes == 0 {
+		maxBytes = 50 * 1024 * 1024
+	}
+
+	hit, data, err := c.cache().getBytesContext(ctx, cacheKey)
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -321,6 +399,17 @@ func (c *Client) CachedGetRequest(
 		)
 	}
 	if hit && data != nil {
+		if int64(len(data)) > maxBytes {
+			return nil, fmt.Errorf(
+				"response too large: exceeded %d bytes",
+				maxBytes,
+			)
+		}
+		if validate != nil {
+			if err := validate(data); err != nil {
+				return nil, err
+			}
+		}
 		return &BytesResponse{
 			StatusCode: http.StatusOK,
 			Data:       data,
@@ -328,12 +417,11 @@ func (c *Client) CachedGetRequest(
 		}, nil
 	}
 
-	maxBytes := opts.MaxBytes
-	if maxBytes == 0 {
-		maxBytes = 50 * 1024 * 1024
+	var requestBody io.Reader
+	if body != nil {
+		requestBody = bytes.NewReader(body)
 	}
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	req, err := http.NewRequestWithContext(ctx, method, url, requestBody)
 	if err != nil {
 		return nil, fmt.Errorf("create fetch request failed: %w", err)
 	}
@@ -350,14 +438,18 @@ func (c *Client) CachedGetRequest(
 	defer resp.Body.Close()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		body, err := readLimitedBytes(contextReader{ctx, resp.Body}, maxBytes)
+		errorBody, err := readLimitedBytes(contextReader{ctx, resp.Body}, maxBytes)
 		if err != nil {
 			return nil, err
 		}
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
-		return &BytesResponse{StatusCode: resp.StatusCode, Data: body}, nil
+		return &BytesResponse{
+			StatusCode: resp.StatusCode,
+			Data:       errorBody,
+			Header:     resp.Header,
+		}, nil
 	}
 
 	stage := c.newByteStage()
@@ -374,13 +466,13 @@ func (c *Client) CachedGetRequest(
 
 	var bodyBuf bytes.Buffer
 	writers = append(writers, &bodyBuf)
-	limitedReader := io.LimitReader(contextReader{ctx, resp.Body}, maxBytes)
+	limitedReader := io.LimitReader(contextReader{ctx, resp.Body}, maxBytes+1)
 	if _, err := io.Copy(io.MultiWriter(writers...), limitedReader); err != nil {
 		return nil, fmt.Errorf("read failed: %w", err)
 	}
 
-	body := bodyBuf.Bytes()
-	if int64(len(body)) >= maxBytes {
+	responseBody := bodyBuf.Bytes()
+	if int64(len(responseBody)) > maxBytes {
 		return nil, fmt.Errorf(
 			"response too large: exceeded %d bytes",
 			maxBytes,
@@ -405,11 +497,17 @@ func (c *Client) CachedGetRequest(
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
+	if resp.StatusCode == cacheStatus && validate != nil {
+		if err := validate(responseBody); err != nil {
+			return nil, err
+		}
+	}
 
-	if stage.writer != nil {
+	if stage.writer != nil &&
+		(cacheStatus == 0 || resp.StatusCode == cacheStatus) {
 		if err := c.cache().commitEntryContext(
 			ctx,
-			stage.writer, "", url, opts.Kind, integrity, opts.TTL,
+			stage.writer, "", cacheKey, opts.Kind, integrity, opts.TTL,
 		); err != nil {
 			if ctx.Err() != nil {
 				return nil, ctx.Err()
@@ -423,8 +521,9 @@ func (c *Client) CachedGetRequest(
 
 	return &BytesResponse{
 		StatusCode: resp.StatusCode,
-		Data:       body,
+		Data:       responseBody,
 		CacheHit:   false,
+		Header:     resp.Header,
 	}, nil
 }
 

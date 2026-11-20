@@ -7,6 +7,8 @@ The network cache stores reusable network responses separately from a workspace.
 
 Metadata and artifacts have separate policy limits and lifetimes. The default metadata refresh period is four hours and the artifact retention period is seven days; request-specific metadata can choose a different TTL. Expiration affects whether an indexed response can be reused, not the meaning of a lock or receipt. Non-success HTTP responses are not stored as successful metadata responses.
 
+A read-only POST lookup opts into caching explicitly. Its key digests the method, URL, request body, and request headers, so two lookup bodies never share a response and a response fetched under one credential is never served for another. A POST that changes remote state stays outside the cache.
+
 The cache client owns its HTTP client, policy, and diagnostic logger. Command composition supplies the disk root explicitly. Each instance initializes its index lazily; separate invocations can share cached objects without sharing transport or provider configuration. Metadata and artifact requests receive the caller's context, including cache-hit reads and copies. Configured TTL policy governs requests without an explicit override. Closing waits for cache operations and releases an opened store without initializing an unused one.
 
 ## Publication and verification

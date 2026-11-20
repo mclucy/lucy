@@ -66,7 +66,7 @@ func (p *Provider) getModFilesByIds(
 		FileIds []int32 `json:"fileIds"`
 	}{FileIds: fileIDs}
 	var resp filesDataResponse
-	if err := p.post(ctx, baseUrl+"/v1/mods/files", payload, &resp); err != nil {
+	if err := p.readPost(ctx, baseUrl+"/v1/mods/files", payload, &resp); err != nil {
 		if isNotFound(err) {
 			return nil, nil
 		}

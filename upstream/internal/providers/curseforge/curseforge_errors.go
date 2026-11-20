@@ -13,6 +13,12 @@ func (e ApiResponseError) Error() string {
 	return fmt.Sprintf("curseforge: API returned status %d", e.StatusCode)
 }
 
+// HTTPStatus reports the API status so lookup retry policy can classify the
+// failure without parsing its message.
+func (e ApiResponseError) HTTPStatus() int {
+	return e.StatusCode
+}
+
 var (
 	ErrProjectNotFound = errors.New("curseforge: project not found")
 	ErrAmbiguousSlug   = errors.New("curseforge: ambiguous slug, multiple projects matched")
