@@ -219,3 +219,167 @@ func TestPinnedVersionLookupKeepsBothCausesWhenFallbackFails(t *testing.T) {
 		t.Errorf("canceled lookup error = %v, want context canceled", err)
 	}
 }
+
+func TestPinnedVersionLookupFallsBackWhenBulkVersionHasNoProject(t *testing.T) {
+	t.Parallel()
+	fallbackRequests := 0
+	transport := roundTripFunc(func(request *http.Request) (*http.Response, error) {
+		switch request.URL.Path {
+		case "/v2/versions":
+			return jsonResponse(t, []versionResponse{{
+				ID: "pinned-version",
+			}}), nil
+		case "/v2/version/pinned-version":
+			fallbackRequests++
+			return jsonResponse(t, versionResponse{
+				ID:        "pinned-version",
+				ProjectId: "fallback-project",
+			}), nil
+		default:
+			t.Errorf("unexpected request %s %s", request.Method, request.URL)
+			return &http.Response{
+				StatusCode: http.StatusNotFound,
+				Body:       http.NoBody,
+			}, nil
+		}
+	})
+
+	provider := newModrinthTestProvider(t, transport)
+	lookup := provider.pinnedVersionLookup(t.Context(), []*versionResponse{{
+		ID: "root-version",
+		Dependencies: []dependenciesResponse{
+			{VersionId: "pinned-version", DependencyType: "required"},
+			{VersionId: "pinned-version", DependencyType: "required"},
+		},
+	}})
+	if lookup == nil {
+		t.Fatal("expected a dependency lookup")
+	}
+
+	for range 2 {
+		pinned, err := lookup(t.Context(), "pinned-version")
+		if err != nil {
+			t.Fatalf("project-less bulk version: %v", err)
+		}
+		if pinned.ProjectId != "fallback-project" {
+			t.Fatalf(
+				"pinned project = %q, want fallback-project",
+				pinned.ProjectId,
+			)
+		}
+	}
+	if fallbackRequests != 1 {
+		t.Fatalf("single-version requests = %d, want 1", fallbackRequests)
+	}
+}
+
+func TestPinnedVersionLookupRejectsProjectlessFallback(t *testing.T) {
+	t.Parallel()
+	transport := roundTripFunc(func(request *http.Request) (*http.Response, error) {
+		switch request.URL.Path {
+		case "/v2/versions":
+			return jsonResponse(t, []versionResponse{{
+				ID: "pinned-version",
+			}}), nil
+		case "/v2/version/pinned-version":
+			return jsonResponse(t, versionResponse{
+				ID: "pinned-version",
+			}), nil
+		default:
+			t.Errorf("unexpected request %s %s", request.Method, request.URL)
+			return &http.Response{
+				StatusCode: http.StatusNotFound,
+				Body:       http.NoBody,
+			}, nil
+		}
+	})
+
+	provider := newModrinthTestProvider(t, transport)
+	lookup := provider.pinnedVersionLookup(t.Context(), []*versionResponse{{
+		ID: "root-version",
+		Dependencies: []dependenciesResponse{
+			{VersionId: "pinned-version", DependencyType: "required"},
+		},
+	}})
+	if lookup == nil {
+		t.Fatal("expected a dependency lookup")
+	}
+
+	pinned, err := lookup(t.Context(), "pinned-version")
+	if pinned != nil {
+		t.Fatalf("project-less fallback returned %+v", pinned)
+	}
+	if !errors.Is(err, ErrInvalidAPIResponse) {
+		t.Fatalf(
+			"project-less fallback error = %v, want invalid response",
+			err,
+		)
+	}
+}
+
+func TestResolveVersionByIdRejectsProjectlessVersion(t *testing.T) {
+	t.Parallel()
+	transport := roundTripFunc(func(request *http.Request) (*http.Response, error) {
+		if request.URL.Path != "/v2/version/standalone-version" {
+			t.Errorf("unexpected request %s %s", request.Method, request.URL)
+		}
+		return jsonResponse(t, versionResponse{
+			ID: "standalone-version",
+		}), nil
+	})
+
+	provider := newModrinthTestProvider(t, transport)
+	pinned, err := provider.resolveVersionById(
+		t.Context(),
+		nil,
+		"standalone-version",
+	)
+	if pinned != nil {
+		t.Fatalf("project-less version returned %+v", pinned)
+	}
+	if !errors.Is(err, ErrInvalidAPIResponse) {
+		t.Fatalf("project-less version error = %v, want invalid response", err)
+	}
+}
+
+func TestPinnedVersionLookupKeepsBothCausesForProjectlessFallback(t *testing.T) {
+	t.Parallel()
+	transport := roundTripFunc(func(request *http.Request) (*http.Response, error) {
+		switch request.URL.Path {
+		case "/v2/versions":
+			return jsonResponse(t, []versionResponse{{
+				ID: "pinned-version",
+			}}), nil
+		case "/v2/version/pinned-version":
+			return &http.Response{
+				StatusCode: http.StatusNotFound,
+				Body:       http.NoBody,
+			}, nil
+		default:
+			t.Errorf("unexpected request %s %s", request.Method, request.URL)
+			return &http.Response{
+				StatusCode: http.StatusNotFound,
+				Body:       http.NoBody,
+			}, nil
+		}
+	})
+
+	provider := newModrinthTestProvider(t, transport)
+	lookup := provider.pinnedVersionLookup(t.Context(), []*versionResponse{{
+		ID: "root-version",
+		Dependencies: []dependenciesResponse{
+			{VersionId: "pinned-version", DependencyType: "required"},
+		},
+	}})
+	if lookup == nil {
+		t.Fatal("expected a dependency lookup")
+	}
+
+	_, err := lookup(t.Context(), "pinned-version")
+	if !errors.Is(err, ErrInvalidAPIResponse) {
+		t.Errorf("fallback failure = %v, want the malformed bulk cause", err)
+	}
+	if !errors.Is(err, ErrNoVersion) {
+		t.Errorf("fallback failure = %v, want the fallback cause", err)
+	}
+}
