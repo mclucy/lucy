@@ -11,7 +11,7 @@ Discovery and selection are separate. Discovery does not choose a runtime or rea
 
 Workspace observation assembles local observations of installations, environment wrappers, declarations, and package files. Reselection refreshes package observations; upstream identification must be repeated afterward.
 
-Package descriptors provide local module metadata. Observation keeps distinct installed paths even when two JARs declare the same package identity. Adoption selects one descriptor per file and leaves conflicting files unmanaged. Other reasons to leave a file unmanaged include a client-only descriptor, an unreadable descriptor, an ecosystem the server does not load, or no upstream identity.
+Package descriptors provide local module metadata. Observation keeps distinct paths when two JARs declare one identity; adoption picks one descriptor per file and leaves conflicting files unmanaged, along with client-only or unreadable descriptors, ecosystems the server does not load, and files without upstream identity.
 
 ## Tracked-file state
 

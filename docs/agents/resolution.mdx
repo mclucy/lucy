@@ -42,7 +42,7 @@ Candidate filtering belongs to providers because only they know their own compat
 
 The resolver receives candidate lookup and artifact materialization as injected capability functions, plus an optional cache that reuses artifact analysis across candidates; descriptor reading remains a dedicated archive inspection. The resolver does not select a provider or open the network cache. Installation and operation workflows receive configured capabilities at construction; operation options can supply prefetched artifact bytes without changing catalog selection. They still extract the server core's descriptor modules to supply as target constraints. Installation strictly verifies supplied bytes against the artifact's pinned hashes.
 
-Import classification and initialization share parsed package descriptors, fingerprints, and completed release lookups for the same local files. Initialization passes recognized files into resolution as fixed candidates and verifies their bytes when it adds them to the artifact store. Resolving these candidates does not download the packages again. Publication still checks the workspace files against the observed hashes and modes.
+Import classification and initialization share parsed descriptors, fingerprints, and completed release lookups for the same local files. Initialization passes recognized files to resolution as fixed candidates and verifies their bytes when adding them to the artifact store, without downloading them again; publication still checks workspace files against observed hashes and modes.
 
 ## From pins to installed files
 
