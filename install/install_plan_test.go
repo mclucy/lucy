@@ -259,17 +259,23 @@ func TestPlanCheckBaseRejectsChanges(t *testing.T) {
 		}
 	})
 
-	t.Run("manifest changed", func(t *testing.T) {
-		root, d, lock := testWorkspace(t)
-		plan := testPlanFixture(t, root, d, lock)
-		d.Server.Core.ProductVersion = versionpkg.Version("0.16.10")
-		if err := document.ManifestFile(root).Write(d); err != nil {
-			t.Fatalf("manifest.Write() error = %v", err)
-		}
-		if err := checkBaseAt(t, root, plan); err == nil {
-			t.Fatal("checkBase() error = nil, want a manifest-change error")
-		}
-	})
+	for _, name := range []string{document.ManifestFilename, document.LockFilename} {
+		t.Run(name+" comment changed", func(t *testing.T) {
+			root, d, lock := testWorkspace(t)
+			plan := testPlanFixture(t, root, d, lock)
+			path := filepath.Join(root, name)
+			raw, err := os.ReadFile(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(path, append(raw, "\n# edited after planning\n"...), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			if err := checkBaseAt(t, root, plan); err == nil || !strings.Contains(err.Error(), name) {
+				t.Fatalf("checkBase() error = %v, want a conflict for %s", err, name)
+			}
+		})
+	}
 
 	t.Run("manifest removed", func(t *testing.T) {
 		root, d, lock := testWorkspace(t)
@@ -293,18 +299,6 @@ func TestPlanCheckBaseRejectsChanges(t *testing.T) {
 		}
 		if err := checkBaseAt(t, root, plan); err == nil {
 			t.Fatal("checkBase() error = nil, want a manifest-appeared error")
-		}
-	})
-
-	t.Run("lock changed", func(t *testing.T) {
-		root, d, lock := testWorkspace(t)
-		plan := testPlanFixture(t, root, d, lock)
-		lock.ManifestFingerprint = "sha256:different"
-		if err := document.LockFile(root).Write(lock); err != nil {
-			t.Fatalf("lockfile.Write() error = %v", err)
-		}
-		if err := checkBaseAt(t, root, plan); err == nil {
-			t.Fatal("checkBase() error = nil, want a lock-change error")
 		}
 	})
 
