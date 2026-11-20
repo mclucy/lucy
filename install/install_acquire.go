@@ -17,6 +17,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/mclucy/lucy/artifact"
@@ -37,15 +38,80 @@ type downloadStore struct {
 	logger      *log.Logger
 	githubProxy string
 	injected    func(*catalog.Artifact) (artifact.MaterializedFile, error)
+	verified    sync.Map // cas.Digest -> *objectVerification
+	progressMu  sync.Mutex
+}
+
+// A pinned object can be requested by several staging workers. Only one
+// verifies or repairs that digest at a time.
+type objectVerification struct {
+	mu     sync.Mutex
+	info   os.FileInfo
+	hashes map[string]string
+}
+
+func (s *downloadStore) verification(digest cas.Digest) *objectVerification {
+	if entry, ok := s.verified.Load(digest); ok {
+		return entry.(*objectVerification)
+	}
+	entry, _ := s.verified.LoadOrStore(digest, new(objectVerification))
+	return entry.(*objectVerification)
+}
+
+func (s *downloadStore) recordVerified(digest cas.Digest, path string, hashes map[string]string) {
+	info, err := os.Lstat(path)
+	if err != nil || !info.Mode().IsRegular() {
+		return
+	}
+	entry := s.verification(digest)
+	entry.mu.Lock()
+	defer entry.mu.Unlock()
+	entry.record(info, hashes)
+}
+
+func sameObject(previous, current os.FileInfo) bool {
+	return previous != nil && current != nil && current.Mode().IsRegular() &&
+		os.SameFile(previous, current) && previous.Size() == current.Size() &&
+		previous.ModTime().Equal(current.ModTime())
+}
+
+func (entry *objectVerification) record(info os.FileInfo, hashes map[string]string) {
+	if !sameObject(entry.info, info) {
+		entry.info = info
+		entry.hashes = maps.Clone(hashes)
+	} else {
+		maps.Copy(entry.hashes, hashes)
+	}
+}
+
+func (entry *objectVerification) match(expected map[string]string) (map[string]string, bool) {
+	if entry.hashes == nil {
+		return nil, false
+	}
+	for algorithm, digest := range expected {
+		if value, ok := entry.hashes[algorithm]; !ok || digest != "" && !strings.EqualFold(digest, value) {
+			return nil, false
+		}
+	}
+	hashes := make(map[string]string, len(expected)+1)
+	hashes["sha256"] = entry.hashes["sha256"]
+	for algorithm := range expected {
+		hashes[algorithm] = entry.hashes[algorithm]
+	}
+	return hashes, true
 }
 
 func (s *downloadStore) cacheHit() {
+	s.progressMu.Lock()
+	defer s.progressMu.Unlock()
 	if s.fetch != nil {
 		s.fetch.Cached++
 	}
 }
 
 func (s *downloadStore) downloaded(bytes int64) {
+	s.progressMu.Lock()
+	defer s.progressMu.Unlock()
 	if s.fetch == nil {
 		return
 	}
@@ -62,7 +128,7 @@ func DigestFile(filename string, algorithms map[string]string) (map[string]strin
 		return nil, err
 	}
 	defer file.Close()
-	hashers, writers, err := digestHashers(algorithms)
+	hashers, writers, err := digestHashers(algorithms, true)
 	if err != nil {
 		return nil, err
 	}
@@ -72,8 +138,11 @@ func DigestFile(filename string, algorithms map[string]string) (map[string]strin
 	return digestValues(hashers, algorithms, filename)
 }
 
-func digestHashers(algorithms map[string]string) (map[string]hash.Hash, []io.Writer, error) {
-	hashers := map[string]hash.Hash{"sha256": sha256.New()}
+func digestHashers(algorithms map[string]string, includeSHA256 bool) (map[string]hash.Hash, []io.Writer, error) {
+	hashers := make(map[string]hash.Hash, len(algorithms)+1)
+	if includeSHA256 {
+		hashers["sha256"] = sha256.New()
+	}
 	for algorithm := range algorithms {
 		switch algorithm {
 		case "sha1":
@@ -111,6 +180,10 @@ func digestValues(hashers map[string]hash.Hash, algorithms map[string]string, fi
 // network or cache access; a miss copies verified bytes from the network cache
 // or the network into the store.
 func (s *downloadStore) materialize(a *catalog.Artifact) (artifact.MaterializedFile, error) {
+	return s.materializeFor(a, a.Filename)
+}
+
+func (s *downloadStore) materializeFor(a *catalog.Artifact, transferName string) (artifact.MaterializedFile, error) {
 	if err := s.ctx.Err(); err != nil {
 		return artifact.MaterializedFile{}, err
 	}
@@ -128,6 +201,7 @@ func (s *downloadStore) materialize(a *catalog.Artifact) (artifact.MaterializedF
 		return artifact.MaterializedFile{}, err
 	}
 	defer store.Close()
+	var entry *objectVerification
 	if expected := strings.ToLower(strings.TrimSpace(a.Hashes["sha256"])); expected != "" {
 		digest, err := cas.ParseDigest("sha256:" + expected)
 		if err != nil {
@@ -136,9 +210,34 @@ func (s *downloadStore) materialize(a *catalog.Artifact) (artifact.MaterializedF
 				a.Filename, expected, err,
 			)
 		}
+		entry = s.verification(digest)
+		entry.mu.Lock()
+		defer entry.mu.Unlock()
+		if err := s.ctx.Err(); err != nil {
+			return artifact.MaterializedFile{}, err
+		}
 		destination := store.Path(digest)
-		hashes, err := DigestFile(destination, a.Hashes)
+		var hashes map[string]string
+		info, err := os.Lstat(destination)
+		if err == nil && info.Mode().IsRegular() {
+			if sameObject(entry.info, info) {
+				if hashes, ok := entry.match(a.Hashes); ok {
+					s.cacheHit()
+					return artifact.MaterializedFile{Path: destination, Hashes: hashes}, nil
+				}
+			}
+			hashes, err = DigestFile(destination, a.Hashes)
+			if err == nil {
+				fresh, statErr := os.Lstat(destination)
+				if statErr != nil || !sameObject(info, fresh) {
+					err = fmt.Errorf("store object changed during verification: %s", a.Filename)
+				}
+			}
+		} else if err == nil {
+			err = fmt.Errorf("store object is not a regular file: %s", a.Filename)
+		}
 		if err == nil {
+			entry.record(info, hashes)
 			s.cacheHit()
 			s.logger.Debug(
 				"artifact verified",
@@ -156,7 +255,7 @@ func (s *downloadStore) materialize(a *catalog.Artifact) (artifact.MaterializedF
 			)
 		}
 	}
-	source, cleanup, err := s.downloadArtifact(a)
+	source, cleanup, err := s.downloadArtifact(a, transferName)
 	if cleanup != nil {
 		defer cleanup()
 	}
@@ -167,12 +266,18 @@ func (s *downloadStore) materialize(a *catalog.Artifact) (artifact.MaterializedF
 	if err != nil {
 		return artifact.MaterializedFile{}, err
 	}
+	destination := store.Path(object.Digest)
+	if entry == nil {
+		s.recordVerified(object.Digest, destination, hashes)
+	} else if info, statErr := os.Lstat(destination); statErr == nil && info.Mode().IsRegular() {
+		entry.record(info, hashes)
+	}
 	s.logger.Debug(
 		"artifact verified",
 		"file", a.Filename,
 		"sha256", hashes["sha256"],
 	)
-	return artifact.MaterializedFile{Path: store.Path(object.Digest), Hashes: hashes}, nil
+	return artifact.MaterializedFile{Path: destination, Hashes: hashes}, nil
 }
 
 // injectedMaterialize verifies bytes another operation supplied. Digests are
@@ -205,6 +310,7 @@ func (s *downloadStore) injectedMaterialize(a *catalog.Artifact) (artifact.Mater
 	if err != nil {
 		return artifact.MaterializedFile{}, err
 	}
+	s.recordVerified(object.Digest, store.Path(object.Digest), hashes)
 	return artifact.MaterializedFile{Path: store.Path(object.Digest), Hashes: hashes}, nil
 }
 
@@ -222,9 +328,17 @@ func importFile(
 		return cas.Object{}, nil, err
 	}
 	defer file.Close()
-	hashers, writers, err := digestHashers(expected)
+	hashers, writers, err := digestHashers(expected, false)
 	if err != nil {
 		return cas.Object{}, nil, err
+	}
+	var pinned *cas.Digest
+	if value := expected["sha256"]; value != "" {
+		digest, err := cas.ParseDigest("sha256:" + strings.ToLower(value))
+		if err != nil {
+			return cas.Object{}, nil, err
+		}
+		pinned = &digest
 	}
 	writer, err := store.NewWriter()
 	if err != nil {
@@ -239,10 +353,14 @@ func importFile(
 	if err != nil {
 		return cas.Object{}, nil, err
 	}
-	object, err = writer.Commit(nil)
+	object, err = writer.Commit(pinned)
 	if err != nil {
+		if errors.Is(err, cas.ErrCorrupt) {
+			err = fmt.Errorf("sha256 checksum mismatch for %s: %w", display, err)
+		}
 		return cas.Object{}, nil, err
 	}
+	hashes["sha256"] = object.Digest.Hex()
 	return object, hashes, nil
 }
 
@@ -283,7 +401,10 @@ func artifactCacheIdentity(a *catalog.Artifact) (string, error) {
 // and the persisted artifact URL stay the artifact's own URL. The returned
 // path is temporary; callers import it into the store before removing the
 // directory.
-func (s *downloadStore) downloadArtifact(a *catalog.Artifact) (string, func(), error) {
+func (s *downloadStore) downloadArtifact(a *catalog.Artifact, transferName string) (string, func(), error) {
+	if s.network == nil {
+		return "", nil, errors.New("artifact download client is unavailable")
+	}
 	identity, err := artifactCacheIdentity(a)
 	if err != nil {
 		return "", nil, err
@@ -301,11 +422,10 @@ func (s *downloadStore) downloadArtifact(a *catalog.Artifact) (string, func(), e
 		if !hit || cached == nil {
 			return "", cleanup, fmt.Errorf("offline artifact unavailable: %s", a.URL)
 		}
-		defer cached.Close()
 		destination := filepath.Join(directory, a.Filename)
 		out, err := os.Create(destination)
 		if err != nil {
-			return "", cleanup, err
+			return "", cleanup, errors.Join(err, cached.Close())
 		}
 		_, copyErr := io.Copy(out, cached)
 		closeErr := out.Close()
@@ -332,10 +452,12 @@ func (s *downloadStore) downloadArtifact(a *catalog.Artifact) (string, func(), e
 	}
 	options.WrapReader = func(reader io.Reader, size int64) io.Reader {
 		total = size
-		s.trace.fetchStarted(a.Filename, size)
+		s.progressMu.Lock()
+		s.trace.fetchStarted(transferName, size)
+		s.progressMu.Unlock()
 		return &fetchReader{
 			reader: reader,
-			name:   a.Filename,
+			name:   transferName,
 			total:  size,
 			read:   &read,
 			store:  s,
@@ -361,8 +483,10 @@ func (s *downloadStore) downloadArtifact(a *catalog.Artifact) (string, func(), e
 		s.cacheHit()
 	} else {
 		s.downloaded(read)
-		s.trace.fetchProgress(a.Filename, read, total)
-		s.trace.fetchDone(a.Filename, false)
+		s.progressMu.Lock()
+		s.trace.fetchProgress(transferName, read, total)
+		s.trace.fetchDone(transferName, false)
+		s.progressMu.Unlock()
 	}
 	s.logger.Debug(
 		"artifact fetched",
@@ -396,6 +520,8 @@ type fetchReader struct {
 func (r *fetchReader) Read(buffer []byte) (int, error) {
 	count, err := r.reader.Read(buffer)
 	*r.read += int64(count)
+	r.store.progressMu.Lock()
 	r.store.trace.fetchProgress(r.name, *r.read, r.total)
+	r.store.progressMu.Unlock()
 	return count, err
 }
