@@ -216,7 +216,12 @@ func RetryAfter(header http.Header) time.Duration {
 	seconds, err := strconv.ParseUint(value, 10, 64)
 	if err == nil && seconds > 0 {
 		const maxSeconds = uint64(math.MaxInt64 / time.Second)
-		return time.Duration(min(seconds, maxSeconds)) * time.Second
+		if seconds > maxSeconds {
+			// Parsed seconds fit uint64 but exceed what time.Duration can
+			// represent after scaling; saturate.
+			return time.Duration(math.MaxInt64)
+		}
+		return time.Duration(seconds) * time.Second
 	}
 	if errors.Is(err, strconv.ErrRange) {
 		// Syntactically valid digits overflowed; the provider asked to wait
