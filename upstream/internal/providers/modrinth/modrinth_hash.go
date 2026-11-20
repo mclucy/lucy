@@ -188,7 +188,7 @@ func (p *Provider) ReleasesByHash(
 		unique = append(unique, hashes[i])
 	}
 
-	versions := make(map[string]versionResponse, len(unique))
+	matches := make(map[string]versionFileMatch, len(unique))
 	versionErrors := make(map[string]error)
 	var throttle error
 	for batch := range slices.Chunk(batchIds(unique), batchSize) {
@@ -205,7 +205,7 @@ func (p *Provider) ReleasesByHash(
 				throttle = err
 			}
 		}
-		maps.Copy(versions, found)
+		maps.Copy(matches, found)
 	}
 	if throttle != nil {
 		// The project and dependency fan-outs need more requests. Stop here
@@ -214,33 +214,21 @@ func (p *Provider) ReleasesByHash(
 			lookups,
 			hashes,
 			resolved,
-			versions,
+			matches,
 			versionErrors,
 			throttle,
 		)
 		return lookups
 	}
 
-	matchedFiles := make(map[string]fileResponse, len(versions))
-	invalid := make(map[string]error, len(versions))
-	for hash := range versions {
-		ver := versions[hash]
-		file, err := requireVersionFile(&ver, hash)
-		if err != nil {
-			invalid[hash] = err
+	matched := make([]*versionResponse, 0, len(matches))
+	projectIds := make([]string, 0, len(matches))
+	for _, match := range matches {
+		if match.err != nil {
 			continue
 		}
-		matchedFiles[hash] = file
-	}
-
-	// Only entries that identify their artifact join the project and
-	// dependency fan-outs.
-	matched := make([]*versionResponse, 0, len(matchedFiles))
-	projectIds := make([]string, 0, len(matchedFiles))
-	for hash := range matchedFiles {
-		ver := versions[hash]
-		matched = append(matched, &ver)
-		projectIds = append(projectIds, ver.ProjectId)
+		matched = append(matched, match.version)
+		projectIds = append(projectIds, match.version.ProjectId)
 	}
 	projects, projectErrors := p.getProjectsByIds(ctx, projectIds)
 	var dependencies versionByIdLookup
@@ -259,7 +247,7 @@ func (p *Provider) ReleasesByHash(
 			continue
 		}
 		hash := hashes[i]
-		ver, ok := versions[hash]
+		match, ok := matches[hash]
 		if !ok {
 			if err := versionErrors[hash]; err != nil {
 				lookups[i].Err = fmt.Errorf(
@@ -270,10 +258,11 @@ func (p *Provider) ReleasesByHash(
 			}
 			continue
 		}
-		if err := invalid[hash]; err != nil {
-			lookups[i].Err = err
+		if match.err != nil {
+			lookups[i].Err = match.err
 			continue
 		}
+		ver := match.version
 		project := projects[ver.ProjectId]
 		if project == nil {
 			lookups[i].Err = projectErrors[ver.ProjectId]
@@ -288,8 +277,7 @@ func (p *Provider) ReleasesByHash(
 			)
 			continue
 		}
-		file := matchedFiles[hash]
-		candidate, err := p.candidateFromVersion(ctx, &ver, file, true, true, dependencies)
+		candidate, err := p.candidateFromVersion(ctx, ver, match.file, true, true, dependencies)
 		if err != nil {
 			lookups[i].Err = fmt.Errorf(
 				"modrinth: release for hash %s: %w",
@@ -298,7 +286,7 @@ func (p *Provider) ReleasesByHash(
 			)
 			continue
 		}
-		lookups[i].Release = p.releaseFromVersion(project, &ver, candidate)
+		lookups[i].Release = p.releaseFromVersion(project, ver, candidate)
 		lookups[i].Matched = true
 	}
 	return lookups
@@ -311,7 +299,7 @@ func failPending(
 	lookups []upstream.ArtifactReleaseLookup,
 	hashes []string,
 	resolved []bool,
-	versions map[string]versionResponse,
+	matches map[string]versionFileMatch,
 	versionErrors map[string]error,
 	throttle error,
 ) {
@@ -320,7 +308,11 @@ func failPending(
 			continue
 		}
 		hash := hashes[i]
-		if _, found := versions[hash]; found {
+		if match, found := matches[hash]; found {
+			if match.err != nil {
+				lookups[i].Err = match.err
+				continue
+			}
 			lookups[i].Err = fmt.Errorf(
 				"modrinth: release lookup for hash %s stopped after throttle: %w",
 				hash,
@@ -356,6 +348,9 @@ func requireVersionFile(
 	version *versionResponse,
 	hash string,
 ) (fileResponse, error) {
+	if version == nil {
+		return fileResponse{}, fmt.Errorf("%w: null version for hash %s", ErrInvalidAPIResponse, hash)
+	}
 	if version.ProjectId == "" {
 		return fileResponse{}, fmt.Errorf(
 			"%w: version %s for hash %s has no project",
@@ -386,7 +381,7 @@ func (p *Provider) versionFilesBatch(
 	ctx context.Context,
 	hashes []string,
 	depth int,
-) (map[string]versionResponse, map[string]error) {
+) (map[string]versionFileMatch, map[string]error) {
 	found, err := p.versionFilesByHash(ctx, hashes)
 	if err == nil {
 		return found, nil
@@ -405,7 +400,7 @@ func (p *Provider) versionFilesBatch(
 		}
 		rightFound, rightErrors := p.versionFilesBatch(ctx, hashes[middle:], depth+1)
 		mergedFound := make(
-			map[string]versionResponse,
+			map[string]versionFileMatch,
 			len(leftFound)+len(rightFound),
 		)
 		maps.Copy(mergedFound, leftFound)

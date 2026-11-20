@@ -405,16 +405,14 @@ func (c *Client) cachedBytesRequest(
 				maxBytes,
 			)
 		}
-		if validate != nil {
-			if err := validate(data); err != nil {
-				return nil, err
-			}
+		if validate == nil || validate(data) == nil {
+			return &BytesResponse{
+				StatusCode: http.StatusOK,
+				Data:       data,
+				CacheHit:   true,
+			}, nil
 		}
-		return &BytesResponse{
-			StatusCode: http.StatusOK,
-			Data:       data,
-			CacheHit:   true,
-		}, nil
+		// Refetch when a stored response fails the lookup's validator.
 	}
 
 	var requestBody io.Reader

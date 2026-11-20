@@ -42,12 +42,19 @@ type versionFilesRequest struct {
 	Algorithm string   `json:"algorithm"`
 }
 
-// versionFilesByHash maps each SHA-1 digest Modrinth knows to its version.
-// Hashes the API does not know are omitted, not reported as errors.
+type versionFileMatch struct {
+	version *versionResponse
+	file    fileResponse
+	err     error
+}
+
+// versionFilesByHash identifies returned matches against their requested
+// digests. An incomplete match is reported for its own digest and prevents
+// caching the response. A hash the API omits is a clean miss.
 func (p *Provider) versionFilesByHash(
 	ctx context.Context,
 	hashes []string,
-) (map[string]versionResponse, error) {
+) (map[string]versionFileMatch, error) {
 	body, err := json.Marshal(versionFilesRequest{
 		Hashes:    hashes,
 		Algorithm: "sha1",
@@ -65,7 +72,8 @@ func (p *Provider) versionFilesByHash(
 
 	p.logger.Debug("modrinth api: POST " + versionFilesUrl)
 
-	var out map[string]versionResponse
+	var out map[string]versionFileMatch
+	var incomplete error
 	outcome := retry.Do(
 		ctx,
 		retry.Default,
@@ -80,8 +88,28 @@ func (p *Provider) versionFilesByHash(
 					MaxBytes: maxBatchResponseBytes,
 				},
 				func(raw []byte) error {
-					if err := json.Unmarshal(raw, &out); err != nil {
+					var versions map[string]*versionResponse
+					if err := json.Unmarshal(raw, &versions); err != nil {
 						return retry.Permanent(fmt.Errorf("modrinth: failed to parse response: %w", err))
+					}
+					if versions == nil {
+						return retry.Permanent(fmt.Errorf("%w: expected a hash-to-version object", ErrInvalidAPIResponse))
+					}
+					out = make(map[string]versionFileMatch, min(len(versions), len(hashes)))
+					incomplete = nil
+					for _, hash := range hashes {
+						version, ok := versions[hash]
+						if !ok {
+							continue
+						}
+						file, err := requireVersionFile(version, hash)
+						out[hash] = versionFileMatch{version: version, file: file, err: err}
+						if incomplete == nil {
+							incomplete = err
+						}
+					}
+					if incomplete != nil {
+						return retry.Permanent(incomplete)
 					}
 					return nil
 				},
@@ -98,6 +126,10 @@ func (p *Provider) versionFilesByHash(
 			return lookupAttempt(res, err)
 		},
 	)
+	if incomplete != nil && errors.Is(outcome.Err, incomplete) {
+		// Cache admission failed, but each returned hash has its own result.
+		return out, nil
+	}
 	if outcome.Status == 0 {
 		if outcome.Err == nil {
 			return nil, fmt.Errorf("modrinth: hash lookup returned no response")
