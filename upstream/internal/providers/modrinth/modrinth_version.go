@@ -106,13 +106,32 @@ func dependencyVersionIds(versions ...*versionResponse) []string {
 	return ids
 }
 
+// requireVersionProject returns the version only when it names its project.
+// A pinned dependency needs that project to become a dependency edge, so a
+// record without one is an invalid response rather than a usable version.
+func requireVersionProject(
+	id string,
+	version *versionResponse,
+) (*versionResponse, error) {
+	if version.ProjectId == "" {
+		return nil, fmt.Errorf(
+			"%w: version %s has no project",
+			ErrInvalidAPIResponse,
+			id,
+		)
+	}
+	return version, nil
+}
+
 // pinnedVersionLookup resolves every pinned dependency version across versions
 // in one bounded fan-out. A nil result means no version pins a dependency, so
-// the caller makes no request. A failed batch reads that ID from the
-// single-version endpoint when a caller asks for it; the retry is remembered
-// so duplicate dependency edges share one request. A bulk result stays
-// authoritative, an ID the API omitted is not found, and a failed retry keeps
-// both causes.
+// the caller makes no request. A version the batch left without a project is
+// malformed, so the caller reads that ID from the single-version endpoint
+// instead; the retry is remembered so duplicate dependency edges share one
+// request. A failed batch also retries that way when a caller asks for it. A
+// valid bulk result stays authoritative, an ID the API omitted is not found,
+// and a failed retry keeps both causes. A retry that resolves no project is an
+// invalid response, never a usable dependency.
 func (p *Provider) pinnedVersionLookup(
 	ctx context.Context,
 	versions []*versionResponse,
@@ -131,10 +150,19 @@ func (p *Provider) pinnedVersionLookup(
 		if err := callCtx.Err(); err != nil {
 			return nil, err
 		}
+		var batchErr error
 		if v := found[id]; v != nil {
-			return v, nil
+			if v.ProjectId != "" {
+				return v, nil
+			}
+			batchErr = fmt.Errorf(
+				"%w: version %s has no project",
+				ErrInvalidAPIResponse,
+				id,
+			)
+		} else {
+			batchErr = errs[id]
 		}
-		batchErr := errs[id]
 		if batchErr == nil {
 			return nil, fmt.Errorf("%w: %s", ErrNoVersion, id)
 		}
@@ -142,7 +170,11 @@ func (p *Provider) pinnedVersionLookup(
 			return prior.version, prior.err
 		}
 		v, err := p.getVersionById(callCtx, id)
+		if err == nil {
+			v, err = requireVersionProject(id, v)
+		}
 		if err != nil {
+			v = nil
 			err = errors.Join(batchErr, err)
 		}
 		attempts[id] = attempt{version: v, err: err}
@@ -152,7 +184,8 @@ func (p *Provider) pinnedVersionLookup(
 
 // resolveVersionById prefers the caller's batch lookup, so a candidate never
 // fans out per dependency. Without one it reads the single-version endpoint,
-// preserving the original identification path.
+// preserving the original identification path, and rejects a project-less
+// record like the batch lookup does.
 func (p *Provider) resolveVersionById(
 	ctx context.Context,
 	lookup versionByIdLookup,
@@ -161,7 +194,11 @@ func (p *Provider) resolveVersionById(
 	if lookup != nil {
 		return lookup(ctx, id)
 	}
-	return p.getVersionById(ctx, id)
+	version, err := p.getVersionById(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	return requireVersionProject(id, version)
 }
 
 // versionSupportsLoader reports whether a server in loader can load the

@@ -61,18 +61,17 @@ func (p *Provider) ReleaseByHash(
 	if err := json.Unmarshal(res.Data, &ver); err != nil {
 		return upstream.Release{}, false, err
 	}
-	if ver.ProjectId == "" {
-		return upstream.Release{}, false, nil
+
+	// Validate the match before asking for the project, so an entry whose
+	// files cannot identify the installed artifact costs one request.
+	file, err := requireVersionFile(&ver, hash)
+	if err != nil {
+		return upstream.Release{}, false, err
 	}
 
 	project, err := p.getProjectById(ctx, ver.ProjectId)
 	if err != nil {
 		return upstream.Release{}, false, err
-	}
-
-	file, ok := fileBySha1(ver.Files, hash)
-	if !ok {
-		return upstream.Release{}, false, nil
 	}
 
 	candidate, err := p.candidateFromVersion(ctx, &ver, file, true, true, nil)
@@ -111,8 +110,8 @@ func (p *Provider) releaseFromVersion(
 // dependency versions in one bounded GET /v2/versions fan-out. A digest the
 // API omits is a miss with no error; a failed request records its error
 // against every input whose digest that batch carried. A returned entry
-// without a project or files is an invalid response for that input, not a
-// miss.
+// without a project or a file carrying the requested digest is an invalid
+// response for that input, not a miss.
 func (p *Provider) ReleasesByHash(
 	ctx context.Context,
 	artifacts []upstream.ArtifactFingerprint,
@@ -166,13 +165,26 @@ func (p *Provider) ReleasesByHash(
 		maps.Copy(versions, found)
 	}
 
-	matched := make([]*versionResponse, 0, len(versions))
-	projectIds := make([]string, 0, len(versions))
-	for _, ver := range versions {
-		matched = append(matched, &ver)
-		if ver.ProjectId != "" {
-			projectIds = append(projectIds, ver.ProjectId)
+	matchedFiles := make(map[string]fileResponse, len(versions))
+	invalid := make(map[string]error, len(versions))
+	for hash := range versions {
+		ver := versions[hash]
+		file, err := requireVersionFile(&ver, hash)
+		if err != nil {
+			invalid[hash] = err
+			continue
 		}
+		matchedFiles[hash] = file
+	}
+
+	// Only entries that identify their artifact join the project and
+	// dependency fan-outs.
+	matched := make([]*versionResponse, 0, len(matchedFiles))
+	projectIds := make([]string, 0, len(matchedFiles))
+	for hash := range matchedFiles {
+		ver := versions[hash]
+		matched = append(matched, &ver)
+		projectIds = append(projectIds, ver.ProjectId)
 	}
 	projects, projectErrors := p.getProjectsByIds(ctx, projectIds)
 	dependencies := p.pinnedVersionLookup(ctx, matched)
@@ -187,13 +199,8 @@ func (p *Provider) ReleasesByHash(
 			lookups[i].Err = versionErrors[hash]
 			continue
 		}
-		if ver.ProjectId == "" {
-			lookups[i].Err = fmt.Errorf(
-				"%w: version %s for hash %s has no project",
-				ErrInvalidAPIResponse,
-				ver.ID,
-				hash,
-			)
+		if err := invalid[hash]; err != nil {
+			lookups[i].Err = err
 			continue
 		}
 		project := projects[ver.ProjectId]
@@ -204,16 +211,7 @@ func (p *Provider) ReleasesByHash(
 			}
 			continue
 		}
-		file, ok := fileBySha1(ver.Files, hash)
-		if !ok {
-			lookups[i].Err = fmt.Errorf(
-				"%w: version %s for hash %s has no files",
-				ErrInvalidAPIResponse,
-				ver.ID,
-				hash,
-			)
-			continue
-		}
+		file := matchedFiles[hash]
 		candidate, err := p.candidateFromVersion(ctx, &ver, file, true, true, dependencies)
 		if err != nil {
 			lookups[i].Err = err
@@ -225,25 +223,46 @@ func (p *Provider) ReleasesByHash(
 	return lookups
 }
 
+// requireVersionFile returns the file whose sha1 matches the requested digest.
+// A record without a project or without that exact file cannot identify the
+// installed artifact, so it is an invalid response for the lookup, not a
+// miss.
+func requireVersionFile(
+	version *versionResponse,
+	hash string,
+) (fileResponse, error) {
+	if version.ProjectId == "" {
+		return fileResponse{}, fmt.Errorf(
+			"%w: version %s for hash %s has no project",
+			ErrInvalidAPIResponse,
+			version.ID,
+			hash,
+		)
+	}
+	file, ok := fileBySha1(version.Files, hash)
+	if !ok {
+		return fileResponse{}, fmt.Errorf(
+			"%w: version %s for hash %s has no file with that sha1",
+			ErrInvalidAPIResponse,
+			version.ID,
+			hash,
+		)
+	}
+	return file, nil
+}
+
 // fileBySha1 picks the file whose sha1 equals hash, case-insensitive. The
 // matched file stands in for the artifact, so a version whose files carry no
-// matching sha1 falls back to its primary file, then to its first file. A
-// version without files has no match.
+// matching sha1 has no match: another file's bytes cannot stand in for the
+// installed artifact.
 func fileBySha1(files []fileResponse, hash string) (fileResponse, bool) {
-	if len(files) == 0 {
+	i := slices.IndexFunc(files, func(f fileResponse) bool {
+		return strings.EqualFold(f.Hashes.Sha1, hash)
+	})
+	if i < 0 {
 		return fileResponse{}, false
 	}
-	if i := slices.IndexFunc(files, func(f fileResponse) bool {
-		return strings.EqualFold(f.Hashes.Sha1, hash)
-	}); i >= 0 {
-		return files[i], true
-	}
-	if i := slices.IndexFunc(files, func(f fileResponse) bool {
-		return f.IsPrimary
-	}); i >= 0 {
-		return files[i], true
-	}
-	return files[0], true
+	return files[i], true
 }
 
 func ecosystemFromModrinthLoaders(loaders []string) catalog.Ecosystem {
