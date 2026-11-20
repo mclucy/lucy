@@ -611,6 +611,65 @@ func TestReleasesByHashThrottleStopsSplitAndLaterBatches(t *testing.T) {
 	}
 }
 
+func TestReleasesByHashProjectThrottlePreservesEarlierMatches(t *testing.T) {
+	t.Parallel()
+	projectRequests := 0
+	provider := newHashTestProvider(t, roundTripFunc(func(request *http.Request) (*http.Response, error) {
+		switch request.URL.Path {
+		case "/v1/fingerprints/432":
+			var payload fingerprintRequest
+			if err := json.UnmarshalRead(request.Body, &payload); err != nil {
+				return nil, err
+			}
+			var response fingerprintResponse
+			for _, fingerprint := range payload.Fingerprints {
+				id := int32(fingerprint)
+				response.Data.ExactMatches = append(response.Data.ExactMatches, fingerprintMatch{
+					File: wireFingerprintFile(id, id, int64(fingerprint)),
+				})
+			}
+			return jsonResponse(t, response), nil
+		case "/v1/mods":
+			projectRequests++
+			if projectRequests > 1 {
+				return throttleHTTPResponse("60"), nil
+			}
+			var payload struct {
+				ModIDs []int32 `json:"modIds"`
+			}
+			if err := json.UnmarshalRead(request.Body, &payload); err != nil {
+				return nil, err
+			}
+			mods := make([]modResponse, 0, len(payload.ModIDs))
+			for _, id := range payload.ModIDs {
+				mods = append(mods, modResponse{ID: id, Slug: "beta"})
+			}
+			return jsonResponse(t, modsDataResponse{Data: mods}), nil
+		default:
+			return nil, fmt.Errorf("unexpected request %s %s", request.Method, request.URL.Path)
+		}
+	}))
+	artifacts := make([]upstream.ArtifactFingerprint, 2*lookupBatchSize+1)
+	for i := range artifacts {
+		artifacts[i] = fixedFingerprint(i + 1)
+	}
+	results := provider.ReleasesByHash(t.Context(), artifacts)
+	if projectRequests != 2 {
+		t.Fatalf("made %d project requests, want one success and one throttle", projectRequests)
+	}
+	for i, result := range results {
+		if i < lookupBatchSize {
+			if !result.Matched || result.Err != nil {
+				t.Fatalf("input %d = %+v, want a release", i, result)
+			}
+			continue
+		}
+		if result.Matched || result.Err == nil || !strings.Contains(result.Err.Error(), "throttled") {
+			t.Fatalf("input %d = %+v, want a throttle error", i, result)
+		}
+	}
+}
+
 func TestReleasesByHashThrottledBodyReadErrorStopsRetries(t *testing.T) {
 	t.Parallel()
 	requests := 0
