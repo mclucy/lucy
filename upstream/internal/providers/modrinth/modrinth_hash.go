@@ -110,7 +110,9 @@ func (p *Provider) releaseFromVersion(
 // projects in one bounded GET /v2/projects fan-out, and their pinned
 // dependency versions in one bounded GET /v2/versions fan-out. A digest the
 // API omits is a miss with no error; a failed request records its error
-// against every input whose digest that batch carried.
+// against every input whose digest that batch carried. A returned entry
+// without a project or files is an invalid response for that input, not a
+// miss.
 func (p *Provider) ReleasesByHash(
 	ctx context.Context,
 	artifacts []upstream.ArtifactFingerprint,
@@ -186,6 +188,12 @@ func (p *Provider) ReleasesByHash(
 			continue
 		}
 		if ver.ProjectId == "" {
+			lookups[i].Err = fmt.Errorf(
+				"%w: version %s for hash %s has no project",
+				ErrInvalidAPIResponse,
+				ver.ID,
+				hash,
+			)
 			continue
 		}
 		project := projects[ver.ProjectId]
@@ -198,6 +206,12 @@ func (p *Provider) ReleasesByHash(
 		}
 		file, ok := fileBySha1(ver.Files, hash)
 		if !ok {
+			lookups[i].Err = fmt.Errorf(
+				"%w: version %s for hash %s has no files",
+				ErrInvalidAPIResponse,
+				ver.ID,
+				hash,
+			)
 			continue
 		}
 		candidate, err := p.candidateFromVersion(ctx, &ver, file, true, true, dependencies)
