@@ -7,6 +7,7 @@ import (
 	"slices"
 
 	"github.com/mclucy/lucy/catalog"
+	"github.com/mclucy/lucy/upstream/internal/providers/retry"
 )
 
 var (
@@ -63,18 +64,30 @@ func (p *Provider) getVersionsBatch(
 
 // getVersionsByIds resolves version IDs in deterministic bounded batches. A
 // failed batch records its error against every ID it carried; an ID the API
-// omits has neither an entry nor an error.
+// omits has neither an entry nor an error. A throttle ends the fan-out; the
+// batches not yet sent record the same throttle instead of asking the provider
+// again before its delay passes.
 func (p *Provider) getVersionsByIds(
 	ctx context.Context,
 	ids []string,
 ) (map[string]*versionResponse, map[string]error) {
 	versions := make(map[string]*versionResponse, len(ids))
 	errs := make(map[string]error)
+	var throttle error
 	for batch := range slices.Chunk(batchIds(ids), batchSize) {
+		if throttle != nil {
+			for _, id := range batch {
+				errs[id] = throttle
+			}
+			continue
+		}
 		found, err := p.getVersionsBatch(ctx, batch)
 		if err != nil {
 			for _, id := range batch {
 				errs[id] = err
+			}
+			if retry.Throttled(err) {
+				throttle = err
 			}
 			continue
 		}
@@ -130,8 +143,10 @@ func requireVersionProject(
 // instead; the retry is remembered so duplicate dependency edges share one
 // request. A failed batch also retries that way when a caller asks for it. A
 // valid bulk result stays authoritative, an ID the API omitted is not found,
-// and a failed retry keeps both causes. A retry that resolves no project is an
-// invalid response, never a usable dependency.
+// and a failed retry keeps both causes. A throttled batch is reported as-is
+// instead of retrying the ID individually, so no request reaches the provider
+// before its delay. A retry that resolves no project is an invalid response,
+// never a usable dependency.
 func (p *Provider) pinnedVersionLookup(
 	ctx context.Context,
 	versions []*versionResponse,
@@ -145,6 +160,7 @@ func (p *Provider) pinnedVersionLookup(
 		err     error
 	}
 	found, errs := p.getVersionsByIds(ctx, ids)
+	throttle := firstThrottled(errs)
 	attempts := make(map[string]attempt)
 	return func(callCtx context.Context, id string) (*versionResponse, error) {
 		if err := callCtx.Err(); err != nil {
@@ -166,10 +182,21 @@ func (p *Provider) pinnedVersionLookup(
 		if batchErr == nil {
 			return nil, fmt.Errorf("%w: %s", ErrNoVersion, id)
 		}
+		if retry.Throttled(batchErr) {
+			// The batch stopped because the provider asked for a delay. A
+			// single-version fallback would reach it before that delay.
+			return nil, batchErr
+		}
 		if prior, ok := attempts[id]; ok {
 			return prior.version, prior.err
 		}
+		if throttle != nil {
+			return nil, errors.Join(batchErr, throttle)
+		}
 		v, err := p.getVersionById(callCtx, id)
+		if retry.Throttled(err) {
+			throttle = err
+		}
 		if err == nil {
 			v, err = requireVersionProject(id, v)
 		}

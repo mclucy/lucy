@@ -63,9 +63,11 @@ func (p *Provider) ReleaseByHash(
 // project's file count. Only exact matches count. An unknown fingerprint is a
 // miss, not an error. A transient batch failure is retried with backoff and
 // then isolated by splitting the batch within a bounded split budget; a part
-// that still fails is an error for every input it covered. An exact match
-// whose file or project details cannot be completed is an incomplete lookup,
-// reported as an error rather than a miss.
+// that still fails is an error for every input it covered. A throttle that
+// asks for a delay ends the lookup: no smaller batch, refetch, or project
+// fan-out is sent before that delay passes. An exact match whose file or
+// project details cannot be completed is an incomplete lookup, reported as an
+// error rather than a miss.
 func (p *Provider) ReleasesByHash(
 	ctx context.Context,
 	artifacts []upstream.ArtifactFingerprint,
@@ -82,8 +84,17 @@ func (p *Provider) ReleasesByHash(
 	}
 
 	unique, indexByFingerprint := fingerprintIndex(artifacts, results)
-	files := p.exactFiles(ctx, unique, indexByFingerprint, results)
-	p.refetchIncompleteFiles(ctx, files, indexByFingerprint, results)
+	files, throttle := p.exactFiles(ctx, unique, indexByFingerprint, results)
+	if throttle != nil {
+		// Matched files still need requests to become releases.
+		failFiles(results, indexByFingerprint, files, throttle)
+		return results
+	}
+	throttle = p.refetchIncompleteFiles(ctx, files, indexByFingerprint, results)
+	if throttle != nil {
+		failFiles(results, indexByFingerprint, files, throttle)
+		return results
+	}
 	p.fillReleases(ctx, files, indexByFingerprint, results)
 	return results
 }
@@ -158,34 +169,64 @@ func failMatchedFile(
 	}
 }
 
+// failFiles records err for every matched file and drops it, so a lookup that
+// stops before its project fan-out reports an incomplete lookup instead of a
+// clean miss.
+func failFiles(
+	results []upstream.ArtifactReleaseLookup,
+	indexByFingerprint map[uint32][]int,
+	files map[uint32]fileResponse,
+	err error,
+) {
+	for fingerprint := range files {
+		failFingerprint(results, indexByFingerprint, fingerprint, err)
+		delete(files, fingerprint)
+	}
+}
+
 // exactFiles resolves fingerprints through POST /v1/fingerprints/432 in
 // bounded batches. A match is kept only when its wire fingerprint is in the
 // uint32 fingerprint space, names a requested input, and the record carries
 // file identity. A fingerprint the API omits stays a miss, unless the batch
 // carries a match it cannot correlate: such a match proves the batch matched
 // something, so any input it leaves undetermined is an incomplete lookup
-// rather than a clean miss.
+// rather than a clean miss. A throttle ends the fan-out; the batches that were
+// not sent report the same throttle instead of reaching the provider early.
 func (p *Provider) exactFiles(
 	ctx context.Context,
 	fingerprints []uint32,
 	indexByFingerprint map[uint32][]int,
 	results []upstream.ArtifactReleaseLookup,
-) map[uint32]fileResponse {
+) (map[uint32]fileResponse, error) {
 	files := make(map[uint32]fileResponse, len(fingerprints))
 	// A request body independent of discovery order lets a repeated lookup
 	// reuse the cached response.
 	slices.Sort(fingerprints)
+	var throttle error
 	for batch := range slices.Chunk(fingerprints, lookupBatchSize) {
-		p.resolveFingerprintBatch(ctx, batch, 0, indexByFingerprint, results, files)
+		if throttle != nil {
+			failFingerprints(results, indexByFingerprint, batch, throttle)
+			continue
+		}
+		throttle = p.resolveFingerprintBatch(
+			ctx,
+			batch,
+			0,
+			indexByFingerprint,
+			results,
+			files,
+		)
 	}
-	return files
+	return files, throttle
 }
 
 // resolveFingerprintBatch resolves one request's fingerprints into files. A
 // batch that still fails after its retry budget is split in halves and retried
 // per part, so one transient failure cannot mark every input unresolved.
 // Permanent statuses, cancellation, and the split-depth budget end the split;
-// only the inputs carried by a failed part report that error.
+// only the inputs carried by a failed part report that error. A throttle stops
+// the split without sending the sibling batch, and is returned so no later
+// batch is requested either.
 func (p *Provider) resolveFingerprintBatch(
 	ctx context.Context,
 	batch []uint32,
@@ -193,7 +234,7 @@ func (p *Provider) resolveFingerprintBatch(
 	indexByFingerprint map[uint32][]int,
 	results []upstream.ArtifactReleaseLookup,
 	files map[uint32]fileResponse,
-) {
+) error {
 	matches, err := p.fingerprintMatches(ctx, batch)
 	if err != nil {
 		if len(batch) > 1 &&
@@ -201,7 +242,7 @@ func (p *Provider) resolveFingerprintBatch(
 			ctx.Err() == nil &&
 			retry.Splittable(err) {
 			middle := len(batch) / 2
-			p.resolveFingerprintBatch(
+			throttle := p.resolveFingerprintBatch(
 				ctx,
 				batch[:middle],
 				depth+1,
@@ -209,7 +250,16 @@ func (p *Provider) resolveFingerprintBatch(
 				results,
 				files,
 			)
-			p.resolveFingerprintBatch(
+			if throttle != nil {
+				failFingerprints(
+					results,
+					indexByFingerprint,
+					batch[middle:],
+					throttle,
+				)
+				return throttle
+			}
+			return p.resolveFingerprintBatch(
 				ctx,
 				batch[middle:],
 				depth+1,
@@ -217,10 +267,12 @@ func (p *Provider) resolveFingerprintBatch(
 				results,
 				files,
 			)
-			return
 		}
 		failFingerprints(results, indexByFingerprint, batch, err)
-		return
+		if retry.Throttled(err) {
+			return err
+		}
+		return nil
 	}
 	wanted := make(map[uint32]struct{}, len(batch))
 	for _, fingerprint := range batch {
@@ -273,7 +325,7 @@ func (p *Provider) resolveFingerprintBatch(
 		files[fingerprint] = match.File
 	}
 	if uncorrelated == 0 {
-		return
+		return nil
 	}
 	// The batch matched at least one file, but this record cannot be tied
 	// to an input. Correlated matches stay matchable and inputs with a
@@ -298,19 +350,21 @@ func (p *Provider) resolveFingerprintBatch(
 			),
 		)
 	}
+	return nil
 }
 
 // refetchIncompleteFiles replaces inline match records that lack release
 // details with authoritative records from POST /v1/mods/files, batched by file
 // ID. Once a refetch is required, an omitted, incomplete or contradictory
 // authoritative record is an incomplete lookup for that input, never a
-// fallback to partial inline data and never a clean miss.
+// fallback to partial inline data and never a clean miss. A throttle ends the
+// fan-out; batches that were not sent report the same throttle.
 func (p *Provider) refetchIncompleteFiles(
 	ctx context.Context,
 	files map[uint32]fileResponse,
 	indexByFingerprint map[uint32][]int,
 	results []upstream.ArtifactReleaseLookup,
-) {
+) error {
 	fileIDs := make([]int32, 0, len(files))
 	fingerprintsByFileID := make(map[int32][]uint32, len(files))
 	for fingerprint, file := range files {
@@ -328,8 +382,21 @@ func (p *Provider) refetchIncompleteFiles(
 	// The request order must not depend on map iteration order.
 	slices.Sort(fileIDs)
 
+	var throttle error
 	for batch := range slices.Chunk(fileIDs, lookupBatchSize) {
-		p.refetchFileBatch(
+		if throttle != nil {
+			for _, fileID := range batch {
+				failMatchedFile(
+					results,
+					indexByFingerprint,
+					files,
+					fingerprintsByFileID[fileID],
+					throttle,
+				)
+			}
+			continue
+		}
+		throttle = p.refetchFileBatch(
 			ctx,
 			batch,
 			0,
@@ -339,12 +406,14 @@ func (p *Provider) refetchIncompleteFiles(
 			results,
 		)
 	}
+	return throttle
 }
 
 // refetchFileBatch replaces incomplete file records for one request batch. A
 // failed batch is split and retried per part while its failure is transient
 // and the split budget allows, so a permanent failure stays bounded and each
-// input reports its own outcome.
+// input reports its own outcome. A throttle stops the split and returns the
+// throttle so no later batch is requested.
 func (p *Provider) refetchFileBatch(
 	ctx context.Context,
 	batch []int32,
@@ -353,7 +422,7 @@ func (p *Provider) refetchFileBatch(
 	files map[uint32]fileResponse,
 	indexByFingerprint map[uint32][]int,
 	results []upstream.ArtifactReleaseLookup,
-) {
+) error {
 	authoritativeFiles, err := p.getModFilesByIds(ctx, batch)
 	if err != nil {
 		if len(batch) > 1 &&
@@ -361,7 +430,7 @@ func (p *Provider) refetchFileBatch(
 			ctx.Err() == nil &&
 			retry.Splittable(err) {
 			middle := len(batch) / 2
-			p.refetchFileBatch(
+			throttle := p.refetchFileBatch(
 				ctx,
 				batch[:middle],
 				depth+1,
@@ -370,7 +439,19 @@ func (p *Provider) refetchFileBatch(
 				indexByFingerprint,
 				results,
 			)
-			p.refetchFileBatch(
+			if throttle != nil {
+				for _, fileID := range batch[middle:] {
+					failMatchedFile(
+						results,
+						indexByFingerprint,
+						files,
+						fingerprintsByFileID[fileID],
+						throttle,
+					)
+				}
+				return throttle
+			}
+			return p.refetchFileBatch(
 				ctx,
 				batch[middle:],
 				depth+1,
@@ -379,7 +460,6 @@ func (p *Provider) refetchFileBatch(
 				indexByFingerprint,
 				results,
 			)
-			return
 		}
 		for _, fileID := range batch {
 			failMatchedFile(
@@ -390,7 +470,10 @@ func (p *Provider) refetchFileBatch(
 				err,
 			)
 		}
-		return
+		if retry.Throttled(err) {
+			return err
+		}
+		return nil
 	}
 
 	authoritative := make(map[int32]fileResponse, len(authoritativeFiles))
@@ -475,11 +558,14 @@ func (p *Provider) refetchFileBatch(
 			files[fingerprint] = file
 		}
 	}
+	return nil
 }
 
 // fillReleases resolves each matched file's project through POST /v1/mods and
 // converts the pair into a release. An exact match whose project the API omits
-// is an incomplete lookup: the release has no project identity to name.
+// is an incomplete lookup: the release has no project identity to name. A
+// throttle stops the project fan-out without sending the batches that remain;
+// releases already resolved from earlier batches are still returned.
 func (p *Provider) fillReleases(
 	ctx context.Context,
 	files map[uint32]fileResponse,
@@ -499,13 +585,36 @@ func (p *Provider) fillReleases(
 	slices.Sort(modIDs)
 
 	mods := make(map[int32]modResponse, len(modIDs))
+	var throttle error
 	for batch := range slices.Chunk(modIDs, lookupBatchSize) {
-		p.resolveModsBatch(ctx, batch, 0, mods, files, indexByFingerprint, results)
+		if throttle != nil {
+			failModsBatch(batch, throttle, files, indexByFingerprint, results)
+			continue
+		}
+		throttle = p.resolveModsBatch(
+			ctx,
+			batch,
+			0,
+			mods,
+			files,
+			indexByFingerprint,
+			results,
+		)
 	}
 
 	for fingerprint, file := range files {
 		mod, ok := mods[file.ModId]
 		if !ok {
+			if throttle != nil {
+				failFingerprint(
+					results,
+					indexByFingerprint,
+					fingerprint,
+					throttle,
+				)
+				delete(files, fingerprint)
+				continue
+			}
 			failFingerprint(
 				results,
 				indexByFingerprint,
@@ -516,6 +625,7 @@ func (p *Provider) fillReleases(
 					file.ID,
 				),
 			)
+			delete(files, fingerprint)
 			continue
 		}
 		release := p.releaseFromCurseForgeFile(&mod, &file)
@@ -525,13 +635,38 @@ func (p *Provider) fillReleases(
 				Matched: true,
 			}
 		}
+		delete(files, fingerprint)
+	}
+}
+
+// failModsBatch reports err for the matched files of one project batch and
+// drops them. It is used for batches that are never requested because an
+// earlier batch was throttled.
+func failModsBatch(
+	batch []int32,
+	err error,
+	files map[uint32]fileResponse,
+	indexByFingerprint map[uint32][]int,
+	results []upstream.ArtifactReleaseLookup,
+) {
+	wanted := make(map[int32]struct{}, len(batch))
+	for _, modID := range batch {
+		wanted[modID] = struct{}{}
+	}
+	for fingerprint, file := range files {
+		if _, ok := wanted[file.ModId]; !ok {
+			continue
+		}
+		failFingerprint(results, indexByFingerprint, fingerprint, err)
+		delete(files, fingerprint)
 	}
 }
 
 // resolveModsBatch resolves one request's projects. A transient failure is
-// split and retried per part while the split budget allows, so one throttled
+// split and retried per part while the split budget allows, so one transient
 // response does not discard every file in the batch; a permanent failure ends
-// the split and reports only the inputs that part carried.
+// the split and reports only the inputs that part carried. A throttle stops
+// the split and is returned so no later batch is requested.
 func (p *Provider) resolveModsBatch(
 	ctx context.Context,
 	batch []int32,
@@ -540,7 +675,7 @@ func (p *Provider) resolveModsBatch(
 	files map[uint32]fileResponse,
 	indexByFingerprint map[uint32][]int,
 	results []upstream.ArtifactReleaseLookup,
-) {
+) error {
 	found, err := p.getModsByIds(ctx, batch)
 	if err != nil {
 		if len(batch) > 1 &&
@@ -548,7 +683,7 @@ func (p *Provider) resolveModsBatch(
 			ctx.Err() == nil &&
 			retry.Splittable(err) {
 			middle := len(batch) / 2
-			p.resolveModsBatch(
+			throttle := p.resolveModsBatch(
 				ctx,
 				batch[:middle],
 				depth+1,
@@ -557,7 +692,17 @@ func (p *Provider) resolveModsBatch(
 				indexByFingerprint,
 				results,
 			)
-			p.resolveModsBatch(
+			if throttle != nil {
+				failModsBatch(
+					batch[middle:],
+					throttle,
+					files,
+					indexByFingerprint,
+					results,
+				)
+				return throttle
+			}
+			return p.resolveModsBatch(
 				ctx,
 				batch[middle:],
 				depth+1,
@@ -566,24 +711,17 @@ func (p *Provider) resolveModsBatch(
 				indexByFingerprint,
 				results,
 			)
-			return
 		}
-		wanted := make(map[int32]struct{}, len(batch))
-		for _, modID := range batch {
-			wanted[modID] = struct{}{}
+		failModsBatch(batch, err, files, indexByFingerprint, results)
+		if retry.Throttled(err) {
+			return err
 		}
-		for fingerprint, file := range files {
-			if _, ok := wanted[file.ModId]; !ok {
-				continue
-			}
-			failFingerprint(results, indexByFingerprint, fingerprint, err)
-			delete(files, fingerprint)
-		}
-		return
+		return nil
 	}
 	for _, mod := range found {
 		mods[mod.ID] = mod
 	}
+	return nil
 }
 
 // fingerprintMatches returns CurseForge's exact fingerprint matches for one

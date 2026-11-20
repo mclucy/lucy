@@ -39,12 +39,11 @@ func (p *Provider) get(ctx context.Context, url string, dest any) error {
 			Headers: headers,
 		},
 	)
+	if attempt := lookupAttempt(res, err); attempt.Status != http.StatusOK {
+		return lookupOutcome(attempt)
+	}
 	if err != nil {
 		return fmt.Errorf("curseforge: request failed: %w", err)
-	}
-
-	if res.StatusCode != http.StatusOK {
-		return ErrApiResponse(res.StatusCode)
 	}
 
 	if err := json.Unmarshal(res.Data, dest); err != nil {
@@ -102,10 +101,7 @@ func (p *Provider) readPost(
 				return nil
 			},
 		)
-		if err != nil {
-			return retry.Attempt{Err: err}
-		}
-		if res.StatusCode != http.StatusOK {
+		if res != nil && res.StatusCode != http.StatusOK {
 			p.logger.Debug(
 				fmt.Sprintf(
 					"curseforge api: POST %s returned status %d",
@@ -113,18 +109,52 @@ func (p *Provider) readPost(
 					res.StatusCode,
 				),
 			)
-			return retry.Attempt{
-				Status:     res.StatusCode,
-				RetryAfter: retry.RetryAfter(res.Header),
-			}
 		}
-		return retry.Attempt{Status: res.StatusCode}
+		return lookupAttempt(res, err)
 	})
-	if outcome.Err != nil {
+	return lookupOutcome(outcome)
+}
+
+// lookupAttempt retains the response status and retry headers even when
+// reading a non-2xx body failed, so the status still classifies the failure.
+func lookupAttempt(res *cache.BytesResponse, err error) retry.Attempt {
+	attempt := retry.Attempt{Err: err}
+	if res != nil {
+		attempt.Status = res.StatusCode
+		attempt.RetryAfter = retry.RetryAfter(res.Header)
+	}
+	return attempt
+}
+
+// lookupOutcome converts a finished lookup. A non-200 status that asked for a
+// delay becomes a ThrottledError so no smaller batch or later request is sent
+// before it passes. A final non-200 status keeps its meaning, so a 404 still
+// reads as a missing resource rather than a read failure, and any body read
+// failure stays in the error chain as diagnostics.
+func lookupOutcome(outcome retry.Attempt) error {
+	if outcome.Status == 0 {
+		if outcome.Err == nil {
+			return fmt.Errorf("curseforge: lookup returned no response")
+		}
 		return fmt.Errorf("curseforge: request failed: %w", outcome.Err)
 	}
 	if outcome.Status != http.StatusOK {
-		return ErrApiResponse(outcome.Status)
+		var statusErr error
+		if retry.TransientStatus(outcome.Status) && outcome.RetryAfter > 0 {
+			statusErr = &retry.ThrottledError{
+				Status:     outcome.Status,
+				RetryAfter: outcome.RetryAfter,
+			}
+		} else {
+			statusErr = ErrApiResponse(outcome.Status)
+		}
+		if outcome.Err != nil {
+			return errors.Join(statusErr, outcome.Err)
+		}
+		return statusErr
+	}
+	if outcome.Err != nil {
+		return fmt.Errorf("curseforge: request failed: %w", outcome.Err)
 	}
 	return nil
 }
