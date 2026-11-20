@@ -80,22 +80,28 @@ func (p *Plan) checkBase(
 // Decode reads the manifest and lock pinned by a capture. An absent document
 // is nil, not an error.
 func (d WorkspaceDocuments) Decode() (*document.Manifest, *document.Lock, error) {
-	var (
-		manifest *document.Manifest
-		lock     *document.Lock
-		err      error
-	)
+	var manifest *document.Manifest
 	if pin := d.documents[document.ManifestFilename]; pin.image != nil {
+		var err error
 		if manifest, err = document.DecodeManifest(bytes.NewReader(pin.raw)); err != nil {
 			return nil, nil, err
 		}
 	}
-	if pin := d.documents[document.LockFilename]; pin.image != nil {
-		if lock, err = document.DecodeLock(bytes.NewReader(pin.raw)); err != nil {
-			return nil, nil, err
-		}
+	lock, err := d.DecodeLock()
+	if err != nil {
+		return nil, nil, err
 	}
 	return manifest, lock, nil
+}
+
+// DecodeLock reads the captured lock without decoding the manifest. A capture
+// without a lock returns nil.
+func (d WorkspaceDocuments) DecodeLock() (*document.Lock, error) {
+	pin := d.documents[document.LockFilename]
+	if pin.image == nil {
+		return nil, nil
+	}
+	return document.DecodeLock(bytes.NewReader(pin.raw))
 }
 
 // matches reports whether current holds the same document images d pinned.

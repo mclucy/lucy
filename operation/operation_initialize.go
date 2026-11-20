@@ -144,7 +144,7 @@ func (s *Service) initialize(ctx context.Context, root string, opts InitOptions,
 		Count:   len(adoptedPackages),
 		Total:   inspected,
 	})
-	old, err := readExistingLock(root)
+	old, err := documents.DecodeLock()
 	if err != nil {
 		return initResult(observed), err
 	}
@@ -402,14 +402,6 @@ func (s *Service) applyDetectedVersions(
 		}
 	}
 	return nil
-}
-
-func readExistingLock(root string) (*documentpkg.Lock, error) {
-	old, err := documentpkg.LockFile(root).Read()
-	if errors.Is(err, os.ErrNotExist) {
-		return nil, nil
-	}
-	return old, err
 }
 
 // resolveAdoptedLock resolves the observed declaration. Module requirements
