@@ -354,9 +354,7 @@ func (m *materializer) fetch(ctx context.Context, it *item, index int) error {
 	return fmt.Errorf("download %s: no source produced a verified file: %w", it.rel, errors.Join(failures...))
 }
 
-// downloadFrom fetches url into dir and returns the staged file's path. Cache
-// hits are verified here, because the cache checks digests only when it stores
-// an entry.
+// downloadFrom fetches url into dir and returns the staged file's path.
 func (m *materializer) downloadFrom(
 	ctx context.Context,
 	url string,
@@ -365,13 +363,13 @@ func (m *materializer) downloadFrom(
 ) (string, error) {
 	digest := it.download
 	name := path.Base(it.rel)
-	// A cache hit bypasses WrapReader, so the transfer limit must also bound
-	// the cache copy: the per-file limit and the remaining extraction budget.
+	// Bound one transfer by the per-file limit and by the bytes left after
+	// files already retained. The aggregate is charged only on retention, so a
+	// failing attempt in flight cannot shrink another attempt's limit.
 	limit := min(maxFileBytes, m.budget.remaining())
 	if limit <= 0 {
 		return "", limitError("extraction exceeds the %d byte limit", maxExtractedBytes)
 	}
-	var attempt *chargedReader
 	res, err := m.network.CachedDownload(ctx, url, dir, cache.DownloadOptions{
 		Kind:          cache.KindArtifact,
 		ExpectedHash:  digest.digest,
@@ -380,23 +378,24 @@ func (m *materializer) downloadFrom(
 		FileMode:      0o644,
 		MaxBytes:      limit,
 		WrapReader: func(r io.Reader, size int64) io.Reader {
-			attempt = newChargedReader(ctx, r, m.budget)
 			m.reportStarted(it.rel, size)
-			return cache.ProgressReader(attempt, size, func(read, total int64) {
+			return cache.ProgressReader(r, size, func(read, total int64) {
 				m.reportProgress(it.rel, read, total)
 			})
 		},
 	})
 	if err != nil {
-		if attempt != nil {
-			attempt.refund()
+		// The cache cannot tell its per-file bound from the aggregate one; when
+		// the aggregate shrank the limit, report the shared import limit.
+		if limit < maxFileBytes && errors.Is(err, cache.ErrDownloadTooLarge) {
+			return "", fmt.Errorf("%w: %w", limitError("extraction exceeds the %d byte limit", maxExtractedBytes), err)
 		}
 		return "", err
 	}
 	staged := res.File.Name()
 	closeErr := res.File.Close()
-	if closeErr == nil && res.CacheHit {
-		closeErr = checkCachedStage(staged, digest, m.budget)
+	if closeErr == nil {
+		closeErr = m.retainStage(staged, it.rel, digest, res.Verified)
 	}
 	if closeErr != nil {
 		_ = os.Remove(staged)
@@ -406,18 +405,30 @@ func (m *materializer) downloadFrom(
 	return staged, nil
 }
 
-func checkCachedStage(staged string, digest *mrpackFile, budget *byteBudget) error {
+// retainStage charges a staged download to the aggregate budget before it can
+// be renamed into place. Hosted bytes the cache did not verify are checked
+// here, because the cache checks digests only when it stores an entry.
+func (m *materializer) retainStage(
+	staged, rel string,
+	digest *mrpackFile,
+	verified bool,
+) error {
 	info, err := os.Stat(staged)
 	if err != nil {
 		return err
 	}
 	if info.Size() > maxFileBytes {
-		return limitError("%s is %d bytes, above the %d byte file limit", staged, info.Size(), maxFileBytes)
+		return limitError("%s is %d bytes, above the %d byte file limit", rel, info.Size(), maxFileBytes)
 	}
-	if err := verifyDigest(staged, digest.algorithm, digest.digest); err != nil {
-		return err
+	if !verified {
+		if err := verifyDigest(staged, digest.algorithm, digest.digest); err != nil {
+			return err
+		}
 	}
-	return budget.spend(info.Size())
+	if err := m.budget.spend(info.Size()); err != nil {
+		return fmt.Errorf("%s: %w", rel, err)
+	}
+	return nil
 }
 
 func verifyDigest(file string, algorithm cache.HashAlgorithm, expected string) error {

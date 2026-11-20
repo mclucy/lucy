@@ -1050,8 +1050,8 @@ func (m *materializer) ensureStage() error {
 	return nil
 }
 
-// byteBudget bounds the bytes written to the destination across all sources.
-// Workers debit and refund it concurrently, so each operation takes the lock.
+// byteBudget bounds the bytes the destination retains across all sources.
+// Workers debit it concurrently, so each operation takes the lock.
 type byteBudget struct {
 	mu   sync.Mutex
 	left int64
@@ -1069,15 +1069,9 @@ func (b *byteBudget) spend(n int64) error {
 	return nil
 }
 
-func (b *byteBudget) refund(n int64) {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	b.left += n
-	b.used -= n
-}
-
-// remaining reports the bytes still available to one transfer. A caller uses it
-// only as an early bound; spend enforces the shared limit while the bytes move.
+// remaining reports the bytes still available once the files already retained
+// are accounted for. Transfers in flight do not debit the budget, so a failing
+// attempt never shrinks this bound for another attempt.
 func (b *byteBudget) remaining() int64 {
 	b.mu.Lock()
 	defer b.mu.Unlock()
@@ -1120,12 +1114,6 @@ func (c *chargedReader) Read(p []byte) (int, error) {
 	}
 	c.read += n64
 	return n, err
-}
-
-// refund returns the bytes of an attempt that failed.
-func (c *chargedReader) refund() {
-	c.budget.refund(c.read)
-	c.read = 0
 }
 
 func sniffContainer(path string) (containerKind, error) {
