@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/mclucy/lucy/cache"
 	"github.com/mclucy/lucy/upstream"
 )
 
@@ -449,6 +450,67 @@ func TestReleasesByHashIncompleteMatchIsAnError(t *testing.T) {
 	}
 	if results[2].Matched || results[2].Err != nil {
 		t.Fatalf("omitted digest = %+v, want a clean miss", results[2])
+	}
+}
+
+func TestReleasesByHashRefetchesIncompleteBatch(t *testing.T) {
+	t.Parallel()
+	noProject, wrongFile, matched := hashFingerprint{0x01}, hashFingerprint{0x02}, hashFingerprint{0x03}
+	artifacts := []upstream.ArtifactFingerprint{noProject, wrongFile, matched, hashFingerprint{0x04}}
+	var posts int
+	transport := roundTripFunc(func(request *http.Request) (*http.Response, error) {
+		switch request.URL.Path {
+		case "/v2/version_files":
+			posts++
+			if posts > 1 {
+				return jsonResponse(t, map[string]versionResponse{}), nil
+			}
+			return jsonResponse(t, map[string]versionResponse{
+				noProject.hex(): {
+					Files: []fileResponse{fileWithSha1("orphan", "orphan.jar", noProject.hex(), true)},
+				},
+				wrongFile.hex(): {
+					ProjectId: "wrong-project",
+					Files:     []fileResponse{fileWithSha1("wrong", "wrong.jar", matched.hex(), true)},
+				},
+				matched.hex(): {
+					ID:            "matched-version",
+					ProjectId:     "matched-project",
+					VersionNumber: "1.2.3",
+					Files:         []fileResponse{fileWithSha1("matched", "matched.jar", matched.hex(), true)},
+				},
+			}), nil
+		case "/v2/projects":
+			return jsonResponse(t, []projectResponse{{ID: "matched-project", Slug: "matched"}}), nil
+		default:
+			return nil, fmt.Errorf("unexpected request %s %s", request.Method, request.URL)
+		}
+	})
+	client := cache.New(t.TempDir(), cache.DefaultCacheConfig(), &http.Client{Transport: transport}, nil)
+	t.Cleanup(func() { _ = client.Close() })
+	provider := New(client, nil)
+
+	first := provider.ReleasesByHash(t.Context(), artifacts)
+	for i := range 2 {
+		if first[i].Matched || !errors.Is(first[i].Err, ErrInvalidAPIResponse) {
+			t.Errorf("invalid match %d = %+v, want incomplete lookup", i, first[i])
+		}
+	}
+	if result := first[2]; result.Err != nil || !result.Matched || result.Release.Candidate.FileID != "matched" {
+		t.Errorf("valid match in incomplete batch = %+v", result)
+	}
+	if first[3].Matched || first[3].Err != nil {
+		t.Errorf("omitted match = %+v, want clean miss", first[3])
+	}
+	for range 2 {
+		for i, result := range provider.ReleasesByHash(t.Context(), artifacts) {
+			if result.Matched || result.Err != nil {
+				t.Errorf("refetched match %d = %+v, want clean miss", i, result)
+			}
+		}
+	}
+	if posts != 2 {
+		t.Errorf("POST requests = %d, want one incomplete and one cacheable response", posts)
 	}
 }
 
