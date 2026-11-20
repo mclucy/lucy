@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"crypto/sha1"
 	"encoding/json/v2"
+	"errors"
 	"io"
 	"math"
 	"net/http"
@@ -43,11 +44,37 @@ func jsonResponse(t *testing.T, body any) *http.Response {
 	}
 }
 
+func rawJSONResponse(body string) *http.Response {
+	return &http.Response{
+		StatusCode: http.StatusOK,
+		Header:     http.Header{"Content-Type": []string{"application/json"}},
+		Body:       io.NopCloser(strings.NewReader(body)),
+	}
+}
+
+type failingBody struct{}
+
+func (failingBody) Read([]byte) (int, error) {
+	return 0, errors.New("body read failed")
+}
+
+func (failingBody) Close() error {
+	return nil
+}
+
+func throttleHTTPResponse(retryAfter string) *http.Response {
+	return &http.Response{
+		StatusCode: http.StatusTooManyRequests,
+		Header:     http.Header{"Retry-After": []string{retryAfter}},
+		Body:       http.NoBody,
+	}
+}
+
 func newHashTestProvider(t *testing.T, transport http.RoundTripper) *Provider {
 	t.Helper()
 	client := cache.New(
 		t.TempDir(),
-		cache.Config{},
+		cache.DefaultCacheConfig(),
 		&http.Client{Transport: transport},
 		nil,
 	)
@@ -187,20 +214,61 @@ func TestReleasesByHashEmptyResponseIsAMiss(t *testing.T) {
 		if request.URL.Path != "/v1/fingerprints/432" {
 			t.Errorf("unexpected request %s %s", request.Method, request.URL.Path)
 		}
-		return jsonResponse(t, fingerprintResponse{}), nil
+		return rawJSONResponse(
+			`{"data":{"exactMatches":[]}}`,
+		), nil
 	})
 
 	provider := newHashTestProvider(t, transport)
-	results := provider.ReleasesByHash(
-		t.Context(),
-		[]upstream.ArtifactFingerprint{fixedFingerprint(5555)},
-	)
-
-	if requests != 1 {
-		t.Fatalf("requests = %d, want 1", requests)
-	}
+	artifacts := []upstream.ArtifactFingerprint{fixedFingerprint(5555)}
+	results := provider.ReleasesByHash(t.Context(), artifacts)
 	if results[0].Matched || results[0].Err != nil {
 		t.Fatalf("empty response = %+v, want a clean miss", results[0])
+	}
+
+	cached := provider.ReleasesByHash(t.Context(), artifacts)
+	if requests != 1 {
+		t.Fatalf("requests = %d, want 1 (empty matches stay cached)", requests)
+	}
+	if cached[0].Matched || cached[0].Err != nil {
+		t.Fatalf("cached empty response = %+v, want a clean miss", cached[0])
+	}
+}
+
+func TestReleasesByHashIncompleteEnvelopeIsNotCached(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		name string
+		body string
+	}{
+		{name: "missing data", body: `{}`},
+		{name: "missing exact matches", body: `{"data":{}}`},
+		{name: "null exact matches", body: `{"data":{"exactMatches":null}}`},
+		{name: "non-array exact matches", body: `{"data":{"exactMatches":{}}}`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			requests := 0
+			provider := newHashTestProvider(t, roundTripFunc(func(request *http.Request) (*http.Response, error) {
+				requests++
+				if request.URL.Path != "/v1/fingerprints/432" {
+					t.Errorf("unexpected request %s %s", request.Method, request.URL.Path)
+				}
+				if requests == 1 {
+					return rawJSONResponse(tc.body), nil
+				}
+				return rawJSONResponse(`{"data":{"exactMatches":[]}}`), nil
+			}))
+			artifacts := []upstream.ArtifactFingerprint{fixedFingerprint(5555)}
+			first := provider.ReleasesByHash(t.Context(), artifacts)[0]
+			if first.Matched || first.Err == nil {
+				t.Fatalf("invalid envelope = %+v, want incomplete lookup", first)
+			}
+			second := provider.ReleasesByHash(t.Context(), artifacts)[0]
+			if second.Matched || second.Err != nil || requests != 2 {
+				t.Fatalf("lookup after malformed response = %+v, requests = %d, want a fresh miss", second, requests)
+			}
+		})
 	}
 }
 
@@ -440,6 +508,109 @@ func TestReleasesByHashRefetchRequiresCompleteAuthoritativeDetail(
 		t.Fatalf(
 			"aliased authoritative detail = %+v, want a fingerprint error",
 			results[3],
+		)
+	}
+}
+
+func TestReleasesByHashThrottleStopsSplitAndLaterBatches(t *testing.T) {
+	t.Parallel()
+	requests := 0
+	transport := roundTripFunc(func(request *http.Request) (*http.Response, error) {
+		requests++
+		if request.URL.Path != "/v1/fingerprints/432" {
+			t.Errorf("unexpected request %s %s", request.Method, request.URL.Path)
+		}
+		return throttleHTTPResponse("60"), nil
+	})
+
+	provider := newHashTestProvider(t, transport)
+	artifacts := make(
+		[]upstream.ArtifactFingerprint,
+		lookupBatchSize+1,
+	)
+	for i := range artifacts {
+		artifacts[i] = fixedFingerprint(uint32(i + 1))
+	}
+	results := provider.ReleasesByHash(t.Context(), artifacts)
+
+	if requests != 1 {
+		t.Fatalf("requests = %d, want 1 (throttle must stop the lookup)", requests)
+	}
+	for i, result := range results {
+		if result.Matched || result.Err == nil ||
+			!strings.Contains(result.Err.Error(), "throttled") {
+			t.Fatalf(
+				"fingerprint %d = %+v, want a throttle error",
+				i,
+				result,
+			)
+		}
+	}
+}
+
+func TestReleasesByHashThrottledBodyReadErrorStopsRetries(t *testing.T) {
+	t.Parallel()
+	requests := 0
+	transport := roundTripFunc(func(request *http.Request) (*http.Response, error) {
+		requests++
+		return &http.Response{
+			StatusCode: http.StatusTooManyRequests,
+			Header:     http.Header{"Retry-After": []string{"60"}},
+			Body:       failingBody{},
+		}, nil
+	})
+
+	provider := newHashTestProvider(t, transport)
+	results := provider.ReleasesByHash(
+		t.Context(),
+		[]upstream.ArtifactFingerprint{
+			fixedFingerprint(1),
+			fixedFingerprint(2),
+		},
+	)
+
+	if requests != 1 {
+		t.Fatalf(
+			"requests = %d, want 1 (throttle status must survive a body read error)",
+			requests,
+		)
+	}
+	for i, result := range results {
+		if result.Matched || result.Err == nil ||
+			!strings.Contains(result.Err.Error(), "throttled") {
+			t.Fatalf(
+				"fingerprint %d = %+v, want a throttle error",
+				i,
+				result,
+			)
+		}
+	}
+}
+
+func TestReleasesByHash404WithBodyReadErrorIsAMiss(t *testing.T) {
+	t.Parallel()
+	requests := 0
+	transport := roundTripFunc(func(request *http.Request) (*http.Response, error) {
+		requests++
+		return &http.Response{
+			StatusCode: http.StatusNotFound,
+			Body:       failingBody{},
+		}, nil
+	})
+
+	provider := newHashTestProvider(t, transport)
+	results := provider.ReleasesByHash(
+		t.Context(),
+		[]upstream.ArtifactFingerprint{fixedFingerprint(5555)},
+	)
+
+	if requests != 1 {
+		t.Fatalf("requests = %d, want 1", requests)
+	}
+	if results[0].Matched || results[0].Err != nil {
+		t.Fatalf(
+			"404 with a failed body read = %+v, want a miss",
+			results[0],
 		)
 	}
 }
