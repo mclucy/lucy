@@ -4,16 +4,16 @@ import (
 	"time"
 
 	"github.com/mclucy/lucy/catalog"
-	"github.com/mclucy/lucy/internal/fn"
 	"github.com/mclucy/lucy/upstream"
 )
 
-// pluginInfo supplies authorship from https://api.github.com/repos/MCDReforged/PluginCatalogue/contents/plugins/{plugin_name}/plugin_info.json.
-// Lucy uses this file only for authorship; metadata comes from meta.json on
-// the meta branch instead.
+// pluginInfo supplies authorship and the source repository URL from the
+// "plugin" section of
+// https://api.mcdreforged.com/catalogue/{plugin_id}/all.json.
+// Metadata comes from the "meta" section instead.
 type pluginInfo struct {
 	ID           string   `json:"id"`
-	Authors      []author `json:"authors"`
+	Authors      []string `json:"authors"`
 	Repository   string   `json:"repository"`
 	Branch       string   `json:"branch"`
 	RelatedPath  string   `json:"related_path"`
@@ -29,7 +29,27 @@ type author struct {
 	Link string `json:"link"`
 }
 
-// pluginRelease contains releases from https://api.github.com/repos/MCDReforged/PluginCatalogue/{plugin_name}/release.json?ref=meta.
+// authorSummary is the catalogue-wide author index from
+// https://api.mcdreforged.com/catalogue/authors.json. It maps each author name
+// to the record the catalogue collected from plugin_info.json, keeping the
+// author links the aggregate omits.
+type authorSummary struct {
+	Amount  int               `json:"amount"`
+	Authors map[string]author `json:"authors"`
+}
+
+// pluginAll is the official per-plugin catalogue aggregate from
+// https://api.mcdreforged.com/catalogue/{plugin_id}/all.json. The catalogue
+// documents meta, release, and repository as null when refreshing that section
+// failed, so Info treats those sections as optional. The release section is
+// not decoded here: release history uses the narrower release.json document.
+type pluginAll struct {
+	Meta       *pluginMeta `json:"meta"`
+	Plugin     *pluginInfo `json:"plugin"`
+	Repository *pluginRepo `json:"repository"`
+}
+
+// pluginRelease contains releases from https://api.mcdreforged.com/catalogue/{plugin_id}/release.json.
 type pluginRelease struct {
 	SchemaVersion int       `json:"schema_version"`
 	ID            string    `json:"id"`
@@ -75,7 +95,7 @@ type asset struct {
 	HashSha256         string    `json:"hash_sha256"`
 }
 
-// pluginMeta contains metadata from https://api.github.com/repos/MCDReforged/PluginCatalogue/contents/{plugin_name}/meta.json?ref=meta.
+// pluginMeta contains the "meta" section of https://api.mcdreforged.com/catalogue/{plugin_id}/all.json.
 type pluginMeta struct {
 	SchemaVersion int               `json:"schema_version"`
 	ID            string            `json:"id"`
@@ -91,7 +111,7 @@ type pluginMeta struct {
 	} `json:"description"`
 }
 
-// pluginRepo contains repository metadata from https://api.github.com/repos/MCDReforged/PluginCatalogue/contents/{plugin_name}/repository.json?ref=meta.
+// pluginRepo contains the "repository" section of https://api.mcdreforged.com/catalogue/{plugin_id}/all.json.
 type pluginRepo struct {
 	URL             string `json:"url"`
 	Name            string `json:"name"`
@@ -113,50 +133,60 @@ type pluginRepo struct {
 }
 
 type rawProjectInformation struct {
-	Info       *pluginInfo
-	Meta       *pluginMeta
-	Repository *pluginRepo
+	Info        *pluginInfo
+	Meta        *pluginMeta
+	Repository  *pluginRepo
+	AuthorLinks map[string]string
 }
 
 func (r rawProjectInformation) ToProjectInformation() catalog.Metadata {
 	info := catalog.Metadata{
-		Title:                 r.Meta.Name,
-		Brief:                 r.Meta.Description.EnUs,
-		Description:           r.Repository.Readme,
-		DescriptionURL:        r.Repository.HtmlUrl,
 		DescriptionIsMarkdown: true,
-		Authors:               nil,
-		URLs:                  nil,
-		License: fn.Ternary(
-			r.Repository.License != nil,
-			r.Repository.License.Name,
-			"n/a",
-		),
+		Authors:               make([]catalog.Person, 0),
+		URLs:                  make([]catalog.URL, 0),
+		License:               "n/a",
 	}
 
-	info.Authors = make([]catalog.Person, 0)
-	for _, author := range r.Info.Authors {
-		info.Authors = append(
-			info.Authors, catalog.Person{
-				Name: author.Name,
-				URL:  author.Link,
-			},
-		)
+	if r.Meta != nil {
+		info.Title = r.Meta.Name
+		info.Brief = r.Meta.Description.EnUs
+		if r.Meta.Link != "" {
+			info.URLs = append(info.URLs, catalog.URL{
+				Name: "Plugin Page",
+				Type: catalog.URLHome,
+				URL:  r.Meta.Link,
+			})
+		}
 	}
 
-	info.URLs = make([]catalog.URL, 0)
-	info.URLs = append(
-		info.URLs,
-		catalog.URL{
-			Name: "Plugin Page",
-			Type: catalog.URLHome,
-			URL:  r.Meta.Link,
-		}, catalog.URL{
-			Name: "SourceGitHub Repo",
-			Type: catalog.URLSource,
-			URL:  r.Info.Repository,
-		},
-	)
+	if r.Repository != nil {
+		info.Description = r.Repository.Readme
+		info.DescriptionURL = r.Repository.HtmlUrl
+		if r.Repository.License != nil {
+			info.License = r.Repository.License.Name
+		}
+	}
+
+	if r.Info != nil {
+		for _, name := range r.Info.Authors {
+			if name == "" {
+				continue
+			}
+			info.Authors = append(
+				info.Authors, catalog.Person{
+					Name: name,
+					URL:  r.AuthorLinks[name],
+				},
+			)
+		}
+		if r.Info.Repository != "" {
+			info.URLs = append(info.URLs, catalog.URL{
+				Name: "SourceGitHub Repo",
+				Type: catalog.URLSource,
+				URL:  r.Info.Repository,
+			})
+		}
+	}
 
 	return info
 }
