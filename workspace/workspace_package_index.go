@@ -5,11 +5,11 @@ import (
 	"sort"
 )
 
-// PackageIndex is a map-backed index over discovered packages, keyed by
-// the qualified identity StringQualified(). All exported methods return
-// results in a stable order; raw map iteration order never reaches callers.
+// PackageIndex collects identities while keeping distinct installed paths.
+// Adoption needs every conflicting file, not one representative by identity.
 type PackageIndex struct {
-	pkgs map[string]DiscoveredPackage
+	pkgs   map[string]DiscoveredPackage
+	extras map[[2]string]DiscoveredPackage
 }
 
 func NewPackageIndex() *PackageIndex {
@@ -18,15 +18,23 @@ func NewPackageIndex() *PackageIndex {
 	}
 }
 
-// Add inserts a package into the index. First-write wins, except that a
-// non-empty Path replaces an existing entry whose Path is empty, so an
-// entry without a local path can gain one when discovered.
+// Add keeps the first observation of a package at a path. An observation with
+// a path replaces a pathless one for the same identity.
 func (idx *PackageIndex) Add(pkg DiscoveredPackage) {
 	key := pkg.ID.StringQualified()
 
-	existing, exists := idx.pkgs[key]
-	if exists {
-		if existing.Path != "" || pkg.Path == "" {
+	if existing, exists := idx.pkgs[key]; exists {
+		if pkg.Path == "" || existing.Path == pkg.Path {
+			return
+		}
+		if existing.Path != "" {
+			if idx.extras == nil {
+				idx.extras = make(map[[2]string]DiscoveredPackage)
+			}
+			file := [2]string{key, pkg.Path}
+			if _, ok := idx.extras[file]; !ok {
+				idx.extras[file] = pkg
+			}
 			return
 		}
 	}
@@ -42,11 +50,13 @@ func (idx *PackageIndex) Merge(pkgs []DiscoveredPackage) {
 	}
 }
 
-// Packages returns all indexed packages sorted ascending by platform,
-// name, and version string.
+// Packages returns the index in identity and path order.
 func (idx *PackageIndex) Packages() []DiscoveredPackage {
-	result := make([]DiscoveredPackage, 0, len(idx.pkgs))
+	result := make([]DiscoveredPackage, 0, len(idx.pkgs)+len(idx.extras))
 	for _, pkg := range idx.pkgs {
+		result = append(result, pkg)
+	}
+	for _, pkg := range idx.extras {
 		result = append(result, pkg)
 	}
 
@@ -58,7 +68,13 @@ func (idx *PackageIndex) Packages() []DiscoveredPackage {
 		if c := cmp.Compare(pi.Name.String(), pj.Name.String()); c != 0 {
 			return c < 0
 		}
-		return cmp.Compare(pi.Version.String(), pj.Version.String()) < 0
+		if c := cmp.Compare(pi.Version.String(), pj.Version.String()); c != 0 {
+			return c < 0
+		}
+		if c := cmp.Compare(pi.Provider, pj.Provider); c != 0 {
+			return c < 0
+		}
+		return result[i].Path < result[j].Path
 	})
 
 	return result

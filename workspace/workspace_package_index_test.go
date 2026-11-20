@@ -6,7 +6,7 @@ import (
 	"github.com/mclucy/lucy/catalog"
 )
 
-func TestPackageIndex_AddFirstWriteWins(t *testing.T) {
+func TestPackageIndexKeepsConflictingInstalledFiles(t *testing.T) {
 	idx := NewPackageIndex()
 	first := makeDiscoveredPackage(
 		t,
@@ -25,11 +25,8 @@ func TestPackageIndex_AddFirstWriteWins(t *testing.T) {
 	idx.Add(first)
 	idx.Add(second)
 	pkgs := idx.Packages()
-	if len(pkgs) != 1 {
-		t.Fatalf("expected 1 package, got %d", len(pkgs))
-	}
-	if pkgs[0].Path != "/mods/sodium-0.5.0.jar" {
-		t.Errorf("first-write-wins violated: got path %q", pkgs[0].Path)
+	if len(pkgs) != 2 || pkgs[0].Path != first.Path || pkgs[1].Path != second.Path {
+		t.Fatalf("observed packages = %v, want both installed paths in order", pkgs)
 	}
 }
 
