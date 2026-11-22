@@ -92,10 +92,10 @@ func (r *Router) trustMavenChecksum(
 	return nil
 }
 
-// ResolveServerProduct resolves the server product artifact, its download
-// inputs, and the Java advisory for the requested Minecraft version. The
-// advisory comes from Mojang's per-version metadata. It always acquires the
-// selected core because the lock records the bytes it pins.
+// ResolveServerProduct resolves the server product artifact, its bootstrap
+// method, its input artifacts, and the Java advisory for the requested
+// Minecraft version. The advisory comes from Mojang's per-version metadata. It
+// always acquires the selected core because the lock records the bytes it pins.
 func (r *Router) ResolveServerProduct(
 	ctx context.Context,
 	req upstream.ServerProductRequest,
@@ -137,6 +137,7 @@ func (r *Router) ResolveServerProduct(
 			"provider", catalog.ProviderMojang,
 		)
 		out.Artifact = minecraft
+		out.Bootstrap = server.BootstrapMethodVanilla
 		out.ProductVersion = req.Minecraft
 		materialized, err := acquire(&out.Artifact)
 		if err != nil {
@@ -145,12 +146,7 @@ func (r *Router) ResolveServerProduct(
 		out.Artifact.Hashes = materialized.Hashes
 		return out, nil
 	}
-	out.Inputs = []server.BootstrapInput{
-		{
-			Path:     "server.jar",
-			Artifact: minecraft,
-		},
-	}
+	out.Inputs = []catalog.Artifact{minecraft}
 	if req.Repository != "" {
 		r.logger.Debug(
 			"routing: server product route selected",
@@ -255,7 +251,7 @@ func (r *Router) ResolveServerProduct(
 					req.Minecraft.String() + "/" + info.Build + "/download",
 				Hashes: map[string]string{"md5": info.MD5},
 			}
-			out.Bootstrapper = server.BootstrapMethodPaperclip
+			out.Bootstrap = server.BootstrapMethodPaperclip
 			r.logger.Debug(
 				"routing: server product route selected",
 				"product", req.Product,
@@ -290,18 +286,18 @@ func (r *Router) ResolveServerProduct(
 		}
 		out.Artifact.Modules = modules
 	}
-	if out.Bootstrapper == server.BootstrapMethodPaperclip {
+	if out.Bootstrap == server.BootstrapMethodPaperclip {
 		if err := paperclipInput(&out, materialized.Path); err != nil {
 			return out, err
 		}
 	}
 	for i := range out.Inputs {
 		if out.Inputs[i].Embedded == "" {
-			input, e := acquire(&out.Inputs[i].Artifact)
+			input, e := acquire(&out.Inputs[i])
 			if e != nil {
 				return out, e
 			}
-			out.Inputs[i].Artifact.Hashes = input.Hashes
+			out.Inputs[i].Hashes = input.Hashes
 		}
 	}
 	return out, nil

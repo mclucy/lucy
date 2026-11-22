@@ -183,6 +183,7 @@ func (s *pipelineSource) ResolveServerProduct(
 		Product:        request.Product,
 		ProductVersion: request.ProductVersion,
 		Artifact:       core,
+		Bootstrap:      serverpkg.BootstrapMethodVanilla,
 		JavaAdvisory:   21,
 	}, nil
 }
@@ -266,7 +267,8 @@ func TestLockedReplayInstallsEmptyWorkspaceWithoutRewritingIntent(t *testing.T) 
 				URL:      "https://example.invalid/server.jar",
 				Hashes:   map[string]string{"sha256": installTestDigest(core)},
 			},
-			Java: document.LockedJava{Advisory: 21},
+			Bootstrap: serverpkg.BootstrapMethodVanilla,
+			Java:      document.LockedJava{Advisory: 21},
 		},
 		Packages: []document.Package{{
 			Environment: serverpkg.EnvironmentServer,
@@ -398,16 +400,14 @@ func TestExplicitAdoptionThenInstallReplacesOwnedRuntimeAndPreservesAmbientFiles
 				URL:       "https://example.invalid/fabric-loader-0.16.9.jar",
 				Hashes:    map[string]string{"sha256": installTestDigest(core)},
 			},
-			Bootstrapper: "fabric",
-			Inputs: []serverpkg.BootstrapInput{{
-				Path: "server.jar",
-				Artifact: catalog.Artifact{
-					Provider: catalog.ProviderMojang,
-					Version:  "1.21.4",
-					Filename: "server.jar",
-					URL:      "https://example.invalid/server.jar",
-					Hashes:   map[string]string{"sha256": installTestDigest(adoptedServerJar)},
-				},
+			Bootstrap: serverpkg.BootstrapMethodFabric,
+			Inputs: []catalog.Artifact{{
+				Provider:  catalog.ProviderMojang,
+				ProjectID: "minecraft",
+				Version:   "1.21.4",
+				Filename:  "server.jar",
+				URL:       "https://example.invalid/server.jar",
+				Hashes:    map[string]string{"sha256": installTestDigest(adoptedServerJar)},
 			}},
 			Java: document.LockedJava{Advisory: 21},
 		},
@@ -435,7 +435,7 @@ func TestExplicitAdoptionThenInstallReplacesOwnedRuntimeAndPreservesAmbientFiles
 	if err := bootstrap.PrepareLocked(
 		t.Context(), root, adopted.Server,
 		filepath.Join(sources, "loader.jar"),
-		map[string]string{"server.jar": filepath.Join(sources, "server.jar")},
+		[]string{filepath.Join(sources, "server.jar")},
 		"", nil, bootstrap.Progress{},
 	); err != nil {
 		t.Fatalf("prepare complete Fabric fixture: %v", err)
@@ -474,15 +474,13 @@ func TestExplicitAdoptionThenInstallReplacesOwnedRuntimeAndPreservesAmbientFiles
 	// A later lock pins a new server input, so installation must replace the
 	// owned runtime outputs while leaving ambient files alone.
 	updated := *adopted
-	updated.Server.Inputs = []serverpkg.BootstrapInput{{
-		Path: "server.jar",
-		Artifact: catalog.Artifact{
-			Provider: catalog.ProviderMojang,
-			Version:  "1.21.4",
-			Filename: "server.jar",
-			URL:      "https://example.invalid/server.jar",
-			Hashes:   map[string]string{"sha256": installTestDigest(serverInput)},
-		},
+	updated.Server.Inputs = []catalog.Artifact{{
+		Provider:  catalog.ProviderMojang,
+		ProjectID: "minecraft",
+		Version:   "1.21.4",
+		Filename:  "server.jar",
+		URL:       "https://example.invalid/server.jar",
+		Hashes:    map[string]string{"sha256": installTestDigest(serverInput)},
 	}}
 	if err := document.LockFile(root).Write(&updated); err != nil {
 		t.Fatalf("write updated lock: %v", err)
@@ -616,7 +614,8 @@ func TestLockedRequirementChangesConvergeWorkspace(t *testing.T) {
 				URL:      "https://example.invalid/server.jar",
 				Hashes:   map[string]string{"sha256": installTestDigest(core)},
 			},
-			Java: document.LockedJava{Advisory: 21},
+			Bootstrap: serverpkg.BootstrapMethodVanilla,
+			Java:      document.LockedJava{Advisory: 21},
 		},
 		Packages: []document.Package{
 			{

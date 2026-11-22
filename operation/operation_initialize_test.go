@@ -101,7 +101,18 @@ func (initializeInstallSource) ResolveServerProduct(
 			Version:  request.ProductVersion,
 			Filename: request.Product.String() + "-" + request.ProductVersion.String() + ".jar",
 		},
+		Bootstrap:    serverpkg.BootstrapMethodVanilla,
 		JavaAdvisory: 21,
+	}
+	switch request.Product {
+	case serverpkg.ProductFabric:
+		resolution.Bootstrap = serverpkg.BootstrapMethodFabric
+	case serverpkg.ProductQuilt:
+		resolution.Bootstrap = serverpkg.BootstrapMethodQuilt
+	case serverpkg.ProductForge, serverpkg.ProductNeoForge:
+		resolution.Bootstrap = serverpkg.BootstrapMethodForge
+	case serverpkg.ProductPaper, serverpkg.ProductPurpur:
+		resolution.Bootstrap = serverpkg.BootstrapMethodPaperclip
 	}
 	if request.Product == serverpkg.ProductFabric {
 		resolution.Artifact.Modules = []catalog.DescriptorModule{{

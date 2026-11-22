@@ -24,7 +24,7 @@ func LaunchFor(method server.BootstrapMethod) Launch {
 		launch.Command = "sh run.sh"
 	case server.BootstrapMethodQuilt:
 		launch.Command = "java -jar quilt-server-launch.jar nogui"
-	case server.BootstrapMethodForgeInstaller:
+	case server.BootstrapMethodForge:
 		launch.Command = "sh run.sh"
 		launch.Handler = "forge_handler"
 	case server.BootstrapMethodPaperclip:

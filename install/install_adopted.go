@@ -244,7 +244,7 @@ func (s *localRuntimeSource) importServer(
 	artifacts := make([]*catalog.Artifact, 0, len(server.Inputs)+1)
 	artifacts = append(artifacts, &server.Artifact)
 	for i := range server.Inputs {
-		artifacts = append(artifacts, &server.Inputs[i].Artifact)
+		artifacts = append(artifacts, &server.Inputs[i])
 	}
 	for _, artifact := range artifacts {
 		materialized, matched, err := s.materialize(ctx, artifact)

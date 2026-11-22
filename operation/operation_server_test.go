@@ -81,8 +81,8 @@ func writeReplayLock(t *testing.T, root, manifestFingerprint string) []byte {
 				Filename:  "paper-1.21.4.jar",
 				Hashes:    map[string]string{"sha256": strings.Repeat("b", 64)},
 			},
-			Bootstrapper: "paperclip",
-			Java:         document.LockedJava{Advisory: 21},
+			Bootstrap: "paperclip",
+			Java:      document.LockedJava{Advisory: 21},
 		},
 		Packages: []document.Package{},
 	}

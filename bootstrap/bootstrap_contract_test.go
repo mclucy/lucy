@@ -59,10 +59,10 @@ func TestBootstrapArtifactDigests(t *testing.T) {
 				t.Fatal(err)
 			}
 			locked := document.LockedServer{
-				Directory:    ".",
-				Product:      server.ProductMinecraft,
-				Artifact:     catalog.Artifact{Hashes: tc.hashes},
-				Bootstrapper: server.BootstrapMethodPlain,
+				Directory: ".",
+				Product:   server.ProductMinecraft,
+				Artifact:  catalog.Artifact{Hashes: tc.hashes},
+				Bootstrap: server.BootstrapMethodVanilla,
 			}
 			existing, err := bootstrap.CheckExisting(root, locked)
 			if err != nil {

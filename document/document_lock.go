@@ -36,9 +36,11 @@ type LockedServer struct {
 	Product          server.Product  `yaml:"product" json:"product"`
 	CoreVersion      version.Version `yaml:"core_version" json:"core_version"`
 	catalog.Artifact `yaml:",inline" json:",inline"`
-	Bootstrapper     server.BootstrapMethod  `yaml:"bootstrapper" json:"bootstrapper"`
-	Inputs           []server.BootstrapInput `yaml:"inputs,omitempty" json:"inputs"`
-	Java             LockedJava              `yaml:"java" json:"java"`
+	Bootstrap        server.BootstrapMethod `yaml:"bootstrap" json:"bootstrap"`
+	// Inputs are the artifacts the method consumes besides the core. The
+	// method decides where each input lands in the server tree.
+	Inputs []catalog.Artifact `yaml:"inputs,omitempty" json:"inputs"`
+	Java   LockedJava         `yaml:"java" json:"java"`
 }
 
 // LockedJava records the inputs of the Java requirement. Package requirements
@@ -99,6 +101,9 @@ func (l *Lock) Validate() error {
 	}
 	if l.Server.Artifact.Filename == "" {
 		return fmt.Errorf("server.artifact.filename is required")
+	}
+	if err := l.Server.Bootstrap.Validate(); err != nil {
+		return fmt.Errorf("server.bootstrap: %w", err)
 	}
 	if l.Server.Java.Advisory <= 0 {
 		return fmt.Errorf("server.java.advisory must be positive")

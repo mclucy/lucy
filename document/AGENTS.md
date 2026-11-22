@@ -5,7 +5,7 @@ Package `document` owns the persisted server specification files: the manifest d
 ## Responsibilities
 
 - **Manifest Declaration (`lucy.yaml`)**: Records user intent, version selectors, server product definitions, tracked file policies, and package requirements grouped by ecosystem.
-- **Lock Resolution (`lucy-lock.yaml`)**: Records fully resolved server inputs, pinned artifacts, requirement bindings, bootstrap inputs, and the `manifest_fingerprint` linking back to the declaration.
+- **Lock Resolution (`lucy-lock.yaml`)**: Records fully resolved server inputs, the selected bootstrap method, pinned artifacts, requirement bindings, bootstrap inputs, and the `manifest_fingerprint` linking back to the declaration.
 - **State Boundary**: Owns declarative intent and resolution only. Committed installation state belongs in `receipt` (`.lucy/install.yaml`), while live runtime observation belongs in `workspace`.
 
 ## Canonicalization & Codec Boundaries

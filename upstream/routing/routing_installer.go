@@ -32,36 +32,37 @@ type mavenLibrary struct {
 	} `json:"downloads"`
 }
 
-// libraryInput turns one profile library into a bootstrap input. The second
-// result is false when the profile explicitly names a library that cannot be
-// downloaded: Forge declares the client classifier with an empty artifact URL
-// because the jar exists nowhere in a public Maven repository.
-func libraryInput(lib mavenLibrary, z *zip.Reader, version versionpkg.Version) (server.BootstrapInput, bool, error) {
+// libraryInput turns one profile library into a bootstrap input. The library
+// coordinate decides its placement, so a download that declares a different
+// path fails resolution instead of landing elsewhere. The second result is
+// false when the profile explicitly names a library that cannot be downloaded:
+// Forge declares the client classifier with an empty artifact URL because the
+// jar exists nowhere in a public Maven repository.
+func libraryInput(lib mavenLibrary, z *zip.Reader, version versionpkg.Version) (catalog.Artifact, bool, error) {
 	download := lib.Downloads.Artifact
-	p := ""
-	if download != nil {
-		p = download.Path
+	p, err := maven.Path(lib.Name)
+	if err != nil {
+		return catalog.Artifact{}, false, err
 	}
-	if p == "" {
-		var err error
-		p, err = maven.Path(lib.Name)
-		if err != nil {
-			return server.BootstrapInput{}, false, err
-		}
+	if download != nil && download.Path != "" && download.Path != p {
+		return catalog.Artifact{}, false, fmt.Errorf(
+			"library %s declares download path %s, but its coordinate places it at %s",
+			lib.Name, download.Path, p,
+		)
 	}
 	a := catalog.Artifact{Provider: catalog.ProviderMaven, ProjectID: lib.Name, Version: version, Filename: path.Base(p), Hashes: map[string]string{}}
 	if z != nil {
 		if raw, err := zipBytes(z, "maven/"+p); err != nil {
-			return server.BootstrapInput{}, false, err
+			return catalog.Artifact{}, false, err
 		} else if raw != nil {
 			a.Embedded = "maven/" + p
 			sum := sha256.Sum256(raw)
 			a.Hashes["sha256"] = hex.EncodeToString(sum[:])
-			return server.BootstrapInput{Path: "libraries/" + p, Artifact: a}, true, nil
+			return a, true, nil
 		}
 	}
 	if download != nil && download.URL == "" {
-		return server.BootstrapInput{}, false, nil
+		return catalog.Artifact{}, false, nil
 	}
 	if download != nil {
 		a.URL = download.URL
@@ -76,7 +77,7 @@ func libraryInput(lib mavenLibrary, z *zip.Reader, version versionpkg.Version) (
 	if download != nil && download.SHA1 != "" {
 		a.Hashes["sha1"] = download.SHA1
 	}
-	return server.BootstrapInput{Path: "libraries/" + p, Artifact: a}, true, nil
+	return a, true, nil
 }
 
 func zipBytes(z *zip.Reader, name string) ([]byte, error) {
@@ -121,7 +122,7 @@ func (r *Router) resolveInstaller(ctx context.Context, req upstream.ServerProduc
 		}
 	}
 	out.Artifact.Version = out.ProductVersion
-	out.Bootstrapper = server.BootstrapMethodForgeInstaller
+	out.Bootstrap = server.BootstrapMethodForge
 	if profile.JSON != "" {
 		raw, e := zipBytes(&z.Reader, strings.TrimPrefix(profile.JSON, "/"))
 		if e != nil {
@@ -149,16 +150,15 @@ func (r *Router) resolveInstaller(ctx context.Context, req upstream.ServerProduc
 			)
 			continue
 		}
-		if seen[input.Path] {
+		if seen[input.ProjectID] {
 			r.logger.Debug(
 				"routing: installer library skipped",
 				"library", lib.Name,
-				"path", input.Path,
-				"reason", "duplicate library path",
+				"reason", "duplicate library coordinate",
 			)
 			continue
 		}
-		seen[input.Path] = true
+		seen[input.ProjectID] = true
 		out.Inputs = append(out.Inputs, input)
 	}
 	// Processors may need Mojang server mappings in addition to the server JAR.
@@ -183,7 +183,7 @@ func (r *Router) resolveInstaller(ctx context.Context, req upstream.ServerProduc
 				return err
 			}
 			if mapping, ok := detail.Downloads["server_mappings"]; ok {
-				out.Inputs = append(out.Inputs, server.BootstrapInput{Path: "server-mappings.txt", Provider: catalog.ProviderMojang, ProjectID: "server-mappings", Version: req.Minecraft, Filename: "server-mappings.txt", URL: mapping.URL, Hashes: map[string]string{"sha1": mapping.SHA1}})
+				out.Inputs = append(out.Inputs, catalog.Artifact{Provider: catalog.ProviderMojang, ProjectID: "server-mappings", Version: req.Minecraft, Filename: "server-mappings.txt", URL: mapping.URL, Hashes: map[string]string{"sha1": mapping.SHA1}})
 			}
 			break
 		}

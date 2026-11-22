@@ -57,7 +57,6 @@ func (s *Store) SaveSnapshot(ctx context.Context, snap snapshot.Snapshot, source
 	if err := snap.Validate(); err != nil {
 		return err
 	}
-	snap.Version = snapshot.FormatVersion
 	snap.Entries = slices.Clone(snap.Entries)
 	slices.SortFunc(snap.Entries, func(a, b snapshot.Entry) int {
 		return strings.Compare(a.Path, b.Path)

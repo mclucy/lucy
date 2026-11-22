@@ -68,8 +68,8 @@ func bootstrapCurrent(root string, l *document.Lock, current *receipt.Receipt, l
 	}
 
 	specs := bootstrap.OutputSpecs(l.Server)
-	if len(specs) == 0 && (l.Server.Product != "" || l.Server.Bootstrapper != "") {
-		logger.Debug("bootstrap not current", "reason", "unsupported bootstrap method", "method", l.Server.Bootstrapper)
+	if len(specs) == 0 && (l.Server.Product != "" || l.Server.Bootstrap != "") {
+		logger.Debug("bootstrap not current", "reason", "unsupported bootstrap method", "method", l.Server.Bootstrap)
 		return false, nil
 	}
 

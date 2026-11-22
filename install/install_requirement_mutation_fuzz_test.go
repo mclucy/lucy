@@ -355,8 +355,8 @@ func initialLock(scenario mutationScenario, fingerprint string) *document.Lock {
 				Filename:  "fabric-loader-0.16.9.jar",
 				Hashes:    map[string]string{"sha256": packageHash(100)},
 			},
-			Bootstrapper: "fabric",
-			Java:         document.LockedJava{Advisory: 21},
+			Bootstrap: "fabric",
+			Java:      document.LockedJava{Advisory: 21},
 		},
 		Packages: packages,
 	}

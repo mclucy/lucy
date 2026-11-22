@@ -25,8 +25,10 @@ func TestBootstrapCurrentRequiresReceiptOwnershipOfManagedOutput(t *testing.T) {
 	lock := &document.Lock{
 		SchemaVersion: document.LockSchemaVersion,
 		Server: document.LockedServer{
+			Product:   server.ProductMinecraft,
 			Minecraft: "1.21.4",
 			Directory: "server",
+			Bootstrap: server.BootstrapMethodVanilla,
 			Artifact: catalog.Artifact{
 				Provider:  catalog.ProviderMojang,
 				ProjectID: "server",
@@ -93,11 +95,11 @@ func TestBootstrapCurrentRequiresForgeInstallerEvidence(t *testing.T) {
 	}
 	lock := &document.Lock{
 		Server: document.LockedServer{
-			Product:      server.ProductForge,
-			Minecraft:    "1.21.11",
-			CoreVersion:  "61.2.0",
-			Bootstrapper: server.BootstrapMethodForgeInstaller,
-			Directory:    "server",
+			Product:     server.ProductForge,
+			Minecraft:   "1.21.11",
+			CoreVersion: "61.2.0",
+			Bootstrap:   server.BootstrapMethodForge,
+			Directory:   "server",
 			Artifact: catalog.Artifact{
 				Hashes: map[string]string{"sha256": transactionTestDigest(installer.Bytes())},
 			},

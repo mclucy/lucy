@@ -572,6 +572,7 @@ func transactionWorkspace(t *testing.T) string {
 				URL:      "https://example.invalid/native",
 				Hashes:   map[string]string{"sha256": fmt.Sprintf("%x", coreHash)},
 			},
+			Bootstrap: serverpkg.BootstrapMethodVanilla,
 		},
 		Packages: []documentpkg.Package{},
 	}

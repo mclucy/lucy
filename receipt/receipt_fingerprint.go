@@ -11,10 +11,9 @@ import (
 
 // BootstrapFingerprint returns the bootstrap recipe key of a lock: the same
 // key the bootstrap snapshot cache uses, so a receipt answers exactly the
-// snapshot a fresh staging would look up. It hashes the method, method
-// revision, Minecraft version, core digest, and input digests only; the
-// workspace directory, artifact URLs, filenames, Java requirements, tracked
-// files, MCDR, and packages cannot invalidate an unchanged bootstrap.
+// snapshot a fresh staging would look up. A new Lucy build changes the key,
+// so the next install restages the runtime. Packages, tracked files, MCDR,
+// and Java requirements cannot invalidate an unchanged bootstrap.
 func BootstrapFingerprint(l *document.Lock) (string, error) {
 	if l == nil {
 		return "", nil

@@ -14,9 +14,9 @@ import (
 // loaderRuntime is the routing definition of one Fabric-style loader: its
 // meta client definition, ecosystem, and bootstrap method.
 type loaderRuntime struct {
-	meta         loadermeta.Definition
-	ecosystem    catalog.Ecosystem
-	bootstrapper server.BootstrapMethod
+	meta      loadermeta.Definition
+	ecosystem catalog.Ecosystem
+	bootstrap server.BootstrapMethod
 }
 
 // loaderRuntimes is keyed by the server product the definition resolves.
@@ -31,8 +31,8 @@ var loaderRuntimes = map[server.Product]loaderRuntime{
 			ProjectID:  "fabric-loader",
 			StableFlag: true,
 		},
-		ecosystem:    catalog.EcosystemFabric,
-		bootstrapper: server.BootstrapMethodFabric,
+		ecosystem: catalog.EcosystemFabric,
+		bootstrap: server.BootstrapMethodFabric,
 	},
 	server.ProductQuilt: {
 		meta: loadermeta.Definition{
@@ -44,8 +44,8 @@ var loaderRuntimes = map[server.Product]loaderRuntime{
 			ProjectID:  "quilt-loader",
 			StableFlag: false,
 		},
-		ecosystem:    catalog.EcosystemQuilt,
-		bootstrapper: server.BootstrapMethodQuilt,
+		ecosystem: catalog.EcosystemQuilt,
+		bootstrap: server.BootstrapMethodQuilt,
 	},
 }
 
@@ -54,15 +54,15 @@ func loaderRuntimeFor(product server.Product) (loaderRuntime, bool) {
 	return definition, ok
 }
 
-// loaderProfileInputs translates a profile into library bootstrap inputs.
-// Profile order is preserved and the loader library is skipped. The caller
-// applies the hash trust policy.
+// loaderProfileInputs translates a profile into the library artifacts the lock
+// records as inputs. Profile order is preserved and the loader library is
+// skipped. The caller applies the hash trust policy.
 func loaderProfileInputs(
 	provider *loadermeta.Provider,
 	profile loadermeta.Profile,
 	loader version.Version,
-) ([]server.BootstrapInput, error) {
-	inputs := make([]server.BootstrapInput, 0, len(profile.Libraries))
+) ([]catalog.Artifact, error) {
+	inputs := make([]catalog.Artifact, 0, len(profile.Libraries))
 	for _, lib := range profile.Libraries {
 		if provider.IsLoaderLibrary(lib.Name) {
 			continue
@@ -124,14 +124,14 @@ func (r *Router) resolveLoaderProduct(
 		return err
 	}
 	out.Artifact = artifact
-	out.Bootstrapper = definition.bootstrapper
+	out.Bootstrap = definition.bootstrap
 
 	inputs, err := loaderProfileInputs(provider, profile, out.ProductVersion)
 	if err != nil {
 		return err
 	}
 	for i := range inputs {
-		if err := r.trustMavenChecksum(ctx, &inputs[i].Artifact); err != nil {
+		if err := r.trustMavenChecksum(ctx, &inputs[i]); err != nil {
 			return err
 		}
 	}

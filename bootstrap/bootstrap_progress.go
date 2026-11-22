@@ -2,7 +2,7 @@ package bootstrap
 
 import "time"
 
-// Progress receives preparation facts from a bootstrap adapter. A zero-value
+// Progress receives preparation facts from a bootstrap method. A zero-value
 // callback reports nothing; the caller decides how to present them.
 type Progress struct {
 	PhaseStarted  func(name string)
