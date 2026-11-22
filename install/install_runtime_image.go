@@ -63,7 +63,13 @@ func (s *Service) RuntimeImage(
 	defer func() {
 		if err := os.RemoveAll(stage); err != nil {
 			image = nil
-			resultErr = fmt.Errorf("remove runtime image stage: %w", err)
+			// The staging cause is kept as text only: a cleanup failure is
+			// fatal even when that cause would permit pinned adoption.
+			if resultErr != nil {
+				resultErr = fmt.Errorf("remove runtime image stage: %w (after: %v)", err, resultErr)
+			} else {
+				resultErr = fmt.Errorf("remove runtime image stage: %w", err)
+			}
 		}
 	}()
 
