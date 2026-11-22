@@ -28,16 +28,20 @@ type Comparison struct {
 	// belongs to the user once it exists, so its mode is never compared.
 	// Matching entries carry the observed permission bits.
 	Matching []Entry
-	// Differing entries name a path that holds other content: other bytes, a
-	// managed file with other permission bits, or a non-regular file.
+	// Differing entries name a path that holds other content: other bytes or
+	// a non-regular file.
 	Differing []Entry
+	// OtherPermissions entries name a managed regular file with the entry's
+	// digest but other read or execute bits. They carry the observed
+	// permission bits.
+	OtherPermissions []Entry
 	// Missing entries name an absent path.
 	Missing []Entry
 }
 
 // Complete reports whether every entry matches.
 func (c Comparison) Complete() bool {
-	return len(c.Differing) == 0 && len(c.Missing) == 0
+	return len(c.Differing) == 0 && len(c.OtherPermissions) == 0 && len(c.Missing) == 0
 }
 
 // Compare digests each entry's path below dir. It refuses a path that leaves
@@ -75,14 +79,15 @@ func Compare(dir string, entries []Entry) (Comparison, error) {
 			comparison.Differing = append(comparison.Differing, entry)
 			continue
 		}
+		observed := entry
+		observed.Mode = uint32(info.Mode().Perm())
+		observed.SHA256 = digest
 		if entry.Policy == managedPolicy && entry.Mode != 0 &&
 			info.Mode().Perm()&0o555 != os.FileMode(entry.Mode)&0o555 {
-			comparison.Differing = append(comparison.Differing, entry)
+			comparison.OtherPermissions = append(comparison.OtherPermissions, observed)
 			continue
 		}
-		entry.Mode = uint32(info.Mode().Perm())
-		entry.SHA256 = digest
-		comparison.Matching = append(comparison.Matching, entry)
+		comparison.Matching = append(comparison.Matching, observed)
 	}
 	return comparison, nil
 }

@@ -61,28 +61,29 @@ type AdoptOptions struct {
 // AdoptExistingWorkspace claims runtime files that match the image, or files
 // pinned by the lock if the image is unavailable. It also claims identified
 // packages. It publishes the documents and receipt in one transaction and
-// leaves the runtime files unchanged.
+// leaves the runtime files unchanged. The warnings name claims that the next
+// install must still complete.
 //
 // The receipt gets a bootstrap fingerprint only when all managed image
-// entries are claimed and all seeds are present. A previously accepted
-// receipt baseline cannot change during adoption.
-func AdoptExistingWorkspace(root string, opts AdoptOptions) (resultErr error) {
+// entries are claimed with the image's permissions and all seeds are present.
+// A previously accepted receipt baseline cannot change during adoption.
+func AdoptExistingWorkspace(root string, opts AdoptOptions) (warnings []error, resultErr error) {
 	if opts.Lock == nil {
-		return errors.New("cannot adopt workspace without lock")
+		return nil, errors.New("cannot adopt workspace without lock")
 	}
 	root, err := filepath.Abs(root)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if opts.Preconditions.documents == nil {
 		opts.Preconditions, err = CaptureWorkspaceDocuments(root)
 		if err != nil {
-			return err
+			return nil, err
 		}
 	}
 	files, err := os.OpenRoot(root)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	defer func() { resultErr = errors.Join(resultErr, files.Close()) }()
 	tracked := trackedPaths(opts.Lock)
@@ -94,23 +95,23 @@ func AdoptExistingWorkspace(root string, opts AdoptOptions) (resultErr error) {
 		tracked,
 	)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if err := adoptRuntime(files, root, opts, tracked, ledger); err != nil {
-		return err
+		return nil, err
 	}
 	if err := adoptPackages(files, root, opts, tracked, ledger); err != nil {
-		return err
+		return nil, err
 	}
 	if err := adoptMCDRWrapper(root, opts, tracked, ledger); err != nil {
-		return err
+		return nil, err
 	}
 	if err := ledger.rejectUnclaimedLegacy(); err != nil {
-		return err
+		return nil, err
 	}
 	next, err := ledger.build(root, opts.Lock)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	publishReceipt := adoptionReceiptChanged(
@@ -119,7 +120,7 @@ func AdoptExistingWorkspace(root string, opts AdoptOptions) (resultErr error) {
 		next,
 		opts.Preconditions.documents[receipt.Filename].image != nil,
 	)
-	return publishAdoption(root, opts, next, publishReceipt, ledger.images, ledger.seedPaths)
+	return ledger.warnings, publishAdoption(root, opts, next, publishReceipt, ledger.images, ledger.seedPaths)
 }
 
 // adoptionLedger accumulates ownership claims over the receipt read at
@@ -133,6 +134,7 @@ type adoptionLedger struct {
 	bootstrapFingerprint string
 	// seedPaths names the seed files the fingerprint requires to exist.
 	seedPaths []string
+	warnings  []error
 }
 
 func newAdoptionLedger() *adoptionLedger {

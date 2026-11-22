@@ -519,8 +519,8 @@ func restoredServerOutputs(
 	}
 	if !comparison.Complete() {
 		return nil, fmt.Errorf(
-			"restored bootstrap tree has %d differing and %d missing files",
-			len(comparison.Differing), len(comparison.Missing),
+			"restored bootstrap tree has %d differing, %d permission-differing, and %d missing files",
+			len(comparison.Differing), len(comparison.OtherPermissions), len(comparison.Missing),
 		)
 	}
 	outputs := make(map[string]bootstrap.Output, len(snap.Entries))

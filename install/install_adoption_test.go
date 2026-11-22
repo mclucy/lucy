@@ -14,7 +14,7 @@ func TestAdoptionRefusesVanishedAcceptedPackage(t *testing.T) {
 	root, _, lock := testWorkspace(t)
 	holdWorkspaceLock(t, root)
 	const relative = "mods/accepted.jar"
-	err := AdoptExistingWorkspace(root, AdoptOptions{
+	_, err := AdoptExistingWorkspace(root, AdoptOptions{
 		Lock: lock,
 		Packages: []AdoptedPackage{{
 			Path:           relative,

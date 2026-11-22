@@ -52,24 +52,51 @@ func adoptRuntime(
 		return fmt.Errorf("compare existing runtime with the locked image: %w", err)
 	}
 
-	for _, entry := range compared.Matching {
-		if entry.Policy != string(bootstrap.PolicyManaged) {
-			continue
-		}
+	claim := func(entry snapshot.Entry) (bool, error) {
 		expected := &workspacewrite.InstallImage{
 			SHA256: entry.SHA256,
 			Mode:   workspacewrite.EffectiveInstallMode(os.FileMode(entry.Mode)),
 		}
 		if !runtimeBaselineMatches(entry.Path, expected, baselines) {
+			return false, nil
+		}
+		return true, ledger.claim(entry.Path, receipt.OriginBootstrap, "", expected)
+	}
+	for _, entry := range compared.Matching {
+		if entry.Policy != string(bootstrap.PolicyManaged) {
+			continue
+		}
+		claimed, err := claim(entry)
+		if err != nil {
+			return err
+		}
+		if !claimed {
+			skipped++
+		}
+	}
+	// A file with the image's bytes but other permissions stays owned with
+	// its observed mode. The fingerprint is withheld, so the next install
+	// restores the image's permissions.
+	var otherPermissions []string
+	for _, entry := range compared.OtherPermissions {
+		claimed, err := claim(entry)
+		if err != nil {
+			return err
+		}
+		if !claimed {
 			skipped++
 			continue
 		}
-		if err := ledger.claim(entry.Path, receipt.OriginBootstrap, "", expected); err != nil {
-			return err
-		}
+		otherPermissions = append(otherPermissions, entry.Path)
+	}
+	if len(otherPermissions) > 0 {
+		ledger.warnings = append(ledger.warnings, fmt.Errorf(
+			"runtime files have other permissions than the runtime image: %s; the next lucy install restores them",
+			strings.Join(otherPermissions, ", "),
+		))
 	}
 
-	runtimeDiffers := false
+	runtimeDiffers := len(otherPermissions) > 0
 	for _, entry := range compared.Differing {
 		if entry.Policy == string(bootstrap.PolicyManaged) {
 			runtimeDiffers = true
@@ -86,6 +113,7 @@ func adoptRuntime(
 			"compared existing server with the locked runtime image",
 			"matching", len(compared.Matching),
 			"differing", len(compared.Differing),
+			"other-permissions", len(compared.OtherPermissions),
 			"missing", len(compared.Missing),
 			"skipped", skipped,
 		)

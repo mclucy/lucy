@@ -467,7 +467,7 @@ func TestExplicitAdoptionThenInstallReplacesOwnedRuntimeAndPreservesAmbientFiles
 	if imageErr != nil {
 		t.Fatalf("build runtime image: %v", errors.Join(imageErr, writer.Close()))
 	}
-	adoptErr := install.AdoptExistingWorkspace(root, install.AdoptOptions{
+	_, adoptErr := install.AdoptExistingWorkspace(root, install.AdoptOptions{
 		Manifest:    manifest,
 		Lock:        adopted,
 		Image:       image,

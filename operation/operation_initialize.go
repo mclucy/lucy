@@ -552,7 +552,7 @@ func (s *Service) publishInitialization(
 	// completes: the artifact store's sweep cannot reclaim the bytes
 	// resolution materialized while the workspace still had no visible lock.
 	var committedErr *install.CommittedError
-	adoptErr := install.AdoptExistingWorkspace(root, install.AdoptOptions{
+	adoptWarnings, adoptErr := install.AdoptExistingWorkspace(root, install.AdoptOptions{
 		Manifest:     manifest,
 		Lock:         resolved,
 		Image:        image,
@@ -579,6 +579,7 @@ func (s *Service) publishInitialization(
 		result.Warnings = observed.Warnings
 		result.Discovery = observed.Discovery
 	}
+	result.Warnings = append(result.Warnings, adoptWarnings...)
 	// Registration is required even when the transaction committed but its
 	// cleanup or post-commit verification failed: the published lock must stay
 	// traceable by the artifact store's sweep. The original committed error is
