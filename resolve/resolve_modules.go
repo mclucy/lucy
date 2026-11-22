@@ -133,6 +133,8 @@ func finalizeModules(packages []document.Package, target Target) ([]ModuleProble
 		if !packages[pi].Enabled() {
 			continue
 		}
+		dropped := len(surviving[pi]) < len(packages[pi].Modules)
+		packages[pi].ModulesSuperseded = packages[pi].ModulesSuperseded || dropped
 		packages[pi].Modules = surviving[pi]
 	}
 	return problems, nil

@@ -48,6 +48,10 @@ type Package struct {
 	// artifact does not carry. A candidate restored from the lock must satisfy
 	// the same selector checks as the catalogue candidate it replaces.
 	Channel upstream.ReleaseChannel `yaml:"channel,omitempty" json:"channel,omitempty"`
+	// ModulesSuperseded records that finalization dropped modules from
+	// Modules because another selected module answers their identity. Modules
+	// then lists only the surviving subset of the artifact's descriptors.
+	ModulesSuperseded bool `yaml:"modules_superseded,omitempty" json:"modules_superseded,omitempty"`
 }
 
 // Enabled reports whether p is selected for installation. Dependency demand

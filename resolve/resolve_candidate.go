@@ -423,9 +423,10 @@ func (c *AnalysisCache) RecordVerified(candidate upstream.Candidate, target Targ
 // names its artifact and hashes, so a pinned candidate whose lock recorded its
 // modules needs no materialization or reopen. Packages without recorded
 // modules are skipped: an absent module list does not prove the artifact has
-// none. A descriptor reader selects its files by loader and Minecraft
-// version, so a package resolved for previousTarget is seeded only when both
-// match target.
+// none. Packages whose modules finalization trimmed are skipped too, because
+// the trimmed list omits descriptors that a different selection may need. A
+// descriptor reader selects its files by loader and Minecraft version, so a
+// package resolved for previousTarget is seeded only when both match target.
 func (c *AnalysisCache) SeedPrevious(previous []document.Package, previousTarget, target Target) {
 	if previousTarget.Minecraft == "" || previousTarget.Minecraft != target.Minecraft {
 		return
@@ -434,7 +435,7 @@ func (c *AnalysisCache) SeedPrevious(previous []document.Package, previousTarget
 	defer c.mu.Unlock()
 	for i := range previous {
 		p := &previous[i]
-		if p.Artifact.Filename == "" || len(p.Artifact.Modules) == 0 {
+		if p.Artifact.Filename == "" || len(p.Artifact.Modules) == 0 || p.ModulesSuperseded {
 			continue
 		}
 		loader := target.DescriptorLoader(p.Ecosystem)
