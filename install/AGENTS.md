@@ -8,7 +8,8 @@ Convergence engine for workspace runtime files, documents, and receipts.
 - Staging vs workspace ownership: materializes locked server inputs and enabled packages into a private staging directory. Staged files never become owned workspace state until committed.
 - Runtime ownership: the files a bootstrap method produces (server jars, libraries, versions, cache, launchers, run scripts) are owned as the runtime image of the lock's recipe. `--overwrite` governs package destinations only.
 - Manifest, lock, and receipt semantics: manifest (`lucy.yaml`) defines intent, lock (`lucy-lock.yaml`) pins exact resolutions, and receipt (`.lucy/install.yaml`) records committed outputs, baseline hashes, modes, and origins (`bootstrap`, `package`, or `mcdr`). Receipt validity separates `receipt.BootstrapFingerprint` (runtime currentness: installation key of the snapshot recipe plus server directory, owned runtime digests, and recorded seed presence) from `receipt.PackageFingerprint` (packages and MCDR wrapper). A recorded seed path must be a present regular file; its content stays user-owned. Java requirements, tracked files, and manifest fingerprints do not invalidate it.
-- Skipping staging: if receipt satisfies the bootstrap contract, server bootstrap staging is bypassed; package-only operations retain accepted bootstrap outputs. Manifest publication on a current runtime commits documents without restaging.
+- Adoption records ownership of managed files that match the runtime image, or only files that match the lock's digest pins if the image is unavailable.
+  A matching bootstrap fingerprint and intact receipt baselines let install skip runtime staging and retain accepted outputs during package changes.
 
 ## Invariants & Transaction Safety
 

@@ -15,13 +15,14 @@ Prepares runnable server trees inside an installation staging directory.
   - `vanilla`: copies the core artifact as `server.jar`.
   - `paperclip`: copies core JAR as `server.jar` and runs Paperclip in patch-only mode (`-Dpaperclip.patchonly=true`). Requires a working Java runtime (`ErrNoJava`).
   - `fabric`: places loader JAR into Maven layout (`libraries/`), generates launch scripts (`run.sh`, `run.bat`), launcher properties, and shim JAR (`fabric-server-launch.jar`).
-  - `quilt`: places the Quilt loader JAR into Maven layout (`libraries/`), copies the pinned profile libraries, and generates the launcher JAR (`quilt-server-launch.jar`) with `QuiltServerLauncher` and an embedded `quilt-server-launch.properties` selecting `KnotServer`, plus `quilt-server-launcher.properties` with `serverJar=server.jar`. It starts with `java -jar quilt-server-launch.jar nogui`. Launcher verification rejects any JAR entry beyond the manifest and embedded properties, and duplicate entries.
+  - `quilt`: places the Quilt loader JAR into Maven layout (`libraries/`), copies the pinned profile libraries, and generates the launcher JAR (`quilt-server-launch.jar`) with `QuiltServerLauncher` and an embedded `quilt-server-launch.properties` selecting `KnotServer`, plus `quilt-server-launcher.properties` with `serverJar=server.jar`. It starts with `java -jar quilt-server-launch.jar nogui`.
   - `forge`: reads the Forge or NeoForge installer's server profile, runs its processors with the locked inputs, and verifies output hashes against expected digests using Java. Both products share the installer profile format.
 - Failure handling: bootstrap method errors or process execution failures return an error without touching workspace state; any staging directory cleanup is owned by the caller.
+- Adoption compares existing files with the locked recipe's runtime image, restored from a snapshot or built offline in a private stage.
 
 ## Relevant Tests
 
 - Exercised via the install pipeline:
   - `go test -count=1 ./install -run TestLockedReplay`
-- Quilt generation and launcher rejection:
+- Quilt generation and image comparison:
   - `go test -count=1 ./bootstrap -run TestQuilt`
