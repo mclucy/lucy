@@ -169,39 +169,41 @@ func WriteFileRoot(
 
 // stageFile places the content of src at the staged name inside root. A
 // hardlink shares the source inode, so it applies only while src already
-// carries mode; a clone takes mode; a byte copy writes the bytes and makes
-// them durable. The staged name stays unpublished until the caller renames it.
-func stageFile(root *os.Root, stage, src string, mode os.FileMode, link LinkMode) error {
-	staged := filepath.Join(root.Name(), stage)
-	if placeFile(src, staged, mode.Perm(), link) {
+// carries mode; a clone takes mode; a byte copy writes the bytes. The staged
+// directory is opened through root, so a path change cannot move the write
+// outside root. The staged name stays unpublished until the caller renames it.
+func stageFile(root *os.Root, stage, src string, mode os.FileMode, link LinkMode) (resultErr error) {
+	dir, err := root.Open(filepath.Dir(stage))
+	if err != nil {
+		return fmt.Errorf("open staging directory: %w", err)
+	}
+	defer func() { resultErr = errors.Join(resultErr, dir.Close()) }()
+	if placeFileAt(dir, filepath.Base(stage), src, mode.Perm(), link) {
+		if err := syncStaged(root, stage); err != nil {
+			return errors.Join(err, removeStaged(root, stage))
+		}
 		return nil
 	}
-	return copyStage(staged, src, mode.Perm())
-}
-
-// copyStage writes src at path with mode and syncs the content, so the caller
-// can publish it through a rename. A failure removes the partial file.
-func copyStage(path, src string, mode os.FileMode) (resultErr error) {
 	source, err := os.Open(src)
 	if err != nil {
 		return err
 	}
 	defer func() { resultErr = errors.Join(resultErr, source.Close()) }()
-	target, err := os.OpenFile(path, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
+	return writeStage(root, stage, source, mode)
+}
+
+// syncStaged makes linked or cloned content durable before publication. A
+// link or a clone writes no bytes through a descriptor, and the source can be
+// a stage file that was never synced, so the staged inode needs its own sync.
+func syncStaged(root *os.Root, stage string) error {
+	file, err := root.Open(stage)
 	if err != nil {
 		return err
 	}
-	complete := false
-	defer func() {
-		if !complete {
-			resultErr = errors.Join(resultErr, os.Remove(path))
-		}
-	}()
-	if err := fillStage(target, source, mode); err != nil {
-		return err
+	if err := file.Sync(); err != nil {
+		return errors.Join(fmt.Errorf("sync staged file: %w", err), file.Close())
 	}
-	complete = true
-	return nil
+	return file.Close()
 }
 
 // writeStage writes reader into the staged file inside root, applies mode, and

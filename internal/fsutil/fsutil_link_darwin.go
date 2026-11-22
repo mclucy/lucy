@@ -9,23 +9,15 @@ import (
 	"golang.org/x/sys/unix"
 )
 
-// cloneFile places a copy-on-write clone of src at dst with perm. It reports
-// an error and leaves dst absent when the filesystem cannot clone, so the
-// caller copies the bytes instead.
-func cloneFile(src, dst string, perm os.FileMode) error {
-	temporary, err := temporarySibling(dst)
-	if err != nil {
+// cloneAt creates name in dir as a copy-on-write clone of src with perm. It
+// reports an error and leaves name absent when the filesystem cannot clone.
+func cloneAt(src string, dir *os.File, name string, perm os.FileMode) error {
+	fd := int(dir.Fd())
+	if err := unix.Clonefileat(unix.AT_FDCWD, src, fd, name, unix.CLONE_NOFOLLOW); err != nil {
 		return err
 	}
-	if err := unix.Clonefile(src, temporary, unix.CLONE_NOFOLLOW); err != nil {
-		_ = os.Remove(temporary)
-		return err
-	}
-	if err := os.Chmod(temporary, perm); err != nil {
-		return errors.Join(err, os.Remove(temporary))
-	}
-	if err := os.Rename(temporary, dst); err != nil {
-		return errors.Join(err, os.Remove(temporary))
+	if err := unix.Fchmodat(fd, name, uint32(perm), unix.AT_SYMLINK_NOFOLLOW); err != nil {
+		return errors.Join(err, unix.Unlinkat(fd, name, 0))
 	}
 	return nil
 }

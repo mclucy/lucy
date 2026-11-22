@@ -1,6 +1,7 @@
 package fsutil
 
 import (
+	"crypto/rand"
 	"errors"
 	"fmt"
 	"os"
@@ -49,77 +50,45 @@ func (m LinkMode) Perm(requested os.FileMode) os.FileMode {
 // never leaves a partial dst.
 //
 // A hardlink deploys a read-only destination, so callers compute perm through
-// LinkMode.Perm. LinkHardlink links only when src already has exactly perm and
-// both paths are on one device; otherwise it falls back to LinkClone, because
-// a chmod on a shared inode would change src. LinkClone falls back to a byte
-// copy when the filesystem cannot clone.
+// LinkMode.Perm. LinkHardlink links only when src already has exactly perm,
+// because a chmod on a shared inode would change src; otherwise it falls back
+// to a clone. A clone falls back to a byte copy.
 func Materialize(src, dst string, perm os.FileMode, mode LinkMode) error {
-	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
+	parent := filepath.Dir(dst)
+	if err := os.MkdirAll(parent, 0o755); err != nil {
 		return err
 	}
-	if placeFile(src, dst, perm, mode) {
-		return nil
-	}
-	return AtomicCopyFile(src, dst, perm)
-}
-
-// placeFile places src at dst through the configured link mode and then a
-// clone, and reports whether either succeeded. The caller copies the bytes
-// when both fail.
-func placeFile(src, dst string, perm os.FileMode, mode LinkMode) bool {
-	if mode == LinkHardlink {
-		if err := linkFile(src, dst, perm); err == nil {
-			return true
-		}
-	}
-	return cloneFile(src, dst, perm) == nil
-}
-
-// linkFile hardlinks src at dst through a temporary sibling. A hardlink
-// shares one inode, so it applies only while src already carries perm; the
-// caller falls back to a clone otherwise.
-func linkFile(src, dst string, perm os.FileMode) error {
-	info, err := os.Stat(src)
+	dir, err := os.Open(parent)
 	if err != nil {
 		return err
 	}
-	if !info.Mode().IsRegular() {
-		return errors.New("link source is not a regular file")
+	defer dir.Close()
+	temporary := "." + filepath.Base(dst) + "." + rand.Text()
+	if !placeFileAt(dir, temporary, src, perm, mode) {
+		return AtomicCopyFile(src, dst, perm)
 	}
-	if info.Mode().Perm() != perm {
-		return fmt.Errorf("link source permissions %v differ from %v", info.Mode().Perm(), perm)
-	}
-	if !sameDevice(src, filepath.Dir(dst)) {
-		return errors.New("link source is on another device")
-	}
-	temporary, err := temporarySibling(dst)
-	if err != nil {
-		return err
-	}
-	if err := os.Link(src, temporary); err != nil {
-		return err
-	}
-	if err := os.Rename(temporary, dst); err != nil {
-		return errors.Join(err, os.Remove(temporary))
+	if err := os.Rename(filepath.Join(parent, temporary), dst); err != nil {
+		return errors.Join(err, os.Remove(filepath.Join(parent, temporary)))
 	}
 	return nil
 }
 
-// temporarySibling reserves a unique name beside dst that is free for a link
-// or a clone to create. Both operations refuse an existing name, and the
-// reserved name sits on the destination filesystem so the rename that
-// publishes it never crosses a filesystem.
-func temporarySibling(dst string) (string, error) {
-	file, err := os.CreateTemp(filepath.Dir(dst), "."+filepath.Base(dst)+".*")
-	if err != nil {
-		return "", err
+// placeFileAt creates name in dir with the content of src through a hardlink
+// or a clone and reports whether one succeeded. name must be absent, and a
+// failed attempt leaves it absent, so the caller copies the bytes instead.
+// Each operation resolves name relative to dir, so a path change above dir
+// cannot redirect the write.
+func placeFileAt(dir *os.File, name, src string, perm os.FileMode, mode LinkMode) bool {
+	if mode == LinkHardlink && linkSourceHasPerm(src, perm) && linkAt(src, dir, name) == nil {
+		return true
 	}
-	name := file.Name()
-	if err := file.Close(); err != nil {
-		return "", errors.Join(err, os.Remove(name))
-	}
-	if err := os.Remove(name); err != nil {
-		return "", err
-	}
-	return name, nil
+	return cloneAt(src, dir, name, perm) == nil
+}
+
+// linkSourceHasPerm reports whether src is a regular file that already
+// carries perm. A hardlink applies only then, because the destination shares
+// the source inode and its mode.
+func linkSourceHasPerm(src string, perm os.FileMode) bool {
+	info, err := os.Lstat(src)
+	return err == nil && info.Mode().IsRegular() && info.Mode().Perm() == perm
 }

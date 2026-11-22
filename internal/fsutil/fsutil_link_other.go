@@ -7,8 +7,8 @@ import (
 	"os"
 )
 
-// cloneFile reports that this platform has no clone operation, so Materialize
+// cloneAt reports that this platform has no clone operation, so the caller
 // copies the bytes instead.
-func cloneFile(src, dst string, perm os.FileMode) error {
+func cloneAt(src string, dir *os.File, name string, perm os.FileMode) error {
 	return errors.ErrUnsupported
 }
