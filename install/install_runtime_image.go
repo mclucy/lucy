@@ -49,6 +49,13 @@ func (s *Service) RuntimeImage(
 	if err != nil {
 		return nil, err
 	}
+	// A runtime that misses the lock's requirement can fail a patcher or a
+	// processor in ways no error type names. Without it, a method that runs
+	// Java reports the missing runtime, and a snapshot still restores.
+	java := ""
+	if check.Satisfied() {
+		java = check.Executable()
+	}
 	stage, err := os.MkdirTemp(filepath.Join(root, ".lucy"), "stage-*")
 	if err != nil {
 		return nil, err
@@ -70,7 +77,7 @@ func (s *Service) RuntimeImage(
 	// Staging attaches the verified digests without rewriting the caller's lock.
 	resolved := *locked
 	resolved.Server.Inputs = slices.Clone(locked.Server.Inputs)
-	outputs, err := s.stageServerTree(ctx, stage, &resolved, check.Executable(), store, opts)
+	outputs, err := s.stageServerTree(ctx, stage, &resolved, java, store, opts)
 	if errors.Is(err, errOfflineArtifactUnavailable) || errors.Is(err, bootstrap.ErrNoJava) {
 		return nil, fmt.Errorf("stage locked runtime: %w: %w", ErrRuntimeImageUnavailable, err)
 	}
