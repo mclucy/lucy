@@ -14,8 +14,8 @@ var ErrNoProviderSucceeded = errors.New("no provider succeeded")
 
 // SearchMany executes search on all providers in parallel.
 //
-// Results are not aggregated: each provider contributes one
-// upstream.SearchResponse item in the returned slice.
+// Each provider contributes one upstream.SearchResponse item in the returned
+// slice, kept separate from the other providers' results.
 func (r *Router) SearchMany(
 	ctx context.Context,
 	providers []upstream.SearchProvider,

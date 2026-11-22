@@ -100,9 +100,7 @@ func (d Distribution) Title() string {
 	}
 }
 
-// Accepts reports whether a build of distribution actual satisfies d. The
-// unspecified distribution accepts every build; a named one accepts only
-// itself, so an unbranded build never satisfies it.
+// Accepts reports whether a build of distribution actual satisfies d.
 func (d Distribution) Accepts(actual Distribution) bool {
 	return d == DistributionAny || d == actual
 }

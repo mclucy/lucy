@@ -6,9 +6,9 @@ import (
 )
 
 // ProxiedDownloadURL prefixes a release asset URL with proxy. A proxy without
-// a trailing slash still separates the asset URL from its prefix. The
-// canonical URL is returned when no proxy is configured or rawURL is not an
-// HTTPS URL hosted on github.com under /owner/repository/releases/download/.
+// a trailing slash still separates the asset URL from its prefix. An unset
+// proxy, or a rawURL outside HTTPS github.com /owner/repository/releases/download/
+// paths, returns rawURL unchanged.
 func ProxiedDownloadURL(rawURL, proxy string) string {
 	if proxy == "" || !isReleaseAssetURL(rawURL) {
 		return rawURL

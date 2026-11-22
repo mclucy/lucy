@@ -18,7 +18,7 @@ Import accepts two kinds of source:
 - A Modrinth modpack in `.mrpack` format. Import reads the declared Minecraft version and loader, installs that loader into the workspace, and records the modpack's server-side files.
 - A server directory packed as a `.zip` or `.tar.gz` archive. Import detects the server software the same way `lucy init` does.
 
-A server archive may contain a Forge or NeoForge installer. Import runs that installer to provision the server. Fabric and Quilt installers are recognized but not run yet. Import never takes a loader name from a filename; it identifies the loader from the archive contents.
+A server archive may contain a Forge or NeoForge installer. Import runs that installer to provision the server. Fabric and Quilt installers are recognized but not run yet. Import identifies the loader from the archive contents rather than from a filename.
 
 Sources are a local path, a direct link to the archive, or a remote modpack reference described below. Relative local paths resolve against the current directory.
 
@@ -26,7 +26,7 @@ Client packs are supported on a best-effort basis. Import keeps the files the se
 
 ## When no server is detected
 
-Some archives hold a modpack that is not set up yet. When import finds no server software, it extracts every file into the target directory, writes no workspace documents, and prints this warning:
+Some archives hold a modpack that is not set up yet. When import finds no server software, it extracts every file into the target directory, leaves workspace creation to `lucy init`, and prints this warning:
 
 ```text
 no server detected; the archive was extracted as-is. Run `lucy init` once the modpack is set up.
@@ -54,7 +54,7 @@ Import checks the hashes the provider publishes for the pack, preferring SHA-512
 
 By default, import uses the current directory when it is empty or does not exist. When the current directory has files in it, import creates a new directory named after the archive. For example, `All The Mods.mrpack` becomes `all-the-mods`. For a remote modpack, the new directory is named after the project, so `modrinth:all-the-mods` becomes `all-the-mods`.
 
-Pass `--directory` to choose the target yourself. A relative path resolves against the current directory. Import never writes into a non-empty directory you name, and it fails rather than overwriting an existing workspace.
+Pass `--directory` to choose the target yourself. A relative path resolves against the current directory. Import writes into an empty or absent target directory you name and fails on a non-empty one rather than overwriting an existing workspace.
 
 The workspace name defaults to the target directory's name. Pass `--name` to store a different one.
 
@@ -66,7 +66,7 @@ Pass `--sha256` with the expected checksum of the archive, as 64 hexadecimal cha
 
 Import reports the number of server files it kept after filtering, the number of client-only files skipped, and the number of packages Lucy manages. It lists observed unmanaged package files for you to review.
 
-When import detects no server, the report states that no server was detected and gives the number of extracted files. It lists unmanaged package files and review lines, and omits the managed package count.
+When import detects no server, the report states that no server was detected and gives the number of extracted files. It lists unmanaged package files and review lines; the managed package count appears only when a server is detected.
 
 Imported packages are managed from then on, the same as packages recorded by `lucy init`. See [`lucy install`](/commands/install) for how later changes take effect.
 

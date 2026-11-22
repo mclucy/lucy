@@ -43,8 +43,7 @@ func (op facetItemOperation) String() string {
 }
 
 // facet is the data structure to construct an advanced Modrinth search. It
-// does not contain all the search options, only the ones that are expected in this
-// program.
+// covers the search options this program expects.
 //
 // From Modrinth docs:
 //

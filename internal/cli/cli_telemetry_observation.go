@@ -190,8 +190,7 @@ func (o *TelemetryObservation) AttachLogger(logger *log.Logger) {
 	o.mu.Unlock()
 }
 
-// SetFailureKind records the bounded failure class. Unknown values are
-// ignored rather than passed through.
+// SetFailureKind records the bounded failure class.
 func (o *TelemetryObservation) SetFailureKind(kind string) {
 	if o == nil || !allowedTelemetryValue(kind, "usage", "panic", "handled", "command") {
 		return
@@ -201,8 +200,7 @@ func (o *TelemetryObservation) SetFailureKind(kind string) {
 	o.mu.Unlock()
 }
 
-// SetCancelReason records the bounded cancellation class. Unknown values are
-// ignored rather than passed through.
+// SetCancelReason records the bounded cancellation class.
 func (o *TelemetryObservation) SetCancelReason(reason string) {
 	if o == nil || !allowedTelemetryValue(
 		reason,
@@ -240,7 +238,7 @@ func allowedTelemetryValue(value string, allowed ...string) bool {
 
 // PhaseStart records that a bounded phase began. The entry stays active until
 // PhaseDone reports it, so a failed or canceled trace keeps the unfinished
-// phase visible. Unknown names are ignored.
+// phase visible.
 func (o *TelemetryObservation) PhaseStart(name string) {
 	if o == nil {
 		return
@@ -303,7 +301,6 @@ func (o *TelemetryObservation) PhaseDone(name string, elapsed time.Duration) {
 }
 
 // ObservePhaseCount projects bounded counts that a finished phase reported.
-// Only phases whose counters are meaningful contribute.
 func (o *TelemetryObservation) ObservePhaseCount(name string, count, total int) {
 	if o == nil {
 		return
@@ -354,7 +351,7 @@ func (o *TelemetryObservation) ObserveInputScale(requestedPackages, lockedPackag
 
 // ObserveResolveRejected records one rejected candidate decision. Neither its
 // name nor its reason is retained. Retry branches may report the same
-// candidate again, so this is an observed rejection count, not a unique total.
+// candidate again, so the count includes repeated rejections.
 func (o *TelemetryObservation) ObserveResolveRejected() {
 	if o == nil {
 		return

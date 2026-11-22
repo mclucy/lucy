@@ -149,8 +149,8 @@ func (s *Service) adoptInstalledPackages(
 	if err := ctx.Err(); err != nil {
 		return nil, nil, nil, 0, err
 	}
-	// A file whose local evidence cannot be read fails the whole adoption, so
-	// no provider lookup is sent for any file in that case.
+	// Unreadable local evidence invalidates the whole adoption, so this
+	// check precedes every provider lookup.
 	for _, proposal := range proposals {
 		if proposal.fatal != nil {
 			return nil, nil, nil, 0, proposal.fatal

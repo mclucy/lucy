@@ -174,9 +174,8 @@ func forgeServiceProvider(zipRdr *zip.Reader) bool {
 	return false
 }
 
-// forgeDecodedDescriptor converts one mods.toml descriptor into modules and
-// their reader views. extras lists reader-only dependencies the descriptor
-// does not declare, such as JarJar containers.
+// extras lists reader-only dependencies added beyond the descriptor, such as
+// JarJar containers.
 func forgeDecodedDescriptor(
 	zipRdr *zip.Reader,
 	descriptor *decodedModsToml,

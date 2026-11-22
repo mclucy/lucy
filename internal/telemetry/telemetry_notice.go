@@ -14,7 +14,7 @@ import (
 const noticeMarkerName = ".alpha_telemety_notice_shown"
 
 // ClaimNotice reports whether this process must present the one-time telemetry
-// notice, and records the claim so no later process presents it again.
+// notice, and records the claim so later processes skip the notice.
 //
 // The claim is the exclusive creation of the marker file beside the local
 // state, so invocations that start together present the notice at most once.

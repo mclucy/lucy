@@ -3,8 +3,8 @@ package cli
 import "strconv"
 
 // ExitError carries an explicit process exit status through the command
-// boundary. Silent suppresses error rendering for statuses that are not
-// failures, such as a search with no matches.
+// boundary. Silent suppresses error rendering for successful statuses, such as
+// a search with no matches.
 type ExitError struct {
 	Code   int
 	Err    error

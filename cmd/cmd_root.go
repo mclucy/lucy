@@ -122,8 +122,7 @@ func NewRunner(args []string, options RunnerOptions) *Runner {
 }
 
 // NewRootCommand builds a fresh root with its persistent flags and
-// subcommands bound to contracts. Agent defaults are applied per run, not
-// here.
+// subcommands bound to contracts.
 func NewRootCommand(contracts *cli.JSONContracts, invocation *cli.Invocation, dependencies *cli.Dependencies) *cobra.Command {
 	root := &cobra.Command{
 		Use:   "lucy",
@@ -340,7 +339,7 @@ func (r *Runner) configureServices(cmd *cobra.Command) error {
 
 // toleratesUnreadableSettings reports whether cmd stays runnable while machine
 // settings are unreadable. These surfaces either repair the configuration or
-// repair the binary, so a broken workspace file must not block them.
+// repair the binary.
 func toleratesUnreadableSettings(cmd *cobra.Command) bool {
 	for current := cmd; current != nil; current = current.Parent() {
 		switch current.Name() {

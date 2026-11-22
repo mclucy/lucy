@@ -51,8 +51,8 @@ func (s *Store) LookupSnapshot(ctx context.Context, key cas.Digest) (snapshot.Sn
 }
 
 // SaveSnapshot publishes every entry's contents to the store, then writes the
-// manifest. A failure before the manifest write leaves no snapshot, and the
-// objects it published are unreferenced.
+// manifest. A failure before the manifest write leaves the published objects
+// unreferenced.
 func (s *Store) SaveSnapshot(ctx context.Context, snap snapshot.Snapshot, sourceDir string) error {
 	if err := snap.Validate(); err != nil {
 		return err
@@ -187,7 +187,6 @@ func (s *Store) restoreEntry(digest cas.Digest, entry snapshot.Entry, destinatio
 }
 
 // SnapshotKeys lists the keys whose manifests are present, in ascending order.
-// A name that is not a canonical manifest is ignored.
 func (s *Store) SnapshotKeys() ([]cas.Digest, error) {
 	entries, err := os.ReadDir(s.snapshots)
 	if errors.Is(err, os.ErrNotExist) {
@@ -221,8 +220,7 @@ func (s *Store) RemoveSnapshot(key cas.Digest) error {
 }
 
 // SnapshotReferences reads every retained manifest and reports the object
-// digests its entries need. Unretained or unreadable manifests are removed and
-// counted; no object a removed manifest named is retained.
+// digests its entries need.
 func (s *Store) SnapshotReferences(
 	ctx context.Context,
 	retained map[cas.Digest]struct{},

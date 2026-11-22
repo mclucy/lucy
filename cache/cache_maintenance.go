@@ -10,7 +10,7 @@ const manifestFilename = "cache.json"
 
 type key string
 
-// ResetReport counts unique objects actually removed, not logical URL references.
+// ResetReport counts unique objects actually removed, collapsing shared URL references.
 // Removed lists the paths of those objects.
 type ResetReport struct {
 	TotalFreedSize int64

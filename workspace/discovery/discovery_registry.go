@@ -11,7 +11,6 @@ type recognizerEntry struct {
 }
 
 // recognizerRegistry is the one deterministic directory-recognition order.
-// There is no init registration and no separate root executable fallback loop.
 var recognizerRegistry = []recognizerEntry{
 	{name: "fabric", discover: discoverFabric},
 	{name: "quilt", discover: discoverQuilt},

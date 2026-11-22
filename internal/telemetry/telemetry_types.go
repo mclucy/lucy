@@ -112,8 +112,8 @@ type Context struct {
 }
 
 // Event describes one non-sensitive invocation observation. Command is the
-// trusted command path only (for example "java list"); arguments and their
-// values are never accepted.
+// trusted command path only (for example "java list"); Event excludes
+// arguments and their values.
 type Event struct {
 	InvocationID string
 	Command      string
@@ -164,7 +164,7 @@ type Submission struct {
 // FlushResult describes one bounded upload run. AcceptedIDs and RejectedIDs
 // contain record IDs the server permanently accepted or rejected in this run,
 // so a caller can check the fate of a specific report's Submission.RecordID.
-// Details are diagnostic text and never affect CLI outcomes.
+// Details are diagnostic text with no effect on CLI outcomes.
 type FlushResult struct {
 	Attempted   int        `json:"attempted"`
 	Accepted    int        `json:"accepted"`
@@ -183,14 +183,14 @@ func (result FlushResult) WasAccepted(id string) bool {
 }
 
 // WasRejected reports whether the server permanently rejected id during this
-// run. Rejected records are removed from the queue and are not retried.
+// run. Rejected records are removed from the queue without a retry.
 func (result FlushResult) WasRejected(id string) bool {
 	return slices.Contains(result.RejectedIDs, id)
 }
 
 // AcceptedStats counts records the server durably accepted in the current
-// statistics window. Bytes are logical payload and sanitized body lengths, not
-// HTTP, TLS, or framing overhead.
+// statistics window. Bytes cover logical payload and sanitized body lengths
+// and exclude HTTP, TLS, and framing overhead.
 type AcceptedStats struct {
 	Events            int64 `json:"events"`
 	Reports           int64 `json:"reports"`
@@ -207,7 +207,7 @@ type RejectedStats struct {
 }
 
 // DroppedStats counts records discarded locally because they were stale,
-// corrupt, or exceeded the bounded queue. They were never accepted remotely.
+// corrupt, or exceeded the bounded queue.
 type DroppedStats struct {
 	Records int64 `json:"records"`
 	Bytes   int64 `json:"bytes"`
@@ -216,13 +216,13 @@ type DroppedStats struct {
 // TransportStats counts locally persisted upload attempts. Requests, outcome
 // counts, and RequestBodyBytes cover every HTTP attempt, including retries.
 // RequestBodyBytes is the exact serialized JSON body handed to the HTTP
-// transport; it excludes HTTP headers, framing, TLS, and other wire overhead
-// and must never be presented as network usage. Uncertain counts attempts
-// whose acceptance is unknown (transport error, timeout, or an unparseable
-// success response). Throttles counts attempts a retryable response identified
-// as intake-limited (HTTP 429, or a rejection reason of intake_limited); it
-// counts denied delivery attempts, not unique records lost. An attempt
-// interrupted by process termination may be missing from these counters.
+// transport; it excludes HTTP headers, framing, TLS, and other wire overhead.
+// Uncertain counts attempts whose acceptance is unknown (transport error,
+// timeout, or an unparseable success response).
+// Throttles counts attempts a retryable response identified as intake-limited
+// (HTTP 429, or a rejection reason of intake_limited) and counts denied
+// delivery attempts by attempt. An attempt interrupted by process termination
+// may be missing from these counters.
 type TransportStats struct {
 	Requests             int64 `json:"requests"`
 	Succeeded            int64 `json:"succeeded"`
@@ -233,8 +233,8 @@ type TransportStats struct {
 	LastRequestBodyBytes int64 `json:"last_request_body_bytes"`
 }
 
-// QueueStats describes locally queued records that have not been accepted or
-// rejected remotely. PayloadBytes and ReportBodyBytes are logical lengths.
+// QueueStats describes locally queued records. PayloadBytes and ReportBodyBytes
+// are logical lengths.
 type QueueStats struct {
 	Records         int       `json:"records"`
 	Events          int       `json:"events"`

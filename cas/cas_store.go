@@ -19,7 +19,7 @@ var (
 	ErrRead    = errors.New("cannot read cas contents")
 )
 
-// Store has one private filesystem root and no consumer metadata.
+// Store owns one private filesystem root; consumers keep their own metadata.
 // Close it after its writers finish; open readers own their file handles.
 type Store struct {
 	root      *os.Root

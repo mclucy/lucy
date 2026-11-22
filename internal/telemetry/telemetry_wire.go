@@ -33,8 +33,8 @@ type wireRecord struct {
 	Upload  *uploadEnvelope `json:"upload,omitempty"`
 }
 
-// uploadEnvelope is transport metadata injected at POST time. It is excluded
-// from a record's immutable digest and never alters the queued payload.
+// uploadEnvelope is transport metadata injected at POST time. It stays outside
+// a record's immutable digest and queued payload.
 type uploadEnvelope struct {
 	QueueMS   int64 `json:"queue_ms"`
 	Attempts  int   `json:"attempts"`
@@ -160,8 +160,8 @@ func (c *Client) uploadRecords(ctx context.Context, prepared []preparedRecord, s
 
 // stampUploads copies the queued wire records and attaches event-only
 // transport metadata measured at this attempt. Reports keep their legacy
-// record shape and size. A legacy event with no room for the envelope is sent
-// without it rather than being rejected or altered.
+// record shape and size. A legacy event without room for the envelope is
+// still sent in its original shape.
 func (c *Client) stampUploads(prepared []preparedRecord, entries map[string]*queueEntry, now time.Time) []wireRecord {
 	records := make([]wireRecord, len(prepared))
 	for index, item := range prepared {
@@ -209,7 +209,7 @@ func recordUploadAttempts(prepared []preparedRecord, entries map[string]*queueEn
 
 // recordUploadThrottles records one intake-limited delivery attempt. A
 // retryable response that names limited records bumps only those; a batch-level
-// response bumps every event in the attempt. Nothing is removed from the queue.
+// response bumps every event in the attempt.
 func recordUploadThrottles(state *persistedState, prepared []preparedRecord, entries map[string]*queueEntry, ids []string) {
 	if state.Transport.Throttles < math.MaxInt64 {
 		state.Transport.Throttles++
@@ -342,8 +342,7 @@ func (c *Client) postOnce(ctx context.Context, records []wireRecord) (attemptOut
 }
 
 // noteIntakeLimited recognizes only the known intake_limited rejection reason
-// on a retryable response. It never marks a record as permanently rejected and
-// never removes anything from the queue.
+// on a retryable response. It leaves rejection status and the queue unchanged.
 func noteIntakeLimited(failure *httpError, body []byte, records []wireRecord) {
 	var decoded wireResponse
 	if err := json.Unmarshal(body, &decoded); err != nil || len(decoded.Rejected) == 0 {

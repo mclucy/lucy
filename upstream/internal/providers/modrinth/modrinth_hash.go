@@ -27,8 +27,8 @@ const versionFileURLPrefix = "https://api.modrinth.com/v2/version_file/"
 var _ upstream.ArtifactBatchReleaseMapper = (*Provider)(nil)
 
 // ReleaseByHash identifies an installed artifact by its SHA-1 hash and
-// returns the release it was published as, in one lookup. A hash Modrinth
-// does not know is a miss, not an error.
+// returns the release it was published as, in one lookup. An unrecognized hash
+// is a miss with no error.
 func (p *Provider) ReleaseByHash(
 	ctx context.Context,
 	artifact upstream.ArtifactFingerprint,

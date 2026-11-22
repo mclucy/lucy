@@ -97,7 +97,8 @@ func lockedSelectorSatisfied(
 ) bool {
 	switch selector {
 	case "", version.Any, version.Beta, version.Stable:
-		// Stable records a release-channel preference the lock does not keep.
+		// The lock stores exact releases, so every channel selector accepts an
+		// existing pin.
 		return true
 	}
 	return p.Version == selector ||

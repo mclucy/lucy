@@ -16,7 +16,7 @@ import (
 const maxSpoolBytes = 64 << 20
 
 // truncationMarker ends a file that omitted output. Room for it is reserved
-// from maxSpoolBytes, so the file never exceeds the bound.
+// from maxSpoolBytes, so the file stays within the bound.
 const truncationMarker = "\n[process output truncated]\n"
 
 // contentLimit bounds headers and subprocess output, leaving the marker its
@@ -57,9 +57,8 @@ type ProcessSpool struct {
 	closed      bool
 }
 
-// NewProcessSpool prepares a spool that names its file after prefix. No file
-// exists until the first subprocess is about to start. A nil logger records no
-// diagnostics of the spool itself.
+// NewProcessSpool prepares a spool that names its file after prefix. A nil
+// logger records no diagnostics of the spool itself.
 func NewProcessSpool(prefix string, logger *Logger) *ProcessSpool {
 	return &ProcessSpool{prefix: prefix, logger: logger}
 }
@@ -68,7 +67,7 @@ func NewProcessSpool(prefix string, logger *Logger) *ProcessSpool {
 // reports the full input length: the copy goroutines of the process package
 // read a short write as a broken pipe and would fail the command over its
 // diagnostic record. A spool that cannot create or write its file keeps
-// counting and never fails the command; the retained log then reports how
+// counting and lets the command proceed; the retained log then reports how
 // much evidence was lost. Output that arrives after Retain or Discard is
 // accepted and dropped, so the retained file stays the evidence it named.
 func (s *ProcessSpool) Write(data []byte) (int, error) {
@@ -187,7 +186,7 @@ func (s *ProcessSpool) store(data []byte) {
 
 // ensure creates the file on first use. It reports whether writes may
 // continue; a creation failure is permanent for this spool so a repeated
-// warning never replaces the output it reports.
+// warning leaves the output it reports intact.
 func (s *ProcessSpool) ensure() bool {
 	if s.file != nil {
 		return true

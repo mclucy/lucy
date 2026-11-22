@@ -27,8 +27,8 @@ type Client struct {
 	sem       chan struct{}
 }
 
-// New validates config and builds a client. It performs no disk or network
-// I/O; the first event or explicit operation initializes state lazily.
+// New validates config and builds a client. The first event or explicit
+// operation initializes state lazily.
 func New(config Config) (*Client, error) {
 	config, err := config.withDefaults()
 	if err != nil {
@@ -79,8 +79,6 @@ func New(config Config) (*Client, error) {
 	}, nil
 }
 
-// Close releases idle HTTP connections owned by the client. It never touches
-// telemetry state.
 func (c *Client) Close() error {
 	if c.ownsHTTP && c.http != nil {
 		c.http.CloseIdleConnections()
@@ -88,9 +86,8 @@ func (c *Client) Close() error {
 	return nil
 }
 
-// Enabled reports whether collection is currently allowed. It does not report
-// whether an endpoint is configured; Flush handles that separately. An empty
-// endpoint still permits durable local enqueueing.
+// Enabled reports whether collection is currently allowed. An empty endpoint
+// still permits durable local enqueueing.
 func (c *Client) Enabled(ctx context.Context) (bool, error) {
 	if c.disabled || environmentDisabled() {
 		return false, nil
@@ -108,8 +105,7 @@ func (c *Client) Enabled(ctx context.Context) (bool, error) {
 	return enabled, nil
 }
 
-// RecordEvent records one invocation observation. It never uploads; call
-// Flush separately when networking is allowed. Callers own InvocationID.
+// RecordEvent records one invocation observation. Callers own InvocationID.
 func (c *Client) RecordEvent(ctx context.Context, event Event) (Submission, error) {
 	return c.enqueue(ctx, recordTypeEvent, func(state *persistedState, _ string, now time.Time) (payloadResult, error) {
 		prepared, err := c.prepareEvent(event, now)
@@ -121,9 +117,8 @@ func (c *Client) RecordEvent(ctx context.Context, event Event) (Submission, erro
 }
 
 // SubmitReport records one explicitly supplied report. It sanitizes and bounds
-// the body, never uploads, and never enables telemetry. When telemetry is off,
-// it returns a non-error Submission whose Reason explains the refusal; the
-// body is not inspected in that case.
+// the body. When telemetry is off, it returns a non-error Submission whose
+// Reason explains the refusal.
 func (c *Client) SubmitReport(ctx context.Context, report Report) (Submission, error) {
 	return c.enqueue(ctx, recordTypeReport, func(state *persistedState, id string, now time.Time) (payloadResult, error) {
 		prepared, truncated, err := c.prepareReport(report, now)
@@ -150,9 +145,8 @@ func (c *Client) SubmitReport(ctx context.Context, report Report) (Submission, e
 }
 
 // SetEnabled persists an explicit opt-in or opt-out. Disabling purges queued
-// records without rotating the identity and waits for any in-flight upload in
-// this process or another cooperating process. Enabling creates an identity if
-// one does not exist. It does not upload.
+// records and waits for any in-flight upload in this process or another
+// cooperating process.
 func (c *Client) SetEnabled(ctx context.Context, enabled bool) error {
 	release, err := c.enterOperation(ctx, -1)
 	if err != nil {
@@ -183,7 +177,7 @@ func (c *Client) SetEnabled(ctx context.Context, enabled bool) error {
 
 // ResetIdentity rotates the installation UUID and restarts the statistics
 // window. Pending records keep their IDs and payloads and may be accepted
-// later; they count in the new window. Remote data is never deleted.
+// later; they count in the new window.
 func (c *Client) ResetIdentity(ctx context.Context) (Identity, error) {
 	release, err := c.enterOperation(ctx, -1)
 	if err != nil {
@@ -206,9 +200,7 @@ func (c *Client) ResetIdentity(ctx context.Context) (Identity, error) {
 	}, nil
 }
 
-// Stats returns a transparent snapshot. Reading statistics may initialize a
-// default state document but never creates an installation identity or sends
-// anything.
+// Stats returns a transparent snapshot.
 func (c *Client) Stats(ctx context.Context) (Stats, error) {
 	stats := Stats{
 		Policy:             CollectionDefault,

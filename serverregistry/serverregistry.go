@@ -27,8 +27,8 @@ const (
 	StateInvalid    = "invalid"
 )
 
-// Entry describes a registered path and its current declaration. An unnamed
-// server has no name selector. Unavailable entries remain registered.
+// Entry describes a registered path and its current declaration. Unavailable
+// entries remain registered.
 type Entry struct {
 	Name    string `json:"name"`
 	Path    string `json:"path"`

@@ -22,7 +22,7 @@ Use [`lucy info`](/commands/info) to inspect a result before adding it.
 
 ## Sources
 
-Each source has its own catalogue and reports different metadata. Lucy does not query a source for a platform it cannot serve.
+Each source has its own catalogue and reports different metadata. Lucy queries a source only for platforms it can serve.
 
 | Source | Packages | Search filtering |
 |---|---|---|
@@ -59,7 +59,7 @@ Spiget is the SpigotMC resource API. Its identity is the numeric resource ID, fo
 </ParamField>
 
 <ParamField query="--sort" type="string" default="relevance">
-  Sort order for each source's results. Sorting is applied after those results are returned. A source that does not report the sorting field keeps its own order.
+  Sort order for each source's results. Sorting is applied after those results are returned. Sources that report the sorting field are sorted by it; others keep their own order.
 
   | Value | Description |
   |---|---|

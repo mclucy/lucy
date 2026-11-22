@@ -21,11 +21,11 @@ lucy config set --global java.home /usr/lib/jvm/temurin-21
 lucy config set java.home ""
 ```
 
-Lucy uses the configured runtime even when it does not meet the server's requirements, and warns if it cannot use it. See [`lucy java`](/commands/java) to set requirements for the server itself.
+Lucy uses the configured runtime even when it falls short of the server's requirements. See [`lucy java`](/commands/java) to set requirements for the server itself.
 
 ## Choose a release mirror and API key
 
-`github.proxy` prefixes GitHub release download URLs with a mirror, for example `https://ghfast.top/`. The value must be an absolute HTTP(S) URL without a query or fragment. An empty value downloads from GitHub directly. Only release asset downloads use the mirror; API and metadata requests go to GitHub directly. Changing the proxy does not download artifacts you already have.
+`github.proxy` prefixes GitHub release download URLs with a mirror, for example `https://ghfast.top/`. The value must be an absolute HTTP(S) URL without a query or fragment. An empty value downloads from GitHub directly. Only release asset downloads use the mirror; API and metadata requests go to GitHub directly.
 
 `curseforge.api_key` supplies a CurseForge API key for this machine. A non-empty key overrides the key embedded in this `lucy` build. An empty value keeps the embedded key.
 
@@ -47,7 +47,7 @@ curseforge:
 
 Workspace settings live in `.lucy/config.yaml`. Global settings live in `~/Library/Application Support/lucy/config.yaml` on macOS, `$XDG_CONFIG_HOME/lucy/config.yaml` (usually `~/.config/lucy/config.yaml`) on Linux, or `%APPDATA%\lucy\config.yaml` on Windows. Relative Java paths are resolved from the directory of the relevant configuration scope.
 
-`lucy init` creates a workspace configuration if one does not exist. You can also create one yourself, including before initialization:
+`lucy init` creates a workspace configuration if none exists. You can also create one yourself, including before initialization:
 
 ```bash
 lucy config create
@@ -56,9 +56,9 @@ lucy config create --global
 
 `lucy config get` shows the effective settings; add `--global` to inspect global settings without workspace overrides. The selected configuration file must exist. `lucy config set` creates it when needed, and writes only that key.
 
-Lucy adds an explanation where a key has none and never replaces a comment that is already in the file, so rewriting a configuration keeps everything you wrote.
+Lucy adds an explanation where a key has none and preserves comments already in the file.
 
-Use `lucy config create --force` to replace an existing file, discarding its settings and comments. Add `--no-comments` if you do not want the commented examples.
+Use `lucy config create --force` to replace an existing file, discarding its settings and comments.
 
 ## Flags
 

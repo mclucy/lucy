@@ -3,7 +3,7 @@ package log
 import "time"
 
 // WaitKind names one class of time a command spends waiting rather than
-// computing. Only observed waits are recorded; nothing is inferred.
+// computing.
 type WaitKind int
 
 const (

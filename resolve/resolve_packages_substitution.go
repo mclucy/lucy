@@ -250,10 +250,10 @@ func identityVersions(
 }
 
 // acceptsVersions reports whether the plain version constraints that the
-// modules of p place on provided identities accept the provided versions. A
-// required or optional constraint must match, and a break must not. Compound
-// nodes are left to the final module check, which evaluates complete
-// dependency trees.
+// modules of p place on provided identities accept the provided versions.
+// Required and optional constraints must match, and a break must fail the
+// match. Compound nodes are left to the final module check, which evaluates
+// complete dependency trees.
 func acceptsVersions(
 	target Target,
 	p document.Package,

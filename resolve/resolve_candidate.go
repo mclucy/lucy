@@ -272,7 +272,7 @@ func conflictDependencies(candidate upstream.Candidate) []upstream.ProjectDepend
 
 // metadataConflict reports the first metadata-declared incompatibility between
 // candidate and the selected packages. It checks both directions so a one-sided
-// declaration is not selection-order dependent.
+// declaration behaves the same in either selection order.
 func metadataConflict(
 	candidate upstream.Candidate,
 	request projectRequest,

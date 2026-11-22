@@ -19,7 +19,7 @@ lucy file recover 'config/*.json'
 
 Patterns match tracked declarations, so a deleted working file still matches. Hidden tracked paths require an explicit leading dot. To recover every tracked file with an accepted revision, use `lucy file recover --all`; files tracked without a hash are skipped.
 
-If the local copy is unavailable, lucy can use the file's configured recovery URL. The download must match the accepted contents; otherwise recovery fails without changing the destination.
+If the local copy is unavailable, lucy can use the file's configured recovery URL. The download must match the accepted contents; otherwise recovery fails and leaves the destination unchanged.
 
 ## Return to an earlier revision
 
@@ -40,6 +40,6 @@ You can also pass a recorded SHA-256 hash as the second argument to `revert`, in
 
 ## Recover on another machine
 
-Local revisions stay in the workspace. A recorded hash does not include the file itself. Before installing on another machine, either place the accepted file at its declared path or make it available at its configured `recover_url`. Lucy does not yet provide an export command.
+Local revisions stay in the workspace. A recorded hash identifies the contents, so supply the file separately. Before installing on another machine, either place the accepted file at its declared path or make it available at its configured `recover_url`. Lucy does not yet provide an export command.
 
 To fetch and accept newer contents from a recovery URL instead of restoring the existing revision, use `lucy file update --from-source <path>`.

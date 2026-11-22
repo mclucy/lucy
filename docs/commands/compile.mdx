@@ -14,7 +14,7 @@ lucy compile https://codeberg.org/owner/repo.git -o ./dist
   Compiling runs scripts from the repository and may download build tools and dependencies. Only compile repositories you trust.
 </Warning>
 
-You need Git, the Java version required by the project, and either the project's Gradle wrapper or a local Gradle installation. The JAR goes into the current directory unless you specify `--output` (`-o`). An output ending in `.jar` names the file; other paths name a directory. Lucy does not overwrite an existing destination.
+You need Git, the Java version required by the project, and either the project's Gradle wrapper or a local Gradle installation. The JAR goes into the current directory unless you specify `--output` (`-o`). An output ending in `.jar` names the file; other paths name a directory.
 
 ## Select a build
 
@@ -35,7 +35,7 @@ lucy compile owner/multi-platform-mod -o ./dist --build-dir fabric --project :fa
 </ParamField>
 
 <ParamField query="--output, -o" type="string">
-  Destination for the compiled mod JAR, resolved relative to the current directory. A path ending in `.jar` names the destination file; any other value names a directory that receives the project's artifact name. Defaults to the current directory. Missing directories are created. The destination must not already exist; `lucy compile` does not overwrite files.
+  Destination for the compiled mod JAR, resolved relative to the current directory. A path ending in `.jar` names the destination file; any other value names a directory that receives the project's artifact name. Defaults to the current directory. Missing directories are created. The destination must be new.
 </ParamField>
 
 <ParamField query="--ecosystem" type="string">

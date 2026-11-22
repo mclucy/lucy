@@ -9,7 +9,7 @@ import (
 
 // DefaultDirectory names the per-user directory that holds Lucy's diagnostic
 // records. Every retained diagnostic file derives from it, so their
-// locations cannot drift apart.
+// locations stay consistent.
 func DefaultDirectory() string {
 	switch runtime.GOOS {
 	case "windows":

@@ -3,10 +3,9 @@ package cli
 import "github.com/spf13/cobra"
 
 // HelpOnlyAnnotation marks a command that displays its own help when invoked
-// without a subcommand.
+// bare.
 const HelpOnlyAnnotation = "lucy.io/help-only"
 
-// MarkHelpOnly records that command only displays help when invoked bare.
 func MarkHelpOnly(command *cobra.Command) {
 	if command.Annotations == nil {
 		command.Annotations = map[string]string{}

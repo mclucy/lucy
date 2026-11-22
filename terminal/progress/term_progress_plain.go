@@ -110,7 +110,6 @@ func (p *plain) PhaseDone(text string, elapsed time.Duration) {
 	p.phaseStart = time.Time{}
 	p.status = ""
 	p.lastStatus = ""
-	// An empty text ends the phase without a completion line.
 	if text != "" {
 		p.writeLineLocked(phaseLine(text, elapsed, p.theme))
 	}

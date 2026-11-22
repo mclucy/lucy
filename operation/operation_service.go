@@ -40,9 +40,8 @@ type Source interface {
 	) []upstream.ArtifactReleaseResolution
 }
 
-// Service executes workspace operations with explicit installation, routing,
-// registry, and diagnostic dependencies. It never discovers a machine-global
-// service of its own.
+// Service executes workspace operations with dependencies supplied by its
+// caller: installation, routing, registry, and diagnostics.
 type Service struct {
 	install  *install.Service
 	source   Source

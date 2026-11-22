@@ -5,7 +5,6 @@ import (
 	"strings"
 )
 
-// buildVersion resolves the display identity from linker flags or Go build information.
 func buildVersion() (string, string) {
 	displayVersion, displayCommit := version, commit
 	info, ok := debug.ReadBuildInfo()

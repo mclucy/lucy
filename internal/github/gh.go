@@ -22,8 +22,6 @@ func New(network *cache.Client, logger *log.Logger) *Client {
 	return &Client{network: network, logger: logger}
 }
 
-// checkGitHubMessage returns the parsed error message when data is a GitHub
-// API error envelope, nil otherwise.
 func checkGitHubMessage(data []byte) *GhApiMessage {
 	var msg *GhApiMessage
 	err := json.Unmarshal(data, &msg)

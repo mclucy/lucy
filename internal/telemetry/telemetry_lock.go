@@ -46,8 +46,7 @@ func (c *Client) enterOperation(ctx context.Context, wait time.Duration) (func()
 }
 
 // acquireProcessSlot claims the in-process slot under the same wait budget as
-// the file lock, so a caller that asked not to wait never blocks on a
-// concurrent operation.
+// the file lock.
 func (c *Client) acquireProcessSlot(ctx context.Context, wait time.Duration, deadline time.Time) error {
 	if wait == 0 {
 		select {

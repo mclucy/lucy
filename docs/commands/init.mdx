@@ -28,7 +28,7 @@ If no server is detected, init fails.
 
 Init records the server name, software, Minecraft version, server directory, and the installed mods and plugins it recognizes. Packages it recognizes are managed from then on: later installs can replace or remove them. A package without a matching release stays unmanaged. If a provider lookup fails and no other provider identifies the file, the warning names the failed provider so you can distinguish an incomplete lookup from a search that found no match.
 
-The name is metadata: changing it does not alter the server definition, the installed files, or the lock's manifest match. Init registers the workspace so the artifact store can retain the lock's artifacts; a registration failure fails the command. Registration warns when another registered server already uses the name, and `--server` cannot select an ambiguous name until one manifest is renamed.
+The name is metadata. Init registers the workspace so the artifact store can retain the lock's artifacts; a registration failure fails the command. Registration warns when another registered server already uses the name, and `--server` cannot select an ambiguous name until one manifest is renamed.
 
 The generated `lucy.yaml` explains each field inline. Pass `--no-comments` to omit those comments and the schema header. Init also creates `.lucy/config.yaml` with every setting commented out, unless that file already exists; see [`lucy config`](/commands/config).
 

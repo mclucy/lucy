@@ -32,7 +32,6 @@ type launcherCheck struct {
 }
 
 // verifyLauncher checks the generated launch files of a bootstrap method.
-// Methods without a generated launcher have nothing to check here.
 func verifyLauncher(serverDir string, locked document.LockedServer) launcherCheck {
 	switch locked.Bootstrapper {
 	case serverpkg.BootstrapMethodFabric:

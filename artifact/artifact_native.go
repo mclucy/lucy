@@ -47,15 +47,12 @@ func descriptorSideResult(modules []catalog.DescriptorModule) (clientOnly, known
 		if module.Side != catalog.SideClient {
 			// Forge and NeoForge descriptors carry no mod-level side, and a
 			// Fabric or Quilt parent without an environment stays server-side.
-			// A module without a client side is not evidence either way.
 			return false, true
 		}
 	}
 	return true, true
 }
 
-// readModulesFor reads every module the descriptor declares without filtering
-// client-only ones.
 func readModulesFor(
 	ctx context.Context,
 	filename string,

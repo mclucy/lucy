@@ -20,9 +20,6 @@ import (
 	"github.com/mclucy/lucy/upstream"
 )
 
-// Source is the routing capability installation consumes. Configured routing
-// implements it; installation never selects a provider or transport on its
-// own.
 type Source interface {
 	Candidates(
 		ctx context.Context,
@@ -274,8 +271,7 @@ func (s *Service) Materializer(
 	return store.materialize, summary
 }
 
-// CheckJava reports whether an installed Java runtime satisfies the lock. It
-// never installs or modifies a runtime.
+// CheckJava reports whether an installed Java runtime satisfies the lock.
 func (s *Service) CheckJava(
 	ctx context.Context,
 	root string,

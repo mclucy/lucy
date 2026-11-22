@@ -39,7 +39,6 @@ func LockOpenedFile(file *os.File, wait bool) (*FileLock, error) {
 	return &FileLock{file: file}, nil
 }
 
-// Close releases ownership. A second Close has no effect.
 func (l *FileLock) Close() error {
 	if l == nil || l.file == nil {
 		return nil

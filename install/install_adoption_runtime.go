@@ -228,7 +228,6 @@ func adoptInconclusiveRuntime(
 		if !observed {
 			if info, err := os.Lstat(file.Path); err == nil &&
 				info.Mode()&os.ModeSymlink != 0 {
-				// Aliases stay unowned.
 				continue
 			}
 		}

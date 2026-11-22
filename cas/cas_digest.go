@@ -66,7 +66,7 @@ func (d *Digest) UnmarshalText(text []byte) error {
 	return nil
 }
 
-// Object records storage facts, not a consumer's filename or retention policy.
+// Object records storage facts alone; filenames and retention policies belong to consumers.
 type Object struct {
 	Digest Digest `json:"digest"`
 	Size   int64  `json:"size"`

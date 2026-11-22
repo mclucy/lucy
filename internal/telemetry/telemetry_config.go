@@ -2,9 +2,9 @@
 //
 // The client owns a private, per-user state directory. It records bounded,
 // typed event records and explicit reports into a durable local queue, and
-// uploads them only when the caller invokes Flush. It never starts a daemon,
-// never inspects files outside its own state directory, and never collects
-// process arguments, environment variables, logs, or arbitrary host data.
+// uploads them only when the caller invokes Flush. It reads only its own state
+// directory and keeps process arguments, environment variables, logs, and
+// arbitrary host data out of collected records.
 //
 // Telemetry is enabled by default for pre-release channels (alpha and beta).
 // LUCY_TELEMETRY can force it off for a process. Persisted opt-in and opt-out
@@ -14,7 +14,7 @@
 // but keeps queued records and their original identities.
 //
 // Every error returned by this package is telemetry-local. A CLI must ignore
-// it: telemetry failure never changes the result of a regular command.
+// it: regular commands keep their result when telemetry fails.
 package telemetry
 
 import (
@@ -36,7 +36,7 @@ import (
 // Recognized false values are 0, off, false, no, disabled, opt-out, and
 // opt_out. An unrecognized non-empty value also disables telemetry (privacy
 // favours failing closed). Recognized true values are 1, on, true, yes,
-// enabled, opt-in, and opt_in; they never override a persisted opt-out.
+// enabled, opt-in, and opt_in; they leave a persisted opt-out in place.
 const EnvironmentVariable = "LUCY_TELEMETRY"
 
 // SchemaVersion is the wire and local-state schema version.

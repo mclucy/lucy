@@ -36,7 +36,7 @@ After editing a tracked file, save its current contents as the accepted revision
 lucy file update config/example.json
 ```
 
-You can list several paths, use shell-style patterns such as `config/*.json`, or use `lucy file update --all`. Patterns match tracked declarations, so they do not depend on which working files currently exist; hidden tracked paths require an explicit leading dot. For an immutable file, accepting the change stops warnings about the new contents.
+You can list several paths, use shell-style patterns such as `config/*.json`, or use `lucy file update --all`. Hidden tracked paths require an explicit leading dot. For an immutable file, accepting the change stops warnings about the new contents.
 
 To download and accept the current contents from a configured recovery URL, use:
 
@@ -44,7 +44,7 @@ To download and accept the current contents from a configured recovery URL, use:
 lucy file update --from-source config/example.json
 ```
 
-This replaces the working file; lucy keeps a local copy of the displaced contents. Unlike recovery, the downloaded contents do not have to match the previous revision.
+This replaces the working file; lucy keeps a local copy of the displaced contents.
 
 ## Change the policy
 
@@ -63,6 +63,6 @@ To stop tracking a file without deleting it, run:
 lucy file untrack config/example.json
 ```
 
-`untrack` accepts the same patterns. Files that are not currently tracked are skipped with a warning, and directories are never untracked.
+`untrack` accepts the same patterns; it warns about files that are already untracked and leaves directories alone.
 
 Continue with [Recover and revert files](/file-tracking/recovery).

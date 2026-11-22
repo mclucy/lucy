@@ -9,23 +9,23 @@ description: "Install a server from its manifest and lock file"
 lucy install
 ```
 
-If `lucy.yaml` changed, lucy resolves a new lock before installing. Versions you pinned stay pinned, so adding one package does not upgrade the others. With only `lucy-lock.yaml` present, lucy rebuilds from the lock alone and registers the workspace as a lock-only entry; commit both files to keep the named-server option.
+If `lucy.yaml` changed, lucy resolves a new lock before installing. With only `lucy-lock.yaml` present, lucy rebuilds from the lock alone and registers the workspace as a lock-only entry; commit both files to keep the named-server option.
 
 For CI, `lucy install --locked` fails when the lock is missing or out of date instead of resolving new versions.
 
 ## What install changes
 
-Install places the files the lock lists. It removes files it installed or took over earlier that the lock no longer lists, including the previous version of a package it upgrades; files it does not recognize are left alone.
+Install places the files the lock lists. It removes files it installed or took over earlier that the lock no longer lists, including the previous version of a package it upgrades; unmanaged files stay in place.
 
 Installation stops when an unmanaged file occupies a package destination; pass `--overwrite` to replace files already there. The receipt hash in `.lucy/install.yaml` is a conflict baseline, not a reproducibility pin, so locally modified files are never silently overwritten or pruned, and re-initialization preserves those baselines. Seed files are user-owned: modifying one never blocks installation or triggers replacement.
 
-If the receipt is missing, files in a runtime directory remain unmanaged and are not replaced. A bootstrap file exactly matching a verified output can be recorded without replacement. Use [`lucy init`](/commands/init) to adopt an existing server without running installers.
+If the receipt is missing, files in a runtime directory stay unmanaged. A bootstrap file exactly matching a verified output can be recorded without replacement. Use [`lucy init`](/commands/init) to adopt an existing server without running installers.
 
 Later installs reuse an adopted runtime when it still matches the lock and its managed files are unchanged.
 
 When the runtime needs preparation, a verified bootstrap from another workspace with the same build and inputs can be restored. `--refresh-bootstrap` reruns it, still protecting local edits.
 
-Installation also refuses a server whose mod dependencies cannot be satisfied; `--accept-broken` installs the declared packages anyway.
+Installation also refuses a server with unsatisfied mod dependencies; `--accept-broken` installs the declared packages anyway.
 
 `--with-optional` adds optional dependencies and writes them into `lucy.yaml`, so they remain part of the server on later installs. It resolves again even when the lock is current.
 
@@ -33,21 +33,21 @@ Files tracked with [`lucy file`](/commands/file) are not overwritten. If an immu
 
 ## Offline
 
-`lucy install --offline` uses only files already present in the global artifact store or the shared network cache. It replays a current lock in a new workspace when every required artifact is available and the required local prerequisites are present, such as a Java runtime for a step that runs Java. It fails when the manifest needs a new resolution, an artifact is unavailable, or a prerequisite is missing. A file whose contents do not match the lock counts as missing, even if it exists. If the lock records multiple checksums, each must match.
+`lucy install --offline` uses only files already present in the global artifact store or the shared network cache. It replays a current lock in a new workspace when every required artifact is available and the required local prerequisites are present, such as a Java runtime for a step that runs Java. It fails when the manifest needs a new resolution, an artifact is unavailable, or a prerequisite is missing. A file whose contents differ from the lock counts as missing, even if it exists. If the lock records multiple checksums, each must match.
 
 ### Artifact store and download cache
 
 Lucy keeps verified artifacts and reusable bootstrap files in a per-user store. Clearing the network cache leaves them in place. `lucy store gc` removes objects and bootstrap snapshots that no registered lock needs.
 
-The network cache remains a separate, expiring copy of upstream responses and downloads. `lucy cache clear` empties it without touching the artifact store or the files in a server directory. Run an online install before relying on `--offline` when the artifact is not already in the store.
+The network cache remains a separate, expiring copy of upstream responses and downloads. `lucy cache clear` empties it without touching the artifact store or the files in a server directory. Run an online install before relying on `--offline` when the artifact is missing from the store.
 
 ## MCDReforged
 
-By default, install runs the `mcdreforged` command on your `PATH`, which needs Python 3.8 or newer. Pass `--mcdr-venv` to create an isolated environment under the server directory instead. The isolated environment needs one online install before it can be used offline; a global MCDReforged installation does not.
+By default, install runs the `mcdreforged` command on your `PATH`, which needs Python 3.8 or newer. Pass `--mcdr-venv` to create an isolated environment under the server directory instead. The isolated environment needs one online install before it can be used offline; a global MCDReforged installation works offline from the start.
 
 ## Java
 
-Java version mismatches are warnings, not install errors. If a step needs a runtime and none is installed, the command stops and suggests `--java`. That flag installs a suitable runtime without changing your default Java. If you selected a runtime with `java.home` in [`lucy config`](/commands/config), `--java` installs nothing and your choice is used. Under `--offline`, `--java` fails instead of downloading.
+Java version mismatches are warnings, not install errors. If a step needs a runtime and none is installed, the command stops and suggests `--java`. That flag installs a suitable runtime without changing your default Java. If you selected a runtime with `java.home` in [`lucy config`](/commands/config), `--java` keeps your choice. Under `--offline`, `--java` fails instead of downloading.
 
 `--add-java-repository` lets `--java` add the Java vendor's package repository to your system package manager. Under `--no-interactive`, methods that need a password are skipped.
 
@@ -55,7 +55,7 @@ Java version mismatches are warnings, not install errors. If a step needs a runt
 
 Lucy keeps a list of servers for your user account in your user data directory. The list is shared by every shell and project and records locations only. A server appears after [`lucy create`](/commands/create), [`lucy init`](/commands/init), or `lucy install` registers it; [`lucy deinit`](/commands/deinit) removes the entry. If the server directory was deleted instead, [`lucy server forget`](#lucy-server-forget) removes the stale entry.
 
-Every install registers its workspace before it acquires artifacts. A manifest may omit `name`; the server remains registered but cannot be selected by name. A lock-only installation is registered as a `lock-only` entry. Registration failure fails the installation because `lucy store gc` cannot retain artifacts for a server it cannot find. Registration warns when another server already uses the name.
+Every install registers its workspace before it acquires artifacts. A manifest may omit `name`; the server remains registered but cannot be selected by name. A lock-only installation is registered as a `lock-only` entry. Registration failure fails the installation because `lucy store gc` needs a registered server to retain its artifacts. Registration warns when another server already uses the name.
 
 ### lucy server list
 
@@ -74,7 +74,7 @@ Lists each registered server's name, state, and path. `list` and `ls` are the sa
 |`unreadable`|The path or manifest exists, but lucy cannot inspect it, usually because of permissions or an I/O error.|
 |`invalid`|The path exists but does not contain a valid lucy manifest, or the registry entry itself cannot be interpreted.|
 
-The listing checks each registered target without changing it. A missing server stays in the list; lucy never removes an entry because a target is unavailable. Reconnect a disconnected drive and list again to see it as `available`. [`lucy deinit`](/commands/deinit) removes the entry of a server that still exists; `lucy server forget` removes one whose directory is gone.
+The listing checks each registered target without changing it. A missing server stays in the list. Reconnect a disconnected drive and list again to see it as `available`. [`lucy deinit`](/commands/deinit) removes the entry of a server that still exists; `lucy server forget` removes one whose directory is gone.
 
 An empty name is shown as `-`. An unnamed server cannot be selected with `--server`. Lock-only, missing, unreadable, and invalid entries also cannot be selected.
 
@@ -98,7 +98,7 @@ Renames a registered server. `<server>` must match exactly one available name; w
 
 `<name>` becomes the top-level `name` in that server's `lucy.yaml`. It is trimmed and must be non-empty and printable. Renaming to a name another server already uses is allowed with a warning; selecting that name then fails until you change one manifest's `name` directly. Renaming to the current name changes nothing and still refreshes the registration.
 
-Only the name changes. The installed server, packages, worlds, configuration, and directory stay in place. The name is not part of what the lock compares, so renaming does not make `lucy-lock.yaml` stale.
+Only the name changes. The installed server, packages, worlds, configuration, and directory stay in place. The lock ignores the name.
 
 ### Machine-readable output
 
@@ -137,7 +137,7 @@ Only the name changes. The installed server, packages, worlds, configuration, an
 </ParamField>
 
 <ParamField query="--overwrite" type="boolean" default="false">
-  Replace files already present at the destinations the lock selects. Other files are left alone.
+  Replace files already present at the destinations the lock selects. Other files stay in place.
 </ParamField>
 
 <ParamField query="--force, -f" type="boolean" default="false">

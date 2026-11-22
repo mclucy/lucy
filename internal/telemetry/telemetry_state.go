@@ -48,7 +48,7 @@ type queueEntry struct {
 	PayloadBytes int64      `json:"payload_bytes"`
 	BodyBytes    int64      `json:"body_bytes,omitempty"`
 	// UploadAttempts and UploadThrottles count actual delivery attempts for
-	// event records only. They are local metadata and never alter the payload.
+	// event records only.
 	UploadAttempts  int `json:"upload_attempts,omitempty"`
 	UploadThrottles int `json:"upload_throttles,omitempty"`
 }

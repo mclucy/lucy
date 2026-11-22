@@ -95,7 +95,6 @@ func Load(
 			result.Graph = graph
 			return result, nil
 		}
-		// Lock file missing or invalid — fall through to probe.
 	}
 
 	result.Origin = OriginLive

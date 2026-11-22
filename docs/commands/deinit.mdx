@@ -5,7 +5,7 @@ description: "Stop managing a server and remove lucy's files"
 
 `lucy deinit` removes lucy from the current server directory: `lucy.yaml`, `lucy-lock.yaml`, and `.lucy/`. The server itself stays, including its software, mods, plugins, worlds, and configuration, so it keeps running without lucy.
 
-It also removes the server from your user's [known-server list](/commands/install#known-servers), so `lucy --server` no longer selects it. A failure to remove the entry is a warning and does not stop the removal.
+It also removes the server from your user's [known-server list](/commands/install#known-servers), so `lucy --server` no longer selects it. A failure to remove the entry is a warning.
 
 <Warning>
   `.lucy/` holds the only local backups and revision history for tracked files. `lucy deinit` deletes them permanently.
@@ -15,11 +15,11 @@ It also removes the server from your user's [known-server list](/commands/instal
 lucy deinit
 ```
 
-Run it from the server directory. The command fails when there is nothing to remove, so a wrong working directory cannot silently delete nothing.
+Run it from the server directory. The command fails when there is nothing to remove.
 
 ## What remains
 
-- Files lucy installed stay on disk but become unmanaged; later lucy commands no longer know about them.
+- Files lucy installed stay on disk and become unmanaged.
 - An isolated MCDReforged environment stays in the server directory, so its launcher keeps working.
 - Your global configuration, Java, all worlds, the network cache, and the global artifact store are untouched.
 

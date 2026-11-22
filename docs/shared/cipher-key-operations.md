@@ -16,8 +16,6 @@ the CurseForge API without requiring every user to supply their own key.
 
 - Each tagged release generates **fresh** key and ciphertext fragments from
   `CURSEFORGE_API_KEY` at release time.
-- Rebuilds of the same tag are **not** bit-identical for cipher material: a new
-  generate step produces a new random seed and nonce.
 - Local/dev builds and GoReleaser snapshots use **unbound** material (empty
   release version and commit associated data).
 

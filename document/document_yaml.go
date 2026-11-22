@@ -206,8 +206,8 @@ func mergeYAMLNode(existing, incoming *yaml.Node) {
 	}
 }
 
-// mergeMappingNode keeps the existing entry order and appends keys the
-// document did not have. Entries absent from incoming are removed.
+// mergeMappingNode keeps the existing entry order and appends new keys.
+// Entries absent from incoming are removed.
 func mergeMappingNode(existing, incoming *yaml.Node) {
 	pending := make(map[string]int, len(incoming.Content)/2)
 	for i := 0; i+1 < len(incoming.Content); i += 2 {

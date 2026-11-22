@@ -54,8 +54,7 @@ func StaticStatusLogoCandidates() []CompletionCandidate {
 	}
 }
 
-// StaticSearchEcosystemCandidates is the search rollout subset, not the full
-// ecosystem set.
+// StaticSearchEcosystemCandidates lists the ecosystems offered in the search rollout.
 func StaticSearchEcosystemCandidates() []CompletionCandidate {
 	return []CompletionCandidate{
 		{Value: catalog.EcosystemFabric.String(), Description: "Fabric mods"},
@@ -86,8 +85,7 @@ func StaticVersionCandidates() []CompletionCandidate {
 }
 
 // LockCandidates lists the package references the current lock resolves, with
-// their versions. It is the only source of workspace package suggestions;
-// nothing is inferred from outside the lock.
+// their versions.
 func LockCandidates(root string) []CompletionCandidate {
 	lock, err := document.LockFile(root).Read()
 	if err != nil {
@@ -118,8 +116,7 @@ func ResolveLockReference(root, name string) (string, error) {
 }
 
 // CompletePackageIDSuggestions completes a "provider:project@version" token
-// for the invocation workspace. Workspace suggestions come from that
-// workspace's lock, which is the only evidence of what it contains.
+// for the invocation workspace.
 func CompletePackageIDSuggestions(
 	_ context.Context,
 	root string,

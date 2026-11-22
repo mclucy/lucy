@@ -14,9 +14,7 @@ import (
 
 // PromptGate decides whether one command may open an interactive selection.
 // Machine-readable output and --no-interactive (which --no-style implies) turn
-// prompts off: neither can be steered by terminal input. A confirmation flag
-// such as --yes does not belong here because it answers a question rather
-// than selecting the value the prompt would have selected.
+// prompts off: neither can be steered by terminal input.
 type PromptGate struct {
 	cmd *cobra.Command
 	inv *Invocation

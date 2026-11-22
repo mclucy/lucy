@@ -158,8 +158,8 @@ func (s *Service) stageInstall(
 	if err != nil {
 		return nil, err
 	}
-	// A refresh request executes the bootstrap method again and publishes a
-	// fresh snapshot, so the current-installation shortcuts must not answer it.
+	// A refresh request executes the bootstrap method again to publish a
+	// fresh snapshot.
 	if opts.RefreshBootstrap {
 		bootstrapOK, current = false, false
 	}

@@ -7,7 +7,6 @@ import (
 	"strings"
 )
 
-// TrackedPath rejects paths that cannot safely name portable workspace files.
 func TrackedPath(value string) (string, error) {
 	if value == "" || strings.ContainsAny(value, "\\:\x00") || !filepath.IsLocal(value) {
 		return "", fmt.Errorf("tracked path must be workspace-relative: %q", value)

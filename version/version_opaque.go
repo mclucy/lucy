@@ -5,8 +5,8 @@ import (
 	"strings"
 )
 
-// parseOpaqueVersion accepts any non-empty identifier. Opaque versions have no
-// ordering; they compare by exact string.
+// parseOpaqueVersion accepts any non-empty identifier. Opaque versions
+// compare by exact string.
 func parseOpaqueVersion(raw Version) ResolvableVersion {
 	text := string(raw)
 	if strings.TrimSpace(text) == "" {

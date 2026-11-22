@@ -1,8 +1,7 @@
 package version
 
 // Expr is a boolean expression in disjunctive normal form: the outer slice is
-// OR, the inner slice is AND. A nil or empty outer slice means the expression
-// imposes no constraint.
+// OR, the inner slice is AND. A nil or empty outer slice accepts every version.
 type Expr [][]SubExpr
 
 type SubExpr struct {

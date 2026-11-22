@@ -237,7 +237,6 @@ func TestForgeInstallerEvidenceDoesNotPinSeedContents(t *testing.T) {
 	check(bootstrap.CurrentnessMismatch, "user_jvm_args.txt")
 }
 
-// forgeShimTestLock returns a Forge lock with no declared inputs.
 func forgeShimTestLock() document.LockedServer {
 	return document.LockedServer{
 		Directory:    ".",

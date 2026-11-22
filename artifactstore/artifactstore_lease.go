@@ -22,7 +22,7 @@ const (
 // registered a workspace. It is global to the per-user store and survives
 // process boundaries through a private file lock. Hold it from before the
 // first artifact access through registration, installation, or planning so a
-// collection sweep cannot reclaim bytes the operation is still using.
+// collection sweep preserves bytes the operation is still using.
 type Lease struct {
 	file      *os.File
 	lock      *fsutil.FileLock
@@ -91,10 +91,8 @@ func (l *Lease) Close() error {
 	return l.closeErr
 }
 
-// beginCollection takes the operation gate and refuses when any lease is
-// active. Stale lease files left by a crashed process are removed. The gate
-// must stay held through the sweep so no operation can acquire artifacts
-// between this check and the last removal.
+// beginCollection keeps the operation gate held through the sweep so
+// operations wait to acquire artifacts until after the last removal.
 func (s *Store) beginCollection() (*fsutil.FileLock, error) {
 	gate, err := fsutil.LockFile(s.operationPath(operationsLockName))
 	if err != nil {

@@ -220,7 +220,6 @@ func statusExclusiveArt(art, other []string) []string {
 	return exclusive
 }
 
-// statusMissingArt reports the art lines that do not appear in rendered.
 func statusMissingArt(rendered string, art []string) []string {
 	plain := ansi.Strip(rendered)
 	var missing []string

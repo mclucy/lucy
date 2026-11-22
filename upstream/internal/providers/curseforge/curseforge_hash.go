@@ -39,7 +39,7 @@ type fingerprintResponse struct {
 
 // ReleaseByHash identifies the installed artifact by its MurmurHash
 // fingerprint and returns the release it was published as, in one lookup.
-// A fingerprint with no exact match is a miss, not an error.
+// A fingerprint with no exact match is a miss with no error.
 func (p *Provider) ReleaseByHash(
 	ctx context.Context,
 	artifact upstream.ArtifactFingerprint,
@@ -680,7 +680,7 @@ func (p *Provider) resolveModsBatch(
 }
 
 // fingerprintMatches returns CurseForge's exact matches for a sorted batch.
-// A 404 means no matches. A partial result must be correlated per input.
+// A 404 reports an empty match set. A partial result must be correlated per input.
 // Docs: https://docs.curseforge.com/rest-api/#get-fingerprints-matches
 func (p *Provider) fingerprintMatches(
 	ctx context.Context,

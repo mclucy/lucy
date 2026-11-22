@@ -305,7 +305,6 @@ func statusLockComponents(lock *documentpkg.Lock) []statusComponent {
 	})
 }
 
-// Only enabled packages can contribute compatibility evidence.
 func statusLockCompatibleEcosystems(
 	lock *documentpkg.Lock,
 ) []statusEcosystem {

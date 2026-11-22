@@ -28,8 +28,7 @@ func (s Sort) Valid() bool {
 }
 
 // applySearchSort reorders items in each response according to s. Relevance
-// preserves the provider's order, and unrecognized sorts also fall through as
-// no-op rather than failing, so a bad sort never blocks the results.
+// preserves the provider's order, and unrecognized sorts leave it in place.
 func applySearchSort(results []upstream.SearchResponse, s Sort) {
 	switch s {
 	case "", SortRelevance:

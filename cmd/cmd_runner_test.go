@@ -83,7 +83,6 @@ func TestRunnerFailureDocument(t *testing.T) {
 	if !runner.JSONSelected() {
 		t.Fatal("schema must select machine output for failures too")
 	}
-	// main.run renders the failure after Execute returns.
 	runner.WriteError(err)
 
 	if stdout.Len() != 0 {

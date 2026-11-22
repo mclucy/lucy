@@ -29,7 +29,7 @@ func main() {
 // signalCancelCause marks a cancellation that came from the operating system.
 // It implements Is(context.Canceled) so existing exit handling is unchanged,
 // and SignalCancellation lets command telemetry distinguish an actual signal
-// from generic internal cancellation without exposing its description.
+// from generic internal cancellation while keeping its description private.
 type signalCancelCause struct{}
 
 func (signalCancelCause) Error() string {
@@ -43,8 +43,8 @@ func (signalCancelCause) Is(target error) bool {
 func (signalCancelCause) SignalCancellation() {}
 
 // signalContext owns signal handling at the process boundary. The returned
-// context carries a typed cause so telemetry can classify interruption only
-// when a signal actually arrived.
+// context carries a typed cause so telemetry can attribute an interruption to
+// an actual signal.
 func signalContext() (context.Context, context.CancelFunc) {
 	ctx, cancel := context.WithCancelCause(context.Background())
 	signals := make(chan os.Signal, 1)
@@ -98,8 +98,8 @@ func run(ctx context.Context, args []string, directory string, stdin io.Reader, 
 	}
 	switch {
 	case runner.JSONSelected():
-		// One document on stderr. A close failure joins the action failure
-		// instead of silently disappearing or producing a second document.
+		// A close failure joins the action failure so stderr carries one document
+		// and the error survives.
 		if err := errors.Join(executeErr, closeErr); err != nil {
 			runner.WriteError(err)
 		}

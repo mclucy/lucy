@@ -19,7 +19,7 @@ Lucy normally infers the mod or plugin type from the server; use `--ecosystem` t
 ### Arguments
 
 <ParamField path="package" type="string" required>
-  One or more package references, in the same `modrinth:project`, `curseforge:project`, or `mcdr:project` form accepted by [`lucy add`](/commands/add). Bare names resolve as the same shortcuts: a unique match in the current lock, otherwise Modrinth (or the MCDR catalogue for MCDR plugins). Only packages declared directly in the manifest can be removed — naming something the manifest never declared is an error, and dependencies remain installed while another package still needs them.
+  One or more package references, in the same `modrinth:project`, `curseforge:project`, or `mcdr:project` form accepted by [`lucy add`](/commands/add). Bare names resolve as the same shortcuts: a unique match in the current lock, otherwise Modrinth (or the MCDR catalogue for MCDR plugins). Only packages declared directly in the manifest can be removed — dependencies remain installed while another package still needs them.
 </ParamField>
 
 <ParamField query="--ecosystem" type="string">

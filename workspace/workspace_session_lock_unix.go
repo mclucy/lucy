@@ -59,8 +59,6 @@ func sessionLockHeldByLsof(filePath string) bool {
 	}
 	for _, line := range lines[outputBegin:] {
 		fields := strings.Fields(line)
-		// Only the server JVM counts as server activity. Other holders, such
-		// as editors and shells, do not count.
 		if len(fields) >= 2 &&
 			fields[0] == "java" &&
 			pidLike(fields[1]) {

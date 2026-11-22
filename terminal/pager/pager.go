@@ -17,7 +17,7 @@ import (
 type Mode int
 
 const (
-	// Auto pages only documents that do not fit the terminal.
+	// Auto pages documents that overflow the terminal.
 	Auto Mode = iota
 	// Always pages every non-empty document.
 	Always

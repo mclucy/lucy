@@ -72,7 +72,6 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Four fragment lines only — never print the plaintext secret.
 	fmt.Printf("cipher_key_a=%s\n", keyA)
 	fmt.Printf("cipher_key_b=%s\n", keyB)
 	fmt.Printf("cipher_ciphertext_a=%s\n", ctA)

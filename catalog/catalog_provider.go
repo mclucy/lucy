@@ -3,7 +3,6 @@ package catalog
 import "strings"
 
 // Provider identifies the execution layer that fetches metadata or artifacts.
-// A provider may or may not back a Registry.
 type Provider string
 
 const (

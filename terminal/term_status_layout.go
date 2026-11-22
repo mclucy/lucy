@@ -16,7 +16,7 @@ const (
 	// LayoutClipped renders only the info block, clipped to the terminal
 	// width. Used when the terminal is narrower than minInfoWidth.
 	LayoutClipped
-	// LayoutInfoOnly renders only the info block with no logo at all.
+	// LayoutInfoOnly renders just the info block.
 	// Used in non-TTY (piped) contexts and when --logo=none.
 	LayoutInfoOnly
 )

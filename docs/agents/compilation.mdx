@@ -13,6 +13,6 @@ The Gradle wrapper is preferred when complete; otherwise lucy uses an installed 
 
 ## Artifact selection
 
-After the build, lucy examines enabled JAR outputs from the selected project. It excludes development classifiers such as sources, Javadoc, and test artifacts, then reads each candidate's archive metadata to establish a supported mod ecosystem. If any candidates are marked as published by Gradle, the choice is restricted to those. Exactly one eligible artifact must remain; ambiguity is an error rather than an arbitrary selection.
+After the build, lucy examines enabled JAR outputs from the selected project, then reads each candidate's archive metadata to establish a supported mod ecosystem. If any candidates are marked as published by Gradle, the choice is restricted to those. Exactly one eligible artifact must remain; ambiguity is an error.
 
 Publishing creates the destination exclusively and removes a partial output if copying fails. The temporary checkout is separate from the workspace installation receipt and the global download cache.

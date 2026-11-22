@@ -147,8 +147,6 @@ func (l *live) PhaseDone(text string, elapsed time.Duration) {
 		l.dirty = true
 	}
 	l.mu.Unlock()
-	// An empty text ends the phase without printing, but the live area is
-	// still cleared above.
 	if text == "" {
 		return
 	}

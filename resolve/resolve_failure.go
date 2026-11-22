@@ -102,7 +102,7 @@ type RejectionGroup struct {
 	FirstVersion string
 	LastVersion  string
 	// Module facts describe a requirement that rejected the builds. They are
-	// empty for kinds that are not about a module.
+	// populated only for module-related rejection kinds.
 	RequiredBy string
 	Dependency string
 	Constraint string
@@ -315,8 +315,8 @@ func (l *rejectionLedger) add(
 	return group
 }
 
-// A conflict on a build that passed its selector explains more than all the
-// other versions that never matched that selector in the first place.
+// A conflict on a build that passed its selector explains more than conflicts
+// on versions the selector excluded.
 func rejectionPriority(kind RejectionKind) int {
 	switch kind {
 	case RejectionServer:
@@ -332,10 +332,9 @@ func rejectionPriority(kind RejectionKind) int {
 
 // summary picks the project whose rejection explains the failure best: a
 // requirement the server cannot satisfy first, then the most specific reasons,
-// not the request that happened to be processed first. Nested failures only
-// back up a deeper cause, so a tie between projects with direct evidence
-// breaks on the rejections the report will show, not the nested counts that
-// build drops from it.
+// ahead of the request that happened to be processed first. Nested failures
+// back up a deeper cause, so ties between projects with direct evidence favor
+// the rejections the report will show; build drops their nested counts.
 func (l *rejectionLedger) summary(minecraft versionpkg.Version, cause error) *Failure {
 	var bestKey projectKey
 	var bestEntry *projectLedger

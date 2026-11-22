@@ -14,10 +14,8 @@ type preparedRecord struct {
 	wireBytes int
 }
 
-// Flush performs one bounded upload run. It never blocks on another process's
-// upload: a busy state returns Skipped/busy and leaves the queue intact.
-// Network, health, and protocol failures are reported through FlushResult and
-// never as errors. Errors are limited to local state I/O.
+// Flush performs one bounded upload run. Network, health, and protocol failures
+// appear in FlushResult; errors are limited to local state I/O.
 func (c *Client) Flush(ctx context.Context) (FlushResult, error) {
 	if ctx == nil {
 		ctx = context.Background()

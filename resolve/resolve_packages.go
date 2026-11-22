@@ -20,7 +20,8 @@ import (
 	versionpkg "github.com/mclucy/lucy/version"
 )
 
-// Limit failed speculative selections, not successful visits and merges.
+// Limit failed speculative selections while leaving successful visits and
+// merges unbounded.
 const backtrackLimit = 10000
 
 // catalogueRegistry names the registry that serves a package provider. Only a
@@ -248,8 +249,6 @@ func candidateDependencies(
 	return out
 }
 
-// appendLockedCandidate adds the locked file when the catalogue did not
-// publish a matching candidate.
 func appendLockedCandidate(
 	list []upstream.Candidate,
 	pin *document.Package,
@@ -1050,8 +1049,8 @@ func Packages(request PackagesRequest) ([]document.Package, []error, error) {
 }
 
 // serverModuleProblems keeps the module problems the server runtime itself
-// answers. No candidate choice can satisfy such a requirement, so accepting
-// package conflicts never turns one into a warning.
+// answers. Only that runtime can satisfy such a requirement, so these stay
+// fatal when package conflicts are accepted.
 func serverModuleProblems(problems []ModuleProblem) []ModuleProblem {
 	var fatal []ModuleProblem
 	for _, problem := range problems {

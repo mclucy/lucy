@@ -151,7 +151,6 @@ func infoBuildCriteriaText(criteria *infoBuildCriteria) string {
 	return strings.Join(parts, ", ")
 }
 
-// infoBuildCompatible keeps builds that are not known to be incompatible.
 // Missing build metadata stays visible: a source that reports no game
 // versions or loaders has not proven a mismatch.
 func infoBuildCompatible(

@@ -11,8 +11,7 @@ import (
 	"github.com/mclucy/lucy/version"
 )
 
-// PhaseInfo describes a finished stage. Counts are facts the renderer turns
-// into prose; the backend never formats them.
+// PhaseInfo describes a finished stage.
 type PhaseInfo struct {
 	Name      string
 	Elapsed   time.Duration
@@ -24,8 +23,7 @@ type PhaseInfo struct {
 }
 
 // Trace receives facts about an operation while it runs. Every field is
-// optional: a nil field or a nil Trace reports nothing. The caller that
-// installs a Trace presents the facts; this package never formats them.
+// optional: a nil field or a nil Trace reports nothing.
 type Trace struct {
 	PhaseStarted  func(name string)
 	PhaseProgress func(name string, count, total int)

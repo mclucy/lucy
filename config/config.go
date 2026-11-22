@@ -152,8 +152,8 @@ func (s *Service) Setting(key string) (string, error) {
 }
 
 // GitHubProxy returns the configured prefix proxy for GitHub release
-// downloads. An empty prefix downloads directly. A hand-edited value that is
-// not an absolute HTTP(S) URL is an error rather than a broken download.
+// downloads. An empty prefix downloads directly. A hand-edited value must be
+// an absolute HTTP(S) URL so an invalid value fails as an error up front.
 func (s *Service) GitHubProxy() (string, error) {
 	value, err := s.Setting("github.proxy")
 	if err != nil {
@@ -173,7 +173,7 @@ func (s *Service) CurseForgeAPIKey() (string, error) {
 }
 
 // JavaHome resolves the selected path against the directory of its source
-// scope. Missing config files do not disable automatic runtime selection.
+// scope. Missing config files still allow automatic runtime selection.
 func (s *Service) JavaHome() (home string, sourcePath string, err error) {
 	global, err := s.read(GlobalScope, false)
 	if err != nil {

@@ -202,7 +202,6 @@ func (h *handler) exist(k string) bool {
 	return hit
 }
 
-// get keeps a reader alive independently of later index replacements. The caller must Close it.
 func (h *handler) get(k string) (
 	hit bool,
 	reader io.ReadCloser,

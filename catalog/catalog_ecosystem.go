@@ -60,8 +60,8 @@ type ecosystemDefinition struct {
 	alsoLoads []Ecosystem
 }
 
-// ecosystemDefinitions is the single source of ecosystem traits. An
-// ecosystem missing from it is not valid.
+// ecosystemDefinitions is the single source of ecosystem traits. Only
+// listed ecosystems are valid.
 var ecosystemDefinitions = map[Ecosystem]ecosystemDefinition{
 	EcosystemUnspecified: {title: "Any"},
 	EcosystemMinecraft:   {title: "Minecraft"},

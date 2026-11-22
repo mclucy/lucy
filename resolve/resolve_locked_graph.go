@@ -7,7 +7,7 @@ import (
 	"github.com/mclucy/lucy/document"
 )
 
-// lockedEdges restores the graph the lock selected, not every relationship
+// lockedEdges restores only the relationships the lock selected from those
 // published upstream. In particular, an imported pack can use a different
 // provider or omit a client-only dependency. Only an additive change can
 // reuse that graph. Changed or removed bindings require fresh expansion.

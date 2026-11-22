@@ -45,7 +45,6 @@ const (
 )
 
 // ReadInstaller identifies a supported installer archive from its contents.
-// found is false for any archive that is not a supported installer.
 //
 // The archive name and extension are not evidence. A caller that scans a
 // directory can log an error and continue: a non-archive or an archive without
@@ -53,8 +52,6 @@ const (
 func ReadInstaller(filePath string) (inst Installer, found bool, err error) {
 	archive, err := zip.OpenReader(filePath)
 	if err != nil {
-		// A non-zip file is not an installer. Other open failures stay
-		// visible to the caller.
 		if errors.Is(err, zip.ErrFormat) {
 			return Installer{}, false, nil
 		}

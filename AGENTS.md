@@ -29,6 +29,8 @@ Package-specific architecture, responsibilities, invariants, and test instructio
 
 - Read applicable package-local `AGENTS.md` instructions (including parent and nested guides, when present).
 - Follow both local package invariants and root repository rules.
+- Treat `docs/` as terminal user documentation. Never take reference from any file under `docs/` when planning or changing code; its pages follow code changes.
+- Derive code intelligence from package-local `AGENTS.md`, code comments, and the code itself.
 
 ## The Fundamental Problem
 
@@ -81,6 +83,13 @@ Clarify before naming. A name is a contract, not a label.
 
 Documentation has two audiences. Choose the layer before writing:
 
+### Writing style
+
+- State what a feature does, supports, or requires. Use a negative statement ("x does not do y") only when the absence is a consequential UX fact.
+- Prefer deleting a sentence over rewording it when the fact adds no practical value.
+- In user pages, keep such statements only where they prevent a specific user mistake.
+- In agent pages, also keep negatives that redirect an agent after a failed path (an unsupported lookup, an ownership assumption, or a state-dependent failure).
+
 ### Human-facing documentation
 
 - The README and published pages outside `docs/agents/` are for users. Change them when a user-facing change is worth documenting.
@@ -103,6 +112,7 @@ Write code that explains itself. Namings must not need documentations from call 
 
 - Do not restate the code. Refactor instead if you must do this.
 - No repeating comments inside or outside the package. Explain 1 fact only once across the codebase.
+- Write comments only for decisions and workarounds the code cannot show. Delete restatements, including negated ones; prefer deletion to rewording.
 - Preconditions, postconditions, edge cases, why the item exists are worth recording.
 - Docs must reflect only the live condition. Never record the history. That's what `git log` and `git blame` are for.
 - Follow the ASD-STE100 standard.
