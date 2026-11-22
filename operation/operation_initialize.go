@@ -75,9 +75,8 @@ func (s *Service) initialize(ctx context.Context, root string, opts InitOptions,
 	if err := promptRuntime(opts, observed); err != nil {
 		return initResult(observed), err
 	}
-	// Bind the selected runtime bytes before identification performs network
-	// work. Adoption may only record these bytes; the observation rejects a
-	// replaced runtime instead of adopting stale membership.
+	// Adoption checks the bytes and mode captured before resolution, so a
+	// replacement does not inherit the ownership of an observed file.
 	var runtimeInstallation *discovery.Installation
 	if selection := observed.Runtime(); selection != nil {
 		runtimeInstallation = selection.Installation
@@ -497,7 +496,28 @@ func (s *Service) publishInitialization(
 		return initResult(observed), err
 	}
 
-	var runtimeInstallation *discovery.Installation
+	const imagePhase = "runtime image"
+	opts.Trace.ReportPhaseStarted(imagePhase)
+	imageStarted := time.Now()
+	image, err := s.install.RuntimeImage(ctx, root, resolved, install.Options{
+		Trace:       opts.Trace,
+		Materialize: opts.Materialize,
+	})
+	if errors.Is(err, install.ErrRuntimeImageUnavailable) {
+		observed.Warnings = append(observed.Warnings, fmt.Errorf(
+			"%w; the next lucy install verifies and owns the remaining runtime files",
+			err,
+		))
+	} else if err != nil {
+		return initResult(observed), err
+	}
+	opts.Trace.ReportPhase(install.PhaseInfo{
+		Name:    imagePhase,
+		Elapsed: time.Since(imageStarted),
+		Count:   len(image),
+	})
+
+	var runtimeFiles []install.AdoptedRuntimeFile
 	if runtimeObserved != nil {
 		// Re-discover from disk instead of trusting the in-memory selection
 		// that may predate the ambiguity prompt or network identification.
@@ -508,14 +528,6 @@ func (s *Service) publishInitialization(
 		if err := runtimeObserved.verify(freshInstallation); err != nil {
 			return initResult(observed), err
 		}
-		runtimeInstallation = freshInstallation
-	} else if observed != nil {
-		if selection := observed.Runtime(); selection != nil {
-			runtimeInstallation = selection.Installation
-		}
-	}
-	var runtimeFiles []install.AdoptedRuntimeFile
-	if runtimeObserved != nil {
 		runtimeFiles = runtimeObserved.files
 	}
 
@@ -543,7 +555,7 @@ func (s *Service) publishInitialization(
 	adoptErr := install.AdoptExistingWorkspace(root, install.AdoptOptions{
 		Manifest:     manifest,
 		Lock:         resolved,
-		Runtime:      runtimeInstallation,
+		Image:        image,
 		RuntimeFiles: runtimeFiles,
 		Packages:     adoptedPackages,
 		Logger:       s.logger,

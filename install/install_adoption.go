@@ -9,6 +9,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/mclucy/lucy/bootstrap"
 	"github.com/mclucy/lucy/document"
 	"github.com/mclucy/lucy/internal/workspacewrite"
 	"github.com/mclucy/lucy/log"
@@ -36,10 +37,12 @@ type AdoptedRuntimeFile struct {
 type AdoptOptions struct {
 	Manifest     *document.Manifest
 	Lock         *document.Lock
-	Runtime      *discovery.Installation
 	RuntimeFiles []AdoptedRuntimeFile
-	Packages     []AdoptedPackage
-	Logger       *log.Logger
+	// Image is the runtime image of Lock from Service.RuntimeImage. A nil
+	// image limits runtime ownership to the files the lock pins by digest.
+	Image    []bootstrap.Output
+	Packages []AdoptedPackage
+	Logger   *log.Logger
 	// PublishLock publishes the resolved lock with the adoption. Callers that
 	// reused an existing lock byte-for-byte leave it false.
 	PublishLock bool
@@ -55,19 +58,14 @@ type AdoptOptions struct {
 	Preconditions WorkspaceDocuments
 }
 
-// AdoptExistingWorkspace explicitly adopts an existing workspace installation
-// without invoking the installer. It verifies attributable runtime files and
-// identified packages, checks bootstrap contract satisfaction against the
-// locked server, enforces path and symlink safety, and atomically publishes
-// the document and receipt changes under the standard installation journal
-// (.lucy/commit.yaml and rollback backup).
+// AdoptExistingWorkspace claims runtime files that match the image, or files
+// pinned by the lock if the image is unavailable. It also claims identified
+// packages. It publishes the documents and receipt in one transaction and
+// leaves the runtime files unchanged.
 //
-// If the locked bootstrap contract is fully satisfied by existing regular
-// files, the receipt records the bootstrap fingerprint so a subsequent install
-// skips bootstrap. If satisfaction is inconclusive, explicit ownership of
-// recognized files is still recorded (preventing future collision conflicts)
-// but the bootstrap fingerprint stays empty. Existing baselines are never
-// reset: a managed file whose digest or mode changed fails adoption.
+// The receipt gets a bootstrap fingerprint only when all managed image
+// entries are claimed and all seeds are present. A previously accepted
+// receipt baseline cannot change during adoption.
 func AdoptExistingWorkspace(root string, opts AdoptOptions) (resultErr error) {
 	if opts.Lock == nil {
 		return errors.New("cannot adopt workspace without lock")

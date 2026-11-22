@@ -382,6 +382,9 @@ func (s *Service) stageServerTree(
 	if keyErr == nil {
 		opened, err := openSnapshotStore()
 		if err != nil {
+			if store.storeOnly {
+				return nil, err
+			}
 			s.logger.Debug("bootstrap snapshot store unavailable", "reason", err.Error())
 		} else {
 			snapStore = opened
@@ -395,6 +398,9 @@ func (s *Service) stageServerTree(
 		)
 		switch {
 		case err != nil:
+			if store.storeOnly {
+				return nil, err
+			}
 			s.logger.Warn(fmt.Errorf(
 				"bootstrap snapshot restore failed for %s; staging from scratch: %w",
 				key.Hex(), err,
@@ -416,6 +422,9 @@ func (s *Service) stageServerTree(
 					Elapsed: time.Since(lookupStarted),
 				})
 				return outputs, nil
+			}
+			if store.storeOnly {
+				return nil, verifyErr
 			}
 			s.logger.Warn(fmt.Errorf(
 				"restored bootstrap snapshot for %s failed verification; staging from scratch: %w",
@@ -452,10 +461,12 @@ func (s *Service) stageServerTree(
 	if err != nil {
 		return nil, err
 	}
-	// Only a tree Lucy executed and checked here becomes a snapshot. Adoption
-	// never reaches this function, so an existing user tree is never stored.
+	// Only the checked output of an executed recipe enters the snapshot store.
 	if snapStore != nil {
 		if err := publishBootstrapSnapshot(ctx, snapStore, key, stage, resolved.Server, outputs); err != nil {
+			if store.storeOnly {
+				return nil, err
+			}
 			s.logger.Warn(fmt.Errorf(
 				"cannot publish bootstrap snapshot %s: %w",
 				key.Hex(), err,
@@ -505,7 +516,6 @@ func restoredServerOutputs(
 			Mode:       entry.Mode,
 			Policy:     bootstrap.OutputPolicy(entry.Policy),
 			Role:       bootstrap.MaterialRole(entry.Role),
-			Evidence:   bootstrap.Evidence(entry.Evidence),
 		}
 	}
 	return outputs, nil

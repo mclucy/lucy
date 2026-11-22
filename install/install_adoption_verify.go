@@ -7,7 +7,6 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/mclucy/lucy/bootstrap"
 	"github.com/mclucy/lucy/document"
 	"github.com/mclucy/lucy/internal/workspacewrite"
 	"github.com/mclucy/lucy/receipt"
@@ -68,34 +67,6 @@ func verifyExistingBaseline(
 		"managed output %s changed mode from %#o to %#o; resolve the modification before re-initializing",
 		cleanPath, entry.Mode, current.Mode,
 	)
-}
-
-// managedRuntimeScope reports whether serverRel falls inside a managed runtime
-// output declared by the locked method. Scope matching stops at a path
-// component boundary, so "libraries/net" never authorizes
-// "libraries/networking.jar".
-func managedRuntimeScope(specs []bootstrap.OutputSpec, serverRel string) bool {
-	serverRel = cleanWorkspacePath(serverRel)
-	for _, spec := range specs {
-		if spec.Policy != bootstrap.PolicyManaged ||
-			spec.Role != bootstrap.RoleRuntime {
-			continue
-		}
-		if spec.Path != "" {
-			if serverRel == cleanWorkspacePath(spec.Path) {
-				return true
-			}
-			continue
-		}
-		scope := cleanWorkspacePath(spec.Scope)
-		if scope == "." || scope == "" {
-			continue
-		}
-		if serverRel == scope || strings.HasPrefix(serverRel, scope+"/") {
-			return true
-		}
-	}
-	return false
 }
 
 // adoptionReceiptChanged reports whether adoption must rewrite the receipt.

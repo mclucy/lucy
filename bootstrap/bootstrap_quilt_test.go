@@ -14,6 +14,7 @@ import (
 	"testing"
 
 	"github.com/mclucy/lucy/bootstrap"
+	"github.com/mclucy/lucy/bootstrap/snapshot"
 	"github.com/mclucy/lucy/catalog"
 	"github.com/mclucy/lucy/document"
 	"github.com/mclucy/lucy/internal/fsutil"
@@ -81,8 +82,7 @@ type quiltTestTree struct {
 
 // TestQuiltLauncherGeneration pins the files the Quilt bootstrap writes: the
 // loader copy, the launcher manifest (main class and wrapped Class-Path), the
-// embedded KnotServer launch property, and the serverJar selector. It also
-// proves the unmodified tree is accepted by both verification paths.
+// embedded KnotServer launch property, and serverJar selector.
 func TestQuiltLauncherGeneration(t *testing.T) {
 	t.Parallel()
 	tree := newQuiltTestTree(t)
@@ -154,20 +154,9 @@ func TestQuiltLauncherGeneration(t *testing.T) {
 			t.Fatalf("verified outputs omit %s: %v", rel, outputs)
 		}
 	}
-
-	existing, err := bootstrap.CheckExisting(tree.root, tree.locked)
-	if err != nil {
-		t.Fatalf("check generated Quilt tree: %v", err)
-	}
-	if !existing.Current || existing.Status != bootstrap.CurrentnessCurrent {
-		t.Fatalf("generated tree status = %s current=%t, want current: %s", existing.Status, existing.Current, existing.Reason)
-	}
 }
 
-// TestQuiltLauncherRejectsMalformedTree proves that the launcher verifier reads
-// the generated files and rejects each broken Java contract, from a foreign
-// main class through a misplaced loader layout.
-func TestQuiltLauncherRejectsMalformedTree(t *testing.T) {
+func TestQuiltImageDetectsChangedFiles(t *testing.T) {
 	t.Parallel()
 	cases := []struct {
 		name   string
@@ -304,14 +293,27 @@ func TestQuiltLauncherRejectsMalformedTree(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			tree := newQuiltTestTree(t)
+			outputs, err := bootstrap.StagedImage(tree.root, tree.locked)
+			if err != nil {
+				t.Fatalf("classify generated Quilt tree: %v", err)
+			}
+			image := make([]snapshot.Entry, 0, len(outputs))
+			for _, out := range outputs {
+				image = append(image, snapshot.Entry{
+					Path:   out.ServerPath,
+					SHA256: out.SHA256,
+					Mode:   out.Mode,
+					Policy: string(out.Policy),
+				})
+			}
 			tc.mutate(t, tree)
 
-			existing, err := bootstrap.CheckExisting(tree.root, tree.locked)
+			comparison, err := snapshot.Compare(tree.root, image)
 			if err != nil {
-				t.Fatalf("check malformed tree: %v", err)
+				t.Fatalf("compare modified Quilt tree: %v", err)
 			}
-			if existing.Current || existing.Status != bootstrap.CurrentnessMismatch {
-				t.Fatalf("malformed tree status = %s current=%t, want mismatch: %s", existing.Status, existing.Current, existing.Reason)
+			if comparison.Complete() {
+				t.Fatal("modified tree matches the runtime image")
 			}
 		})
 	}

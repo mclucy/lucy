@@ -26,6 +26,7 @@ type Comparison struct {
 	// entry also compares the read and execute bits of its mode, because a
 	// read-only copy or hard link runs the same as a writable one. A seed file
 	// belongs to the user once it exists, so its mode is never compared.
+	// Matching entries carry the observed permission bits.
 	Matching []Entry
 	// Differing entries name a path that holds other content: other bytes, a
 	// managed file with other permission bits, or a non-regular file.
@@ -79,6 +80,8 @@ func Compare(dir string, entries []Entry) (Comparison, error) {
 			comparison.Differing = append(comparison.Differing, entry)
 			continue
 		}
+		entry.Mode = uint32(info.Mode().Perm())
+		entry.SHA256 = digest
 		comparison.Matching = append(comparison.Matching, entry)
 	}
 	return comparison, nil

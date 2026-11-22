@@ -1,7 +1,11 @@
 package bootstrap
 
 import (
+	"cmp"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
+	"io"
 	"io/fs"
 	"maps"
 	"os"
@@ -27,16 +31,9 @@ func StagedImage(stageRoot string, locked document.LockedServer) ([]Output, erro
 		return nil, fmt.Errorf("invalid bootstrap output contract: %w", err)
 	}
 	optional := optionalOutputs(locked)
-	if err := checkPathSafety(stageRoot, locked.Directory, false); err != nil {
-		return nil, fmt.Errorf("unsafe server directory %q: %w", locked.Directory, err)
-	}
-	serverRoot := filepath.Join(stageRoot, filepath.FromSlash(locked.Directory))
-	rootInfo, err := os.Lstat(serverRoot)
+	serverRoot, err := stagedServerRoot(stageRoot, locked.Directory)
 	if err != nil {
-		return nil, fmt.Errorf("staged server directory does not exist: %w", err)
-	}
-	if !rootInfo.IsDir() {
-		return nil, fmt.Errorf("staged server directory is not a directory: %s", serverRoot)
+		return nil, err
 	}
 
 	outputs := make([]Output, 0, len(exact))
@@ -82,7 +79,7 @@ func StagedImage(stageRoot string, locked document.LockedServer) ([]Output, erro
 		}
 		produced[rel] = true
 		outputs = append(outputs, Output{
-			Path:       workspacePath(locked, rel),
+			Path:       filepath.ToSlash(filepath.Join(locked.Directory, rel)),
 			ServerPath: rel,
 			SHA256:     digest,
 			Mode:       uint32(info.Mode().Perm()),
@@ -139,4 +136,42 @@ func scopeOutput(rel string, scopes []OutputSpec) (OutputSpec, bool) {
 		}
 	}
 	return matched, found
+}
+
+// stagedServerRoot rejects a symlink or non-directory in the staged server path.
+func stagedServerRoot(stage, directory string) (string, error) {
+	relative := filepath.FromSlash(cmp.Or(directory, "."))
+	if err := document.SafeRelativePath(relative); err != nil {
+		return "", err
+	}
+	relative = filepath.Clean(relative)
+	root := filepath.Clean(stage)
+	for {
+		info, err := os.Lstat(root)
+		if err != nil {
+			return "", fmt.Errorf("inspect staged server directory: %w", err)
+		}
+		if !info.IsDir() {
+			return "", fmt.Errorf("staged server path %s is not a directory", root)
+		}
+		if relative == "." || relative == "" {
+			return root, nil
+		}
+		part, rest, _ := strings.Cut(relative, string(filepath.Separator))
+		root = filepath.Join(root, part)
+		relative = rest
+	}
+}
+
+func fileSHA256(path string) (string, error) {
+	file, err := os.Open(path)
+	if err != nil {
+		return "", err
+	}
+	defer file.Close()
+	hasher := sha256.New()
+	if _, err := io.Copy(hasher, file); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(hasher.Sum(nil)), nil
 }

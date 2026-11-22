@@ -84,10 +84,7 @@ func (t *Trace) bootstrapProgress() bootstrap.Progress {
 	}
 }
 
-// ReportPhase publishes a finished stage another package ran. Initialization
-// reports identification and adoption, and import reports the source download
-// and the files it writes, which installation does not perform, so their
-// elapsed time and counts are visible instead of unaccounted.
+// ReportPhase publishes a finished stage another package ran.
 func (t *Trace) ReportPhase(phase PhaseInfo) {
 	t.phaseDone(phase)
 }
