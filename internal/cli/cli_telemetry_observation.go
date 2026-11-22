@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"strings"
 	"sync"
 	"time"
 
@@ -12,12 +13,10 @@ import (
 // Bounds shared by every observation projection. They mirror the wire
 // contract and are applied before data leaves the process.
 const (
-	maxTelemetryElapsedMS   = 604800000
-	maxTelemetryPhaseCount  = 24
-	maxTelemetryScale       = 1000000
-	maxTelemetryPromptCount = 10000
-	maxTelemetryWarnings    = 10000
-	slowInvocationThreshold = 30 * time.Second
+	maxTelemetryElapsedMS  = 604800000
+	maxTelemetryPhaseCount = 24
+	maxTelemetryPhaseName  = 64
+	maxTelemetryScale      = 1000000
 )
 
 // TelemetryPhase is one phase of an invocation. Elapsed is observed time
@@ -34,102 +33,17 @@ type TelemetryPhase struct {
 
 // TelemetryExecution is the bounded execution snapshot of one invocation.
 // Phases may overlap and an active phase means unfinished work, so the
-// durations are not exclusive time.
+// durations are not exclusive time. InputWaitMS is present only when a form
+// actually ran, so an unmeasured wait differs from a measured zero.
 type TelemetryExecution struct {
 	Phases       []TelemetryPhase `json:"phases,omitempty"`
 	ActivePhase  string           `json:"active_phase,omitempty"`
 	CancelReason string           `json:"cancel_reason,omitempty"`
 	FailureKind  string           `json:"failure_kind,omitempty"`
-	Slow         bool             `json:"slow"`
+	InputWaitMS  *int64           `json:"input_wait_ms,omitempty"`
+	Files        *int             `json:"files,omitempty"`
 	HTTPMS       *int64           `json:"http_ms,omitempty"`
 	LockMS       *int64           `json:"lock_ms,omitempty"`
-}
-
-// TelemetryPrompt is the bounded prompt snapshot of one invocation. Aborted
-// means the user explicitly aborted a form; Interrupted means the surrounding
-// context was canceled while a form was open. Neither carries typed input.
-type TelemetryPrompt struct {
-	Mode        string `json:"mode"`
-	Count       int    `json:"count"`
-	WaitMS      int64  `json:"wait_ms"`
-	Aborted     bool   `json:"aborted"`
-	Interrupted bool   `json:"interrupted,omitzero"`
-}
-
-// telemetryScale accumulates counts by value. A negative field is unobserved;
-// zero is a real observed zero. Optional wire pointers are built only when
-// projecting the context.
-type telemetryScale struct {
-	Packages          int
-	RequestedPackages int
-	Files             int
-	CompletedFiles    int
-}
-
-// telemetryScaleData is the bounded wire projection of telemetryScale. Files
-// counts files written by a phase; CompletedFiles counts completed file
-// transfers. They are separate metrics and may differ.
-type telemetryScaleData struct {
-	Packages          *int `json:"packages,omitempty"`
-	RequestedPackages *int `json:"requested_packages,omitempty"`
-	Files             *int `json:"files,omitempty"`
-	CompletedFiles    *int `json:"completed_files,omitempty"`
-}
-
-func newTelemetryScale() telemetryScale {
-	return telemetryScale{
-		Packages:          -1,
-		RequestedPackages: -1,
-		Files:             -1,
-		CompletedFiles:    -1,
-	}
-}
-
-func (scale *telemetryScale) observeMax(target *int, value int) {
-	if value < 0 {
-		return
-	}
-	value = min(value, maxTelemetryScale)
-	if *target < value {
-		*target = value
-	}
-}
-
-func (scale *telemetryScale) increment(target *int) {
-	value := 0
-	if *target > 0 {
-		value = *target
-	}
-	*target = min(value+1, maxTelemetryScale)
-}
-
-func (scale telemetryScale) any() bool {
-	return scale.Packages >= 0 ||
-		scale.RequestedPackages >= 0 ||
-		scale.Files >= 0 ||
-		scale.CompletedFiles >= 0
-}
-
-func (scale telemetryScale) data() telemetryScaleData {
-	return telemetryScaleData{
-		Packages:          telemetryCountPointer(scale.Packages),
-		RequestedPackages: telemetryCountPointer(scale.RequestedPackages),
-		Files:             telemetryCountPointer(scale.Files),
-		CompletedFiles:    telemetryCountPointer(scale.CompletedFiles),
-	}
-}
-
-func telemetryCountPointer(value int) *int {
-	if value < 0 {
-		return nil
-	}
-	pointer := value
-	return &pointer
-}
-
-type telemetryWarnings struct {
-	Recoverable          int  `json:"recoverable"`
-	ResolutionRejections *int `json:"resolution_rejections,omitempty"`
 }
 
 // TelemetryObservation accumulates the bounded facts one invocation observed
@@ -138,26 +52,22 @@ type telemetryWarnings struct {
 // invocation allocates and records nothing.
 type TelemetryObservation struct {
 	mu          sync.Mutex
-	started     time.Time
 	logger      *log.Logger
 	phases      []TelemetryPhase
 	active      string
 	failure     string
 	cancel      string
-	prompt      TelemetryPrompt
 	promptTimer PromptTimer
-	scale       telemetryScale
-	warnings    int
-	rejects     int
+	files       int
+	packages    int
 }
 
 // NewTelemetryObservation starts one observation. Callers create it only when
 // telemetry is enabled for the invocation.
 func NewTelemetryObservation() *TelemetryObservation {
 	return &TelemetryObservation{
-		started: time.Now(),
-		prompt:  TelemetryPrompt{Mode: "unknown"},
-		scale:   newTelemetryScale(),
+		files:    -1,
+		packages: -1,
 	}
 }
 
@@ -203,20 +113,6 @@ func (o *TelemetryObservation) SetCancelReason(reason string) {
 	o.mu.Unlock()
 }
 
-// SetPromptMode records whether prompting was available. Unknown values
-// degrade to unknown instead of surfacing a free-form string.
-func (o *TelemetryObservation) SetPromptMode(mode string) {
-	if o == nil {
-		return
-	}
-	if !allowedTelemetryValue(mode, "available", "non_interactive", "no_terminal", "unknown") {
-		mode = "unknown"
-	}
-	o.mu.Lock()
-	o.prompt.Mode = mode
-	o.mu.Unlock()
-}
-
 func allowedTelemetryValue(value string, allowed ...string) bool {
 	for _, candidate := range allowed {
 		if value == candidate {
@@ -226,32 +122,36 @@ func allowedTelemetryValue(value string, allowed ...string) bool {
 	return false
 }
 
-// PhaseStart records that a bounded phase began. The entry stays active until
-// PhaseDone reports it, so a failed or canceled trace keeps the unfinished
-// phase visible.
+// PhaseStart records that a code-defined phase began. The entry stays active
+// until PhaseDone reports it, so a failed or canceled trace keeps the
+// unfinished phase visible. A phase beyond the projection cap leaves the
+// previous active phase in place instead of naming an entry that is absent.
 func (o *TelemetryObservation) PhaseStart(name string) {
 	if o == nil {
 		return
 	}
-	id, ok := telemetryPhaseID(name)
+	id, ok := telemetryPhaseName(name)
 	if !ok {
 		return
 	}
 	o.mu.Lock()
 	defer o.mu.Unlock()
-	if index := o.phaseIndex(id); index >= 0 {
+	index := o.phaseIndex(id)
+	switch {
+	case index >= 0:
 		if o.phases[index].State != "active" {
 			o.phases[index].started = time.Now()
 		}
 		o.phases[index].State = "active"
-	} else if len(o.phases) < maxTelemetryPhaseCount {
+		o.active = id
+	case len(o.phases) < maxTelemetryPhaseCount:
 		o.phases = append(o.phases, TelemetryPhase{
 			Name:    id,
 			State:   "active",
 			started: time.Now(),
 		})
+		o.active = id
 	}
-	o.active = id
 }
 
 // PhaseDone records the observed elapsed time of a phase. Repeated completions
@@ -260,7 +160,7 @@ func (o *TelemetryObservation) PhaseDone(name string, elapsed time.Duration) {
 	if o == nil {
 		return
 	}
-	id, ok := telemetryPhaseID(name)
+	id, ok := telemetryPhaseName(name)
 	if !ok {
 		return
 	}
@@ -290,106 +190,61 @@ func (o *TelemetryObservation) PhaseDone(name string, elapsed time.Duration) {
 	}
 }
 
-// ObservePhaseCount projects bounded counts that a finished phase reported.
-func (o *TelemetryObservation) ObservePhaseCount(name string, count, total int) {
-	if o == nil {
-		return
-	}
-	id, ok := telemetryPhaseID(name)
-	if !ok {
+// ObserveFiles records the largest meaningful file count a finished phase
+// reported. A negative count is unobserved; zero is a real observed count.
+func (o *TelemetryObservation) ObserveFiles(count int) {
+	if o == nil || count < 0 {
 		return
 	}
 	o.mu.Lock()
 	defer o.mu.Unlock()
-	switch id {
-	case "packages":
-		o.scale.observeMax(&o.scale.Packages, count)
-		o.scale.observeMax(&o.scale.RequestedPackages, total)
-	case "files", "install":
-		// Import reports the server files it materialized, and a committed
-		// installation reports the files it created and replaced.
-		o.scale.observeMax(&o.scale.Files, count)
+	if o.files < count {
+		o.files = min(count, maxTelemetryScale)
 	}
 }
 
-// ObserveFetchDone records one completed file transfer without its name.
-func (o *TelemetryObservation) ObserveFetchDone() {
-	if o == nil {
+// ObservePackages records the largest meaningful package count the run
+// observed. A negative count is unobserved; zero is a real observed count.
+func (o *TelemetryObservation) ObservePackages(count int) {
+	if o == nil || count < 0 {
 		return
 	}
 	o.mu.Lock()
 	defer o.mu.Unlock()
-	o.scale.increment(&o.scale.CompletedFiles)
+	if o.packages < count {
+		o.packages = min(count, maxTelemetryScale)
+	}
 }
 
-// ObserveInputScale records declared and locked package counts before
-// resolution completes. A negative value means the caller did not observe it;
-// zero is a real observed count. No names or versions are retained.
-func (o *TelemetryObservation) ObserveInputScale(requestedPackages, lockedPackages int) {
+// Packages projects the observed package count for the workspace context. It
+// is nil when no phase observed a count, so an empty workspace is distinct
+// from one that was never inspected.
+func (o *TelemetryObservation) Packages() *int {
 	if o == nil {
-		return
+		return nil
 	}
 	o.mu.Lock()
 	defer o.mu.Unlock()
-	if requestedPackages >= 0 {
-		o.scale.observeMax(&o.scale.RequestedPackages, requestedPackages)
-	}
-	if lockedPackages >= 0 {
-		o.scale.observeMax(&o.scale.Packages, lockedPackages)
-	}
+	return telemetryCountPointer(o.packages)
 }
 
-// ObserveResolveRejected records one rejected candidate decision. Neither its
-// name nor its reason is retained. Retry branches may report the same
-// candidate again, so the count includes repeated rejections.
-func (o *TelemetryObservation) ObserveResolveRejected() {
+func telemetryCountPointer(value int) *int {
+	if value < 0 {
+		return nil
+	}
+	pointer := value
+	return &pointer
+}
+
+// Execution projects the bounded execution context. It is called once at the
+// end of an invocation; the returned value owns its data.
+func (o *TelemetryObservation) Execution(ended time.Time) telemetry.Context {
 	if o == nil {
-		return
-	}
-	o.mu.Lock()
-	defer o.mu.Unlock()
-	if o.rejects < maxTelemetryWarnings {
-		o.rejects++
-	}
-}
-
-// ObserveWarning counts one recoverable warning already routed to the user.
-func (o *TelemetryObservation) ObserveWarning() {
-	o.ObserveWarnings(1)
-}
-
-// ObserveWarnings counts several recoverable warnings already routed to the
-// user. The count is additive and bounded, so a renderer reports a whole
-// result in one call without formatting its warnings.
-func (o *TelemetryObservation) ObserveWarnings(count int) {
-	if o == nil || count <= 0 {
-		return
-	}
-	o.mu.Lock()
-	defer o.mu.Unlock()
-	o.warnings = min(o.warnings+count, maxTelemetryWarnings)
-}
-
-// PromptAborted reports whether a prompt was explicitly aborted.
-func (o *TelemetryObservation) PromptAborted() bool {
-	if o == nil {
-		return false
-	}
-	o.promptTimer.mu.Lock()
-	defer o.promptTimer.mu.Unlock()
-	return o.promptTimer.aborted
-}
-
-// Contexts projects the execution, prompt, scale, and warning contexts. It is
-// called once at the end of an invocation; the returned values own their data.
-func (o *TelemetryObservation) Contexts(ended time.Time) (
-	execution telemetry.Context,
-	prompt telemetry.Context,
-	scale telemetry.Context,
-	warnings telemetry.Context,
-) {
-	if o == nil {
-		return telemetry.Context{}, telemetry.Context{}, telemetry.Context{}, telemetry.Context{}
+		return telemetry.Context{
+			Kind:   "execution",
+			Status: telemetry.ContextAbsent,
+			Reason: telemetry.ContextReasonNotReached,
+		}
 	}
 	o.mu.Lock()
 	logger := o.logger
@@ -408,71 +263,29 @@ func (o *TelemetryObservation) Contexts(ended time.Time) (
 			maxTelemetryElapsedMS,
 		)
 	}
-	executionData := TelemetryExecution{
+	data := TelemetryExecution{
 		Phases:       phases,
 		ActivePhase:  o.active,
 		CancelReason: o.cancel,
 		FailureKind:  o.failure,
-		Slow:         o.slow(ended),
+		Files:        telemetryCountPointer(o.files),
 	}
-	scaleData := o.scale.data()
-	scalePresent := o.scale.any()
-	warningsData := telemetryWarnings{Recoverable: o.warnings}
-	if o.rejects > 0 {
-		rejections := o.rejects
-		warningsData.ResolutionRejections = &rejections
-	}
-	promptData := o.prompt
 	o.mu.Unlock()
-	o.promptTimer.mu.Lock()
-	promptData.Count = min(o.promptTimer.count, maxTelemetryPromptCount)
-	promptData.WaitMS = telemetryMilliseconds(o.promptTimer.elapsed)
-	promptData.Aborted = o.promptTimer.aborted
-	promptData.Interrupted = o.promptTimer.interrupted
-	o.promptTimer.mu.Unlock()
 
+	if elapsed, measured := o.promptTimer.wait(); measured {
+		milliseconds := telemetryMilliseconds(elapsed)
+		data.InputWaitMS = &milliseconds
+	}
 	if logger != nil {
 		http, lock := logger.WaitTimings()
-		executionData.HTTPMS = durationMilliseconds(http)
-		executionData.LockMS = durationMilliseconds(lock)
+		data.HTTPMS = durationMilliseconds(http)
+		data.LockMS = durationMilliseconds(lock)
 	}
-
-	execution = telemetry.Context{
+	return telemetry.Context{
 		Kind:   "execution",
 		Status: telemetry.ContextPresent,
-		Data:   executionData,
+		Data:   data,
 	}
-	prompt = telemetry.Context{
-		Kind:   "prompt",
-		Status: telemetry.ContextPresent,
-		Data:   promptData,
-	}
-	if scalePresent {
-		scale = telemetry.Context{
-			Kind:   "scale",
-			Status: telemetry.ContextPresent,
-			Data:   scaleData,
-		}
-	} else {
-		scale = telemetry.Context{
-			Kind:   "scale",
-			Status: telemetry.ContextAbsent,
-			Reason: telemetry.ContextReasonNotObserved,
-		}
-	}
-	warnings = telemetry.Context{
-		Kind:   "warnings",
-		Status: telemetry.ContextPresent,
-		Data:   warningsData,
-	}
-	return execution, prompt, scale, warnings
-}
-
-func (o *TelemetryObservation) slow(ended time.Time) bool {
-	if o.started.IsZero() || ended.IsZero() {
-		return false
-	}
-	return ended.Sub(o.started) >= slowInvocationThreshold
 }
 
 func (o *TelemetryObservation) phaseIndex(id string) int {
@@ -499,26 +312,24 @@ func durationMilliseconds(value *time.Duration) *int64 {
 	return &milliseconds
 }
 
-var telemetryPhaseIDs = map[string]string{
-	"setup":              "setup",
-	"command":            "command",
-	"server":             "server",
-	"packages":           "packages",
-	"install":            "install",
-	"python environment": "python_environment",
-	"python_environment": "python_environment",
-	"download pack":      "download_pack",
-	"download_pack":      "download_pack",
-	"download archive":   "download_archive",
-	"download_archive":   "download_archive",
-	"files":              "files",
-	"loader installer":   "loader_installer",
-	"loader_installer":   "loader_installer",
-	"adoption":           "adoption",
-	"identification":     "identification",
-}
-
-func telemetryPhaseID(name string) (string, bool) {
-	id, ok := telemetryPhaseIDs[name]
-	return id, ok
+// telemetryPhaseName turns a code-defined phase label into the bounded code
+// name the wire accepts. ASCII spaces become underscores once at this
+// boundary; every other character must satisfy [a-z0-9][a-z0-9_-]{0,63}.
+func telemetryPhaseName(name string) (string, bool) {
+	normalized := strings.ReplaceAll(name, " ", "_")
+	if normalized == "" || len(normalized) > maxTelemetryPhaseName {
+		return "", false
+	}
+	for index := range len(normalized) {
+		character := normalized[index]
+		if character >= 'a' && character <= 'z' ||
+			character >= '0' && character <= '9' {
+			continue
+		}
+		if index > 0 && (character == '_' || character == '-') {
+			continue
+		}
+		return "", false
+	}
+	return normalized, true
 }

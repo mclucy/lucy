@@ -8,10 +8,14 @@ import (
 )
 
 type preparedRecord struct {
-	entry     queueEntry
-	record    queuedRecord
-	wire      wireRecord
-	wireBytes int
+	entry        queueEntry
+	payloadBytes int64
+	encoded      []byte
+}
+
+type preparedBatch struct {
+	records []preparedRecord
+	body    []byte
 }
 
 // Flush performs one bounded upload run. Network, health, and protocol failures
@@ -108,21 +112,21 @@ func (c *Client) Flush(ctx context.Context) (FlushResult, error) {
 		if flushContext.Err() != nil {
 			break
 		}
-		prepared, missing := c.prepareBatch(state, skipped)
+		batch, missing := c.prepareBatch(state, skipped)
 		if len(missing) > 0 {
 			c.dropEntries(state, missing)
 		}
-		if len(prepared) == 0 {
+		if len(batch.records) == 0 {
 			if err := c.saveState(state, now); err != nil {
 				return result, err
 			}
 			break
 		}
-		upload, uploadErr := c.uploadRecords(flushContext, prepared, state)
-		result.Attempted += len(prepared)
+		upload, uploadErr := c.uploadRecords(flushContext, batch.body, state)
+		result.Attempted += len(batch.records)
 		if uploadErr != nil {
 			if failure, isHTTP := errors.AsType[*httpError](uploadErr); isHTTP && failure.batchInvalid {
-				rejectedEntries := c.applyRejectedBatch(state, prepared)
+				rejectedEntries := c.applyRejectedBatch(state, batch.records)
 				result.Rejected += len(rejectedEntries)
 				result.RejectedIDs = append(result.RejectedIDs, entryIDs(rejectedEntries)...)
 				state.LastError = sanitizeErrorText(uploadErr)
@@ -145,7 +149,7 @@ func (c *Client) Flush(ctx context.Context) (FlushResult, error) {
 			result.Detail = state.LastError
 			return result, nil
 		}
-		acceptedEntries, rejectedEntries := c.applyUploadResult(state, prepared, upload, skipped, now)
+		acceptedEntries, rejectedEntries := c.applyUploadResult(state, batch.records, upload, skipped, now)
 		result.Accepted += len(acceptedEntries)
 		result.Rejected += len(rejectedEntries)
 		result.AcceptedIDs = append(result.AcceptedIDs, entryIDs(acceptedEntries)...)
@@ -161,8 +165,8 @@ func (c *Client) Flush(ctx context.Context) (FlushResult, error) {
 			result.Detail = "server did not acknowledge any record in the batch"
 			break
 		}
-		if classified < len(prepared) {
-			result.Detail = fmt.Sprintf("server classified %d of %d records in the batch", classified, len(prepared))
+		if classified < len(batch.records) {
+			result.Detail = fmt.Sprintf("server classified %d of %d records in the batch", classified, len(batch.records))
 			break
 		}
 	}
@@ -181,15 +185,17 @@ func (c *Client) Flush(ctx context.Context) (FlushResult, error) {
 // prepareBatch loads the oldest records that fit both server bounds. Records
 // whose outbox files are missing or corrupt are returned for local dropping so
 // they cannot block healthy records.
-func (c *Client) prepareBatch(state *persistedState, skipped map[string]struct{}) ([]preparedRecord, []queueEntry) {
-	prepared := make([]preparedRecord, 0, min(len(state.Queue), c.limits.MaxRecordsPerRequest))
+func (c *Client) prepareBatch(state *persistedState, skipped map[string]struct{}) (preparedBatch, []queueEntry) {
+	batch := preparedBatch{
+		records: make([]preparedRecord, 0, min(len(state.Queue), c.limits.MaxRecordsPerRequest)),
+	}
 	missing := make([]queueEntry, 0)
-	estimated := int64(len(`{"records":[]}`))
+	estimated := len(`{"records":[]}`)
 	for _, entry := range state.Queue {
 		if _, skip := skipped[entry.ID]; skip {
 			continue
 		}
-		if len(prepared) >= c.limits.MaxRecordsPerRequest {
+		if len(batch.records) >= c.limits.MaxRecordsPerRequest {
 			break
 		}
 		record, err := c.readQueueRecord(entry.ID)
@@ -198,27 +204,36 @@ func (c *Client) prepareBatch(state *persistedState, skipped map[string]struct{}
 			missing = append(missing, entry)
 			continue
 		}
-		wire := wireRecord{ID: entry.ID, Type: entry.Type, Payload: record.Payload}
-		encoded, err := marshalCanonical(wire)
+		encoded, err := marshalCanonical(wireRecord{ID: entry.ID, Type: entry.Type, Payload: record.Payload})
 		if err != nil || len(encoded) > c.limits.MaxRecordBytes {
 			missing = append(missing, entry)
 			continue
 		}
-		wireBytes := len(encoded)
-		additional := int64(wireBytes) + 1
-		// Reserve room for event-only transport metadata so the actual POST can
-		// add it without crossing either size bound. Reports keep their exact
-		// legacy sizing.
-		if entry.Type == recordTypeEvent && wireBytes+maxUploadEnvelopeBytes <= c.limits.MaxRecordBytes {
-			additional += maxUploadEnvelopeBytes
+		additional := len(encoded)
+		if len(batch.records) > 0 {
+			additional++
 		}
-		if len(prepared) > 0 && estimated+additional > int64(c.limits.MaxRequestBytes) {
+		if len(batch.records) > 0 && estimated+additional > c.limits.MaxRequestBytes {
 			break
 		}
 		estimated += additional
-		prepared = append(prepared, preparedRecord{entry: entry, record: record, wire: wire, wireBytes: wireBytes})
+		batch.records = append(batch.records, preparedRecord{
+			entry:        entry,
+			payloadBytes: int64(len(record.Payload)),
+			encoded:      encoded,
+		})
 	}
-	return prepared, missing
+	batch.body = make([]byte, 0, estimated)
+	batch.body = append(batch.body, `{"records":[`...)
+	for index := range batch.records {
+		if index > 0 {
+			batch.body = append(batch.body, ',')
+		}
+		batch.body = append(batch.body, batch.records[index].encoded...)
+		batch.records[index].encoded = nil
+	}
+	batch.body = append(batch.body, `]}`...)
+	return batch, missing
 }
 
 func (c *Client) dropEntries(state *persistedState, entries []queueEntry) {
@@ -259,7 +274,7 @@ func (c *Client) applyUploadResult(state *persistedState, prepared []preparedRec
 			switch item.entry.Type {
 			case recordTypeEvent:
 				state.Accepted.Events++
-				state.Accepted.EventPayloadBytes += int64(len(item.record.Payload))
+				state.Accepted.EventPayloadBytes += item.payloadBytes
 			case recordTypeReport:
 				state.Accepted.Reports++
 				state.Accepted.ReportBodyBytes += item.entry.BodyBytes
@@ -269,7 +284,7 @@ func (c *Client) applyUploadResult(state *persistedState, prepared []preparedRec
 		if _, ok := rejectedIDs[item.entry.ID]; ok {
 			remove[item.entry.ID] = struct{}{}
 			rejected = append(rejected, item.entry)
-			state.countRejected(int64(len(item.record.Payload)))
+			state.countRejected(item.payloadBytes)
 			continue
 		}
 		skipped[item.entry.ID] = struct{}{}
@@ -285,7 +300,7 @@ func (c *Client) applyRejectedBatch(state *persistedState, prepared []preparedRe
 	for _, item := range prepared {
 		remove[item.entry.ID] = struct{}{}
 		rejected = append(rejected, item.entry)
-		state.countRejected(int64(len(item.record.Payload)))
+		state.countRejected(item.payloadBytes)
 	}
 	c.removeQueueIDs(state, remove)
 	return rejected

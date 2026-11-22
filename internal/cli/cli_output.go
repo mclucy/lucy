@@ -72,8 +72,8 @@ func (o *installOutput) Trace() *install.Trace {
 			Rejected: o.resolveRejected,
 		},
 	}
-	if o.inv.TelemetryObservation != nil {
-		trace.InputScale = o.inv.TelemetryObservation.ObserveInputScale
+	if observation := o.inv.TelemetryObservation; observation != nil {
+		trace.PackageCount = observation.ObservePackages
 	}
 	return trace
 }
@@ -105,7 +105,14 @@ func (o *installOutput) phaseProgress(name string, count, total int) {
 
 func (o *installOutput) phaseDone(phase install.PhaseInfo) {
 	o.inv.TelemetryObservation.PhaseDone(phase.Name, phase.Elapsed)
-	o.inv.TelemetryObservation.ObservePhaseCount(phase.Name, phase.Count, phase.Total)
+	switch phase.Name {
+	case "packages":
+		o.inv.TelemetryObservation.ObservePackages(phase.Count)
+	case "install", "files":
+		// Import reports the server files it materialized, and a committed
+		// installation reports the files it created and replaced.
+		o.inv.TelemetryObservation.ObserveFiles(phase.Count)
+	}
 	o.phase = ""
 	o.phaseCount = 0
 	o.phaseTotal = 0
@@ -139,7 +146,6 @@ func (o *installOutput) fetchProgress(name string, read, total int64) {
 }
 
 func (o *installOutput) fetchDone(name string, _ bool) {
-	o.inv.TelemetryObservation.ObserveFetchDone()
 	if slots := o.activeFetches[name]; len(slots) > 0 {
 		o.fetchedBytes += slots[0]
 		slots = slots[1:]
@@ -161,7 +167,6 @@ func (o *installOutput) resolveState(resolved, pending int) {
 }
 
 func (o *installOutput) resolveRejected(project, _, _ string) {
-	o.inv.TelemetryObservation.ObserveResolveRejected()
 	o.rejected++
 	o.rejectedProject = project
 	o.updateStatus()
@@ -228,8 +233,6 @@ func (o *installOutput) Render(result *install.Result) error {
 	}
 	result.Warnings = append(result.Warnings, javaWarnings(result.Java)...)
 	warnings := warningMessages(result.Warnings)
-	// Output.Warn has already counted the warnings collected earlier in the run.
-	o.inv.TelemetryObservation.ObserveWarnings(len(warnings) + len(result.Diagnostics))
 	result.WarningMessages = append(warnings, o.Warnings()...)
 	if o.JSON() {
 		return installJSON.Write(o.Output, result)
@@ -259,10 +262,10 @@ func (o *installOutput) Render(result *install.Result) error {
 	// Flush the summary before warnings so the two surfaces cannot interleave.
 	o.renderer.Close()
 	for _, warning := range result.Warnings {
-		o.warn(warning, false)
+		o.warn(warning)
 	}
 	for _, diagnostic := range result.Diagnostics {
-		o.warn(fmt.Errorf("%s: %s", diagnostic.Path, diagnostic.Message), false)
+		o.warn(fmt.Errorf("%s: %s", diagnostic.Path, diagnostic.Message))
 	}
 	return nil
 }

@@ -8,8 +8,7 @@ import (
 )
 
 const (
-	// maxContexts leaves one slot for the worker-injected transport context
-	// when an event carries the upload envelope.
+	// maxContexts bounds the typed snapshots attached to one event.
 	maxContexts          = 15
 	maxContextDataBytes  = 8 << 10
 	maxContextTypeLength = 64
@@ -18,21 +17,20 @@ const (
 )
 
 type eventPayload struct {
-	InvocationID     string           `json:"invocation_id"`
-	InstallationID   string           `json:"installation_id"`
-	OccurredAt       string           `json:"occurred_at"`
-	Command          string           `json:"command"`
-	LucyVersion      string           `json:"lucy_version"`
-	LucyCommit       string           `json:"lucy_commit"`
-	Channel          string           `json:"channel"`
-	OS               string           `json:"os"`
-	Arch             string           `json:"arch"`
-	DurationMS       *int64           `json:"duration_ms,omitempty"`
-	Outcome          Outcome          `json:"outcome"`
-	ErrorCode        string           `json:"error_code"`
-	SchemaVersion    int              `json:"schema_version"`
-	CollectionPolicy string           `json:"collection_policy"`
-	Contexts         []contextPayload `json:"contexts,omitempty"`
+	InvocationID   string           `json:"invocation_id"`
+	InstallationID string           `json:"installation_id"`
+	OccurredAt     string           `json:"occurred_at"`
+	Operation      string           `json:"operation"`
+	LucyVersion    string           `json:"lucy_version"`
+	LucyCommit     string           `json:"lucy_commit"`
+	Channel        string           `json:"channel"`
+	OS             string           `json:"os"`
+	Arch           string           `json:"arch"`
+	DurationMS     *int64           `json:"duration_ms,omitempty"`
+	Outcome        Outcome          `json:"outcome"`
+	ErrorCode      string           `json:"error_code"`
+	SchemaVersion  int              `json:"schema_version"`
+	Contexts       []contextPayload `json:"contexts,omitempty"`
 }
 
 type contextPayload struct {
@@ -44,21 +42,20 @@ type contextPayload struct {
 }
 
 type reportPayload struct {
-	ReportID         string `json:"report_id"`
-	InstallationID   string `json:"installation_id"`
-	InvocationID     string `json:"invocation_id,omitempty"`
-	Kind             string `json:"kind"`
-	Agent            string `json:"agent,omitempty"`
-	Model            string `json:"model,omitempty"`
-	CreatedAt        string `json:"created_at"`
-	SchemaVersion    int    `json:"schema_version"`
-	CollectionPolicy string `json:"collection_policy"`
-	Body             string `json:"body"`
+	ReportID       string `json:"report_id"`
+	InstallationID string `json:"installation_id"`
+	InvocationID   string `json:"invocation_id,omitempty"`
+	Kind           string `json:"kind"`
+	Agent          string `json:"agent,omitempty"`
+	Model          string `json:"model,omitempty"`
+	CreatedAt      string `json:"created_at"`
+	SchemaVersion  int    `json:"schema_version"`
+	Body           string `json:"body"`
 }
 
 type preparedEvent struct {
 	invocationID     string
-	command          string
+	operation        string
 	durationMS       int64
 	durationMeasured bool
 	outcome          Outcome
@@ -81,9 +78,9 @@ func (c *Client) prepareEvent(event Event, now time.Time) (preparedEvent, error)
 	if err != nil {
 		return preparedEvent{}, fmt.Errorf("%w: invocation id: %v", ErrInvalidEvent, err)
 	}
-	command, err := normalizeCommand(event.Command)
+	operation, err := normalizeCommand(event.Operation)
 	if err != nil {
-		return preparedEvent{}, fmt.Errorf("%w: command must be a command path without arguments", ErrInvalidEvent)
+		return preparedEvent{}, fmt.Errorf("%w: operation must be a command path without arguments", ErrInvalidEvent)
 	}
 	if event.Duration < 0 || event.Duration > maxEventDuration {
 		return preparedEvent{}, fmt.Errorf("%w: duration out of range", ErrInvalidEvent)
@@ -107,7 +104,7 @@ func (c *Client) prepareEvent(event Event, now time.Time) (preparedEvent, error)
 	durationMeasured := event.DurationMeasured || event.Duration > 0
 	return preparedEvent{
 		invocationID:     invocationID,
-		command:          command,
+		operation:        operation,
 		durationMS:       event.Duration.Milliseconds(),
 		durationMeasured: durationMeasured,
 		outcome:          event.Outcome,
@@ -129,9 +126,6 @@ func normalizeContexts(contexts []Context) ([]contextPayload, error) {
 		kind := strings.ToLower(strings.TrimSpace(string(context.Kind)))
 		if !validContextType(kind) {
 			return nil, fmt.Errorf("%w: invalid context type", ErrInvalidEvent)
-		}
-		if kind == "transport" {
-			return nil, fmt.Errorf("%w: transport context is reserved for the upload worker", ErrInvalidEvent)
 		}
 		if context.Version != 0 && context.Version != contextSchemaVersion {
 			return nil, fmt.Errorf("%w: unsupported context version", ErrInvalidEvent)
@@ -233,20 +227,19 @@ func (c *Client) buildEventPayload(event preparedEvent, state *persistedState) e
 		durationMS = &measured
 	}
 	return eventPayload{
-		InvocationID:     event.invocationID,
-		InstallationID:   state.InstallationID,
-		OccurredAt:       event.occurredAt.Format(time.RFC3339),
-		Command:          event.command,
-		LucyVersion:      c.version,
-		LucyCommit:       c.commit,
-		Channel:          c.channel,
-		OS:               c.os,
-		Arch:             c.arch,
-		DurationMS:       durationMS,
-		Outcome:          event.outcome,
-		ErrorCode:        event.errorCode,
-		SchemaVersion:    SchemaVersion,
-		CollectionPolicy: payloadPolicy(state.Policy),
-		Contexts:         event.contexts,
+		InvocationID:   event.invocationID,
+		InstallationID: state.InstallationID,
+		OccurredAt:     event.occurredAt.Format(time.RFC3339),
+		Operation:      event.operation,
+		LucyVersion:    c.version,
+		LucyCommit:     c.commit,
+		Channel:        c.channel,
+		OS:             c.os,
+		Arch:           c.arch,
+		DurationMS:     durationMS,
+		Outcome:        event.outcome,
+		ErrorCode:      event.errorCode,
+		SchemaVersion:  SchemaVersion,
+		Contexts:       event.contexts,
 	}
 }

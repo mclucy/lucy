@@ -71,6 +71,7 @@ func NewJavaCommand(
 		"",
 		"Pin a Java distribution in lucy.yaml, or auto to accept any",
 	)
+	MarkTelemetryPositionArgument(javaUseCmd, 1, TelemetryArgumentVersion)
 	javaCmd.AddCommand(javaListCmd, javaUseCmd)
 	return javaCmd
 }

@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"io/fs"
-	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -21,79 +20,9 @@ import (
 	"github.com/spf13/pflag"
 )
 
-const (
-	telemetryMaxPositionals = 10000
-	telemetrySlowThreshold  = 30 * time.Second
-)
-
-// telemetryFlagNames is the complete set of flag names the invocation shape
-// may name. Values are never recorded, only the pflag kind and this allowlist.
-var telemetryFlagNames = map[string]bool{
-	"offline":        true,
-	"json":           true,
-	"json-compact":   true,
-	"no-interactive": true,
-	"no-style":       true,
-	"no-color":       true,
-	"server":         true,
-	"core":           true,
-	"core-version":   true,
-	"minecraft":      true,
-	"locked":         true,
-	"yes":            true,
-	"interactive":    true,
-	"dry-run":        true,
-	"all":            true,
-	"provider":       true,
-	"source":         true,
-	"loader":         true,
-	"latest":         true,
-	"version":        true,
-	"channel":        true,
-	"force":          true,
-	"output":         true,
-	"path":           true,
-	"directory":      true,
-	"name":           true,
-	"package":        true,
-	"java":           true,
-	"log-file":       true,
-	"log-level":      true,
-	"print-logs":     true,
-}
-
-var telemetryVersionFlags = map[string]bool{
-	"version":      true,
-	"core-version": true,
-	"minecraft":    true,
-	"latest":       true,
-}
-
-var telemetrySelectorFlags = map[string]bool{
-	"server":   true,
-	"core":     true,
-	"provider": true,
-	"source":   true,
-	"loader":   true,
-	"channel":  true,
-	"java":     true,
-}
-
 type telemetryInvocation struct {
-	Intent      string          `json:"intent"`
-	Output      string          `json:"output"`
-	Offline     bool            `json:"offline"`
-	Flags       []telemetryFlag `json:"flags,omitempty"`
-	Positionals *int            `json:"positionals,omitempty"`
-}
-
-type telemetryFlag struct {
-	Name string `json:"name"`
-	Kind string `json:"kind"`
-}
-
-type telemetryCollection struct {
-	LocalLog bool `json:"local_log"`
+	Intent    string              `json:"intent"`
+	Arguments []telemetryArgument `json:"arguments,omitempty"`
 }
 
 // beginTelemetryObservation starts the bounded observation only after the
@@ -147,25 +76,6 @@ func (r *Runner) completeCommandObservation(ended time.Time, commandErr error) {
 	observation.PhaseDone("command", ended.Sub(r.commandStarted))
 }
 
-// telemetryPromptMode reports whether a prompt was usable by this invocation.
-// It reads only parsed flags and the already-resolved presentation state.
-func telemetryPromptMode(command *cobra.Command, inv *cli.Invocation) string {
-	if command == nil || inv == nil || !command.Flags().Parsed() {
-		return "unknown"
-	}
-	if cli.NewPromptGate(command, inv).Available() {
-		return "available"
-	}
-	if cli.JSONMode(command) != cli.JSONNone {
-		return "non_interactive"
-	}
-	if telemetryBoolFlag(command, cli.FlagNoInteractive) ||
-		telemetryBoolFlag(command, cli.FlagNoStyle) {
-		return "non_interactive"
-	}
-	return "no_terminal"
-}
-
 // telemetryFailureKind classifies a failed invocation without retaining its
 // text. Usage is decided once by the caller so report and context agree.
 func (r *Runner) telemetryFailureKind(commandErr error, usageError bool) string {
@@ -202,8 +112,9 @@ func telemetryUsageCode(code string) bool {
 
 // telemetryCancelReason distinguishes causes only when the boundary knows
 // them. A typed signal cause is required before calling a cancellation an OS
-// interruption; generic cancellation stays generic.
-func (r *Runner) telemetryCancelReason(commandErr error, promptAborted bool) string {
+// interruption; generic cancellation stays generic. A prompt abort keeps its
+// identity because cli.ErrPromptAborted also matches context.Canceled.
+func (r *Runner) telemetryCancelReason(commandErr error) string {
 	if commandErr == nil {
 		return ""
 	}
@@ -211,7 +122,7 @@ func (r *Runner) telemetryCancelReason(commandErr error, promptAborted bool) str
 		!errors.Is(commandErr, context.DeadlineExceeded) {
 		return ""
 	}
-	if promptAborted {
+	if errors.Is(commandErr, cli.ErrPromptAborted) {
 		return "prompt_aborted"
 	}
 	if errors.Is(commandErr, context.DeadlineExceeded) ||
@@ -279,70 +190,15 @@ func (r *Runner) invocationContext(command *cobra.Command, usageError bool) tele
 	if usageError {
 		intent = "invalid_usage"
 	}
-	output := "text"
-	switch r.selectedJSON {
-	case cli.JSONPretty:
-		output = "json"
-	case cli.JSONCompact:
-		output = "json_compact"
-	}
-	data := telemetryInvocation{
-		Intent:  intent,
-		Output:  output,
-		Offline: telemetryBoolFlag(command, "offline"),
-	}
-	if command != nil {
-		if flags := telemetryFlagShape(command); len(flags) > 0 {
-			data.Flags = flags
-		}
-		if command.Flags().Parsed() && !r.flagParsingFailed {
-			count := min(len(command.Flags().Args()), telemetryMaxPositionals)
-			data.Positionals = &count
-		}
+	data := telemetryInvocation{Intent: intent}
+	if command != nil && command.Flags().Parsed() && !r.flagParsingFailed {
+		data.Arguments = telemetryArguments(command)
 	}
 	return telemetry.Context{
 		Kind:   "invocation",
 		Status: telemetry.ContextPresent,
 		Data:   data,
 	}
-}
-
-func telemetryFlagShape(command *cobra.Command) []telemetryFlag {
-	var flags []telemetryFlag
-	for name := range telemetryFlagNames {
-		flag := telemetryFlagSource(command, name)
-		if flag == nil || !flag.Changed {
-			continue
-		}
-		flags = append(flags, telemetryFlag{
-			Name: name,
-			Kind: telemetryFlagKind(name, flag.Value.Type()),
-		})
-	}
-	sort.Slice(flags, func(left, right int) bool {
-		return flags[left].Name < flags[right].Name
-	})
-	return flags
-}
-
-func telemetryFlagKind(name, flagType string) string {
-	switch flagType {
-	case "bool":
-		return "boolean"
-	case "int", "int8", "int16", "int32", "int64",
-		"uint", "uint8", "uint16", "uint32", "uint64",
-		"float32", "float64", "count", "duration":
-		return "number"
-	case "stringSlice", "stringArray", "intSlice", "uintSlice", "boolSlice":
-		return "list"
-	}
-	if telemetryVersionFlags[name] {
-		return "version"
-	}
-	if telemetrySelectorFlags[name] {
-		return "selector"
-	}
-	return "text"
 }
 
 func telemetryFlagSource(command *cobra.Command, name string) *pflag.Flag {
@@ -377,48 +233,27 @@ func (r *Runner) buildTelemetryContexts(
 	command *cobra.Command,
 	usageError bool,
 	failureKind, cancelReason string,
-	started, ended time.Time,
-	localLog bool,
+	ended time.Time,
 ) []telemetry.Context {
 	observation := r.invocation.TelemetryObservation
+	contexts := make([]telemetry.Context, 0, 8)
+	contexts = append(contexts, r.invocationContext(command, usageError))
 	if observation != nil {
-		observation.SetPromptMode(telemetryPromptMode(command, r.invocation))
 		if cancelReason != "" {
 			observation.SetCancelReason(cancelReason)
 		}
 		if failureKind != "" && cancelReason == "" {
 			observation.SetFailureKind(failureKind)
 		}
-	}
-
-	contexts := make([]telemetry.Context, 0, 10)
-	contexts = append(contexts, r.invocationContext(command, usageError))
-	if observation != nil {
-		execution, prompt, scale, warnings := observation.Contexts(ended)
-		contexts = append(
-			contexts,
-			adjustTelemetryExecution(execution, started, ended),
-			prompt,
-			scale,
-			warnings,
-		)
+		r.invocation.MergeWorkspacePackages(observation.Packages())
+		contexts = append(contexts, observation.Execution(ended))
 	} else {
-		for _, kind := range []telemetry.ContextKind{
-			"execution", "prompt", "scale", "warnings",
-		} {
-			contexts = append(contexts, telemetry.Context{
-				Kind:   kind,
-				Status: telemetry.ContextAbsent,
-				Reason: telemetry.ContextReasonNotReached,
-			})
-		}
+		contexts = append(contexts, telemetry.Context{
+			Kind:   telemetry.ContextExecution,
+			Status: telemetry.ContextAbsent,
+			Reason: telemetry.ContextReasonNotReached,
+		})
 	}
-
-	contexts = append(contexts, telemetry.Context{
-		Kind:   "collection",
-		Status: telemetry.ContextPresent,
-		Data:   telemetryCollection{LocalLog: localLog},
-	})
 
 	seen := map[telemetry.ContextKind]bool{}
 	for _, observed := range r.invocation.TelemetryContexts {
@@ -465,34 +300,6 @@ func normalizeObservedContext(observed telemetry.Context) telemetry.Context {
 		}
 	}
 	return observed
-}
-
-// adjustTelemetryExecution applies the one slow criterion at projection.
-// Failure and cancellation classes come from the observer setters.
-func adjustTelemetryExecution(
-	execution telemetry.Context,
-	started, ended time.Time,
-) telemetry.Context {
-	if execution.Status != telemetry.ContextPresent {
-		return execution
-	}
-	data, ok := execution.Data.(cli.TelemetryExecution)
-	if !ok {
-		if pointer, pointerOK := execution.Data.(*cli.TelemetryExecution); pointerOK && pointer != nil {
-			data = *pointer
-		} else {
-			data = cli.TelemetryExecution{}
-		}
-	}
-	data.Slow = telemetrySlow(started, ended)
-	execution.Data = data
-	return execution
-}
-
-func telemetrySlow(started, ended time.Time) bool {
-	return !started.IsZero() &&
-		!ended.IsZero() &&
-		ended.Sub(started) >= telemetrySlowThreshold
 }
 
 func (r *Runner) telemetryLocalLog() bool {

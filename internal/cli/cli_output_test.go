@@ -155,10 +155,10 @@ func TestWriteErrorUsesStderr(t *testing.T) {
 	}
 }
 
-// TestInstallRenderObservesWarningsOnce checks that a rendered install result
-// reports its warnings to telemetry exactly once in every rendering, while the
-// machine document and the human rendering keep them unchanged.
-func TestInstallRenderObservesWarningsOnce(t *testing.T) {
+// TestInstallRenderProjectsCounts checks that a rendered install result keeps
+// the observed file and package counts in the execution projection while
+// every warning still reaches each rendering once.
+func TestInstallRenderProjectsCounts(t *testing.T) {
 	renderings := []struct {
 		name string
 		flag string
@@ -179,11 +179,12 @@ func TestInstallRenderObservesWarningsOnce(t *testing.T) {
 			inv.TelemetryObservation = observation
 			output := newInstallOutput(cmd, inv)
 
-			// A warning recorded while the operation ran is observed when it
-			// is recorded, so rendering the result must not count it again.
+			// A warning recorded while the operation ran is reported when it
+			// is recorded, so rendering the result must not repeat it.
 			output.Warn(errors.New("earlier warning"))
 
 			trace := output.Trace()
+			trace.PackageCount(0)
 			trace.PhaseStarted("install")
 			trace.PhaseDone(install.PhaseInfo{Name: "install", Count: 7})
 			trace.ReportPhase(install.PhaseInfo{Name: "files", Count: 3})
@@ -203,20 +204,12 @@ func TestInstallRenderObservesWarningsOnce(t *testing.T) {
 				t.Fatalf("render: %v", err)
 			}
 
-			_, _, scale, warnings := observation.Contexts(time.Now())
-			scaleData, ok := scale.Data.(telemetryScaleData)
-			if !ok {
-				t.Fatalf("scale data = %T, want telemetryScaleData", scale.Data)
+			execution := observedExecution(t, observation)
+			if execution.Files == nil || *execution.Files != 7 {
+				t.Fatalf("files = %v, want 7", execution.Files)
 			}
-			if scaleData.Files == nil || *scaleData.Files != 7 {
-				t.Fatalf("files = %v, want 7", scaleData.Files)
-			}
-			warningData, ok := warnings.Data.(telemetryWarnings)
-			if !ok {
-				t.Fatalf("warnings data = %T, want telemetryWarnings", warnings.Data)
-			}
-			if warningData.Recoverable != 5 {
-				t.Fatalf("recoverable warnings = %d, want 5", warningData.Recoverable)
+			if packages := observation.Packages(); packages == nil || *packages != 0 {
+				t.Fatalf("packages = %v, want an observed zero", packages)
 			}
 
 			if rendering.flag == "" {
@@ -269,30 +262,118 @@ func TestInstallRenderObservesWarningsOnce(t *testing.T) {
 	}
 }
 
-// TestObservePhaseCountAcceptsInstallAndFiles checks both phases whose count
-// is a number of files: a committed installation and an imported workspace.
-func TestObservePhaseCountAcceptsInstallAndFiles(t *testing.T) {
-	tests := []struct {
-		phase string
-		count int
-	}{
-		{phase: "install", count: 7},
-		{phase: "files", count: 3},
+// observedExecution projects the execution context of one observation and
+// returns its bounded data.
+func observedExecution(t *testing.T, observation *TelemetryObservation) TelemetryExecution {
+	t.Helper()
+	context := observation.Execution(time.Now())
+	data, ok := context.Data.(TelemetryExecution)
+	if !ok {
+		t.Fatalf("execution data = %T, want TelemetryExecution", context.Data)
+	}
+	return data
+}
+
+// TestExecutionProjectsObservedCounts checks that files and packages keep a
+// real zero and stay optional when no phase observed them.
+func TestExecutionProjectsObservedCounts(t *testing.T) {
+	t.Run("unobserved", func(t *testing.T) {
+		observation := NewTelemetryObservation()
+		if files := observedExecution(t, observation).Files; files != nil {
+			t.Fatalf("files = %d, want unobserved", *files)
+		}
+		if packages := observation.Packages(); packages != nil {
+			t.Fatalf("packages = %d, want unobserved", *packages)
+		}
+	})
+
+	t.Run("zero", func(t *testing.T) {
+		observation := NewTelemetryObservation()
+		observation.ObserveFiles(0)
+		observation.ObservePackages(0)
+		if files := observedExecution(t, observation).Files; files == nil || *files != 0 {
+			t.Fatalf("files = %v, want an observed zero", files)
+		}
+		if packages := observation.Packages(); packages == nil || *packages != 0 {
+			t.Fatalf("packages = %v, want an observed zero", packages)
+		}
+	})
+}
+
+// TestExecutionPhasesUseCodeNames covers a completed and an unfinished phase
+// whose names are normalized from operation code.
+func TestExecutionPhasesUseCodeNames(t *testing.T) {
+	observation := NewTelemetryObservation()
+	observation.PhaseStart("python environment")
+	observation.PhaseDone("python environment", 2*time.Second)
+	observation.PhaseStart("loader-installer")
+
+	execution := observedExecution(t, observation)
+	phases := map[string]TelemetryPhase{}
+	for _, phase := range execution.Phases {
+		phases[phase.Name] = phase
+	}
+	complete, ok := phases["python_environment"]
+	if !ok || complete.State != "complete" || complete.ElapsedMS != 2000 {
+		t.Fatalf("completed phase = %+v, want python_environment complete at 2000 ms", complete)
+	}
+	active, ok := phases["loader-installer"]
+	if !ok || active.State != "active" {
+		t.Fatalf("active phase = %+v, want loader-installer active", active)
+	}
+	if execution.ActivePhase != "loader-installer" {
+		t.Fatalf("active phase = %q, want loader-installer", execution.ActivePhase)
+	}
+}
+
+// TestExecutionKeepsActivePhaseAtCap checks that a phase past the projection
+// cap never replaces the active entry it could not record.
+func TestExecutionKeepsActivePhaseAtCap(t *testing.T) {
+	observation := NewTelemetryObservation()
+	for index := range maxTelemetryPhaseCount {
+		observation.PhaseStart(fmt.Sprintf("phase-%d", index))
+	}
+	last := fmt.Sprintf("phase-%d", maxTelemetryPhaseCount-1)
+	observation.PhaseStart("overflow")
+
+	execution := observedExecution(t, observation)
+	if execution.ActivePhase != last {
+		t.Fatalf("active phase = %q, want %q", execution.ActivePhase, last)
+	}
+	for _, phase := range execution.Phases {
+		if phase.Name == "overflow" {
+			t.Fatal("an overflow phase was recorded past the cap")
+		}
+	}
+}
+
+// TestExecutionInputWaitIsOptional checks that an unopened form leaves the
+// wait unmeasured, a form that closed immediately reports zero, and the
+// accumulated wait stays inside the wire bound.
+func TestExecutionInputWaitIsOptional(t *testing.T) {
+	observation := NewTelemetryObservation()
+	if wait := observedExecution(t, observation).InputWaitMS; wait != nil {
+		t.Fatalf("input wait = %d ms, want unmeasured", *wait)
 	}
 
-	for _, test := range tests {
-		t.Run(test.phase, func(t *testing.T) {
-			observation := NewTelemetryObservation()
-			observation.ObservePhaseCount(test.phase, test.count, 0)
+	observation.promptTimer.measure(0)
+	if wait := observedExecution(t, observation).InputWaitMS; wait == nil {
+		t.Fatal("input wait is unmeasured, want an observed zero")
+	} else if *wait != 0 {
+		t.Fatalf("input wait = %d ms, want 0", *wait)
+	}
 
-			_, _, scale, _ := observation.Contexts(time.Now())
-			scaleData, ok := scale.Data.(telemetryScaleData)
-			if !ok {
-				t.Fatalf("scale data = %T, want telemetryScaleData", scale.Data)
-			}
-			if scaleData.Files == nil || *scaleData.Files != test.count {
-				t.Fatalf("files = %v, want %d", scaleData.Files, test.count)
-			}
-		})
+	observation.promptTimer.measure(1500 * time.Millisecond)
+	if wait := observedExecution(t, observation).InputWaitMS; wait == nil {
+		t.Fatal("input wait is unmeasured, want 1500 ms")
+	} else if *wait != 1500 {
+		t.Fatalf("input wait = %d ms, want 1500 ms", *wait)
+	}
+
+	observation.promptTimer.measure(8 * 24 * time.Hour)
+	if wait := observedExecution(t, observation).InputWaitMS; wait == nil {
+		t.Fatal("input wait is unmeasured, want the bound")
+	} else if *wait != maxTelemetryElapsedMS {
+		t.Fatalf("input wait = %d ms, want the %d ms bound", *wait, maxTelemetryElapsedMS)
 	}
 }
