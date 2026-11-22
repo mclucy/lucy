@@ -277,6 +277,7 @@ func applyCommit(root, stage string, d *document.Manifest, l *document.Lock, pub
 			next.BootstrapFingerprint = bf
 		} else {
 			next.BootstrapFingerprint = previous.BootstrapFingerprint
+			next.SeedPaths = slices.Clone(previous.SeedPaths)
 		}
 		next.PackageFingerprint = pf
 		if !stagedBootstrap {
@@ -296,6 +297,7 @@ func applyCommit(root, stage string, d *document.Manifest, l *document.Lock, pub
 		// forward untouched. Overlay reconciliation updates only the staged
 		// paths and preserves every other accepted entry.
 		next.BootstrapFingerprint = previous.BootstrapFingerprint
+		next.SeedPaths = slices.Clone(previous.SeedPaths)
 		next.PackageFingerprint = previous.PackageFingerprint
 		next.Entries = slices.Clone(previous.Entries)
 	}
@@ -323,6 +325,7 @@ func applyCommit(root, stage string, d *document.Manifest, l *document.Lock, pub
 	}
 	tracked := trackedPaths(l)
 	staged := make(map[string]commitWrite)
+	var seedPaths []string
 	err := func() error {
 		if metadataOnly {
 			return nil
@@ -361,6 +364,9 @@ func applyCommit(root, stage string, d *document.Manifest, l *document.Lock, pub
 					return fmt.Errorf("tracked file %s collides with managed runtime output", relative)
 				}
 				return nil
+			}
+			if isSeed && stagedBootstrap {
+				seedPaths = append(seedPaths, relative)
 			}
 			if isSeed {
 				if _, err := os.Stat(target); err == nil {
@@ -508,6 +514,10 @@ func applyCommit(root, stage string, d *document.Manifest, l *document.Lock, pub
 	}()
 	if err != nil {
 		return FileChanges{}, err
+	}
+	if reconcile && stagedBootstrap {
+		slices.Sort(seedPaths)
+		next.SeedPaths = seedPaths
 	}
 	var pruneExpected map[string]*workspacewrite.InstallImage
 	if reconcile {

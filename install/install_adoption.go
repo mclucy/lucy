@@ -133,6 +133,7 @@ type adoptionLedger struct {
 	images               map[string]*workspacewrite.InstallImage
 	legacyUnclaimed      map[string]struct{}
 	bootstrapFingerprint string
+	seedPaths            []string
 }
 
 func newAdoptionLedger() *adoptionLedger {
@@ -358,6 +359,7 @@ func (l *adoptionLedger) build(root string, lock *document.Lock) (receipt.Receip
 
 	next := receipt.New()
 	next.BootstrapFingerprint = l.bootstrapFingerprint
+	next.SeedPaths = slices.Clone(l.seedPaths)
 	next.PackageFingerprint = packageFingerprint
 	next.Entries = make([]receipt.Entry, 0, len(names))
 	for _, name := range names {

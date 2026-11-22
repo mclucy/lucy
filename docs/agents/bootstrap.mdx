@@ -39,4 +39,4 @@ An upstream installer that an archive carries is identified from its contents, n
 
 Bootstrap output becomes subject to installation's ownership and commit checks. The bootstrap stage does not by itself publish a workspace receipt or authorize removal of unrelated files. Runtime discovery later recognizes installations from their actual members.
 
-Install treats the runtime as current when the receipt's bootstrap fingerprint equals the lock's recipe key and every runtime file the receipt owns still matches its recorded digest. Seed, discard, and bootstrap-only files need no receipt entry.
+Install treats the runtime as current when the receipt's bootstrap fingerprint equals the lock's recipe key and every runtime file the receipt owns still matches its recorded digest. The receipt also records the seed paths the bootstrap produced: a recorded seed that is absent or not a regular file makes the runtime stale and the next install restages it, while an edited seed stays user-owned. Seed, discard, and bootstrap-only files need no ownership entry.

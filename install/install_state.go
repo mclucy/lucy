@@ -66,6 +66,24 @@ func bootstrapCurrent(root string, l *document.Lock, current *receipt.Receipt, l
 		return false, nil
 	}
 
+	for _, seed := range current.SeedPaths {
+		if err := workspacewrite.SafePath(root, seed); err != nil {
+			return false, err
+		}
+		info, err := os.Lstat(filepath.Join(root, filepath.FromSlash(seed)))
+		switch {
+		case os.IsNotExist(err):
+			logger.Debug("bootstrap not current", "reason", "recorded seed missing", "path", seed)
+			return false, nil
+		case err != nil:
+			return false, err
+		}
+		if !info.Mode().IsRegular() {
+			logger.Debug("bootstrap not current", "reason", "recorded seed is symlink or non-regular", "path", seed)
+			return false, nil
+		}
+	}
+
 	tracked := trackedPaths(l)
 	hasBootstrapEntry := false
 	for _, entry := range current.Entries {

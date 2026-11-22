@@ -7,9 +7,11 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
+	"github.com/mclucy/lucy/bootstrap"
 	"github.com/mclucy/lucy/catalog"
 	"github.com/mclucy/lucy/document"
 	"github.com/mclucy/lucy/internal/workspacewrite"
@@ -175,6 +177,80 @@ func TestApplyCommitRetainedBootstrapDriftAborts(t *testing.T) {
 	}
 	if !bytes.Equal(committed, after) {
 		t.Fatal("aborted commit still rewrote the receipt")
+	}
+}
+
+// A staged seed has no ownership entry, so the receipt must record its path
+// separately. A later install uses that record to notice a deleted seed and
+// restage it without claiming the content.
+func TestApplyCommitRecordsStagedSeedPaths(t *testing.T) {
+	root := t.TempDir()
+	core := []byte("plain server core\n")
+	seed := []byte("-Xmx1G\n")
+	lock := &document.Lock{
+		SchemaVersion:       document.LockSchemaVersion,
+		ManifestFingerprint: transactionTestDigest([]byte("manifest")),
+		Server: document.LockedServer{
+			Directory:   "server",
+			Minecraft:   "1.21.4",
+			Product:     serverpkg.ProductMinecraft,
+			CoreVersion: "1.21.4",
+			Bootstrap:   serverpkg.BootstrapMethodVanilla,
+			Artifact: catalog.Artifact{
+				Provider:  catalog.ProviderMojang,
+				ProjectID: "server",
+				Version:   "1.21.4",
+				Filename:  "server.jar",
+				Hashes:    map[string]string{"sha256": transactionTestDigest(core)},
+			},
+			Java: document.LockedJava{Advisory: 21},
+		},
+		Packages: []document.Package{},
+	}
+	stage := t.TempDir()
+	transactionTestWrite(t, stage, "server/server.jar", core)
+	transactionTestWrite(t, stage, "server/user_jvm_args.txt", seed)
+	if err := os.MkdirAll(filepath.Join(root, ".lucy"), 0o700); err != nil {
+		t.Fatalf("create state directory: %v", err)
+	}
+	stagedOutputs := map[string]bootstrap.Output{
+		"server/server.jar": {
+			Path: "server/server.jar", SHA256: transactionTestDigest(core),
+			Mode: 0o644, Policy: bootstrap.PolicyManaged, Role: bootstrap.RoleRuntime,
+		},
+		"server/user_jvm_args.txt": {
+			Path: "server/user_jvm_args.txt", SHA256: transactionTestDigest(seed),
+			Mode: 0o644, Policy: bootstrap.PolicySeed, Role: bootstrap.RoleRuntime,
+		},
+	}
+	if _, err := applyCommit(
+		root, stage, nil, lock, false, nil, stagedOutputs, nil, true,
+		installCommitReconcile, transactionTestDocuments(t, root), nil,
+	); err != nil {
+		t.Fatalf("commit staged bootstrap: %v", err)
+	}
+	committed, err := receipt.Read(root)
+	if err != nil {
+		t.Fatalf("read committed receipt: %v", err)
+	}
+	if !slices.Equal(committed.SeedPaths, []string{"server/user_jvm_args.txt"}) {
+		t.Fatalf("seed paths = %v, want [server/user_jvm_args.txt]", committed.SeedPaths)
+	}
+	for _, entry := range committed.Entries {
+		if entry.Path == "server/user_jvm_args.txt" {
+			t.Fatal("seed was recorded as an owned entry")
+		}
+	}
+
+	if err := os.Remove(filepath.Join(root, "server", "user_jvm_args.txt")); err != nil {
+		t.Fatalf("remove seed: %v", err)
+	}
+	current, err := bootstrapCurrent(root, lock, committed, nil)
+	if err != nil {
+		t.Fatalf("bootstrap currentness: %v", err)
+	}
+	if current {
+		t.Fatal("receipt with a deleted recorded seed reported current")
 	}
 }
 

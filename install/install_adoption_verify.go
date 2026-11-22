@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/mclucy/lucy/bootstrap"
@@ -108,12 +109,14 @@ func adoptionReceiptChanged(
 ) bool {
 	if !exists || previous == nil {
 		return len(next.Entries) > 0 ||
+			len(next.SeedPaths) > 0 ||
 			next.BootstrapFingerprint != "" ||
 			next.PackageFingerprint != ""
 	}
 	if legacy || previous.LockFingerprint != "" ||
 		previous.Version != next.Version ||
 		previous.BootstrapFingerprint != next.BootstrapFingerprint ||
+		!slices.Equal(previous.SeedPaths, next.SeedPaths) ||
 		previous.PackageFingerprint != next.PackageFingerprint {
 		return true
 	}
