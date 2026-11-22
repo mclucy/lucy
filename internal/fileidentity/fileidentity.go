@@ -165,12 +165,12 @@ func (m *Memo) observe(
 		return Observation{}, errors.Join(readErr, closeErr)
 	}
 	observation.Hashes = hashes
-	if identified {
-		observation.Identity = identity
-		observation.HasIdentity = true
-		if !identity.Racy(time.Now()) {
-			m.store(key, identity, hashes)
-		}
+	// The identity observed before the read describes no particular content
+	// once the read saw a change, so it must not reach a persisted record.
+	observation.Identity = identity
+	observation.HasIdentity = identified
+	if identified && !identity.Racy(time.Now()) {
+		m.store(key, identity, hashes)
 	}
 	return observation, nil
 }
@@ -223,46 +223,81 @@ func cloneHashes(hashes map[string]string) map[string]string {
 	return clone
 }
 
-// digestFile reads file once and returns the SHA-256 and every requested
-// algorithm. The identity is read from the same handle after the bytes, so the
-// digest and the identity describe the same content.
+// digestAttempts bounds how often digestFile rereads a file that changes
+// while it is read.
+const digestAttempts = 3
+
+// digestFile reads file and returns the SHA-256 and every requested
+// algorithm. It reads the identity from the same handle before and after the
+// bytes, and reports an identity only when both reads agree, so a write during
+// the read can never pair an old digest with the identity of new content. A
+// file that keeps changing returns the digest of the last read without an
+// identity.
 func digestFile(
 	file *os.File,
 	algorithms []string,
 ) (map[string]string, Identity, bool, error) {
-	hashers := map[string]hash.Hash{"sha256": sha256.New()}
-	writers := []io.Writer{hashers["sha256"]}
+	factories := map[string]func() hash.Hash{"sha256": sha256.New}
 	for _, algorithm := range algorithms {
-		if _, known := hashers[algorithm]; known {
-			continue
-		}
-		var hasher hash.Hash
 		switch algorithm {
+		case "sha256":
 		case "sha1":
-			hasher = sha1.New()
+			factories[algorithm] = sha1.New
 		case "sha512":
-			hasher = sha512.New()
+			factories[algorithm] = sha512.New
 		case "md5":
-			hasher = md5.New()
+			factories[algorithm] = md5.New
 		default:
 			return nil, Identity{}, false, fmt.Errorf(
 				"unsupported artifact digest %s", algorithm,
 			)
 		}
+	}
+	var hashes map[string]string
+	for attempt := range digestAttempts {
+		if attempt > 0 {
+			if _, err := file.Seek(0, io.SeekStart); err != nil {
+				return nil, Identity{}, false, err
+			}
+		}
+		before, err := file.Stat()
+		if err != nil {
+			return nil, Identity{}, false, err
+		}
+		hashes, err = readDigests(file, factories)
+		if err != nil {
+			return nil, Identity{}, false, err
+		}
+		after, err := file.Stat()
+		if err != nil {
+			return nil, Identity{}, false, err
+		}
+		first, firstOK := identityFromInfo(before)
+		last, lastOK := identityFromInfo(after)
+		if !firstOK || !lastOK {
+			return hashes, Identity{}, false, nil
+		}
+		if first.Same(last) {
+			return hashes, last, true, nil
+		}
+	}
+	return hashes, Identity{}, false, nil
+}
+
+func readDigests(file *os.File, factories map[string]func() hash.Hash) (map[string]string, error) {
+	hashers := make(map[string]hash.Hash, len(factories))
+	writers := make([]io.Writer, 0, len(factories))
+	for algorithm, factory := range factories {
+		hasher := factory()
 		hashers[algorithm] = hasher
 		writers = append(writers, hasher)
 	}
 	if _, err := io.Copy(io.MultiWriter(writers...), file); err != nil {
-		return nil, Identity{}, false, err
-	}
-	info, err := file.Stat()
-	if err != nil {
-		return nil, Identity{}, false, err
+		return nil, err
 	}
 	hashes := make(map[string]string, len(hashers))
 	for algorithm, hasher := range hashers {
 		hashes[algorithm] = hex.EncodeToString(hasher.Sum(nil))
 	}
-	identity, ok := identityFromInfo(info)
-	return hashes, identity, ok, nil
+	return hashes, nil
 }
