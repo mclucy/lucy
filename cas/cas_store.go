@@ -21,6 +21,8 @@ var (
 
 // Store owns one private filesystem root; consumers keep their own metadata.
 // Close it after its writers finish; open readers own their file handles.
+// A Commit orders its writes with fsutil.Barrier, so a power loss before the
+// next device flush leaves an object complete or missing, never partial.
 type Store struct {
 	root      *os.Root
 	directory string

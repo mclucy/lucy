@@ -129,7 +129,7 @@ func Lock(root string, logger *log.Logger) (*fsutil.FileLock, error) {
 	if closeErr != nil {
 		return nil, errors.Join(closeErr, lock.Close())
 	}
-	return lock, nil
+	return lock.FlushOnClose(), nil
 }
 
 // SafePath rejects existing symlink components before root-confined IO.
