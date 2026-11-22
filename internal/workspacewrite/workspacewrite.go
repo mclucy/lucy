@@ -167,14 +167,6 @@ func RemoveRoot(root *os.Root, relative string) error {
 	if err := fsutil.RenameRoot(root, relative, garbage); err != nil {
 		return err
 	}
-	// Windows refuses to delete a read-only file. Elsewhere the unlink needs
-	// no file permission, and a chmod would change every hardlink that shares
-	// the inode, including the store object.
-	if runtime.GOOS == "windows" {
-		if err := root.Chmod(garbage, 0o600); err != nil {
-			return err
-		}
-	}
 	return root.Remove(garbage)
 }
 

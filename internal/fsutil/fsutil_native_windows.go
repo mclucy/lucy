@@ -151,16 +151,6 @@ func finalDosPath(handle windows.Handle) (string, error) {
 	}
 }
 
-// makeStagedRemovable clears the read-only attribute that Windows would
-// otherwise refuse to delete. A staged name never shares a source inode here,
-// because the device check keeps a hardlink from being created.
-func makeStagedRemovable(root *os.Root, name string) error {
-	if err := root.Chmod(name, 0o600); err != nil && !errors.Is(err, os.ErrNotExist) {
-		return err
-	}
-	return nil
-}
-
 func makePrivateDirectories(path string, missing []string) error {
 	for i := len(missing) - 1; i >= 0; i-- {
 		directory := missing[i]

@@ -281,13 +281,8 @@ func publish(
 }
 
 // removeStaged deletes one staged name and tolerates a name that a completed
-// publish already renamed away. On a platform that refuses to delete a
-// read-only file it first makes the staged name writable; such a platform
-// never links a staged name to a source inode, so no shared content changes.
+// publish already renamed away.
 func removeStaged(root *os.Root, stage string) error {
-	if err := makeStagedRemovable(root, stage); err != nil {
-		return fmt.Errorf("make staged file removable: %w", err)
-	}
 	if err := root.Remove(stage); err != nil && !errors.Is(err, os.ErrNotExist) {
 		return fmt.Errorf("remove staged file: %w", err)
 	}

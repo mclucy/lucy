@@ -96,11 +96,6 @@ func syncDir(root *os.Root, dir string) error {
 	return resultErr
 }
 
-// makeStagedRemovable has no work because unlinking ignores the file mode.
-func makeStagedRemovable(root *os.Root, name string) error {
-	return nil
-}
-
 func makePrivateDirectories(path string, missing []string) error {
 	if err := os.MkdirAll(path, 0o700); err != nil {
 		return err

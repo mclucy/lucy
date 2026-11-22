@@ -34,11 +34,6 @@ func unsupportedNative(operation string) error {
 	return fmt.Errorf("%s is not supported on %s", operation, runtime.GOOS)
 }
 
-// makeStagedRemovable has no work because unlinking ignores the file mode.
-func makeStagedRemovable(root *os.Root, name string) error {
-	return nil
-}
-
 func makePrivateDirectories(path string, missing []string) error {
 	return unsupportedNative("durable directory creation")
 }

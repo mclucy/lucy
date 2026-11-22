@@ -9,7 +9,6 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 
 	"github.com/mclucy/lucy/internal/fsutil"
@@ -296,14 +295,6 @@ func (s *Store) removePrivateFile(name string) error {
 	}
 	if !info.Mode().IsRegular() {
 		return fmt.Errorf("refuse non-regular cas cleanup path")
-	}
-	// Windows refuses to delete a read-only file. Elsewhere the unlink needs
-	// no file permission, and a chmod would change every hardlink that an
-	// installation shares with the object.
-	if runtime.GOOS == "windows" {
-		if err := s.root.Chmod(name, 0o600); err != nil {
-			return err
-		}
 	}
 	return s.root.Remove(name)
 }
