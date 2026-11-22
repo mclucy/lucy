@@ -11,6 +11,7 @@ import (
 
 	"github.com/mclucy/lucy/bootstrap"
 	"github.com/mclucy/lucy/document"
+	"github.com/mclucy/lucy/internal/fileidentity"
 	"github.com/mclucy/lucy/internal/workspacewrite"
 	"github.com/mclucy/lucy/log"
 	"github.com/mclucy/lucy/receipt"
@@ -30,6 +31,9 @@ type AdoptedRuntimeFile struct {
 	Path           string
 	Role           discovery.FileRole
 	ExpectedSHA256 string
+	// ExpectedHashes carries every digest discovery computed for the file, so
+	// a later pin match does not read the same bytes for another algorithm.
+	ExpectedHashes map[string]string
 	ExpectedMode   uint32
 }
 
@@ -87,20 +91,26 @@ func AdoptExistingWorkspace(root string, opts AdoptOptions) (warnings []error, r
 	}
 	defer func() { resultErr = errors.Join(resultErr, files.Close()) }()
 	tracked := trackedPaths(opts.Lock)
+	memo := fileidentity.NewMemo()
+	check := currentCheck{
+		memo:     memo,
+		evidence: newCurrentEvidence(root, memo, opts.Logger),
+	}
 
 	current, legacy, ledger, err := loadAdoptionReceipt(
 		files,
 		root,
 		opts.Preconditions,
 		tracked,
+		check,
 	)
 	if err != nil {
 		return nil, err
 	}
-	if err := adoptRuntime(files, root, opts, tracked, ledger); err != nil {
+	if err := adoptRuntime(files, root, opts, tracked, ledger, check); err != nil {
 		return nil, err
 	}
-	if err := adoptPackages(files, root, opts, tracked, ledger); err != nil {
+	if err := adoptPackages(files, root, opts, tracked, ledger, check); err != nil {
 		return nil, err
 	}
 	if err := adoptMCDRWrapper(root, opts, tracked, ledger); err != nil {
@@ -120,7 +130,7 @@ func AdoptExistingWorkspace(root string, opts AdoptOptions) (warnings []error, r
 		next,
 		opts.Preconditions.documents[receipt.Filename].image != nil,
 	)
-	return ledger.warnings, publishAdoption(root, opts, next, publishReceipt, ledger.images, ledger.seedPaths)
+	return ledger.warnings, publishAdoption(root, opts, next, publishReceipt, ledger.images, ledger.seedPaths, check)
 }
 
 // adoptionLedger accumulates ownership claims over the receipt read at
@@ -135,14 +145,16 @@ type adoptionLedger struct {
 	// seedPaths names the seed files the fingerprint requires to exist.
 	seedPaths []string
 	warnings  []error
+	check     currentCheck
 }
 
-func newAdoptionLedger() *adoptionLedger {
+func newAdoptionLedger(check currentCheck) *adoptionLedger {
 	return &adoptionLedger{
 		previous:        make(map[string]receipt.Entry),
 		entries:         make(map[string]receipt.Entry),
 		images:          make(map[string]*workspacewrite.InstallImage),
 		legacyUnclaimed: make(map[string]struct{}),
+		check:           check,
 	}
 }
 
@@ -156,6 +168,7 @@ func loadAdoptionReceipt(
 	root string,
 	documents WorkspaceDocuments,
 	tracked map[string]bool,
+	check currentCheck,
 ) (*receipt.Receipt, bool, *adoptionLedger, error) {
 	captured, ok := documents.documents[receipt.Filename]
 	if !ok {
@@ -180,7 +193,7 @@ func loadAdoptionReceipt(
 		}
 	}
 
-	ledger := newAdoptionLedger()
+	ledger := newAdoptionLedger(check)
 	if current == nil {
 		return nil, false, ledger, nil
 	}
@@ -204,7 +217,7 @@ func loadAdoptionReceipt(
 				cleanPath,
 			)
 		}
-		image, err := verifyExistingBaseline(files, cleanPath, entry)
+		image, err := verifyExistingBaseline(files, cleanPath, entry, check)
 		if err != nil {
 			return nil, false, nil, err
 		}
@@ -338,7 +351,7 @@ func (l *adoptionLedger) rejectUnclaimedLegacy() error {
 // rejection, and schema validation.
 func (l *adoptionLedger) build(root string, lock *document.Lock) (receipt.Receipt, error) {
 	var packageFingerprint string
-	if packageSetObserved(root, lock, l.entries) {
+	if packageSetObserved(root, lock, l.entries, l.check) {
 		fingerprint, err := receipt.PackageFingerprint(lock)
 		if err != nil {
 			return receipt.Receipt{}, err

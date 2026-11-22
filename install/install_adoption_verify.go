@@ -6,8 +6,11 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync"
+	"sync/atomic"
 
 	"github.com/mclucy/lucy/document"
+	"github.com/mclucy/lucy/internal/fileidentity"
 	"github.com/mclucy/lucy/internal/workspacewrite"
 	"github.com/mclucy/lucy/receipt"
 )
@@ -32,6 +35,33 @@ func matchesReceipt(entry receipt.Entry, current *workspacewrite.InstallImage) b
 	)
 }
 
+// packageFilePinned reports whether target still holds every digest the
+// artifact pins. The observation is memoized, so a package whose stat identity
+// this command already hashed is not read again.
+func packageFilePinned(check currentCheck, target string, pins map[string]string) bool {
+	algorithms := make([]string, 0, len(pins))
+	for algorithm, digest := range pins {
+		if algorithm == "sha256" || strings.TrimSpace(digest) == "" {
+			continue
+		}
+		algorithms = append(algorithms, algorithm)
+	}
+	observation, err := check.memo.ObservePath(target, algorithms)
+	if err != nil || !observation.Exists || !observation.Regular {
+		return false
+	}
+	for algorithm, want := range pins {
+		if strings.TrimSpace(want) == "" {
+			continue
+		}
+		got := observation.Hashes[algorithm]
+		if got == "" || !strings.EqualFold(got, want) {
+			return false
+		}
+	}
+	return true
+}
+
 // verifyExistingBaseline checks that a receipt entry still describes the file
 // it protects and returns the observed image. Content and permission changes
 // fail closed; a missing file returns a nil image and keeps its ownership
@@ -40,8 +70,9 @@ func verifyExistingBaseline(
 	files *os.Root,
 	cleanPath string,
 	entry receipt.Entry,
+	check currentCheck,
 ) (*workspacewrite.InstallImage, error) {
-	current, err := workspacewrite.ObserveInstallImage(files, cleanPath)
+	current, err := workspacewrite.ObserveInstallImageCached(files, cleanPath, check.memo)
 	if err != nil {
 		return nil, fmt.Errorf("inspect existing managed path %s: %w", cleanPath, err)
 	}
@@ -114,6 +145,7 @@ func packageSetObserved(
 	root string,
 	lock *document.Lock,
 	entries map[string]receipt.Entry,
+	check currentCheck,
 ) bool {
 	if len(lock.Packages) == 0 && lock.MCDR != nil {
 		return false
@@ -142,7 +174,7 @@ func packageSetObserved(
 			return false
 		}
 		target := filepath.Join(root, filepath.FromSlash(cleanDest))
-		if _, err := DigestFile(target, pkg.Artifact.Hashes); err != nil {
+		if !packageFilePinned(check, target, pkg.Artifact.Hashes) {
 			return false
 		}
 		claimed[cleanDest] = struct{}{}
@@ -171,40 +203,96 @@ func verifyAdoptedOutputs(
 	files *os.Root,
 	root string,
 	expected map[string]*workspacewrite.InstallImage,
+	check currentCheck,
 ) error {
-	for path, want := range expected {
-		if err := workspacewrite.SafePath(root, path); err != nil {
-			return err
-		}
-		current, err := workspacewrite.ObserveInstallImage(files, path)
-		if err != nil {
-			return fmt.Errorf("inspect adopted output %s before publication: %w", path, err)
-		}
-		switch {
-		case want == nil:
-			if current != nil {
-				return fmt.Errorf(
-					"adopted output %s appeared before publication",
-					path,
-				)
+	paths := make([]string, 0, len(expected))
+	for path := range expected {
+		paths = append(paths, path)
+	}
+	slices.Sort(paths)
+	type verifiedOutput struct {
+		image       *workspacewrite.InstallImage
+		identity    fileidentity.Identity
+		hasIdentity bool
+		err         error
+	}
+	results := make([]verifiedOutput, len(paths))
+	workers := min(len(paths), installFileWorkers)
+	var next atomic.Int64
+	var group sync.WaitGroup
+	for range workers {
+		group.Go(func() {
+			for {
+				index := int(next.Add(1)) - 1
+				if index >= len(paths) {
+					return
+				}
+				path := paths[index]
+				want := expected[path]
+				if err := workspacewrite.SafePath(root, path); err != nil {
+					results[index].err = err
+					return
+				}
+				current, identity, hasIdentity, err := workspacewrite.ObserveInstallImageEvidence(files, path, check.memo)
+				if err != nil {
+					results[index].err = fmt.Errorf(
+						"inspect adopted output %s before publication: %w",
+						path,
+						err,
+					)
+					return
+				}
+				switch {
+				case want == nil:
+					if current != nil {
+						results[index].err = fmt.Errorf(
+							"adopted output %s appeared before publication",
+							path,
+						)
+						return
+					}
+				case current == nil:
+					results[index].err = fmt.Errorf(
+						"adopted output %s disappeared before publication",
+						path,
+					)
+					return
+				case workspacewrite.InstallImagesEqual(current, want):
+					results[index] = verifiedOutput{
+						image:       current,
+						identity:    identity,
+						hasIdentity: hasIdentity,
+					}
+				case !strings.EqualFold(current.SHA256, want.SHA256):
+					results[index].err = fmt.Errorf(
+						"adopted output %s changed before publication",
+						path,
+					)
+					return
+				default:
+					results[index].err = fmt.Errorf(
+						"adopted output %s changed mode before publication",
+						path,
+					)
+					return
+				}
 			}
-		case current == nil:
-			return fmt.Errorf(
-				"adopted output %s disappeared before publication",
-				path,
-			)
-		case workspacewrite.InstallImagesEqual(current, want):
-		case !strings.EqualFold(current.SHA256, want.SHA256):
-			return fmt.Errorf(
-				"adopted output %s changed before publication",
-				path,
-			)
-		default:
-			return fmt.Errorf(
-				"adopted output %s changed mode before publication",
-				path,
-			)
+		})
+	}
+	group.Wait()
+	for index, path := range paths {
+		result := results[index]
+		if result.err != nil {
+			return result.err
 		}
+		if result.image == nil {
+			continue
+		}
+		check.evidence.observe(
+			receipt.Entry{Path: path, SHA256: result.image.SHA256},
+			result.identity,
+			result.hasIdentity,
+		)
 	}
 	return nil
 }

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 
 	"github.com/mclucy/lucy/artifactstore"
 	"github.com/mclucy/lucy/bootstrap"
@@ -97,6 +98,29 @@ func writableMode(mode uint32) uint32 {
 		return 0
 	}
 	return mode | 0o200
+}
+
+// snapshotOutputs converts a stored snapshot into the runtime image its
+// entries describe, sorted by workspace path. It reads metadata only, so a
+// caller that needs the image to compare workspace files does not restore the
+// bytes.
+func snapshotOutputs(snap snapshot.Snapshot, server document.LockedServer) []bootstrap.Output {
+	outputs := make([]bootstrap.Output, 0, len(snap.Entries))
+	for _, entry := range snap.Entries {
+		path := filepath.ToSlash(filepath.Join(server.Directory, filepath.FromSlash(entry.Path)))
+		outputs = append(outputs, bootstrap.Output{
+			Path:       path,
+			ServerPath: entry.Path,
+			SHA256:     entry.SHA256,
+			Mode:       entry.Mode,
+			Policy:     bootstrap.OutputPolicy(entry.Policy),
+			Role:       bootstrap.MaterialRole(entry.Role),
+		})
+	}
+	slices.SortFunc(outputs, func(a, b bootstrap.Output) int {
+		return cmp.Compare(a.Path, b.Path)
+	})
+	return outputs
 }
 
 // openSnapshotStore opens the artifact store that owns the snapshot index.

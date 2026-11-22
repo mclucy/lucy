@@ -3,6 +3,7 @@ package install
 import (
 	"context"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -15,9 +16,9 @@ const installFileWorkers = 4
 
 // stagePackages validates ownership and destinations before acquiring or
 // copying independent package artifacts.
-func (s *Service) stagePackages(root, stage string, resolved *document.Lock, store *downloadStore, stagedOutputs map[string]bootstrap.Output, opts Options) (map[string]bool, error) {
+func (s *Service) stagePackages(root, stage string, resolved *document.Lock, store *downloadStore, stagedOutputs map[string]bootstrap.Output, opts Options) (map[string]bool, map[string]string, error) {
 	if err := rejectSharedDestinations(root, resolved, stagedOutputs); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	type job struct {
 		pkg         *document.Package
@@ -32,7 +33,7 @@ func (s *Service) stagePackages(root, stage string, resolved *document.Lock, sto
 		}
 		destination, err := resolved.PackageDestination(p)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		if opts.Overwrite {
 			overwritePaths[filepath.ToSlash(destination)] = true
@@ -40,12 +41,13 @@ func (s *Service) stagePackages(root, stage string, resolved *document.Lock, sto
 		jobs = append(jobs, job{pkg: p, destination: destination})
 	}
 	if len(jobs) == 0 {
-		return overwritePaths, nil
+		return overwritePaths, nil, nil
 	}
 	const phase = "package staging"
 	started := time.Now()
 	opts.Trace.phaseStarted(phase)
 	completed := 0
+	hashes := make([]string, len(jobs))
 	err := runStagingJobs(store.ctx, len(jobs), store.injected != nil, func(i int) error {
 		j := jobs[i]
 		source, err := store.materializeFor(&j.pkg.Artifact, filepath.ToSlash(j.destination))
@@ -53,6 +55,7 @@ func (s *Service) stagePackages(root, stage string, resolved *document.Lock, sto
 			return err
 		}
 		j.pkg.Artifact.Hashes = source.Hashes
+		hashes[i] = strings.ToLower(source.Hashes["sha256"])
 		if err := fsutil.Materialize(source.Path, filepath.Join(stage, j.destination), s.link.Perm(0o644), s.link); err != nil {
 			return err
 		}
@@ -63,11 +66,19 @@ func (s *Service) stagePackages(root, stage string, resolved *document.Lock, sto
 		return nil
 	})
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	opts.Trace.phaseDone(PhaseInfo{Name: phase, Elapsed: time.Since(started), Count: len(jobs), Total: len(jobs)})
 	s.logger.Debug("packages staged", "active", len(jobs), "recorded", len(resolved.Packages))
-	return overwritePaths, nil
+	stagedHashes := make(map[string]string, len(jobs))
+	for i, j := range jobs {
+		if hashes[i] == "" {
+			continue
+		}
+		key := filepath.ToSlash(filepath.Clean(filepath.FromSlash(j.destination)))
+		stagedHashes[key] = hashes[i]
+	}
+	return overwritePaths, stagedHashes, nil
 }
 
 // runStagingJobs runs each job with at most installFileWorkers in flight, or

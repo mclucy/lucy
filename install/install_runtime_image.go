@@ -10,6 +10,7 @@ import (
 	"slices"
 
 	"github.com/mclucy/lucy/bootstrap"
+	"github.com/mclucy/lucy/bootstrap/snapshot"
 	"github.com/mclucy/lucy/document"
 )
 
@@ -18,13 +19,35 @@ import (
 // only the files the lock pins by digest.
 var ErrRuntimeImageUnavailable = errors.New("runtime image unavailable")
 
+// storedRuntimeImage returns the runtime image the stored snapshot of the
+// recipe describes, without materializing it.
+func storedRuntimeImage(
+	ctx context.Context,
+	locked *document.Lock,
+) ([]bootstrap.Output, bool) {
+	key, err := snapshot.Key(locked.Server)
+	if err != nil {
+		return nil, false
+	}
+	store, err := openSnapshotStore()
+	if err != nil {
+		return nil, false
+	}
+	defer store.Close()
+	snap, ok, err := store.LookupSnapshot(ctx, key)
+	if err != nil || !ok {
+		return nil, false
+	}
+	return snapshotOutputs(snap, locked.Server), true
+}
+
 // RuntimeImage returns the runtime image of a locked server: the files its
 // bootstrap method produces, with their digests, modes, policies, and roles,
-// sorted by path. It restores the stored snapshot of the recipe, or builds the
-// image in a private stage under root from artifacts the store already holds
-// and stores the result. It never writes the server directory and never uses
-// the network; a missing artifact or Java runtime returns an error that wraps
-// ErrRuntimeImageUnavailable.
+// sorted by path. It reads that image from the stored snapshot of the recipe,
+// or builds it in a private stage under root from artifacts the store already
+// holds and stores the result. It never writes the server directory and never
+// uses the network; a missing artifact or Java runtime returns an error that
+// wraps ErrRuntimeImageUnavailable.
 //
 // The caller must hold the workspace writer lock. Stage-only material is
 // absent from the result.
@@ -42,6 +65,12 @@ func (s *Service) RuntimeImage(
 	}
 	if err := document.SafeRelativePath(locked.Server.Directory); err != nil {
 		return nil, err
+	}
+	// A stored snapshot already names every runtime file's digest and mode.
+	// Adoption compares the workspace against those values, so restoring the
+	// bytes here would only repeat a read the comparison performs.
+	if image, ok := storedRuntimeImage(ctx, locked); ok {
+		return image, nil
 	}
 
 	opts.ProvisionJava = nil

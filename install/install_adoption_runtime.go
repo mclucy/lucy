@@ -21,6 +21,7 @@ func adoptRuntime(
 	opts AdoptOptions,
 	tracked map[string]bool,
 	ledger *adoptionLedger,
+	check currentCheck,
 ) error {
 	if opts.Lock.Server.Bootstrap == "" && opts.Lock.Server.Product == "" {
 		return nil
@@ -47,7 +48,7 @@ func adoptRuntime(
 			Policy: string(out.Policy),
 		})
 	}
-	compared, err := snapshot.Compare(root, entries)
+	compared, err := snapshot.CompareCached(root, entries, check.memo)
 	if err != nil {
 		return fmt.Errorf("compare existing runtime with the locked image: %w", err)
 	}

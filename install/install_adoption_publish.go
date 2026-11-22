@@ -19,6 +19,7 @@ func publishAdoption(
 	publishReceipt bool,
 	expected map[string]*workspacewrite.InstallImage,
 	seeds []string,
+	check currentCheck,
 ) error {
 	manifestSnapshot := opts.ManifestSnapshot
 	if opts.Manifest != nil && manifestSnapshot == nil {
@@ -59,11 +60,15 @@ func publishAdoption(
 			files *os.Root,
 			_ []workspacewrite.InstallJournalEntry,
 		) error {
-			if err := verifyAdoptedOutputs(files, root, expected); err != nil {
+			if err := verifyAdoptedOutputs(files, root, expected, check); err != nil {
 				return err
 			}
 			return verifyAdoptedSeeds(files, seeds)
 		},
-	}, opts.Logger)
-	return err
+	}, check, opts.Logger)
+	if err != nil {
+		return err
+	}
+	check.evidence.write(root, next.Entries, opts.Logger)
+	return nil
 }

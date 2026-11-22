@@ -22,6 +22,7 @@ func adoptPackages(
 	opts AdoptOptions,
 	tracked map[string]bool,
 	ledger *adoptionLedger,
+	check currentCheck,
 ) error {
 	for _, pkg := range opts.Packages {
 		if pkg.Path == "" {
@@ -41,7 +42,7 @@ func adoptPackages(
 		if tracked[strings.ToLower(cleanRel)] || installPathReserved(root, cleanRel) {
 			continue
 		}
-		image, err := workspacewrite.ObserveInstallImage(files, cleanRel)
+		image, err := workspacewrite.ObserveInstallImageCached(files, cleanRel, check.memo)
 		if err != nil || image == nil {
 			if pkg.ExpectedSHA256 != "" {
 				if err != nil {

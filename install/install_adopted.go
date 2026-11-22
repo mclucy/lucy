@@ -206,10 +206,16 @@ func newLocalRuntimeSource(root string, files []AdoptedRuntimeFile) *localRuntim
 			path = filepath.Join(root, filepath.FromSlash(path))
 		}
 		if relative, ok := workspaceRelative(root, path); ok && digest != "" {
+			digests := map[string]string{"sha256": digest}
+			for algorithm, value := range observed.ExpectedHashes {
+				if value = strings.ToLower(strings.TrimSpace(value)); value != "" {
+					digests[algorithm] = value
+				}
+			}
 			source.files = append(source.files, &localRuntimeFile{
 				path:    path,
 				rel:     relative,
-				digests: map[string]string{"sha256": digest},
+				digests: digests,
 			})
 		}
 	}

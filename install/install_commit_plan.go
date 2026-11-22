@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/mclucy/lucy/document"
+	"github.com/mclucy/lucy/internal/fileidentity"
 	"github.com/mclucy/lucy/internal/workspacewrite"
 	"github.com/mclucy/lucy/receipt"
 )
@@ -202,6 +203,7 @@ func (d WorkspaceDocuments) documentWrites(
 func (d WorkspaceDocuments) verify(
 	files *os.Root,
 	writes []commitWrite,
+	memo *fileidentity.Memo,
 ) error {
 	if d.documents == nil {
 		return nil
@@ -218,7 +220,7 @@ func (d WorkspaceDocuments) verify(
 				break
 			}
 		}
-		current, err := workspacewrite.ObserveInstallImage(files, name)
+		current, err := workspacewrite.ObserveInstallImageCached(files, name, memo)
 		if err != nil {
 			return err
 		}

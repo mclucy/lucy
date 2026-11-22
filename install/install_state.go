@@ -3,48 +3,83 @@ package install
 import (
 	"context"
 	"errors"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
 
 	"github.com/mclucy/lucy/document"
+	"github.com/mclucy/lucy/internal/fileidentity"
 	"github.com/mclucy/lucy/internal/workspacewrite"
 	"github.com/mclucy/lucy/log"
 	"github.com/mclucy/lucy/receipt"
 )
 
+// currentCheck carries the digest evidence of one command. memo avoids a
+// second read of a file this command already hashed, and evidence answers a
+// check from stat identities an earlier command recorded.
+type currentCheck struct {
+	memo     *fileidentity.Memo
+	evidence *currentEvidence
+}
+
 // installationCurrent reports whether the receipt answers the lock and both
-// bootstrap and package convergence are current.
-func installationCurrent(ctx context.Context, root string, l *document.Lock, logger *log.Logger) (bootstrapOK, packagesOK bool, err error) {
+// bootstrap and package convergence are current. It returns the evidence it
+// collected so a caller can record the identities this command proved.
+func installationCurrent(
+	ctx context.Context,
+	root string,
+	l *document.Lock,
+	memo *fileidentity.Memo,
+	logger *log.Logger,
+) (bootstrapOK, packagesOK bool, evidence *currentEvidence, err error) {
+	evidence = newCurrentEvidence(root, memo, logger)
+	check := currentCheck{memo: memo, evidence: evidence}
 	current, err := receipt.Read(root)
 	if errors.Is(err, os.ErrNotExist) {
 		logger.Debug("installation not current", "reason", "no install receipt")
-		return false, false, nil
+		return false, false, evidence, nil
 	}
 	if err != nil {
-		return false, false, err
+		return false, false, evidence, err
 	}
-	bCurrent, err := bootstrapCurrent(root, l, current, logger)
+	bCurrent, err := bootstrapCurrentWithCheck(root, l, current, check, logger)
 	if err != nil || !bCurrent {
-		return false, false, err
+		return false, false, evidence, err
 	}
-	pCurrent, err := packagesCurrent(ctx, root, l, current, logger)
+	pCurrent, err := packagesCurrent(ctx, root, l, current, check, logger)
 	if err != nil || !pCurrent {
-		return true, false, err
+		return true, false, evidence, err
 	}
 	logger.Debug(
 		"installation current",
 		"reason", "receipt satisfies bootstrap contract and package set",
 		"receipt", filepath.Join(root, receipt.Filename),
 	)
-	return true, true, nil
+	evidence.write(root, current.Entries, logger)
+	return true, true, evidence, nil
 }
 
 // bootstrapCurrent reports whether the receipt answers the resolved bootstrap
 // plan: its bootstrap fingerprint matches the lock and every recorded bootstrap
 // output still matches its accepted baseline.
-func bootstrapCurrent(root string, l *document.Lock, current *receipt.Receipt, logger *log.Logger) (bool, error) {
+func bootstrapCurrent(
+	root string,
+	l *document.Lock,
+	current *receipt.Receipt,
+	logger *log.Logger,
+) (bool, error) {
+	return bootstrapCurrentWithCheck(root, l, current, currentCheck{}, logger)
+}
+
+func bootstrapCurrentWithCheck(
+	root string,
+	l *document.Lock,
+	current *receipt.Receipt,
+	check currentCheck,
+	logger *log.Logger,
+) (bool, error) {
 	if current == nil {
 		return false, nil
 	}
@@ -85,6 +120,7 @@ func bootstrapCurrent(root string, l *document.Lock, current *receipt.Receipt, l
 	}
 
 	tracked := trackedPaths(l)
+	targets := make([]receipt.Entry, 0, len(current.Entries))
 	hasBootstrapEntry := false
 	for _, entry := range current.Entries {
 		if entry.Origin != receipt.OriginBootstrap {
@@ -94,21 +130,32 @@ func bootstrapCurrent(root string, l *document.Lock, current *receipt.Receipt, l
 		if tracked[strings.ToLower(entry.Path)] {
 			continue
 		}
-		entryCurrent, err := receiptEntryCurrent(root, entry, "bootstrap", logger)
-		if err != nil || !entryCurrent {
-			return false, err
-		}
+		targets = append(targets, entry)
 	}
 	if l.Server.Product != "" && !hasBootstrapEntry {
 		logger.Debug("bootstrap not current", "reason", "no bootstrap entries recorded in receipt")
 		return false, nil
 	}
-	return true, nil
+	currentFiles, err := checkFilesInOrder(
+		context.Background(),
+		len(targets),
+		func(i int) (bool, error) {
+			return receiptEntryCurrent(root, targets[i], "bootstrap", check, logger)
+		},
+	)
+	return currentFiles, err
 }
 
 // packagesCurrent reports whether recorded package entries match the lock's
 // package pins and every package file exists with its expected digest.
-func packagesCurrent(ctx context.Context, root string, l *document.Lock, current *receipt.Receipt, logger *log.Logger) (bool, error) {
+func packagesCurrent(
+	ctx context.Context,
+	root string,
+	l *document.Lock,
+	current *receipt.Receipt,
+	check currentCheck,
+	logger *log.Logger,
+) (bool, error) {
 	if current == nil {
 		return false, nil
 	}
@@ -133,7 +180,7 @@ func packagesCurrent(ctx context.Context, root string, l *document.Lock, current
 		}
 	}
 
-	check := func(i int) (bool, error) {
+	verify := func(i int) (bool, error) {
 		p := &l.Packages[i]
 		if !p.Enabled() {
 			return true, nil
@@ -152,14 +199,19 @@ func packagesCurrent(ctx context.Context, root string, l *document.Lock, current
 			logger.Debug("packages not current", "reason", "package identity mismatch", "path", cleanDest)
 			return false, nil
 		}
-		return receiptEntryCurrent(root, entry, "packages", logger)
+		return receiptEntryCurrent(root, entry, "packages", check, logger)
 	}
-	return checkPackageFiles(ctx, len(l.Packages), check)
+	return checkFilesInOrder(ctx, len(l.Packages), verify)
 }
 
-// Each worker verifies one file at a time. Stop assigning work on a stale
-// file but finish earlier checks: the first result in lock order decides.
-func checkPackageFiles(ctx context.Context, count int, check func(int) (bool, error)) (bool, error) {
+// checkFilesInOrder verifies one file at a time on a bounded pool. Stop
+// assigning work on a stale file but finish earlier checks: the first result
+// in receipt order decides.
+func checkFilesInOrder(
+	ctx context.Context,
+	count int,
+	check func(int) (bool, error),
+) (bool, error) {
 	var mu sync.Mutex
 	var wg sync.WaitGroup
 	next, firstFailure := 0, count
@@ -196,11 +248,13 @@ func checkPackageFiles(ctx context.Context, count int, check func(int) (bool, er
 
 // receiptEntryCurrent reports whether the file a receipt entry protects still
 // exists as a regular file with its accepted digest and mode. kind names the
-// entry class in diagnostics.
+// entry class in diagnostics. A stat identity the sidecar recorded for the
+// accepted digest answers the check without reading the file.
 func receiptEntryCurrent(
 	root string,
 	entry receipt.Entry,
 	kind string,
+	check currentCheck,
 	logger *log.Logger,
 ) (bool, error) {
 	if err := workspacewrite.SafePath(root, entry.Path); err != nil {
@@ -209,7 +263,7 @@ func receiptEntryCurrent(
 	target := filepath.Join(root, filepath.FromSlash(entry.Path))
 	info, err := os.Lstat(target)
 	switch {
-	case os.IsNotExist(err):
+	case errors.Is(err, fs.ErrNotExist):
 		logger.Debug(kind+" not current", "reason", "managed output missing", "path", entry.Path)
 		return false, nil
 	case err != nil:
@@ -219,22 +273,27 @@ func receiptEntryCurrent(
 		logger.Debug(kind+" not current", "reason", "managed output is symlink or non-regular", "path", entry.Path)
 		return false, nil
 	}
-	actual, err := DigestFile(target, nil)
+	if check.evidence.trusted(entry, info) {
+		return true, nil
+	}
+	observation, err := check.memo.ObservePath(target, nil)
 	if err != nil {
 		return false, err
 	}
-	if !strings.EqualFold(actual["sha256"], entry.SHA256) {
-		logger.Debug(kind+" not current", "reason", "managed output modified", "path", entry.Path, "baseline", entry.SHA256, "actual", actual["sha256"])
+	actual := observation.Hashes["sha256"]
+	if !strings.EqualFold(actual, entry.SHA256) {
+		logger.Debug(kind+" not current", "reason", "managed output modified", "path", entry.Path, "baseline", entry.SHA256, "actual", actual)
 		return false, nil
 	}
 	if entry.Mode != 0 {
-		actualMode := workspacewrite.EffectiveInstallMode(info.Mode().Perm())
+		actualMode := workspacewrite.EffectiveInstallMode(observation.Mode.Perm())
 		expectedMode := workspacewrite.EffectiveInstallMode(os.FileMode(entry.Mode))
 		if actualMode != expectedMode {
 			logger.Debug(kind+" not current", "reason", "managed output mode modified", "path", entry.Path, "expected", expectedMode, "actual", actualMode)
 			return false, nil
 		}
 	}
+	check.evidence.observe(entry, observation.Identity, observation.HasIdentity)
 	return true, nil
 }
 
