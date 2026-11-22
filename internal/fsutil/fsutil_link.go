@@ -37,9 +37,10 @@ func ParseLinkMode(value string) (LinkMode, error) {
 
 // Perm reports the permission set a destination requests under this mode. A
 // hardlink shares the store inode, so the destination is read-only; a clone or
-// a copy keeps the requested permissions.
+// a copy keeps the requested permissions. A platform that cannot link files
+// deploys a copy, so it keeps those permissions too.
 func (m LinkMode) Perm(requested os.FileMode) os.FileMode {
-	if m == LinkHardlink {
+	if m == LinkHardlink && hardlinkSharesInode {
 		return requested &^ 0o222
 	}
 	return requested

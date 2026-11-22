@@ -35,7 +35,7 @@ type CurseForge struct {
 }
 
 type Store struct {
-	Link *string `yaml:"link,omitempty" json:"link" description:"How installed files share content with the artifact store: clone (copy-on-write; a plain copy where the filesystem cannot clone) or hardlink (installed files share the stored copy and are read-only; a server that must rewrite a runtime file fails). An empty value selects clone." example:"hardlink"`
+	Link *string `yaml:"link,omitempty" json:"link" description:"How installed files share content with the artifact store: clone (copy-on-write; a plain copy where the filesystem cannot clone) or hardlink (installed files share the stored copy and are read-only; a server that must rewrite a runtime file fails). An empty value selects clone. Windows installs plain copies with write bits because it cannot share a stored inode." example:"hardlink"`
 }
 
 func decodeValues(reader io.Reader) (*Values, error) {

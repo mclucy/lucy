@@ -27,7 +27,7 @@ Lucy uses the configured runtime even when it falls short of the server's requir
 
 `store.link` selects how files installed from the artifact store share content with it.
 
-`clone` (the default) installs copy-on-write clones where the filesystem supports it, such as APFS, btrfs, and XFS, and plain copies elsewhere. `hardlink` makes installed files hardlinks of the stored copy and removes their write bits, so they are read-only: a server that rewrites one in place fails instead of changing the shared copy. Files whose mode cannot match the stored copy, such as executable launch scripts, are clones. Hardlinks require the store and the server on one filesystem; otherwise lucy clones or copies.
+`clone` (the default) installs copy-on-write clones where the filesystem supports it, such as APFS, btrfs, and XFS, and plain copies elsewhere. `hardlink` makes installed files hardlinks of the stored copy and removes their write bits, so they are read-only: a server that rewrites one in place fails instead of changing the shared copy. Files whose mode cannot match the stored copy, such as executable launch scripts, are clones. Hardlinks require the store and the server on one filesystem; otherwise lucy clones or copies. On Windows, lucy cannot share a stored inode, so `hardlink` installs plain copies and keeps their write bits.
 
 ```bash
 lucy config set store.link hardlink
