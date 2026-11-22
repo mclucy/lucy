@@ -175,6 +175,11 @@ type PackagesRequest struct {
 	// Cache shares artifact analysis across related searches. A nil cache
 	// limits reuse to this invocation.
 	Cache *AnalysisCache
+	// Listings shares candidate listings across related searches. A listing
+	// answers the same builds whatever selectors a search applies, so one
+	// command may reuse it for every resolution of the same project, runtime,
+	// and ecosystem. A nil Listings limits reuse to this invocation.
+	Listings *CandidateCache
 	// Logger records resolution diagnostics. A nil Logger records nothing.
 	Logger *log.Logger
 	Trace  Trace

@@ -42,6 +42,12 @@ Candidate filtering belongs to providers because only they know their own compat
 
 The resolver receives candidate lookup and artifact materialization as injected capability functions, plus an optional cache that reuses artifact analysis across candidates; descriptor reading remains a dedicated archive inspection. The resolver does not select a provider or open the network cache. Installation and operation workflows receive configured capabilities at construction; operation options can supply prefetched artifact bytes without changing catalog selection. They still extract the server core's descriptor modules to supply as target constraints. Installation strictly verifies supplied bytes against the artifact's pinned hashes.
 
+Resolution overlaps upstream work with its sequential search. It starts candidate listings for the manifest roots it already knows and for dependencies a chosen candidate reveals, and it analyzes the top-ranked candidate of each listing in the background. The search consumes listings and analyses in its established order, so the selected graph and every reported error stay the same as a serial search. Work the search never needs is cancelled when resolution ends, and its errors are dropped with it.
+
+A command can share candidate listings between related resolutions, such as the bounded upgrade frontier, because a listing answers the same builds whatever selectors a resolution applies. The artifact analysis cache also accepts the previous lock as a seed: a pinned package whose recorded key and hashes match is reused without materializing or reopening its artifact.
+
+Candidates carry compatibility and dependency evidence; resolution has no generic package-fetch path.
+
 Initialization carries each hash lookup into adoption with its release, file identity, and provider errors. A match supplies provenance, not ownership. Initialization uses accepted local packages as fixed resolver candidates and saves verified package and runtime artifacts to the store, even when it reuses the lock. A reused runtime artifact that lacks a SHA-256 pin gains one only when the adopted bytes match its existing pins. This lets offline replay find the stored object without changing the selected artifact or replacing its original checksums.
 
 ## From pins to installed files

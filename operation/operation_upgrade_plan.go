@@ -32,6 +32,7 @@ func (s *Service) resolveUpgradeOption(
 	combo []int,
 	materialize func(*catalog.Artifact) (artifact.MaterializedFile, error),
 	cache *resolve.AnalysisCache,
+	listings *resolve.CandidateCache,
 	trace *install.Trace,
 ) (UpgradeOption, error) {
 	resolutionManifest, err := cloneManifest(d)
@@ -76,6 +77,7 @@ func (s *Service) resolveUpgradeOption(
 		Materialize:        materialize,
 		ExpandDependencies: true,
 		Cache:              cache,
+		Listings:           listings,
 		Logger:             s.logger,
 		Trace:              upgradeResolveTrace(trace),
 	})

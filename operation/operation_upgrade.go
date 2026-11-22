@@ -143,6 +143,7 @@ func (s *Service) PlanUpgrade(
 		Materialize: opts.Materialize,
 	})
 	cache := resolve.NewAnalysisCache()
+	listings := resolve.NewCandidateCache()
 	maxVersions := opts.MaxVersions
 	if maxVersions <= 0 {
 		maxVersions = defaultUpgradeVersions
@@ -226,6 +227,7 @@ func (s *Service) PlanUpgrade(
 			combo,
 			materialize,
 			cache,
+			listings,
 			opts.Trace,
 		)
 		if err != nil {
