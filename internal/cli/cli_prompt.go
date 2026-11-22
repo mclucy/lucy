@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"os"
+	"sync"
 	"time"
 
 	"charm.land/huh/v2"
@@ -56,23 +57,38 @@ func (g PromptGate) flagsAllow() bool {
 	return true
 }
 
-// RunPrompt runs one form under the invocation observation in ctx. The wait
-// stopwatch covers only the prompt. Abort is recorded only when huh reported
-// it and the surrounding context was not canceled, so a signal or deadline
-// keeps its own cause.
+type promptTimerKey struct{}
+
+// PromptTimer measures time spent executing terminal forms.
+type PromptTimer struct {
+	mu          sync.Mutex
+	elapsed     time.Duration
+	count       int
+	aborted     bool
+	interrupted bool
+}
+
+// WithPromptTimer attaches the invocation's input timer to its form context.
+func WithPromptTimer(ctx context.Context, timer *PromptTimer) context.Context {
+	return context.WithValue(ctx, promptTimerKey{}, timer)
+}
+
+// RunPrompt runs one form and measures its wait when the invocation requests it.
 func RunPrompt(ctx context.Context, form *huh.Form) error {
-	observation := telemetryObservationFromContext(ctx)
-	started := time.Time{}
-	if observation != nil {
-		started = time.Now()
+	timer, _ := ctx.Value(promptTimerKey{}).(*PromptTimer)
+	if timer == nil {
+		return NormalizePromptError(ctx, form.RunWithContext(ctx))
 	}
+	started := time.Now()
 	raw := form.RunWithContext(ctx)
+	elapsed := time.Since(started)
 	contextErr := ctx.Err()
-	aborted := errors.Is(raw, huh.ErrUserAborted) && contextErr == nil
-	interrupted := contextErr != nil
-	if observation != nil {
-		observation.ObservePromptWait(time.Since(started), aborted, interrupted)
-	}
+	timer.mu.Lock()
+	timer.elapsed += elapsed
+	timer.count++
+	timer.aborted = timer.aborted || (contextErr == nil && errors.Is(raw, huh.ErrUserAborted))
+	timer.interrupted = timer.interrupted || contextErr != nil
+	timer.mu.Unlock()
 	return NormalizePromptError(ctx, raw)
 }
 

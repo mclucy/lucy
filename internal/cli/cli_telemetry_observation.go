@@ -137,17 +137,18 @@ type telemetryWarnings struct {
 // goroutine, and every method is safe on a nil receiver so a disabled
 // invocation allocates and records nothing.
 type TelemetryObservation struct {
-	mu       sync.Mutex
-	started  time.Time
-	logger   *log.Logger
-	phases   []TelemetryPhase
-	active   string
-	failure  string
-	cancel   string
-	prompt   TelemetryPrompt
-	scale    telemetryScale
-	warnings int
-	rejects  int
+	mu          sync.Mutex
+	started     time.Time
+	logger      *log.Logger
+	phases      []TelemetryPhase
+	active      string
+	failure     string
+	cancel      string
+	prompt      TelemetryPrompt
+	promptTimer PromptTimer
+	scale       telemetryScale
+	warnings    int
+	rejects     int
 }
 
 // NewTelemetryObservation starts one observation. Callers create it only when
@@ -160,23 +161,12 @@ func NewTelemetryObservation() *TelemetryObservation {
 	}
 }
 
-type telemetryObservationKey struct{}
-
-// WithTelemetryObservation returns a context that carries obs to shared
-// helpers such as RunPrompt. A nil observation leaves ctx unchanged.
+// WithTelemetryObservation attaches the observation's input timer.
 func WithTelemetryObservation(ctx context.Context, obs *TelemetryObservation) context.Context {
 	if obs == nil {
 		return ctx
 	}
-	return context.WithValue(ctx, telemetryObservationKey{}, obs)
-}
-
-func telemetryObservationFromContext(ctx context.Context) *TelemetryObservation {
-	if ctx == nil {
-		return nil
-	}
-	observation, _ := ctx.Value(telemetryObservationKey{}).(*TelemetryObservation)
-	return observation
+	return WithPromptTimer(ctx, &obs.promptTimer)
 }
 
 // AttachLogger lets the observation read bounded wait samples at projection
@@ -380,39 +370,14 @@ func (o *TelemetryObservation) ObserveWarnings(count int) {
 	o.warnings = min(o.warnings+count, maxTelemetryWarnings)
 }
 
-// ObservePromptWait records one prompt interaction and whether the user
-// explicitly aborted it or the surrounding context was canceled while it was
-// open. Callers pass an abort only when the prompt itself reported it and the
-// context was not canceled.
-func (o *TelemetryObservation) ObservePromptWait(elapsed time.Duration, aborted, interrupted bool) {
-	if o == nil {
-		return
-	}
-	o.mu.Lock()
-	defer o.mu.Unlock()
-	if o.prompt.Count < maxTelemetryPromptCount {
-		o.prompt.Count++
-	}
-	o.prompt.WaitMS = min(
-		o.prompt.WaitMS+telemetryMilliseconds(elapsed),
-		maxTelemetryElapsedMS,
-	)
-	if aborted {
-		o.prompt.Aborted = true
-	}
-	if interrupted {
-		o.prompt.Interrupted = true
-	}
-}
-
 // PromptAborted reports whether a prompt was explicitly aborted.
 func (o *TelemetryObservation) PromptAborted() bool {
 	if o == nil {
 		return false
 	}
-	o.mu.Lock()
-	defer o.mu.Unlock()
-	return o.prompt.Aborted
+	o.promptTimer.mu.Lock()
+	defer o.promptTimer.mu.Unlock()
+	return o.promptTimer.aborted
 }
 
 // Contexts projects the execution, prompt, scale, and warning contexts. It is
@@ -459,6 +424,12 @@ func (o *TelemetryObservation) Contexts(ended time.Time) (
 	}
 	promptData := o.prompt
 	o.mu.Unlock()
+	o.promptTimer.mu.Lock()
+	promptData.Count = min(o.promptTimer.count, maxTelemetryPromptCount)
+	promptData.WaitMS = telemetryMilliseconds(o.promptTimer.elapsed)
+	promptData.Aborted = o.promptTimer.aborted
+	promptData.Interrupted = o.promptTimer.interrupted
+	o.promptTimer.mu.Unlock()
 
 	if logger != nil {
 		http, lock := logger.WaitTimings()
