@@ -25,7 +25,7 @@ Tracked files and runtime-owned outputs are different ownership domains. Tracked
 
 ## Runtime ownership and displacement
 
-Runtime outputs are the files a bootstrap method produces: server jars, `libraries/`, `versions/`, `cache/`, launchers, and run scripts. They are owned as the runtime image of the lock's recipe; `--overwrite` governs package destinations, and runtime outputs never need it. At commit, an unowned runtime output with identical bytes is claimed without a rewrite. A runtime output with other bytes is replaced, and its before-image is kept under `.lucy/displaced/<transaction-id>/<path>` with an `index.yaml` that records path, SHA-256, and mode. The journal entry carries the displacement flag. Displacement materializes only after the commit point: recovery before it restores the before-images, and recovery after it completes the cleanup. Lucy never deletes displaced content; the workspace owner does.
+Runtime outputs are the files a bootstrap method produces: server jars, `libraries/`, `versions/`, `cache/`, launchers, and run scripts. They are owned as the runtime image of the lock's recipe; `--overwrite` governs package destinations, and runtime outputs never need it. At commit, an unowned runtime output with identical bytes is claimed without a rewrite. A runtime output with other bytes is replaced, and its before-image is kept under `.lucy/displaced/<transaction-id>/files/<path>` with an `index.yaml` that records path, SHA-256, and mode. The journal entry carries the displacement flag. Displacement materializes only after the commit point: recovery before it restores the before-images, and recovery after it completes the cleanup. Lucy never deletes displaced content; the workspace owner does.
 
 ## Store link mode
 

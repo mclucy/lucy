@@ -33,6 +33,11 @@ const (
 	// DisplacedIndexName names the index inside each installation directory
 	// under DisplacedRoot.
 	DisplacedIndexName = "index.yaml"
+
+	// DisplacedFilesName names the directory that holds the displaced files
+	// inside each installation directory. It keeps payload paths apart from
+	// DisplacedIndexName.
+	DisplacedFilesName = "files"
 )
 
 // InstallImage describes one content state of a path. A nil image means the
@@ -56,8 +61,8 @@ type InstallJournalEntry struct {
 }
 
 // DisplacedFile records one file kept under DisplacedRoot. Path is the
-// workspace path the file occupied and also its path below the installation
-// directory.
+// workspace path the file occupied and also its path below DisplacedFilesName
+// in the installation directory.
 type DisplacedFile struct {
 	Path   string `yaml:"path"`
 	SHA256 string `yaml:"sha256"`
@@ -450,11 +455,7 @@ func preserveDisplacedInstallFiles(files *os.Root, backup string, entries []Inst
 			}
 			directory = filepath.Join(DisplacedRoot, id)
 		}
-		first, _, _ := strings.Cut(entry.Path, "/")
-		if strings.EqualFold(first, DisplacedIndexName) {
-			return fmt.Errorf("displaced path %q conflicts with the displacement index", entry.Path)
-		}
-		target := filepath.Join(directory, filepath.FromSlash(entry.Path))
+		target := filepath.Join(directory, DisplacedFilesName, filepath.FromSlash(entry.Path))
 		if err := preserveDisplacedInstallFile(files, backup, target, entry); err != nil {
 			return fmt.Errorf("displace %s: %w", entry.Path, err)
 		}

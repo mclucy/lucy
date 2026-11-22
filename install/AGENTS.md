@@ -15,7 +15,7 @@ Convergence engine for workspace runtime files, documents, and receipts.
 - Path validation: verifies workspace confinement (`SafePath`), rejects path names that alias the same target filesystem entry, and reserves `.lucy/commit.yaml`, `lucy.yaml`, and `lucy-lock.yaml`.
 - Verification, commit, and rollback:
   - Preserves before-images of replaced or pruned files into a temporary workspace-relative `.lucy/rollback-*` directory before publishing `.lucy/commit.yaml`.
-  - Displacement: a replaced runtime output that Lucy does not own, or owns with a changed digest, keeps its before-image under `.lucy/displaced/<transaction-id>/` with an `index.yaml` (path, sha256, mode). The journal carries the flag; execution happens only after the commit point, recovery before it restores the original files, and Lucy never deletes displaced content.
+  - Displacement: a replaced runtime output that Lucy does not own, or owns with a changed digest, keeps its before-image under `.lucy/displaced/<transaction-id>/files/` with an `index.yaml` beside it (path, sha256, mode). The journal carries the flag; execution happens only after the commit point, recovery before it restores the original files, and Lucy never deletes displaced content.
   - Accepted entries already absent at planning stay preconditions through journal planning and the pre-commit check; a path that reappears fails the install and is never deleted.
   - Atomically writes files, lock, manifest (if publishing), and receipt; then marks the journal `Committed = true`.
   - Point of no return: once marked committed, recovery is cleanup-only. Failures during rollback/journal cleanup or post-commit tracked-file provisioning return `CommittedError`; committed files and documents are never rolled back.
