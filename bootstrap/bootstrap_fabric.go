@@ -12,7 +12,7 @@ import (
 
 // prepareFabric places the Fabric loader on the classpath and generates the
 // launch scripts and shim JAR that start it.
-func prepareFabric(root string, server document.LockedServer, corePath string) error {
+func prepareFabric(root string, server document.LockedServer, corePath string, link fsutil.LinkMode) error {
 	loaderPath, err := fabricLoaderPath(server.CoreVersion.String())
 	if err != nil {
 		return err
@@ -21,7 +21,7 @@ func prepareFabric(root string, server document.LockedServer, corePath string) e
 	if err != nil {
 		return err
 	}
-	if err := fsutil.AtomicCopyFile(corePath, filepath.Join(root, filepath.FromSlash(loaderPath)), 0o644); err != nil {
+	if err := placeArtifact(corePath, filepath.Join(root, filepath.FromSlash(loaderPath)), link); err != nil {
 		return err
 	}
 	classpath := loaderClasspath(loaderPath, placed)

@@ -20,6 +20,7 @@ import (
 	"github.com/mclucy/lucy/document"
 	"github.com/mclucy/lucy/filetrack"
 	"github.com/mclucy/lucy/install"
+	"github.com/mclucy/lucy/internal/fsutil"
 	serverpkg "github.com/mclucy/lucy/server"
 	"github.com/mclucy/lucy/serverregistry"
 	"github.com/mclucy/lucy/upstream"
@@ -107,6 +108,7 @@ func installTestService(t *testing.T) *install.Service {
 		installTestRegistry(t),
 		nil,
 		"",
+		fsutil.LinkClone,
 	)
 }
 
@@ -206,7 +208,7 @@ func TestResolveInstallUsesInjectedSourceAndArtifacts(t *testing.T) {
 		Hashes:    map[string]string{"sha256": installTestDigest(core)},
 	}}
 	tracker := filetrack.NewService(&http.Client{}, nil)
-	service := install.NewService(source, nil, tracker, nil, installTestRegistry(t), nil, "")
+	service := install.NewService(source, nil, tracker, nil, installTestRegistry(t), nil, "", fsutil.LinkClone)
 	materialize := installTestMaterializer(t, map[string][]byte{"server.jar": core})
 	result, err := service.Sync(t.Context(), root, manifest, nil, install.Options{Materialize: materialize})
 	if err != nil {
@@ -436,6 +438,7 @@ func TestExplicitAdoptionThenInstallReplacesOwnedRuntimeAndPreservesAmbientFiles
 		t.Context(), root, adopted.Server,
 		filepath.Join(sources, "loader.jar"),
 		[]string{filepath.Join(sources, "server.jar")},
+		fsutil.LinkClone,
 		"", nil, bootstrap.Progress{},
 	); err != nil {
 		t.Fatalf("prepare complete Fabric fixture: %v", err)

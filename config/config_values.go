@@ -19,6 +19,7 @@ type Values struct {
 	Java       Java       `yaml:"java,omitempty" json:"java" description:"Java runtime selection."`
 	GitHub     GitHub     `yaml:"github,omitempty" json:"github" description:"GitHub access."`
 	CurseForge CurseForge `yaml:"curseforge,omitempty" json:"curseforge" description:"CurseForge access."`
+	Store      Store      `yaml:"store,omitempty" json:"store" description:"Artifact store use."`
 }
 
 type Java struct {
@@ -31,6 +32,10 @@ type GitHub struct {
 
 type CurseForge struct {
 	APIKey *string `yaml:"api_key,omitempty" json:"api_key" secret:"true" description:"CurseForge API key. An empty value uses the key built into this Lucy build." example:"$2a$10$example"`
+}
+
+type Store struct {
+	Link *string `yaml:"link,omitempty" json:"link" description:"How installed files share content with the artifact store: clone (copy-on-write; a plain copy where the filesystem cannot clone) or hardlink (installed files share the stored copy and are read-only; a server that must rewrite a runtime file fails). An empty value selects clone." example:"hardlink"`
 }
 
 func decodeValues(reader io.Reader) (*Values, error) {

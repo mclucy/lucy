@@ -18,11 +18,22 @@ import (
 
 // PrepareLocked builds the server tree of a locked server in stage. inputs
 // holds the local file of each locked input at the same index; an embedded
-// input has an empty entry because it is extracted from the installer. java
-// is the Java executable for the bootstrap steps that run Java; it may be
+// input has an empty entry because it is extracted from the installer. link
+// selects how the core and the inputs share content with their store copies.
+// java is the Java executable for the bootstrap steps that run Java; it may be
 // empty when no runtime is installed, and only those steps fail then.
 // progress reports bounded stages such as the Forge processor count.
-func PrepareLocked(ctx context.Context, stage string, server document.LockedServer, corePath string, inputs []string, java string, output io.Writer, progress Progress) error {
+func PrepareLocked(
+	ctx context.Context,
+	stage string,
+	server document.LockedServer,
+	corePath string,
+	inputs []string,
+	link fsutil.LinkMode,
+	java string,
+	output io.Writer,
+	progress Progress,
+) error {
 	for _, part := range []string{server.Minecraft.String(), server.CoreVersion.String()} {
 		if part == "" || part == "." || part == ".." || strings.ContainsAny(part, "/\\") {
 			return fmt.Errorf("invalid locked server version %q", part)
@@ -64,24 +75,30 @@ func PrepareLocked(ctx context.Context, stage string, server document.LockedServ
 		if inputs[i] == "" {
 			return fmt.Errorf("missing locked bootstrap input %s", input.ProjectID)
 		}
-		if err := fsutil.AtomicCopyFile(inputs[i], dst, 0o644); err != nil {
+		if err := placeArtifact(inputs[i], dst, link); err != nil {
 			return err
 		}
 	}
 	switch server.Bootstrap {
 	case serverpkg.BootstrapMethodVanilla:
-		return preparePlain(root, corePath)
+		return placeArtifact(corePath, filepath.Join(root, "server.jar"), link)
 	case serverpkg.BootstrapMethodPaperclip:
-		return preparePaperclip(ctx, root, corePath, java, output)
+		return preparePaperclip(ctx, root, corePath, link, java, output)
 	case serverpkg.BootstrapMethodFabric:
-		return prepareFabric(root, server, corePath)
+		return prepareFabric(root, server, corePath, link)
 	case serverpkg.BootstrapMethodQuilt:
-		return prepareQuilt(root, server, corePath)
+		return prepareQuilt(root, server, corePath, link)
 	case serverpkg.BootstrapMethodForge:
 		return prepareForgeInstaller(ctx, root, server, corePath, &installer.Reader, java, output, progress)
 	default:
 		return fmt.Errorf("unsupported bootstrap method %q", server.Bootstrap)
 	}
+}
+
+// placeArtifact places a stored artifact in the server tree. Methods only read
+// placed artifacts, so a hardlink mode may share the store inode.
+func placeArtifact(src, dst string, link fsutil.LinkMode) error {
+	return fsutil.Materialize(src, dst, link.Perm(0o644), link)
 }
 
 func extractLockedEntry(z *zip.Reader, name, dst string) error {

@@ -13,6 +13,7 @@ import (
 	"github.com/mclucy/lucy/catalog"
 	"github.com/mclucy/lucy/document"
 	"github.com/mclucy/lucy/filetrack"
+	"github.com/mclucy/lucy/internal/fsutil"
 	"github.com/mclucy/lucy/internal/workspacewrite"
 	"github.com/mclucy/lucy/javaruntime"
 	"github.com/mclucy/lucy/log"
@@ -46,6 +47,7 @@ type Service struct {
 	registry    *serverregistry.Registry
 	logger      *log.Logger
 	githubProxy string
+	link        fsutil.LinkMode
 }
 
 // NewService constructs the installation service from its explicit
@@ -53,7 +55,7 @@ type Service struct {
 // tracked files; python supplies interpreter and process capabilities;
 // registry records successful installations for the artifact store's
 // retention sweep; githubProxy mirrors release asset downloads when
-// non-empty.
+// non-empty; link selects how stored content reaches the workspace.
 func NewService(
 	source Source,
 	network *cache.Client,
@@ -62,6 +64,7 @@ func NewService(
 	registry *serverregistry.Registry,
 	logger *log.Logger,
 	githubProxy string,
+	link fsutil.LinkMode,
 ) *Service {
 	return &Service{
 		source:      source,
@@ -71,6 +74,7 @@ func NewService(
 		registry:    registry,
 		logger:      logger,
 		githubProxy: githubProxy,
+		link:        link,
 	}
 }
 

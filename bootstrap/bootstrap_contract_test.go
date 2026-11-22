@@ -71,9 +71,9 @@ func TestBootstrapArtifactDigests(t *testing.T) {
 			if existing.Current != tc.matches {
 				t.Fatalf("existing runtime current = %t, want %t: %s", existing.Current, tc.matches, existing.Reason)
 			}
-			outputs, stageErr := bootstrap.ValidateStagedOutputs(root, locked)
-			if (stageErr == nil) != tc.matches {
-				t.Fatalf("stage verification error = %v, want match %t", stageErr, tc.matches)
+			outputs, stageErr := bootstrap.StagedImage(root, locked)
+			if stageErr != nil {
+				t.Fatalf("classify staged tree: %v", stageErr)
 			}
 			if tc.matches && (len(existing.Outputs) != 1 || existing.Outputs[0].SHA256 != sha256hex ||
 				len(outputs) != 1 || outputs[0].SHA256 != sha256hex) {

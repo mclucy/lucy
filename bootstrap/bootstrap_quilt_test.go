@@ -16,6 +16,7 @@ import (
 	"github.com/mclucy/lucy/bootstrap"
 	"github.com/mclucy/lucy/catalog"
 	"github.com/mclucy/lucy/document"
+	"github.com/mclucy/lucy/internal/fsutil"
 	"github.com/mclucy/lucy/server"
 	"github.com/mclucy/lucy/version"
 )
@@ -139,9 +140,9 @@ func TestQuiltLauncherGeneration(t *testing.T) {
 		t.Fatalf("Quilt launch handler = %q, want vanilla_handler", launch.Handler)
 	}
 
-	outputs, err := bootstrap.ValidateStagedOutputs(tree.root, tree.locked)
+	outputs, err := bootstrap.StagedImage(tree.root, tree.locked)
 	if err != nil {
-		t.Fatalf("validate generated Quilt tree: %v", err)
+		t.Fatalf("classify generated Quilt tree: %v", err)
 	}
 	for _, rel := range []string{
 		"server.jar",
@@ -312,9 +313,6 @@ func TestQuiltLauncherRejectsMalformedTree(t *testing.T) {
 			if existing.Current || existing.Status != bootstrap.CurrentnessMismatch {
 				t.Fatalf("malformed tree status = %s current=%t, want mismatch: %s", existing.Status, existing.Current, existing.Reason)
 			}
-			if _, err := bootstrap.ValidateStagedOutputs(tree.root, tree.locked); err == nil {
-				t.Fatal("staged validation accepted malformed Quilt launcher tree")
-			}
 		})
 	}
 }
@@ -372,7 +370,7 @@ func newQuiltTestTree(t *testing.T) quiltTestTree {
 	}
 
 	if err := bootstrap.PrepareLocked(
-		t.Context(), stage, locked, corePath, inputFiles, "", io.Discard,
+		t.Context(), stage, locked, corePath, inputFiles, fsutil.LinkClone, "", io.Discard,
 		bootstrap.Progress{},
 	); err != nil {
 		t.Fatalf("prepare Quilt tree: %v", err)

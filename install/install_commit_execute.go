@@ -289,23 +289,22 @@ func executeCommit(
 			}
 		}
 		if change.source != "" {
-			input, err := os.Open(change.source)
-			if err != nil {
-				return nil, err
-			}
-			copyErr := fsutil.WriteRoot(
+			// Stage files belong to this transaction alone, so a hardlink moves
+			// one into the workspace without a copy. A stage file that is
+			// itself a store link or clone keeps sharing the store content.
+			// A mode change falls back to a clone or copy.
+			if err := fsutil.WriteFileRoot(
 				files,
 				change.path,
-				input,
+				change.source,
+				fsutil.LinkHardlink,
 				fsutil.WriteOptions{
 					Mode:    os.FileMode(entry.After.Mode),
 					Replace: true,
 					Check:   installBeforeCheck(files, entry),
 				},
-			)
-			closeErr := input.Close()
-			if copyErr != nil || closeErr != nil {
-				return nil, errors.Join(copyErr, closeErr)
+			); err != nil {
+				return nil, err
 			}
 		} else if err := fsutil.WriteRoot(
 			files,

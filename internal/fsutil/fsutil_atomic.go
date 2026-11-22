@@ -89,7 +89,9 @@ func atomicCopy(reader io.Reader, path string, mode os.FileMode) (resultErr erro
 	}
 	defer func() { resultErr = errors.Join(resultErr, root.Close()) }()
 	base := filepath.Base(path)
-	return publish(root, stagedName(base), base, reader, mode, true, nil)
+	return publish(root, stagedName(base), base, func(stage string) error {
+		return writeStage(root, stage, reader, mode)
+	}, true, nil)
 }
 
 // WriteOptions controls one publish.
@@ -125,34 +127,111 @@ func WriteRoot(root *os.Root, relative string, reader io.Reader, opts WriteOptio
 		root,
 		filepath.Join(stageRel, stagedName(filepath.Base(relative))),
 		relative,
-		reader,
-		opts.Mode,
+		func(stage string) error {
+			return writeStage(root, stage, reader, opts.Mode)
+		},
 		opts.Replace,
 		opts.Check,
 	)
 }
 
-// publish stages a payload and renames it into place. A reader therefore sees
-// the previous content or the new content, never a partial write, and a stage
-// that a crash abandons never masquerades as destination data.
-func publish(
+// WriteFileRoot publishes the content of src at a path confined to root under
+// the same staging rules as WriteRoot. link selects how the bytes reach the
+// staged name: a hardlink or a clone never copies them.
+func WriteFileRoot(
 	root *os.Root,
-	stage, dest string,
-	reader io.Reader,
-	mode os.FileMode,
-	replace bool,
-	check func() error,
-) (resultErr error) {
+	relative, src string,
+	link LinkMode,
+	opts WriteOptions,
+) error {
+	if !filepath.IsLocal(relative) {
+		return fmt.Errorf("output path must stay inside the workspace")
+	}
+	parent := filepath.Dir(relative)
+	if err := root.MkdirAll(parent, 0o700); err != nil {
+		return err
+	}
+	stageRel, err := stagingRelative(root, parent)
+	if err != nil {
+		return err
+	}
+	return publish(
+		root,
+		filepath.Join(stageRel, stagedName(filepath.Base(relative))),
+		relative,
+		func(stage string) error {
+			return stageFile(root, stage, src, opts.Mode, link)
+		},
+		opts.Replace,
+		opts.Check,
+	)
+}
+
+// stageFile places the content of src at the staged name inside root. A
+// hardlink shares the source inode, so it applies only while src already
+// carries mode; a clone takes mode; a byte copy writes the bytes and makes
+// them durable. The staged name stays unpublished until the caller renames it.
+func stageFile(root *os.Root, stage, src string, mode os.FileMode, link LinkMode) error {
+	staged := filepath.Join(root.Name(), stage)
+	if placeFile(src, staged, mode.Perm(), link) {
+		return nil
+	}
+	return copyStage(staged, src, mode.Perm())
+}
+
+// copyStage writes src at path with mode and syncs the content, so the caller
+// can publish it through a rename. A failure removes the partial file.
+func copyStage(path, src string, mode os.FileMode) (resultErr error) {
+	source, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer func() { resultErr = errors.Join(resultErr, source.Close()) }()
+	target, err := os.OpenFile(path, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
+	if err != nil {
+		return err
+	}
+	complete := false
+	defer func() {
+		if !complete {
+			resultErr = errors.Join(resultErr, os.Remove(path))
+		}
+	}()
+	if err := fillStage(target, source, mode); err != nil {
+		return err
+	}
+	complete = true
+	return nil
+}
+
+// writeStage writes reader into the staged file inside root, applies mode, and
+// makes the content durable before publication. A failure removes the partial
+// file.
+func writeStage(root *os.Root, stage string, reader io.Reader, mode os.FileMode) (resultErr error) {
 	file, err := root.OpenFile(stage, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
 	if err != nil {
 		return fmt.Errorf("create staged file: %w", err)
 	}
+	complete := false
 	defer func() {
-		if file != nil {
-			resultErr = errors.Join(resultErr, file.Close())
+		if !complete {
+			resultErr = errors.Join(resultErr, removeStaged(root, stage))
 		}
-		if err := root.Remove(stage); err != nil && !errors.Is(err, os.ErrNotExist) {
-			resultErr = errors.Join(resultErr, fmt.Errorf("remove staged file: %w", err))
+	}()
+	if err := fillStage(file, reader, mode); err != nil {
+		return err
+	}
+	complete = true
+	return nil
+}
+
+// fillStage writes reader into an open staged file, applies mode, makes the
+// content durable, and closes the file. It closes the file even on failure.
+func fillStage(file *os.File, reader io.Reader, mode os.FileMode) (resultErr error) {
+	closed := false
+	defer func() {
+		if !closed {
+			resultErr = errors.Join(resultErr, file.Close())
 		}
 	}()
 	if _, err := io.Copy(file, reader); err != nil {
@@ -165,10 +244,29 @@ func publish(
 		return fmt.Errorf("sync staged file: %w", err)
 	}
 	if err := file.Close(); err != nil {
-		file = nil
+		closed = true
 		return fmt.Errorf("close staged file: %w", err)
 	}
-	file = nil
+	closed = true
+	return nil
+}
+
+// publish stages a payload through stagePayload and renames it into place. A
+// reader therefore sees the previous content or the new content, never a
+// partial write, and a stage that a crash abandons never masquerades as
+// destination data. A failure after staging removes the staged name, and a
+// payload that fails while being staged removes its own partial file.
+func publish(
+	root *os.Root,
+	stage, dest string,
+	stagePayload func(stage string) error,
+	replace bool,
+	check func() error,
+) (resultErr error) {
+	if err := stagePayload(stage); err != nil {
+		return err
+	}
+	defer func() { resultErr = errors.Join(resultErr, removeStaged(root, stage)) }()
 	if check != nil {
 		if err := check(); err != nil {
 			return err
@@ -178,6 +276,20 @@ func publish(
 		return RenameRoot(root, stage, dest)
 	}
 	return RenameRootNoReplace(root, stage, dest)
+}
+
+// removeStaged deletes one staged name and tolerates a name that a completed
+// publish already renamed away. On a platform that refuses to delete a
+// read-only file it first makes the staged name writable; such a platform
+// never links a staged name to a source inode, so no shared content changes.
+func removeStaged(root *os.Root, stage string) error {
+	if err := makeStagedRemovable(root, stage); err != nil {
+		return fmt.Errorf("make staged file removable: %w", err)
+	}
+	if err := root.Remove(stage); err != nil && !errors.Is(err, os.ErrNotExist) {
+		return fmt.Errorf("remove staged file: %w", err)
+	}
+	return nil
 }
 
 // stagingRelative prefers the workspace staging directory, which keeps a

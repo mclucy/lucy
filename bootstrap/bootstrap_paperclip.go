@@ -16,10 +16,11 @@ func preparePaperclip(
 	ctx context.Context,
 	root string,
 	corePath string,
+	link fsutil.LinkMode,
 	java string,
 	output io.Writer,
 ) error {
-	if err := fsutil.AtomicCopyFile(corePath, filepath.Join(root, "server.jar"), 0o644); err != nil {
+	if err := placeArtifact(corePath, filepath.Join(root, "server.jar"), link); err != nil {
 		return err
 	}
 	if err := requireJava(java, "Paperclip patching"); err != nil {

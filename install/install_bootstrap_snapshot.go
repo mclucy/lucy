@@ -13,39 +13,41 @@ import (
 	"github.com/mclucy/lucy/bootstrap/snapshot"
 	"github.com/mclucy/lucy/cas"
 	"github.com/mclucy/lucy/document"
+	"github.com/mclucy/lucy/internal/fsutil"
 	serverpkg "github.com/mclucy/lucy/server"
 )
 
-// restoreBootstrapSnapshot restores a stored output set into a fresh stage.
-// It reports false without an error when no snapshot exists, so the caller
-// stages the method from scratch.
+// restoreBootstrapSnapshot restores a stored output set into a fresh stage
+// and returns the snapshot it restored. It reports false without an error
+// when no snapshot exists, so the caller stages the method from scratch.
 func restoreBootstrapSnapshot(
 	ctx context.Context,
 	store snapshot.Store,
 	key cas.Digest,
 	stage string,
 	server document.LockedServer,
+	link fsutil.LinkMode,
 	trace *Trace,
-) (bool, error) {
+) (snapshot.Snapshot, bool, error) {
 	snap, ok, err := store.LookupSnapshot(ctx, key)
 	if err != nil {
-		return false, err
+		return snapshot.Snapshot{}, false, err
 	}
 	if !ok {
-		return false, nil
+		return snapshot.Snapshot{}, false, nil
 	}
 	root, err := serverRootPath(stage, server)
 	if err != nil {
-		return false, err
+		return snapshot.Snapshot{}, false, err
 	}
 	if err := requireEmptyDirectory(root); err != nil {
-		return false, err
+		return snapshot.Snapshot{}, false, err
 	}
 	trace.phaseStarted("bootstrap snapshot")
-	if err := store.RestoreSnapshot(ctx, snap, root); err != nil {
-		return false, err
+	if err := store.RestoreSnapshot(ctx, snap, root, link); err != nil {
+		return snapshot.Snapshot{}, false, err
 	}
-	return true, nil
+	return snap, true, nil
 }
 
 // publishBootstrapSnapshot stores the checked staging output for reuse by any

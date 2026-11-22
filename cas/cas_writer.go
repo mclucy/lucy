@@ -136,7 +136,7 @@ func (w *Writer) Commit(expected *Digest) (object Object, resultErr error) {
 	if err := w.store.root.MkdirAll(filepath.Dir(name), 0o700); err != nil {
 		return Object{}, err
 	}
-	if err := w.file.Chmod(0o400); err != nil {
+	if err := w.file.Chmod(0o444); err != nil {
 		return Object{}, err
 	}
 	if err := w.file.Sync(); err != nil {

@@ -18,7 +18,7 @@ const (
 
 // prepareQuilt places the Quilt loader on the launcher classpath and generates
 // the launcher JAR and the properties that select the vanilla server JAR.
-func prepareQuilt(root string, server document.LockedServer, corePath string) error {
+func prepareQuilt(root string, server document.LockedServer, corePath string, link fsutil.LinkMode) error {
 	loaderPath, err := quiltLoaderPath(server.CoreVersion.String())
 	if err != nil {
 		return err
@@ -27,7 +27,7 @@ func prepareQuilt(root string, server document.LockedServer, corePath string) er
 	if err != nil {
 		return err
 	}
-	if err := fsutil.AtomicCopyFile(corePath, filepath.Join(root, filepath.FromSlash(loaderPath)), 0o644); err != nil {
+	if err := placeArtifact(corePath, filepath.Join(root, filepath.FromSlash(loaderPath)), link); err != nil {
 		return err
 	}
 	classpath := loaderClasspath(loaderPath, placed)

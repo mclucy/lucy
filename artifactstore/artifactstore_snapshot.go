@@ -105,11 +105,17 @@ func (s *Store) storeObject(digest cas.Digest, source string) error {
 	return nil
 }
 
-// RestoreSnapshot materializes every entry into destination. Bytes are
-// verified against their digest while copying. The caller owns destination;
-// a failed restore leaves it incomplete, and the caller removes it before a
-// cold start.
-func (s *Store) RestoreSnapshot(ctx context.Context, snap snapshot.Snapshot, destination string) error {
+// RestoreSnapshot materializes every entry into destination with link. Each
+// stored object is verified against its digest before it is materialized,
+// because a clone or a hardlink places bytes that no copy reads. The caller
+// owns destination; a failed restore leaves it incomplete, and the caller
+// removes it before a cold start.
+func (s *Store) RestoreSnapshot(
+	ctx context.Context,
+	snap snapshot.Snapshot,
+	destination string,
+	link fsutil.LinkMode,
+) error {
 	if err := snap.Validate(); err != nil {
 		return err
 	}
@@ -125,7 +131,7 @@ func (s *Store) RestoreSnapshot(ctx context.Context, snap snapshot.Snapshot, des
 		if err != nil {
 			return fmt.Errorf("snapshot entry %s: %w", entry.Path, err)
 		}
-		if err := s.restoreEntry(digest, entry, destination); err != nil {
+		if err := s.restoreEntry(digest, entry, destination, link); err != nil {
 			failure := fmt.Errorf("restore %s: %w", entry.Path, err)
 			if errors.Is(err, cas.ErrCorrupt) {
 				// Drop every corrupt object in this restore so one cold
@@ -142,47 +148,32 @@ func (s *Store) RestoreSnapshot(ctx context.Context, snap snapshot.Snapshot, des
 	return recoverable
 }
 
-func (s *Store) restoreEntry(digest cas.Digest, entry snapshot.Entry, destination string) error {
-	reader, err := s.Open(digest)
-	if err != nil {
+func (s *Store) restoreEntry(
+	digest cas.Digest,
+	entry snapshot.Entry,
+	destination string,
+	link fsutil.LinkMode,
+) error {
+	if err := s.verifyObject(digest); err != nil {
 		return err
 	}
-	target := filepath.Join(destination, filepath.FromSlash(entry.Path))
 	mode := os.FileMode(entry.Mode)
 	if mode == 0 {
 		mode = 0o644
 	}
-	if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
-		return errors.Join(err, reader.Close())
-	}
-	out, err := os.CreateTemp(filepath.Dir(target), ".restore-*")
+	target := filepath.Join(destination, filepath.FromSlash(entry.Path))
+	return fsutil.Materialize(s.Path(digest), target, link.Perm(mode), link)
+}
+
+// verifyObject hashes a stored object before a restore places it, because a
+// clone or a hardlink never reads the bytes it publishes.
+func (s *Store) verifyObject(digest cas.Digest) error {
+	reader, err := s.Open(digest)
 	if err != nil {
-		return errors.Join(err, reader.Close())
-	}
-	temporary := out.Name()
-	complete := false
-	defer func() {
-		if !complete {
-			_ = os.Remove(temporary)
-		}
-	}()
-	if _, err := io.Copy(out, reader); err != nil {
-		return errors.Join(err, out.Close(), reader.Close())
-	}
-	if err := reader.Close(); err != nil {
-		return errors.Join(err, out.Close())
-	}
-	if err := out.Chmod(mode); err != nil {
-		return errors.Join(err, out.Close())
-	}
-	if err := out.Close(); err != nil {
 		return err
 	}
-	if err := os.Rename(temporary, target); err != nil {
-		return err
-	}
-	complete = true
-	return nil
+	_, copyErr := io.Copy(io.Discard, reader)
+	return errors.Join(copyErr, reader.Close())
 }
 
 // SnapshotKeys lists the keys whose manifests are present, in ascending order.

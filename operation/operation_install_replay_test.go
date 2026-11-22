@@ -18,6 +18,7 @@ import (
 	"github.com/mclucy/lucy/document"
 	"github.com/mclucy/lucy/filetrack"
 	"github.com/mclucy/lucy/install"
+	"github.com/mclucy/lucy/internal/fsutil"
 	"github.com/mclucy/lucy/receipt"
 	serverpkg "github.com/mclucy/lucy/server"
 	"github.com/mclucy/lucy/serverregistry"
@@ -201,7 +202,7 @@ func testInitializedLockReplaysOffline(t *testing.T, reuseLock bool) {
 	}
 	tracker := filetrack.NewService(&http.Client{}, nil)
 	registry := operationTestRegistry(t)
-	installer := install.NewService(source, nil, tracker, nil, registry, nil, "")
+	installer := install.NewService(source, nil, tracker, nil, registry, nil, "", fsutil.LinkClone)
 	service := NewService(installer, source, registry, nil)
 
 	sourceRoot := t.TempDir()

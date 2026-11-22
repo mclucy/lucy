@@ -53,7 +53,7 @@ func (s *Service) stagePackages(root, stage string, resolved *document.Lock, sto
 			return err
 		}
 		j.pkg.Artifact.Hashes = source.Hashes
-		if err := fsutil.AtomicCopyFile(source.Path, filepath.Join(stage, j.destination), 0o644); err != nil {
+		if err := fsutil.Materialize(source.Path, filepath.Join(stage, j.destination), s.link.Perm(0o644), s.link); err != nil {
 			return err
 		}
 		store.progressMu.Lock()

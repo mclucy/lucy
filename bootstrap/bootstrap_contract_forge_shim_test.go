@@ -37,8 +37,8 @@ const (
 // TestForgeRootShimAttribution pins which root shim a shim-era Forge tree
 // claims. The root copy is admitted only when run.sh has the generated launcher
 // shape and the root copy byte-matches the canonical shim under libraries, which
-// must be a JAR whose manifest names the Forge shim main class. Both staging and
-// existing-tree checks apply this rule. A named root shim that fails it is an
+// must be a JAR whose manifest names the Forge shim main class. The
+// existing-tree check applies this rule. A named root shim that fails it is an
 // error, never silently unclaimed.
 func TestForgeRootShimAttribution(t *testing.T) {
 	t.Parallel()
@@ -62,8 +62,6 @@ java @user_jvm_args.txt @libraries/net/minecraftforge/forge/1.21.11-61.2.0/unix_
 		extra           map[string][]byte // additional files relative to the server root
 		existingStatus  bootstrap.CurrentnessStatus
 		existingClaimed bool
-		stageErr        bool
-		stageClaimed    bool
 	}{
 		{
 			name:            "canonical shim claims root shim",
@@ -72,7 +70,6 @@ java @user_jvm_args.txt @libraries/net/minecraftforge/forge/1.21.11-61.2.0/unix_
 			canonical:       shim,
 			existingStatus:  bootstrap.CurrentnessInconclusive,
 			existingClaimed: true,
-			stageClaimed:    true,
 		},
 		{
 			name:           "root differs from canonical shim",
@@ -80,14 +77,12 @@ java @user_jvm_args.txt @libraries/net/minecraftforge/forge/1.21.11-61.2.0/unix_
 			rootShim:       other,
 			canonical:      shim,
 			existingStatus: bootstrap.CurrentnessMismatch,
-			stageErr:       true,
 		},
 		{
 			name:           "missing canonical shim rejects named root shim",
 			runSh:          shimEraRunSh,
 			rootShim:       shim,
 			existingStatus: bootstrap.CurrentnessMismatch,
-			stageErr:       true,
 		},
 		{
 			name:           "non-JAR canonical shim rejects named root shim",
@@ -95,7 +90,6 @@ java @user_jvm_args.txt @libraries/net/minecraftforge/forge/1.21.11-61.2.0/unix_
 			rootShim:       []byte("not a jar"),
 			canonical:      []byte("not a jar"),
 			existingStatus: bootstrap.CurrentnessMismatch,
-			stageErr:       true,
 		},
 		{
 			name:           "JAR of another entry point rejects named root shim",
@@ -103,7 +97,6 @@ java @user_jvm_args.txt @libraries/net/minecraftforge/forge/1.21.11-61.2.0/unix_
 			rootShim:       wrong,
 			canonical:      wrong,
 			existingStatus: bootstrap.CurrentnessMismatch,
-			stageErr:       true,
 		},
 		{
 			name:           "invalid root copy rejects against valid canonical shim",
@@ -111,7 +104,6 @@ java @user_jvm_args.txt @libraries/net/minecraftforge/forge/1.21.11-61.2.0/unix_
 			rootShim:       []byte("not a jar"),
 			canonical:      shim,
 			existingStatus: bootstrap.CurrentnessMismatch,
-			stageErr:       true,
 		},
 		{
 			name:           "comment mention does not claim root shim",
@@ -119,7 +111,6 @@ java @user_jvm_args.txt @libraries/net/minecraftforge/forge/1.21.11-61.2.0/unix_
 			rootShim:       shim,
 			canonical:      shim,
 			existingStatus: bootstrap.CurrentnessInconclusive,
-			stageErr:       true,
 		},
 		{
 			name:           "heredoc mention does not claim root shim",
@@ -127,7 +118,6 @@ java @user_jvm_args.txt @libraries/net/minecraftforge/forge/1.21.11-61.2.0/unix_
 			rootShim:       shim,
 			canonical:      shim,
 			existingStatus: bootstrap.CurrentnessInconclusive,
-			stageErr:       true,
 		},
 		{
 			name:           "conditional mention does not claim root shim",
@@ -135,7 +125,6 @@ java @user_jvm_args.txt @libraries/net/minecraftforge/forge/1.21.11-61.2.0/unix_
 			rootShim:       shim,
 			canonical:      shim,
 			existingStatus: bootstrap.CurrentnessInconclusive,
-			stageErr:       true,
 		},
 		{
 			name:           "other directory invocation does not claim root shim",
@@ -143,7 +132,6 @@ java @user_jvm_args.txt @libraries/net/minecraftforge/forge/1.21.11-61.2.0/unix_
 			rootShim:       shim,
 			canonical:      shim,
 			existingStatus: bootstrap.CurrentnessInconclusive,
-			stageErr:       true,
 		},
 		{
 			name:           "unreferenced root file does not claim root shim",
@@ -151,14 +139,12 @@ java @user_jvm_args.txt @libraries/net/minecraftforge/forge/1.21.11-61.2.0/unix_
 			rootShim:       shim,
 			canonical:      shim,
 			existingStatus: bootstrap.CurrentnessInconclusive,
-			stageErr:       true,
 		},
 		{
 			name:           "invoked root shim must exist",
 			runSh:          shimEraRunSh,
 			canonical:      shim,
 			existingStatus: bootstrap.CurrentnessMismatch,
-			stageErr:       true,
 		},
 		{
 			name:           "legacy launcher with extra command keeps launch command",
@@ -190,14 +176,6 @@ java @user_jvm_args.txt @libraries/net/minecraftforge/forge/1.21.11-61.2.0/unix_
 			}
 			if got := hasServerPath(existing.Outputs, forgeShimTestRoot); got != tc.existingClaimed {
 				t.Fatalf("existing claims root shim = %t, want %t", got, tc.existingClaimed)
-			}
-
-			outputs, stageErr := bootstrap.ValidateStagedOutputs(root, locked)
-			if (stageErr != nil) != tc.stageErr {
-				t.Fatalf("staged verification error = %v, want error %t", stageErr, tc.stageErr)
-			}
-			if got := hasServerPath(outputs, forgeShimTestRoot); got != tc.stageClaimed {
-				t.Fatalf("staged claims root shim = %t, want %t", got, tc.stageClaimed)
 			}
 		})
 	}
