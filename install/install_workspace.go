@@ -359,12 +359,14 @@ func (s *Service) stageServerTree(
 			s.logger.Debug("bootstrap snapshot unavailable", "reason", keyErr.Error())
 			return nil, false, nil
 		}
-		opened, err := openSnapshotStore()
-		if err != nil {
-			s.logger.Debug("bootstrap snapshot store unavailable", "reason", err.Error())
-			return nil, false, nil
+		if snapStore == nil {
+			opened, err := openSnapshotStore()
+			if err != nil {
+				s.logger.Debug("bootstrap snapshot store unavailable", "reason", err.Error())
+				return nil, false, nil
+			}
+			snapStore = opened
 		}
-		snapStore = opened
 		if opts.RefreshBootstrap {
 			return nil, false, nil
 		}
@@ -405,8 +407,12 @@ func (s *Service) stageServerTree(
 			inputs[i] = file.Path
 		}
 	}
-	if !pinnedKey {
-		key, keyErr = snapshot.Key(resolved.Server)
+	// Acquisition can add a stronger digest than the lock pinned, and the key
+	// names the strongest one. Publication and a second lookup use the key
+	// that later runs with the enriched lock compute.
+	if enriched, enrichedErr := snapshot.Key(resolved.Server); !pinnedKey ||
+		(enrichedErr == nil && enriched != key) {
+		key, keyErr = enriched, enrichedErr
 		outputs, restored, err := lookup()
 		if err != nil || restored {
 			return outputs, err
