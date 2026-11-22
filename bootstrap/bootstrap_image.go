@@ -59,13 +59,7 @@ func StagedImage(stageRoot string, locked document.LockedServer) ([]Output, erro
 		if !entry.Type().IsRegular() {
 			return fmt.Errorf("bootstrap method %s wrote non-regular file %s", locked.Bootstrap, rel)
 		}
-		spec, declared := exact[rel]
-		if !declared {
-			spec, declared = optional[rel]
-		}
-		if !declared {
-			spec, declared = scopeOutput(rel, scopes)
-		}
+		spec, declared := classifyOutput(rel, exact, optional, scopes)
 		if !declared {
 			return fmt.Errorf("bootstrap method %s wrote undeclared file %s", locked.Bootstrap, rel)
 		}
@@ -174,4 +168,32 @@ func fileSHA256(path string) (string, error) {
 		return "", err
 	}
 	return hex.EncodeToString(hasher.Sum(nil)), nil
+}
+
+// ClassifyOutput returns the declaration of the method of locked that covers
+// the server-relative path rel. The second result is false for a path the
+// method does not write.
+func ClassifyOutput(locked document.LockedServer, rel string) (OutputSpec, bool, error) {
+	exact, scopes, err := validateContract(locked)
+	if err != nil {
+		return OutputSpec{}, false, fmt.Errorf("invalid bootstrap output contract: %w", err)
+	}
+	spec, declared := classifyOutput(rel, exact, optionalOutputs(locked), scopes)
+	return spec, declared, nil
+}
+
+// classifyOutput matches an exact output first, then an optional output, then
+// the longest scope.
+func classifyOutput(
+	rel string,
+	exact, optional map[string]OutputSpec,
+	scopes []OutputSpec,
+) (OutputSpec, bool) {
+	if spec, ok := exact[rel]; ok {
+		return spec, true
+	}
+	if spec, ok := optional[rel]; ok {
+		return spec, true
+	}
+	return scopeOutput(rel, scopes)
 }

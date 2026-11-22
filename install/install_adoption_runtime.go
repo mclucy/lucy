@@ -130,7 +130,17 @@ func adoptPinnedRuntime(
 	if err := document.SafeRelativePath(server.Directory); err != nil {
 		return err
 	}
+	// Only managed runtime outputs enter the receipt. A pinned input that the
+	// method discards after staging, such as the Forge mappings, stays with
+	// the user, as it does after a fresh install.
 	claim := func(serverRel string, pins map[string]string) error {
+		spec, declared, err := bootstrap.ClassifyOutput(server, serverRel)
+		if err != nil {
+			return err
+		}
+		if !declared || spec.Policy != bootstrap.PolicyManaged || spec.Role != bootstrap.RoleRuntime {
+			return nil
+		}
 		rel := filepath.ToSlash(filepath.Join(server.Directory, filepath.FromSlash(serverRel)))
 		if runtimePathReserved(root, rel, tracked) || !workspacePathSafe(root, rel) {
 			return nil
