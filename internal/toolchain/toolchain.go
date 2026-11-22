@@ -46,7 +46,8 @@ type Inventory struct {
 
 // DiscoverJava probes installed Java runtimes without provisioning tools and
 // without running their compilers. Missing tools and unusable candidates are
-// inventory results; additional homes are local JDK hints.
+// inventory results; additional homes are local JDK hints. A command may
+// discover several times, so results are memoized for this process.
 func DiscoverJava(ctx context.Context, homes ...string) (Inventory, error) {
 	if err := ctx.Err(); err != nil {
 		return Inventory{}, err
@@ -55,7 +56,21 @@ func DiscoverJava(ctx context.Context, homes ...string) (Inventory, error) {
 	if err != nil {
 		return Inventory{}, err
 	}
-	return discover(ctx, environment, homes, false)
+	key := discoveryKey(environment, homes)
+	javaDiscovery.Lock()
+	defer javaDiscovery.Unlock()
+	if inventory, ok := javaDiscovery.inventories[key]; ok {
+		return cloneInventory(inventory), nil
+	}
+	inventory, err := discover(ctx, environment, homes, false)
+	if err != nil {
+		return Inventory{}, err
+	}
+	if javaDiscovery.inventories == nil {
+		javaDiscovery.inventories = make(map[string]Inventory)
+	}
+	javaDiscovery.inventories[key] = inventory
+	return cloneInventory(inventory), nil
 }
 
 // DiscoverBuildTools probes installed Java runtimes, their compilers, and
@@ -71,6 +86,35 @@ func DiscoverBuildTools(ctx context.Context, homes ...string) (Inventory, error)
 	return discover(ctx, environment, homes, true)
 }
 
+// javaDiscovery memoizes the Java discovery of one process. Its key carries
+// every input that changes the candidate list.
+var javaDiscovery struct {
+	sync.Mutex
+	inventories map[string]Inventory
+}
+
+// discoveryKey joins the environment values, roots, and hints that decide
+// which Java candidates discovery considers, so a change reselects instead of
+// reusing.
+func discoveryKey(environment envVars, homes []string) string {
+	fields := []string{
+		environment.javaHome,
+		environment.pathJava,
+		environment.gradleUserHome,
+		environment.home,
+		environment.path,
+	}
+	fields = append(fields, javaRoots(environment)...)
+	fields = append(fields, homes...)
+	return strings.Join(fields, "\x00")
+}
+
+func cloneInventory(inventory Inventory) Inventory {
+	inventory.Java = slices.Clone(inventory.Java)
+	inventory.Problems = slices.Clone(inventory.Problems)
+	return inventory
+}
+
 func discover(ctx context.Context, environment envVars, homes []string, compilers bool) (Inventory, error) {
 	inventory := Inventory{
 		JavaHome: environment.javaHome, PathJava: environment.pathJava,
@@ -79,6 +123,8 @@ func discover(ctx context.Context, environment envVars, homes []string, compiler
 	candidates := javaCandidates(environment, homes)
 	results := make([]JavaInstallation, len(candidates))
 	problems := make([]error, len(candidates))
+	cache := loadProbeCache()
+	defer cache.save()
 	concurrency := make(chan struct{}, 4)
 	var workers sync.WaitGroup
 	for i, candidate := range candidates {
@@ -89,7 +135,7 @@ func discover(ctx context.Context, environment envVars, homes []string, compiler
 			case <-ctx.Done():
 				return
 			}
-			results[i], problems[i] = probeJava(ctx, candidate, compilers)
+			results[i], problems[i] = probeJava(ctx, candidate, compilers, cache)
 		})
 	}
 	workers.Wait()

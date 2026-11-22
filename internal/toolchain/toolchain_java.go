@@ -39,6 +39,18 @@ func javaCandidates(environment envVars, hints []string) []javaCandidate {
 			add(filepath.Join(home, "bin", javaExecutableName), "Gradle configuration")
 		}
 	}
+	for _, root := range javaRoots(environment) {
+		for _, home := range javaHomesUnder(root) {
+			add(filepath.Join(home, "bin", javaExecutableName), root)
+		}
+	}
+	return candidates
+}
+
+// javaRoots lists the directories that hold Java homes of the system and of
+// version managers. Each child of a root holds one home, or a current link to
+// one.
+func javaRoots(environment envVars) []string {
 	roots := systemJavaRoots()
 	sdkman := os.Getenv("SDKMAN_DIR")
 	if sdkman == "" {
@@ -62,12 +74,7 @@ func javaCandidates(environment envVars, hints []string) []javaCandidate {
 	if managed, err := ManagedJavaRoot(); err == nil {
 		roots = append(roots, managed)
 	}
-	for _, root := range roots {
-		for _, home := range javaHomesUnder(root) {
-			add(filepath.Join(home, "bin", javaExecutableName), root)
-		}
-	}
-	return candidates
+	return roots
 }
 
 func javaHomesUnder(root string) []string {
@@ -112,12 +119,12 @@ func javaHomesUnder(root string) []string {
 }
 
 // probeJava probes one candidate. compilers adds the compiler probe that only
-// a build needs.
-func probeJava(ctx context.Context, candidate javaCandidate, compilers bool) (JavaInstallation, error) {
+// a build needs. cache may be nil, which probes without caching.
+func probeJava(ctx context.Context, candidate javaCandidate, compilers bool, cache *probeCache) (JavaInstallation, error) {
 	if !isExecutable(candidate.java) {
 		return JavaInstallation{}, fmt.Errorf("java candidate %q from %s is not executable", candidate.java, candidate.source)
 	}
-	installation, err := probeInstallation(ctx, candidate.java)
+	installation, err := probeInstallation(ctx, candidate.java, cache)
 	if err != nil {
 		return JavaInstallation{}, err
 	}
@@ -128,8 +135,12 @@ func probeJava(ctx context.Context, candidate javaCandidate, compilers bool) (Ja
 }
 
 // probeInstallation returns the installation that one Java executable
-// reports.
-func probeInstallation(ctx context.Context, executable string) (JavaInstallation, error) {
+// reports, from the cache while the executable and the release file of its
+// home keep their recorded identities.
+func probeInstallation(ctx context.Context, executable string, cache *probeCache) (JavaInstallation, error) {
+	if installation, ok := cache.lookup(executable); ok {
+		return installation, nil
+	}
 	output, err := runProbe(ctx, executable, "-XshowSettings:properties", "-version")
 	if err != nil {
 		return JavaInstallation{}, fmt.Errorf("probe java %q: %w", executable, err)
@@ -162,6 +173,7 @@ func probeInstallation(ctx context.Context, executable string) (JavaInstallation
 	if installation.Major == 0 || !isExecutable(installation.Java) {
 		return JavaInstallation{}, fmt.Errorf("java %q reported an unusable installation", executable)
 	}
+	cache.store(executable, installation)
 	return installation, nil
 }
 
@@ -202,7 +214,9 @@ func ProbeJava(ctx context.Context, path string) (JavaInstallation, error) {
 	} else if !isExecutable(path) {
 		return JavaInstallation{}, fmt.Errorf("probe Java %q: not an executable file", path)
 	}
-	return probeJava(ctx, javaCandidate{java: executable, source: "requested path"}, false)
+	cache := loadProbeCache()
+	defer cache.save()
+	return probeJava(ctx, javaCandidate{java: executable, source: "requested path"}, false, cache)
 }
 
 func majorVersion(version string) int {

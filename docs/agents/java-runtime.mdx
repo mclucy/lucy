@@ -17,7 +17,7 @@ Configured Java home merges the global and workspace values. A present workspace
 
 Without a configured home, toolchain discovery locates installed runtimes and runtime selection ranks them by the number of unmet conditions. Ties prefer a runtime meeting the advisory, then the oldest major, then the newest update. A named distribution requires a build bearing that brand; unbranded builds fall outside it. Selection produces a check record containing the chosen runtime, its source, and problems; the check records evidence about this machine, while lock pins come from resolution.
 
-Runtime selection discovers Java runtimes only. It never runs a compiler or Gradle, which belong to the build discovery of the compilation command.
+Runtime selection discovers Java runtimes only. It never runs a compiler or Gradle, which belong to the build discovery of the compilation command. Discovery is memoized for the process, so a command that selects more than once probes each candidate at most once, and it records probe results in the per-user cache. An entry is reused only while the resolved Java executable, the `release` file of its installation home, and the `JAVA_HOME` value that selected it keep their recorded identities; any mismatch probes again. A missing, unreadable, or corrupt cache file is ignored and rewritten, and an entry whose executable is gone is pruned. A missing cache costs probes, never correctness.
 
 ## Provisioning boundary
 
