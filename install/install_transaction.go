@@ -365,13 +365,24 @@ func applyCommit(root, stage string, d *document.Manifest, l *document.Lock, pub
 				}
 				return nil
 			}
+			seedPresent := false
+			if isSeed {
+				seedInfo, err := os.Lstat(target)
+				switch {
+				case err == nil:
+					if !seedInfo.Mode().IsRegular() {
+						return fmt.Errorf("refuse non-regular seed output %s", relative)
+					}
+					seedPresent = true
+				case !errors.Is(err, os.ErrNotExist):
+					return err
+				}
+			}
 			if isSeed && stagedBootstrap {
 				seedPaths = append(seedPaths, relative)
 			}
-			if isSeed {
-				if _, err := os.Stat(target); err == nil {
-					return nil
-				}
+			if seedPresent {
+				return nil
 			}
 			sha256 := out.SHA256
 			if sha256 == "" {

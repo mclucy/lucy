@@ -254,6 +254,60 @@ func TestApplyCommitRecordsStagedSeedPaths(t *testing.T) {
 	}
 }
 
+// A seed path that holds a directory can never become current, so recording
+// it would restage the runtime on every later install. The commit refuses it.
+func TestApplyCommitRefusesNonRegularSeed(t *testing.T) {
+	root := t.TempDir()
+	core := []byte("plain server core\n")
+	seed := []byte("-Xmx1G\n")
+	lock := &document.Lock{
+		SchemaVersion:       document.LockSchemaVersion,
+		ManifestFingerprint: transactionTestDigest([]byte("manifest")),
+		Server: document.LockedServer{
+			Directory:   "server",
+			Minecraft:   "1.21.4",
+			Product:     serverpkg.ProductMinecraft,
+			CoreVersion: "1.21.4",
+			Bootstrap:   serverpkg.BootstrapMethodVanilla,
+			Artifact: catalog.Artifact{
+				Provider:  catalog.ProviderMojang,
+				ProjectID: "server",
+				Version:   "1.21.4",
+				Filename:  "server.jar",
+				Hashes:    map[string]string{"sha256": transactionTestDigest(core)},
+			},
+			Java: document.LockedJava{Advisory: 21},
+		},
+		Packages: []document.Package{},
+	}
+	stage := t.TempDir()
+	transactionTestWrite(t, stage, "server/server.jar", core)
+	transactionTestWrite(t, stage, "server/user_jvm_args.txt", seed)
+	if err := os.MkdirAll(filepath.Join(root, ".lucy"), 0o700); err != nil {
+		t.Fatalf("create state directory: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Join(root, "server", "user_jvm_args.txt"), 0o755); err != nil {
+		t.Fatalf("create directory at seed path: %v", err)
+	}
+	stagedOutputs := map[string]bootstrap.Output{
+		"server/server.jar": {
+			Path: "server/server.jar", SHA256: transactionTestDigest(core),
+			Mode: 0o644, Policy: bootstrap.PolicyManaged, Role: bootstrap.RoleRuntime,
+		},
+		"server/user_jvm_args.txt": {
+			Path: "server/user_jvm_args.txt", SHA256: transactionTestDigest(seed),
+			Mode: 0o644, Policy: bootstrap.PolicySeed, Role: bootstrap.RoleRuntime,
+		},
+	}
+	_, err := applyCommit(
+		root, stage, nil, lock, false, nil, stagedOutputs, nil, true,
+		installCommitReconcile, transactionTestDocuments(t, root), nil,
+	)
+	if err == nil || !strings.Contains(err.Error(), "non-regular seed output") {
+		t.Fatalf("applyCommit() error = %v, want non-regular seed refusal", err)
+	}
+}
+
 func transactionTestImage(
 	data []byte,
 	mode os.FileMode,
