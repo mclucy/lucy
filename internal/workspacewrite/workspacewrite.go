@@ -149,7 +149,8 @@ func SafePath(root, relative string) error {
 	return nil
 }
 
-// RemoveRoot persists disappearance from its original name; leftovers are private cleanup data.
+// RemoveRoot persists disappearance from its original name. A leftover stays
+// in the private .lucy/tmp directory.
 func RemoveRoot(root *os.Root, relative string) error {
 	if !filepath.IsLocal(relative) {
 		return fmt.Errorf("output path must stay inside the workspace")
@@ -166,8 +167,13 @@ func RemoveRoot(root *os.Root, relative string) error {
 	if err := fsutil.RenameRoot(root, relative, garbage); err != nil {
 		return err
 	}
-	if err := root.Chmod(garbage, 0o600); err != nil {
-		return err
+	// Windows refuses to delete a read-only file. Elsewhere the unlink needs
+	// no file permission, and a chmod would change every hardlink that shares
+	// the inode, including the store object.
+	if runtime.GOOS == "windows" {
+		if err := root.Chmod(garbage, 0o600); err != nil {
+			return err
+		}
 	}
 	return root.Remove(garbage)
 }
