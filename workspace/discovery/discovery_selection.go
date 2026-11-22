@@ -26,10 +26,13 @@ const (
 type SelectionSource string
 
 const (
-	SourceUnknown   SelectionSource = ""
-	SourceInferred  SelectionSource = "inferred"
-	SourceDeclared  SelectionSource = "declared"
-	SourceExplicit  SelectionSource = "explicit"
+	SourceUnknown  SelectionSource = ""
+	SourceInferred SelectionSource = "inferred"
+	SourceDeclared SelectionSource = "declared"
+	SourceExplicit SelectionSource = "explicit"
+	// SourceCoverage selects the installation whose recognized members
+	// account for strictly more files than any other candidate's.
+	SourceCoverage  SelectionSource = "coverage"
 	SourcePreferred SelectionSource = "preferred"
 )
 
@@ -218,6 +221,10 @@ func (r *Result) selectInferred(
 		r.selectCandidate(selectable[0], SourceInferred)
 		return nil
 	default:
+		if leading := coverageLeader(selectable); leading != nil {
+			r.selectCandidate(leading, SourceCoverage)
+			return nil
+		}
 		if policy == PolicyPreferModified {
 			if preferred := preferredInstallation(selectable); preferred != nil {
 				r.selectCandidate(preferred, SourcePreferred)
@@ -230,6 +237,50 @@ func (r *Result) selectInferred(
 		State:         SelectionAmbiguous,
 		Installations: cloneInstallations(selectable),
 	}
+}
+
+// coverageLeader returns the only candidate whose member coverage is strictly
+// higher than every other candidate's. It returns nil for a tie at the top, so
+// the caller keeps the existing preference or ambiguity behavior.
+func coverageLeader(selectable []*Installation) *Installation {
+	var leader *Installation
+	highest := 0
+	tied := false
+	for _, installation := range selectable {
+		coverage := memberCoverage(installation)
+		switch {
+		case coverage > highest:
+			highest = coverage
+			leader = installation
+			tied = false
+		case coverage == highest && leader != nil:
+			tied = true
+		}
+	}
+	if tied {
+		return nil
+	}
+	return leader
+}
+
+// memberCoverage counts the members that prove this runtime owns the
+// directory. Entry points, payloads, and libraries are files the recognizer
+// proved belong to the runtime, so the runtime the directory was built around
+// owns the most of them. Configuration sidecars do not show which runtime was
+// installed, and unreadable members prove nothing.
+func memberCoverage(installation *Installation) int {
+	if installation == nil {
+		return 0
+	}
+	coverage := 0
+	for _, file := range installation.Files {
+		if file.Role == RoleConfiguration ||
+			file.Ownership == OwnershipUnreadable {
+			continue
+		}
+		coverage++
+	}
+	return coverage
 }
 
 func (r *Result) selectCandidate(

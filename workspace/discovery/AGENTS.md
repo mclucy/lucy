@@ -9,7 +9,7 @@
 - **Evidence and diagnostics**: Retains structural findings (conflicting identities, unreadable archives) in `Diagnostics` without aborting discovery.
 - **Receipt ownership**: `ObserveOwnership` verifies member files against `.lucy/install.yaml` using content hashes; paths alone never prove management, and unreadable files remain `OwnershipUnknown`.
 - **Observation vs. receipt**: Distinguishes physical directory state from recorded management; discovery never writes or modifies receipt state.
-- **Deterministic selection**: `Select` applies a direct installation choice first, an identity expectation second, the persisted declaration third, and inferred preference last, returning structured `SelectionError` values on failure. Entry points are launchability evidence, never a selection result.
+- **Deterministic selection**: `Select` applies a direct installation choice first, an identity expectation second, the persisted declaration third, member coverage fourth, and inferred preference last, returning structured `SelectionError` values on failure. Entry points are launchability evidence, never a selection result.
 - **Read-only evaluation**: Scans, ownership checks, and runtime selections never modify files on disk or make network calls.
 
 ## Testing

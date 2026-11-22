@@ -32,7 +32,8 @@ func reportDiscoveryFindings(observed *discovery.Result, output *Output) {
 	}
 	selection := observed.Selection
 	resolved := selection.IsValid()
-	automatic := selection.Source == discovery.SourcePreferred
+	automatic := selection.Source == discovery.SourcePreferred ||
+		selection.Source == discovery.SourceCoverage
 	unresolvedReported := false
 	unreadableReported := map[string]bool{}
 	for finding := range observed.Findings() {
