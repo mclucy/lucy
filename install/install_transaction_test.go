@@ -300,8 +300,8 @@ func TestApplyCommitRefusesNonRegularSeed(t *testing.T) {
 		},
 	}
 	_, err := applyCommit(
-		root, stage, nil, lock, false, nil, stagedOutputs, nil, true,
-		installCommitReconcile, transactionTestDocuments(t, root), nil,
+		root, stage, nil, lock, false, nil, nil, stagedOutputs, nil, true,
+		installCommitReconcile, transactionTestDocuments(t, root), currentCheck{}, nil,
 	)
 	if err == nil || !strings.Contains(err.Error(), "non-regular seed output") {
 		t.Fatalf("applyCommit() error = %v, want non-regular seed refusal", err)
