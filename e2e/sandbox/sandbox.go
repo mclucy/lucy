@@ -390,7 +390,7 @@ func installServer(outDir string, ra resolvedArtifact) error {
 // support. Preferring the oldest qualifying major keeps legacy installers off
 // newer class-file versions while still accepting the current JDK.
 func installerJava() (string, error) {
-	inventory, err := toolchain.Discover(context.Background())
+	inventory, err := toolchain.DiscoverJava(context.Background())
 	if err != nil {
 		return "", fmt.Errorf("discover Java runtimes: %w", err)
 	}

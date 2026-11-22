@@ -111,13 +111,28 @@ func javaHomesUnder(root string) []string {
 	return homes
 }
 
-func probeJava(ctx context.Context, candidate javaCandidate) (JavaInstallation, error) {
+// probeJava probes one candidate. compilers adds the compiler probe that only
+// a build needs.
+func probeJava(ctx context.Context, candidate javaCandidate, compilers bool) (JavaInstallation, error) {
 	if !isExecutable(candidate.java) {
 		return JavaInstallation{}, fmt.Errorf("java candidate %q from %s is not executable", candidate.java, candidate.source)
 	}
-	output, err := runProbe(ctx, candidate.java, "-XshowSettings:properties", "-version")
+	installation, err := probeInstallation(ctx, candidate.java)
 	if err != nil {
-		return JavaInstallation{}, fmt.Errorf("probe java %q: %w", candidate.java, err)
+		return JavaInstallation{}, err
+	}
+	if compilers {
+		installation.Javac = probeCompiler(ctx, installation.Home)
+	}
+	return installation, nil
+}
+
+// probeInstallation returns the installation that one Java executable
+// reports.
+func probeInstallation(ctx context.Context, executable string) (JavaInstallation, error) {
+	output, err := runProbe(ctx, executable, "-XshowSettings:properties", "-version")
+	if err != nil {
+		return JavaInstallation{}, fmt.Errorf("probe java %q: %w", executable, err)
 	}
 	properties := make(map[string]string)
 	for line := range strings.SplitSeq(output, "\n") {
@@ -127,7 +142,7 @@ func probeJava(ctx context.Context, candidate javaCandidate) (JavaInstallation, 
 		}
 	}
 	if properties["java.home"] == "" {
-		return JavaInstallation{}, fmt.Errorf("java %q reported no installation home", candidate.java)
+		return JavaInstallation{}, fmt.Errorf("java %q reported no installation home", executable)
 	}
 	home := canonical(properties["java.home"])
 	if filepath.Base(home) == "jre" {
@@ -145,15 +160,22 @@ func probeJava(ctx context.Context, candidate javaCandidate) (JavaInstallation, 
 		Implementor:  release["IMPLEMENTOR"],
 	}
 	if installation.Major == 0 || !isExecutable(installation.Java) {
-		return JavaInstallation{}, fmt.Errorf("java %q reported an unusable installation", candidate.java)
-	}
-	javac := filepath.Join(home, "bin", javacExecutableName)
-	if isExecutable(javac) {
-		if _, err := runProbe(ctx, javac, "-version"); err == nil {
-			installation.Javac = javac
-		}
+		return JavaInstallation{}, fmt.Errorf("java %q reported an unusable installation", executable)
 	}
 	return installation, nil
+}
+
+// probeCompiler returns the javac of a Java home that runs, or "" when the
+// home has no usable compiler.
+func probeCompiler(ctx context.Context, home string) string {
+	javac := filepath.Join(home, "bin", javacExecutableName)
+	if !isExecutable(javac) {
+		return ""
+	}
+	if _, err := runProbe(ctx, javac, "-version"); err != nil {
+		return ""
+	}
+	return javac
 }
 
 // ProbeJava inspects the Java installation at path. path is a Java home or a
@@ -180,7 +202,7 @@ func ProbeJava(ctx context.Context, path string) (JavaInstallation, error) {
 	} else if !isExecutable(path) {
 		return JavaInstallation{}, fmt.Errorf("probe Java %q: not an executable file", path)
 	}
-	return probeJava(ctx, javaCandidate{java: executable, source: "requested path"})
+	return probeJava(ctx, javaCandidate{java: executable, source: "requested path"}, false)
 }
 
 func majorVersion(version string) int {

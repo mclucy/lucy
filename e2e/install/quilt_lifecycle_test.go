@@ -386,7 +386,7 @@ func writeServerFiles(t *testing.T, root string) {
 // selectJava picks the oldest installed runtime the Quilt loader supports.
 func selectJava(t *testing.T) string {
 	t.Helper()
-	inventory, err := toolchain.Discover(t.Context())
+	inventory, err := toolchain.DiscoverJava(t.Context())
 	if err != nil {
 		t.Fatalf("discover Java runtimes: %v", err)
 	}

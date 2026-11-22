@@ -44,9 +44,10 @@ type Inventory struct {
 	Problems       []error
 }
 
-// Discover probes installed executables without provisioning tools. Missing tools
-// and unusable candidates are inventory results; additional homes are local JDK hints.
-func Discover(ctx context.Context, homes ...string) (Inventory, error) {
+// DiscoverJava probes installed Java runtimes without provisioning tools and
+// without running their compilers. Missing tools and unusable candidates are
+// inventory results; additional homes are local JDK hints.
+func DiscoverJava(ctx context.Context, homes ...string) (Inventory, error) {
 	if err := ctx.Err(); err != nil {
 		return Inventory{}, err
 	}
@@ -54,6 +55,23 @@ func Discover(ctx context.Context, homes ...string) (Inventory, error) {
 	if err != nil {
 		return Inventory{}, err
 	}
+	return discover(ctx, environment, homes, false)
+}
+
+// DiscoverBuildTools probes installed Java runtimes, their compilers, and
+// Gradle. Build commands use it; runtime selection uses DiscoverJava.
+func DiscoverBuildTools(ctx context.Context, homes ...string) (Inventory, error) {
+	if err := ctx.Err(); err != nil {
+		return Inventory{}, err
+	}
+	environment, err := readEnv()
+	if err != nil {
+		return Inventory{}, err
+	}
+	return discover(ctx, environment, homes, true)
+}
+
+func discover(ctx context.Context, environment envVars, homes []string, compilers bool) (Inventory, error) {
 	inventory := Inventory{
 		JavaHome: environment.javaHome, PathJava: environment.pathJava,
 		GradleUserHome: environment.gradleUserHome,
@@ -71,7 +89,7 @@ func Discover(ctx context.Context, homes ...string) (Inventory, error) {
 			case <-ctx.Done():
 				return
 			}
-			results[i], problems[i] = probeJava(ctx, candidate)
+			results[i], problems[i] = probeJava(ctx, candidate, compilers)
 		})
 	}
 	workers.Wait()
@@ -93,9 +111,12 @@ func Discover(ctx context.Context, homes ...string) (Inventory, error) {
 		a, b := &inventory.Java[i], &inventory.Java[j]
 		return cmp.Or(cmp.Compare(b.Major, a.Major), cmp.Compare(a.Home, b.Home)) < 0
 	})
-	inventory.Gradle, err = probeGradle(ctx)
-	if err != nil {
-		inventory.Problems = append(inventory.Problems, err)
+	if compilers {
+		var err error
+		inventory.Gradle, err = probeGradle(ctx)
+		if err != nil {
+			inventory.Problems = append(inventory.Problems, err)
+		}
 	}
 	if err := ctx.Err(); err != nil {
 		return Inventory{}, err
