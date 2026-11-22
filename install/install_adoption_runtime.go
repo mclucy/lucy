@@ -69,11 +69,16 @@ func adoptRuntime(
 		}
 	}
 
-	managedDiffers := false
+	runtimeDiffers := false
 	for _, entry := range compared.Differing {
 		if entry.Policy == string(bootstrap.PolicyManaged) {
-			managedDiffers = true
-			break
+			runtimeDiffers = true
+			continue
+		}
+		// An edited seed still counts as present; another kind of file at
+		// a seed path does not.
+		if !regularFileWithin(files, entry.Path) {
+			runtimeDiffers = true
 		}
 	}
 	if opts.Logger != nil {
@@ -86,7 +91,7 @@ func adoptRuntime(
 		)
 	}
 	// Missing seeds require a stage, but existing seeds stay user-owned.
-	if managedDiffers || len(compared.Missing) > 0 || skipped > 0 {
+	if runtimeDiffers || len(compared.Missing) > 0 || skipped > 0 {
 		return nil
 	}
 	fingerprint, err := receipt.BootstrapFingerprint(opts.Lock)
@@ -96,6 +101,11 @@ func adoptRuntime(
 	ledger.bootstrapFingerprint = fingerprint
 	ledger.seedPaths = observedSeedPaths(root, opts.Image, tracked)
 	return nil
+}
+
+func regularFileWithin(files *os.Root, rel string) bool {
+	info, err := files.Lstat(filepath.FromSlash(rel))
+	return err == nil && info.Mode().IsRegular()
 }
 
 func runtimeBaselines(root string, observed []AdoptedRuntimeFile) map[string]AdoptedRuntimeFile {

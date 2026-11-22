@@ -208,3 +208,15 @@ func verifyAdoptedOutputs(
 	}
 	return nil
 }
+
+// verifyAdoptedSeeds rechecks that every seed the bootstrap fingerprint
+// requires is still a regular file. A receipt with the fingerprint skips the
+// runtime stage, which is the only step that restores a missing seed.
+func verifyAdoptedSeeds(files *os.Root, seeds []string) error {
+	for _, path := range seeds {
+		if !regularFileWithin(files, path) {
+			return fmt.Errorf("runtime seed %s disappeared before publication", path)
+		}
+	}
+	return nil
+}

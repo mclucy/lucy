@@ -119,7 +119,7 @@ func AdoptExistingWorkspace(root string, opts AdoptOptions) (resultErr error) {
 		next,
 		opts.Preconditions.documents[receipt.Filename].image != nil,
 	)
-	return publishAdoption(root, opts, next, publishReceipt, ledger.images)
+	return publishAdoption(root, opts, next, publishReceipt, ledger.images, ledger.seedPaths)
 }
 
 // adoptionLedger accumulates ownership claims over the receipt read at
@@ -131,7 +131,8 @@ type adoptionLedger struct {
 	images               map[string]*workspacewrite.InstallImage
 	legacyUnclaimed      map[string]struct{}
 	bootstrapFingerprint string
-	seedPaths            []string
+	// seedPaths names the seed files the fingerprint requires to exist.
+	seedPaths []string
 }
 
 func newAdoptionLedger() *adoptionLedger {
