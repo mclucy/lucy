@@ -343,6 +343,40 @@ func (s *Service) stageServerTree(
 			}
 		}
 	}
+	// A lock that pins every digest names its recipe before acquisition, so a
+	// stored snapshot restores without the build inputs. Otherwise the key
+	// exists once acquisition attaches every store digest.
+	key, keyErr := snapshot.Key(resolved.Server)
+	pinnedKey := keyErr == nil
+	var snapStore *artifactstore.Store
+	defer func() {
+		if snapStore != nil {
+			snapStore.Close()
+		}
+	}()
+	lookup := func() (map[string]bootstrap.Output, bool, error) {
+		if keyErr != nil {
+			s.logger.Debug("bootstrap snapshot unavailable", "reason", keyErr.Error())
+			return nil, false, nil
+		}
+		opened, err := openSnapshotStore()
+		if err != nil {
+			s.logger.Debug("bootstrap snapshot store unavailable", "reason", err.Error())
+			return nil, false, nil
+		}
+		snapStore = opened
+		if opts.RefreshBootstrap {
+			return nil, false, nil
+		}
+		return s.restoreServerSnapshot(ctx, snapStore, key, stage, resolved.Server, opts.Trace)
+	}
+	if pinnedKey {
+		outputs, restored, err := lookup()
+		if err != nil || restored {
+			return outputs, err
+		}
+	}
+
 	materialized := make([]artifact.MaterializedFile, 1+len(resolved.Server.Inputs))
 	err := runStagingJobs(ctx, len(materialized), store.injected != nil, func(i int) error {
 		a := &resolved.Server.Artifact
@@ -371,24 +405,9 @@ func (s *Service) stageServerTree(
 			inputs[i] = file.Path
 		}
 	}
-
-	// The recipe key exists once every input has its store digest.
-	key, keyErr := snapshot.Key(resolved.Server)
-	if keyErr != nil {
-		s.logger.Debug("bootstrap snapshot unavailable", "reason", keyErr.Error())
-	}
-	var snapStore *artifactstore.Store
-	if keyErr == nil {
-		opened, err := openSnapshotStore()
-		if err != nil {
-			s.logger.Debug("bootstrap snapshot store unavailable", "reason", err.Error())
-		} else {
-			snapStore = opened
-			defer snapStore.Close()
-		}
-	}
-	if snapStore != nil && !opts.RefreshBootstrap {
-		outputs, restored, err := s.restoreServerSnapshot(ctx, snapStore, key, stage, resolved.Server, opts.Trace)
+	if !pinnedKey {
+		key, keyErr = snapshot.Key(resolved.Server)
+		outputs, restored, err := lookup()
 		if err != nil || restored {
 			return outputs, err
 		}
