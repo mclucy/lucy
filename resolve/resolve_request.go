@@ -61,11 +61,10 @@ func (o requestOrigin) String() string {
 // Target identifies the server runtime whose compatibility rules package
 // resolution enforces.
 type Target struct {
-	Product      serverpkg.Product
-	Bootstrapper serverpkg.BootstrapMethod
-	Minecraft    versionpkg.Version
-	CoreVersion  versionpkg.Version
-	MCDRVersion  string
+	Product     serverpkg.Product
+	Minecraft   versionpkg.Version
+	CoreVersion versionpkg.Version
+	MCDRVersion string
 	// CoreModules are the descriptor modules the server core artifact ships.
 	// Fabric's loader bundles mods as nested jars, so these satisfy package
 	// requirements that no package provides.
@@ -80,9 +79,10 @@ type ModuleIdentity struct {
 }
 
 // PackageRuntime returns the ecosystem whose loader loads server packages on
-// target. A paperclip server runs Paper regardless of how the manifest names
-// its product. The second result is false for a target that loads no server
-// packages through Lucy.
+// target. A product outside Lucy's product table comes from a GitHub
+// repository, and Lucy resolves such a repository only as a Paperclip fork,
+// so it runs Paper. The second result is false for a target that loads no
+// server packages through Lucy.
 func (t Target) PackageRuntime() (catalog.Ecosystem, bool) {
 	switch t.Product {
 	case serverpkg.ProductFabric,
@@ -93,7 +93,7 @@ func (t Target) PackageRuntime() (catalog.Ecosystem, bool) {
 		serverpkg.ProductPurpur:
 		return t.Product.Ecosystem(), true
 	}
-	if t.Bootstrapper == serverpkg.BootstrapMethodPaperclip {
+	if _, known := serverpkg.ParseProduct(t.Product.String()); !known && t.Product != serverpkg.ProductUnknown {
 		return catalog.EcosystemPaper, true
 	}
 	return catalog.EcosystemUnspecified, false
