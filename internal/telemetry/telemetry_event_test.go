@@ -58,7 +58,7 @@ func TestRecordEventDurationPayload(t *testing.T) {
 
 			submission, err := client.RecordEvent(t.Context(), Event{
 				InvocationID:     "11111111-1111-4111-8111-111111111111",
-				Command:          "java list",
+				Operation:        "java list",
 				Duration:         test.duration,
 				DurationMeasured: test.measured,
 				Outcome:          OutcomeSuccess,
@@ -76,6 +76,9 @@ func TestRecordEventDurationPayload(t *testing.T) {
 			var payload eventPayload
 			if err := json.Unmarshal(record.Payload, &payload); err != nil {
 				t.Fatalf("decode outbox payload: %v", err)
+			}
+			if payload.Operation != "java list" {
+				t.Fatalf("operation = %q, want %q", payload.Operation, "java list")
 			}
 			if !test.wantPresent {
 				if payload.DurationMS != nil {

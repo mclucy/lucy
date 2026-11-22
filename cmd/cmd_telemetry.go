@@ -176,17 +176,14 @@ func (r *Runner) recordInvocation(ctx context.Context, command *cobra.Command, s
 	r.completeCommandObservation(ended, commandErr)
 	localLog := r.telemetryLocalLog()
 	failureKind := r.telemetryFailureKind(commandErr, usageError)
-	cancelReason := r.telemetryCancelReason(
-		commandErr,
-		r.invocation.TelemetryObservation.PromptAborted(),
-	)
+	cancelReason := r.telemetryCancelReason(commandErr)
 	id := telemetry.NewUUID()
 	if localLog {
 		r.invocation.Logger.Debug("telemetry invocation", "invocation_id", id)
 	}
 	event := telemetry.Event{
 		InvocationID:     id,
-		Command:          strings.TrimPrefix(command.CommandPath(), "lucy "),
+		Operation:        strings.TrimPrefix(command.CommandPath(), "lucy "),
 		Duration:         ended.Sub(started),
 		DurationMeasured: true,
 		Outcome:          outcome,
@@ -197,9 +194,7 @@ func (r *Runner) recordInvocation(ctx context.Context, command *cobra.Command, s
 			usageError,
 			failureKind,
 			cancelReason,
-			started,
 			ended,
-			localLog,
 		),
 	}
 	submission, enqueueErr := client.RecordEvent(ctx, event)

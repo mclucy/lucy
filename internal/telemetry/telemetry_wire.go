@@ -15,34 +15,14 @@ import (
 )
 
 const (
-	maxResponseBytes = 1 << 20
-
-	maxUploadCounter = 10_000
-	// maxUploadQueueMS bounds queue_ms at the seven-day record retention.
-	maxUploadQueueMS = int64(7 * 24 * time.Hour / time.Millisecond)
-	// maxUploadEnvelopeBytes is a conservative upper bound for the serialized
-	// `,"upload":{"queue_ms":…,"attempts":…,"throttles":…}` member.
-	maxUploadEnvelopeBytes = 96
-	intakeLimitedReason    = "intake_limited"
+	maxResponseBytes    = 1 << 20
+	intakeLimitedReason = "intake_limited"
 )
 
 type wireRecord struct {
-	ID      string          `json:"id"`
-	Type    recordType      `json:"type"`
-	Payload jsontext.Value  `json:"payload"`
-	Upload  *uploadEnvelope `json:"upload,omitempty"`
-}
-
-// uploadEnvelope is transport metadata injected at POST time. It stays outside
-// a record's immutable digest and queued payload.
-type uploadEnvelope struct {
-	QueueMS   int64 `json:"queue_ms"`
-	Attempts  int   `json:"attempts"`
-	Throttles int   `json:"throttles"`
-}
-
-type wireRequest struct {
-	Records []wireRecord `json:"records"`
+	ID      string         `json:"id"`
+	Type    recordType     `json:"type"`
+	Payload jsontext.Value `json:"payload"`
 }
 
 type wireRejection struct {
@@ -77,7 +57,6 @@ type httpError struct {
 	retryable    bool
 	batchInvalid bool
 	throttled    bool
-	throttledIDs []string
 }
 
 func (failure *httpError) Error() string {
@@ -114,23 +93,15 @@ func (c *Client) checkHealth(ctx context.Context) error {
 	return nil
 }
 
-func (c *Client) uploadRecords(ctx context.Context, prepared []preparedRecord, state *persistedState) (uploadResult, error) {
-	entries := make(map[string]*queueEntry, len(prepared))
-	for index := range state.Queue {
-		entries[state.Queue[index].ID] = &state.Queue[index]
-	}
+func (c *Client) uploadRecords(ctx context.Context, body []byte, state *persistedState) (uploadResult, error) {
 	var lastErr error
 	for attempt := 1; attempt <= c.limits.MaxAttempts; attempt++ {
-		records := c.stampUploads(prepared, entries, c.now())
-		outcome, err := c.postOnce(ctx, records)
+		outcome, err := c.postOnce(ctx, body)
 		if outcome.attempted {
 			c.recordAttempt(state, outcome)
-			recordUploadAttempts(prepared, entries)
 		}
-		if err != nil {
-			if failure, isHTTP := errors.AsType[*httpError](err); isHTTP && failure.throttled {
-				recordUploadThrottles(state, prepared, entries, failure.throttledIDs)
-			}
+		if failure, isHTTP := errors.AsType[*httpError](err); isHTTP && failure.throttled {
+			recordThrottledAttempt(state)
 		}
 		if err == nil {
 			return uploadResult{
@@ -158,80 +129,11 @@ func (c *Client) uploadRecords(ctx context.Context, prepared []preparedRecord, s
 	return uploadResult{}, lastErr
 }
 
-// stampUploads copies the queued wire records and attaches event-only
-// transport metadata measured at this attempt. Reports keep their legacy
-// record shape and size. A legacy event without room for the envelope is
-// still sent in its original shape.
-func (c *Client) stampUploads(prepared []preparedRecord, entries map[string]*queueEntry, now time.Time) []wireRecord {
-	records := make([]wireRecord, len(prepared))
-	for index, item := range prepared {
-		wire := item.wire
-		if item.entry.Type == recordTypeEvent && item.wireBytes+maxUploadEnvelopeBytes <= c.limits.MaxRecordBytes {
-			attempts := 1
-			throttles := 0
-			if entry := entries[item.entry.ID]; entry != nil {
-				attempts = min(entry.UploadAttempts+1, maxUploadCounter)
-				throttles = min(max(entry.UploadThrottles, 0), maxUploadCounter)
-			}
-			wire.Upload = &uploadEnvelope{
-				QueueMS:   uploadQueueMS(item.entry.CreatedAt, now),
-				Attempts:  attempts,
-				Throttles: throttles,
-			}
-		}
-		records[index] = wire
-	}
-	return records
-}
-
-// uploadQueueMS measures time spent durably queued. Skewed clocks clamp to
-// zero so the envelope stays inside its declared bounds.
-func uploadQueueMS(createdAt time.Time, now time.Time) int64 {
-	if createdAt.IsZero() {
-		return 0
-	}
-	elapsed := now.Sub(createdAt).Milliseconds()
-	return min(max(elapsed, 0), maxUploadQueueMS)
-}
-
-func recordUploadAttempts(prepared []preparedRecord, entries map[string]*queueEntry) {
-	for _, item := range prepared {
-		if item.entry.Type != recordTypeEvent {
-			continue
-		}
-		entry := entries[item.entry.ID]
-		if entry == nil {
-			continue
-		}
-		entry.UploadAttempts = min(entry.UploadAttempts+1, maxUploadCounter)
-	}
-}
-
-// recordUploadThrottles records one intake-limited delivery attempt. A
-// retryable response that names limited records bumps only those; a batch-level
-// response bumps every event in the attempt.
-func recordUploadThrottles(state *persistedState, prepared []preparedRecord, entries map[string]*queueEntry, ids []string) {
+// recordThrottledAttempt counts one retryable delivery attempt the server
+// identified as intake-limited, by HTTP 429 or an intake_limited rejection.
+func recordThrottledAttempt(state *persistedState) {
 	if state.Transport.Throttles < math.MaxInt64 {
 		state.Transport.Throttles++
-	}
-	limited := make(map[string]struct{}, len(ids))
-	for _, id := range ids {
-		limited[id] = struct{}{}
-	}
-	for _, item := range prepared {
-		if item.entry.Type != recordTypeEvent {
-			continue
-		}
-		if len(limited) > 0 {
-			if _, ok := limited[item.entry.ID]; !ok {
-				continue
-			}
-		}
-		entry := entries[item.entry.ID]
-		if entry == nil {
-			continue
-		}
-		entry.UploadThrottles = min(entry.UploadThrottles+1, maxUploadCounter)
 	}
 }
 
@@ -249,11 +151,7 @@ func (c *Client) recordAttempt(state *persistedState, outcome attemptOutcome) {
 	}
 }
 
-func (c *Client) postOnce(ctx context.Context, records []wireRecord) (attemptOutcome, error) {
-	body, err := marshalCanonical(wireRequest{Records: records})
-	if err != nil {
-		return attemptOutcome{}, fmt.Errorf("telemetry: encode request: %w", err)
-	}
+func (c *Client) postOnce(ctx context.Context, body []byte) (attemptOutcome, error) {
 	if len(body) > c.limits.MaxRequestBytes {
 		return attemptOutcome{}, fmt.Errorf("telemetry: request body is %d bytes, limit %d", len(body), c.limits.MaxRequestBytes)
 	}
@@ -298,7 +196,7 @@ func (c *Client) postOnce(ctx context.Context, records []wireRecord) (attemptOut
 		}
 		if failure.retryable {
 			failure.throttled = response.StatusCode == http.StatusTooManyRequests
-			noteIntakeLimited(failure, responseBody, records)
+			noteIntakeLimited(failure, responseBody)
 		}
 		outcome.kind = attemptRejected
 		return outcome, failure
@@ -343,33 +241,16 @@ func (c *Client) postOnce(ctx context.Context, records []wireRecord) (attemptOut
 
 // noteIntakeLimited recognizes only the known intake_limited rejection reason
 // on a retryable response. It leaves rejection status and the queue unchanged.
-func noteIntakeLimited(failure *httpError, body []byte, records []wireRecord) {
+func noteIntakeLimited(failure *httpError, body []byte) {
 	var decoded wireResponse
-	if err := json.Unmarshal(body, &decoded); err != nil || len(decoded.Rejected) == 0 {
+	if err := json.Unmarshal(body, &decoded); err != nil {
 		return
 	}
-	known := make(map[string]struct{}, len(records))
-	for _, record := range records {
-		known[record.ID] = struct{}{}
-	}
-	seen := make(map[string]struct{}, len(decoded.Rejected))
 	for _, rejection := range decoded.Rejected {
-		if strings.TrimSpace(rejection.Reason) != intakeLimitedReason {
-			continue
+		if strings.TrimSpace(rejection.Reason) == intakeLimitedReason {
+			failure.throttled = true
+			return
 		}
-		failure.throttled = true
-		id, err := normalizeUUID(rejection.ID)
-		if err != nil {
-			continue
-		}
-		if _, ok := known[id]; !ok {
-			continue
-		}
-		if _, duplicate := seen[id]; duplicate {
-			continue
-		}
-		seen[id] = struct{}{}
-		failure.throttledIDs = append(failure.throttledIDs, id)
 	}
 }
 

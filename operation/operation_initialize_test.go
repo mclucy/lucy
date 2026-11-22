@@ -318,7 +318,7 @@ func TestInitializeResolvesFromCapturedLock(t *testing.T) {
 					}
 				}
 			},
-			InputScale: func(_, _ int) {
+			PackageCount: func(int) {
 				if err := os.WriteFile(path, captured, 0o644); err != nil {
 					t.Fatal(err)
 				}

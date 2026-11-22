@@ -112,7 +112,7 @@ func (s *Service) Resolve(
 	old *document.Lock,
 	opts Options,
 ) (*document.Lock, *Result, error) {
-	opts.Trace.reportInputScale(d, old)
+	opts.Trace.reportPackageCount(old)
 	result := newResult()
 	result.Mode = ModeResolve
 	result.Reason = "lock resolved"
@@ -175,7 +175,7 @@ func (s *Service) ApplyPlan(
 	if plan == nil || plan.Resolved == nil {
 		return nil, fmt.Errorf("installation plan is required")
 	}
-	opts.Trace.reportInputScale(plan.Manifest, plan.Previous)
+	opts.Trace.reportPackageCount(plan.Previous)
 	absolute, err := filepath.Abs(root)
 	if err != nil {
 		return nil, err

@@ -32,9 +32,9 @@ type Invocation struct {
 	Pager pager.Mode
 	// TelemetryEnabled permits projections of facts already observed by a command.
 	TelemetryEnabled bool
-	// TelemetryObservation accumulates bounded execution, prompt, scale, and
-	// warning facts for this run when telemetry is enabled. A nil observation
-	// records nothing.
+	// TelemetryObservation accumulates bounded execution and observed workload
+	// facts for this run when telemetry is enabled. A nil observation records
+	// nothing.
 	TelemetryObservation *TelemetryObservation
 	// TelemetryContexts holds only explicitly projected, bounded observations.
 	TelemetryContexts []telemetry.Context

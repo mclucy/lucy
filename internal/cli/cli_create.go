@@ -119,6 +119,10 @@ func NewCreateCommand(
 		false,
 		"Let --java add the Java vendor's package repository to the system package manager",
 	)
+	MarkTelemetryFlagArgument(cmd, flagCreateCoreName, TelemetryArgumentSelector)
+	MarkTelemetryFlagArgument(cmd, flagCreateCoreVersionName, TelemetryArgumentVersion)
+	MarkTelemetryFlagArgument(cmd, flagCreateMcName, TelemetryArgumentVersion)
+	MarkTelemetryFlagArgument(cmd, flagCreateMCDRVersionName, TelemetryArgumentVersion)
 	return cmd
 }
 

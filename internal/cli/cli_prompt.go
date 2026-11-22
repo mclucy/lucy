@@ -3,8 +3,10 @@ package cli
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"os"
+	"sync"
 	"time"
 
 	"charm.land/huh/v2"
@@ -56,25 +58,58 @@ func (g PromptGate) flagsAllow() bool {
 	return true
 }
 
-// RunPrompt runs one form under the invocation observation in ctx. The wait
-// stopwatch covers only the prompt. Abort is recorded only when huh reported
-// it and the surrounding context was not canceled, so a signal or deadline
-// keeps its own cause.
+type promptTimerKey struct{}
+
+// PromptTimer accumulates the observed wait of the forms one invocation ran.
+// Elapsed is unmeasured until a form executes, so an unopened prompt differs
+// from a form that closed immediately.
+type PromptTimer struct {
+	mu       sync.Mutex
+	elapsed  time.Duration
+	measured bool
+}
+
+// WithPromptTimer attaches the invocation's input timer to its form context.
+func WithPromptTimer(ctx context.Context, timer *PromptTimer) context.Context {
+	return context.WithValue(ctx, promptTimerKey{}, timer)
+}
+
+func (t *PromptTimer) measure(elapsed time.Duration) {
+	if t == nil {
+		return
+	}
+	t.mu.Lock()
+	t.elapsed += elapsed
+	t.measured = true
+	t.mu.Unlock()
+}
+
+func (t *PromptTimer) wait() (time.Duration, bool) {
+	if t == nil {
+		return 0, false
+	}
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return t.elapsed, t.measured
+}
+
+// RunPrompt runs one form and measures its wait when the invocation requests
+// it. The measurement covers each form exactly once, even when it fails.
 func RunPrompt(ctx context.Context, form *huh.Form) error {
-	observation := telemetryObservationFromContext(ctx)
-	started := time.Time{}
-	if observation != nil {
-		started = time.Now()
+	timer, _ := ctx.Value(promptTimerKey{}).(*PromptTimer)
+	if timer == nil {
+		return NormalizePromptError(ctx, form.RunWithContext(ctx))
 	}
+	started := time.Now()
 	raw := form.RunWithContext(ctx)
-	contextErr := ctx.Err()
-	aborted := errors.Is(raw, huh.ErrUserAborted) && contextErr == nil
-	interrupted := contextErr != nil
-	if observation != nil {
-		observation.ObservePromptWait(time.Since(started), aborted, interrupted)
-	}
+	timer.measure(time.Since(started))
 	return NormalizePromptError(ctx, raw)
 }
+
+// ErrPromptAborted reports an explicit form abort. It wraps context.Canceled
+// so every caller that treats a canceled invocation as an interruption keeps
+// matching the abort.
+var ErrPromptAborted = fmt.Errorf("prompt aborted: %w", context.Canceled)
 
 // Huh can report a cancelled context as a timeout instead of its cause.
 func NormalizePromptError(ctx context.Context, err error) error {
@@ -85,7 +120,7 @@ func NormalizePromptError(ctx context.Context, err error) error {
 		return cause
 	}
 	if errors.Is(err, huh.ErrUserAborted) {
-		return context.Canceled
+		return ErrPromptAborted
 	}
 	return err
 }

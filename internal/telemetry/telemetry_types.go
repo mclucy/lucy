@@ -111,12 +111,12 @@ type Context struct {
 	Data    any
 }
 
-// Event describes one non-sensitive invocation observation. Command is the
-// trusted command path only (for example "java list"); Event excludes
-// arguments and their values.
+// Event describes one non-sensitive invocation observation. Operation is the
+// trusted normalized command path only (for example "java list"); Event
+// excludes arguments and their values.
 type Event struct {
 	InvocationID string
-	Command      string
+	Operation    string
 	Duration     time.Duration
 	// DurationMeasured emits duration_ms even when Duration is zero. A
 	// positive Duration is emitted regardless; an unmeasured zero is omitted.

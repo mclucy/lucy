@@ -19,6 +19,54 @@ type telemetryWorkspace struct {
 	Packages         *int   `json:"packages,omitempty"`
 }
 
+// MergeWorkspacePackages attaches an observed package count to this run's
+// workspace context without replacing the runtime and environment facts a
+// command already projected. A nil count changes nothing; an observed zero is
+// a real measurement. An existing present context gains the count only when it
+// has none of its own, so a command's final document stays authoritative. An
+// absent context becomes present because the package count is itself evidence
+// of a workspace; a failed observation keeps its failure.
+func (inv *Invocation) MergeWorkspacePackages(packages *int) {
+	if inv == nil || !inv.TelemetryEnabled || packages == nil {
+		return
+	}
+	count := max(0, min(*packages, maxTelemetryScale))
+	for index := len(inv.TelemetryContexts) - 1; index >= 0; index-- {
+		context := &inv.TelemetryContexts[index]
+		if context.Kind != telemetry.ContextWorkspace {
+			continue
+		}
+		switch context.Status {
+		case telemetry.ContextFailed:
+			return
+		case telemetry.ContextPresent:
+			data, ok := context.Data.(telemetryWorkspace)
+			if !ok {
+				if pointer, pointerOK := context.Data.(*telemetryWorkspace); pointerOK && pointer != nil {
+					data = *pointer
+				} else {
+					data = telemetryWorkspace{}
+				}
+			}
+			if data.Packages != nil {
+				return
+			}
+			data.Packages = &count
+			context.Data = data
+		default:
+			context.Status = telemetry.ContextPresent
+			context.Reason = ""
+			context.Data = telemetryWorkspace{Packages: &count}
+		}
+		return
+	}
+	inv.TelemetryContexts = append(inv.TelemetryContexts, telemetry.Context{
+		Kind:   telemetry.ContextWorkspace,
+		Status: telemetry.ContextPresent,
+		Data:   telemetryWorkspace{Packages: &count},
+	})
+}
+
 func recordWorkspaceTelemetryFailure(inv *Invocation) {
 	if inv.TelemetryEnabled {
 		inv.TelemetryContexts = append(inv.TelemetryContexts, telemetry.Context{Kind: "workspace", Status: telemetry.ContextStatus("failed")})

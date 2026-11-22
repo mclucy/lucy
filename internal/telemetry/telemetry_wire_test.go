@@ -96,7 +96,7 @@ func TestFlushThrottleForUnreadableResponse(t *testing.T) {
 
 			submission, err := client.RecordEvent(t.Context(), Event{
 				InvocationID:     "22222222-2222-4222-8222-222222222222",
-				Command:          "java list",
+				Operation:        "java list",
 				DurationMeasured: true,
 				Outcome:          OutcomeSuccess,
 			})
@@ -139,21 +139,6 @@ func TestFlushThrottleForUnreadableResponse(t *testing.T) {
 			}
 			if stats.Transport.RejectedRequests != 0 || stats.Transport.Succeeded != 0 {
 				t.Fatalf("transport outcomes = %+v, want no success or rejection", stats.Transport)
-			}
-
-			state, _, err := client.loadState(now)
-			if err != nil {
-				t.Fatalf("load state: %v", err)
-			}
-			if len(state.Queue) != 1 {
-				t.Fatalf("queue entries = %d, want 1", len(state.Queue))
-			}
-			entry := state.Queue[0]
-			if entry.UploadAttempts != maxAttempts {
-				t.Fatalf("upload attempts = %d, want %d", entry.UploadAttempts, maxAttempts)
-			}
-			if entry.UploadThrottles != int(test.wantThrottles) {
-				t.Fatalf("upload throttles = %d, want %d", entry.UploadThrottles, test.wantThrottles)
 			}
 		})
 	}

@@ -47,10 +47,6 @@ type queueEntry struct {
 	CreatedAt    time.Time  `json:"created_at"`
 	PayloadBytes int64      `json:"payload_bytes"`
 	BodyBytes    int64      `json:"body_bytes,omitempty"`
-	// UploadAttempts and UploadThrottles count actual delivery attempts for
-	// event records only.
-	UploadAttempts  int `json:"upload_attempts,omitempty"`
-	UploadThrottles int `json:"upload_throttles,omitempty"`
 }
 
 // persistedState is the single source of truth for identity, policy, counters,
@@ -210,13 +206,6 @@ func (state *persistedState) normalize(now time.Time) {
 		entry.ID = entryID
 		if entry.CreatedAt.IsZero() {
 			entry.CreatedAt = now.UTC()
-		}
-		if entry.Type == recordTypeEvent {
-			entry.UploadAttempts = min(max(entry.UploadAttempts, 0), maxUploadCounter)
-			entry.UploadThrottles = min(max(entry.UploadThrottles, 0), maxUploadCounter)
-		} else {
-			entry.UploadAttempts = 0
-			entry.UploadThrottles = 0
 		}
 		kept = append(kept, entry)
 		queueBytes += entry.PayloadBytes

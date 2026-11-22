@@ -127,16 +127,15 @@ func (c *Client) SubmitReport(ctx context.Context, report Report) (Submission, e
 		}
 		return payloadResult{
 			Payload: reportPayload{
-				ReportID:         id,
-				InstallationID:   state.InstallationID,
-				InvocationID:     prepared.invocationID,
-				Kind:             string(prepared.kind),
-				Agent:            prepared.agent,
-				Model:            prepared.model,
-				CreatedAt:        prepared.createdAt.Format(time.RFC3339),
-				SchemaVersion:    SchemaVersion,
-				CollectionPolicy: payloadPolicy(state.Policy),
-				Body:             prepared.body,
+				ReportID:       id,
+				InstallationID: state.InstallationID,
+				InvocationID:   prepared.invocationID,
+				Kind:           string(prepared.kind),
+				Agent:          prepared.agent,
+				Model:          prepared.model,
+				CreatedAt:      prepared.createdAt.Format(time.RFC3339),
+				SchemaVersion:  SchemaVersion,
+				Body:           prepared.body,
 			},
 			BodyBytes: int64(len(prepared.body)),
 			Truncated: truncated,
@@ -263,13 +262,6 @@ func (c *Client) effective(state *persistedState) (bool, CollectionPolicy, SkipR
 		}
 		return false, policy, SkipDisabled
 	}
-}
-
-func payloadPolicy(policy CollectionPolicy) string {
-	if policy == CollectionOptIn {
-		return string(CollectionOptIn)
-	}
-	return string(CollectionDefault)
 }
 
 func (c *Client) debug(message string, fields ...any) {
