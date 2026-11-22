@@ -17,13 +17,17 @@ For CI, `lucy install --locked` fails when the lock is missing or out of date in
 
 Install places the files the lock lists. It removes files it installed or took over earlier that the lock no longer lists, including the previous version of a package it upgrades; unmanaged files stay in place.
 
-Installation stops when an unmanaged file occupies a package destination; pass `--overwrite` to replace files already there. The receipt hash in `.lucy/install.yaml` is a conflict baseline, not a reproducibility pin, so locally modified files are never silently overwritten or pruned, and re-initialization preserves those baselines. Seed files are user-owned: modifying one never blocks installation or triggers replacement.
+Runtime outputs are the files the server build produces: server jars, `libraries/`, `versions/`, `cache/`, launchers, and run scripts. Lucy owns them as the runtime image of the locked recipe. An existing file with the same bytes becomes owned without a rewrite. A file with other bytes is replaced, and its previous content is kept under `.lucy/displaced/<transaction-id>/` with an `index.yaml` that records its path, SHA-256, and mode. Lucy never deletes displaced files; remove them yourself. Human output reports the count (`Kept N replaced file(s) in .lucy/displaced/`), and JSON results list the paths in `files.displaced`.
 
-If the receipt is missing, files in a runtime directory stay unmanaged. A bootstrap file exactly matching a verified output can be recorded without replacement. Use [`lucy init`](/commands/init) to adopt an existing server without running installers.
+Displacement happens after the install commit point. An install interrupted before it restores the original files from rollback data, and the next Lucy run completes an interrupted cleanup.
 
-Later installs reuse an adopted runtime when it still matches the lock and its managed files are unchanged.
+Installation stops when an unmanaged file occupies a package destination; pass `--overwrite` to replace files already there. `--overwrite` does not apply to runtime outputs, which never need it. The receipt hash in `.lucy/install.yaml` is a conflict baseline, not a reproducibility pin: for a package file, a changed digest stops the install unless `--overwrite` is passed. Re-initialization preserves those baselines. Seed files are user-owned: modifying one never blocks installation or triggers replacement.
 
-When the runtime needs preparation, a verified bootstrap from another workspace with the same build and inputs can be restored. `--refresh-bootstrap` reruns it, still protecting local edits.
+Use [`lucy init`](/commands/init) to adopt an existing server without running installers.
+
+Later installs reuse the runtime when its receipt matches the lock's recipe and every runtime file the receipt owns is unchanged.
+
+When the runtime needs preparation, a verified bootstrap from another workspace with the same build and inputs can be restored, provided every restored file still matches the saved build. `--refresh-bootstrap` runs the build again instead.
 
 Installation also refuses a server with unsatisfied mod dependencies; `--accept-broken` installs the declared packages anyway.
 
@@ -137,7 +141,7 @@ Only the name changes. The installed server, packages, worlds, configuration, an
 </ParamField>
 
 <ParamField query="--overwrite" type="boolean" default="false">
-  Replace files already present at the destinations the lock selects. Other files stay in place.
+  Replace files already present at package destinations. Runtime outputs never need it.
 </ParamField>
 
 <ParamField query="--force, -f" type="boolean" default="false">
@@ -157,7 +161,7 @@ Only the name changes. The installed server, packages, worlds, configuration, an
 </ParamField>
 
 <ParamField query="--refresh-bootstrap" type="boolean" default="false">
-  Run bootstrap again instead of reusing the current runtime or a saved snapshot. Protection for locally modified files still applies.
+  Run bootstrap again instead of reusing the current runtime or a saved snapshot.
 </ParamField>
 
 `--json` prints a machine-readable result, and `--no-interactive` produces append-only output for CI logs. See [Global Flags](/commands/global-flags).

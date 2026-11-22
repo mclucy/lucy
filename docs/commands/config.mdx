@@ -23,6 +23,19 @@ lucy config set java.home ""
 
 Lucy uses the configured runtime even when it falls short of the server's requirements. See [`lucy java`](/commands/java) to set requirements for the server itself.
 
+## Choose how installed files share store content
+
+`store.link` selects how files installed from the artifact store share content with it.
+
+`clone` (the default) installs copy-on-write clones where the filesystem supports it, such as APFS, btrfs, and XFS, and plain copies elsewhere. `hardlink` makes installed files hardlinks of the stored copy and removes their write bits, so they are read-only: a server that rewrites one in place fails instead of changing the shared copy. Files whose mode cannot match the stored copy, such as executable launch scripts, are clones. Hardlinks require the store and the server on one filesystem; otherwise lucy clones or copies.
+
+```bash
+lucy config set store.link hardlink
+lucy config set --global store.link clone
+```
+
+Choose `hardlink` when the server does not rewrite its installed files and you want to avoid duplicating stored bytes. An invalid value fails every command except `lucy config`, `docs`, `schema`, and `self-update`, with an error that names `store.link`.
+
 ## Choose a release mirror and API key
 
 `github.proxy` prefixes GitHub release download URLs with a mirror, for example `https://ghfast.top/`. The value must be an absolute HTTP(S) URL without a query or fragment. An empty value downloads from GitHub directly. Only release asset downloads use the mirror; API and metadata requests go to GitHub directly.
