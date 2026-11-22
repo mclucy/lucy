@@ -159,18 +159,21 @@ func (m *Memo) observe(
 	if err != nil {
 		return Observation{}, err
 	}
-	hashes, identity, identified, readErr := digestFile(file, algorithms)
+	read, readErr := digestFile(file, algorithms)
 	closeErr := file.Close()
 	if readErr != nil || closeErr != nil {
 		return Observation{}, errors.Join(readErr, closeErr)
 	}
-	observation.Hashes = hashes
-	// The identity observed before the read describes no particular content
-	// once the read saw a change, so it must not reach a persisted record.
-	observation.Identity = identity
-	observation.HasIdentity = identified
-	if identified && !identity.Racy(time.Now()) {
-		m.store(key, identity, hashes)
+	observation.Hashes = read.hashes
+	// The pre-read stat describes no particular content once the read saw a
+	// change, so the mode, size, and identity come from the handle the bytes
+	// were read through.
+	observation.Mode = read.mode
+	observation.Size = read.size
+	observation.Identity = read.identity
+	observation.HasIdentity = read.identified
+	if read.identified && !read.identity.Racy(time.Now()) {
+		m.store(key, read.identity, read.hashes)
 	}
 	return observation, nil
 }
@@ -227,16 +230,24 @@ func cloneHashes(hashes map[string]string) map[string]string {
 // while it is read.
 const digestAttempts = 3
 
+// digestResult holds what one handle read produced. mode and size come from
+// the last stat of that handle. identity is valid only when identified is
+// true.
+type digestResult struct {
+	hashes     map[string]string
+	identity   Identity
+	identified bool
+	mode       fs.FileMode
+	size       int64
+}
+
 // digestFile reads file and returns the SHA-256 and every requested
 // algorithm. It reads the identity from the same handle before and after the
 // bytes, and reports an identity only when both reads agree, so a write during
 // the read can never pair an old digest with the identity of new content. A
 // file that keeps changing returns the digest of the last read without an
 // identity.
-func digestFile(
-	file *os.File,
-	algorithms []string,
-) (map[string]string, Identity, bool, error) {
+func digestFile(file *os.File, algorithms []string) (digestResult, error) {
 	factories := map[string]func() hash.Hash{"sha256": sha256.New}
 	for _, algorithm := range algorithms {
 		switch algorithm {
@@ -248,40 +259,47 @@ func digestFile(
 		case "md5":
 			factories[algorithm] = md5.New
 		default:
-			return nil, Identity{}, false, fmt.Errorf(
+			return digestResult{}, fmt.Errorf(
 				"unsupported artifact digest %s", algorithm,
 			)
 		}
 	}
-	var hashes map[string]string
+	var result digestResult
 	for attempt := range digestAttempts {
 		if attempt > 0 {
 			if _, err := file.Seek(0, io.SeekStart); err != nil {
-				return nil, Identity{}, false, err
+				return digestResult{}, err
 			}
 		}
 		before, err := file.Stat()
 		if err != nil {
-			return nil, Identity{}, false, err
+			return digestResult{}, err
 		}
-		hashes, err = readDigests(file, factories)
+		hashes, err := readDigests(file, factories)
 		if err != nil {
-			return nil, Identity{}, false, err
+			return digestResult{}, err
 		}
 		after, err := file.Stat()
 		if err != nil {
-			return nil, Identity{}, false, err
+			return digestResult{}, err
+		}
+		result = digestResult{
+			hashes: hashes,
+			mode:   after.Mode(),
+			size:   after.Size(),
 		}
 		first, firstOK := identityFromInfo(before)
 		last, lastOK := identityFromInfo(after)
 		if !firstOK || !lastOK {
-			return hashes, Identity{}, false, nil
+			return result, nil
 		}
 		if first.Same(last) {
-			return hashes, last, true, nil
+			result.identity = last
+			result.identified = true
+			return result, nil
 		}
 	}
-	return hashes, Identity{}, false, nil
+	return result, nil
 }
 
 func readDigests(file *os.File, factories map[string]func() hash.Hash) (map[string]string, error) {
