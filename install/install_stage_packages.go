@@ -70,34 +70,50 @@ func (s *Service) stagePackages(root, stage string, resolved *document.Lock, sto
 	return overwritePaths, nil
 }
 
-// runStagingJobs joins each bounded group before considering the next one, so
-// the first error in input order is returned. Injected sources remain serial.
+// runStagingJobs runs each job with at most installFileWorkers in flight, or
+// one at a time for an injected source. A job starts as soon as a worker frees
+// up, so one slow transfer does not hold up the jobs behind it. The first
+// failure in input order is returned and no further job starts after it.
 func runStagingJobs(ctx context.Context, count int, serial bool, run func(int) error) error {
-	workers := installFileWorkers
+	if count == 0 {
+		return ctx.Err()
+	}
+	workers := min(installFileWorkers, count)
 	if serial {
 		workers = 1
 	}
-	for base := 0; base < count; base += workers {
-		if err := ctx.Err(); err != nil {
+	var (
+		mu     sync.Mutex
+		next   int
+		failed bool
+		errs   = make([]error, count)
+		group  sync.WaitGroup
+	)
+	worker := func() {
+		for {
+			mu.Lock()
+			if failed || next >= count {
+				mu.Unlock()
+				return
+			}
+			index := next
+			next++
+			mu.Unlock()
+			if err := run(index); err != nil {
+				mu.Lock()
+				errs[index], failed = err, true
+				mu.Unlock()
+				return
+			}
+		}
+	}
+	for range workers {
+		group.Go(worker)
+	}
+	group.Wait()
+	for _, err := range errs {
+		if err != nil {
 			return err
-		}
-		width := min(workers, count-base)
-		if width == 1 {
-			if err := run(base); err != nil {
-				return err
-			}
-			continue
-		}
-		var results [installFileWorkers]error
-		var group sync.WaitGroup
-		for offset := range width {
-			group.Go(func() { results[offset] = run(base + offset) })
-		}
-		group.Wait()
-		for _, err := range results[:width] {
-			if err != nil {
-				return err
-			}
 		}
 	}
 	return ctx.Err()
