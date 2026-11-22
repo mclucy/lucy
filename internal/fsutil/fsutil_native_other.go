@@ -24,6 +24,10 @@ func renameRoot(root *os.Root, from, to string, replace bool) error {
 	return unsupportedNative("durable rename")
 }
 
+func renameDirRoot(root *os.Root, from, to string) error {
+	return unsupportedNative("durable directory rename")
+}
+
 // sameDevice has no portable implementation on this platform, so a publish
 // always stages beside its destination instead.
 func sameDevice(first, second string) bool {

@@ -75,6 +75,14 @@ func sameDevice(first, second string) bool {
 	return false
 }
 
+// renameDirRoot has no directory flush on Windows; NTFS journals the rename.
+func renameDirRoot(root *os.Root, from, to string) error {
+	if err := root.Rename(from, to); err != nil {
+		return fmt.Errorf("rename directory in root: %w", err)
+	}
+	return nil
+}
+
 func renameRoot(root *os.Root, from, to string, replace bool) (resultErr error) {
 	sourceRoot, err := root.OpenRoot(filepath.Dir(from))
 	if err != nil {

@@ -192,7 +192,12 @@ func keepDisplacedFiles(root string) (string, error) {
 	} else if !errors.Is(err, os.ErrNotExist) {
 		return "", err
 	}
-	if err := os.Rename(source, filepath.Join(root, name)); err != nil {
+	files, err := os.OpenRoot(root)
+	if err != nil {
+		return "", err
+	}
+	renameErr := fsutil.RenameDirRoot(files, filepath.FromSlash(workspacewrite.DisplacedRoot), name)
+	if err := errors.Join(renameErr, files.Close()); err != nil {
 		return "", fmt.Errorf("keep displaced files: %w", err)
 	}
 	return name, nil

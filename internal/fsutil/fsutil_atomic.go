@@ -36,6 +36,16 @@ func RenameRootNoReplace(root *os.Root, from, to string) error {
 	return publishRoot(root, from, to, false)
 }
 
+// RenameDirRoot renames a directory inside root and persists the rename. The
+// destination must be absent. The directory's own entries must already be
+// durable.
+func RenameDirRoot(root *os.Root, from, to string) error {
+	if !filepath.IsLocal(from) || !filepath.IsLocal(to) {
+		return fmt.Errorf("rename paths must stay inside their root")
+	}
+	return renameDirRoot(root, filepath.Clean(from), filepath.Clean(to))
+}
+
 func publishRoot(root *os.Root, from, to string, replace bool) error {
 	if !filepath.IsLocal(from) || !filepath.IsLocal(to) {
 		return fmt.Errorf("rename paths must stay inside their root")

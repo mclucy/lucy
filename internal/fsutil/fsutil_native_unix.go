@@ -50,6 +50,13 @@ func renameRoot(root *os.Root, from, to string, replace bool) error {
 	return syncRenameChain(root, from, to)
 }
 
+func renameDirRoot(root *os.Root, from, to string) error {
+	if err := root.Rename(from, to); err != nil {
+		return fmt.Errorf("rename directory in root: %w", err)
+	}
+	return syncRenameChain(root, from, to)
+}
+
 // sameDevice reports whether both paths live on one filesystem, so that a
 // staged copy reaches its destination through a rename. When either path
 // cannot be stated, it reports false and the publish stages beside the
