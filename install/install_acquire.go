@@ -46,6 +46,9 @@ type downloadStore struct {
 	injected    func(*catalog.Artifact) (artifact.MaterializedFile, error)
 	verified    sync.Map   // cas.Digest -> *objectVerification
 	progressMu  sync.Mutex // concurrent staging and fetch reports
+	// injectedMu keeps a caller-supplied materializer one call at a time: it
+	// is external code that may keep state between calls.
+	injectedMu sync.Mutex
 }
 
 // A pinned object can be requested by several staging workers. Only one
@@ -314,7 +317,9 @@ func (s *downloadStore) injectedMaterialize(a *catalog.Artifact) (artifact.Mater
 		input.Modules[i].Provides = slices.Clone(a.Modules[i].Provides)
 		input.Modules[i].Dependencies = slices.Clone(a.Modules[i].Dependencies)
 	}
+	s.injectedMu.Lock()
 	materialized, err := s.injected(&input)
+	s.injectedMu.Unlock()
 	if err != nil {
 		return artifact.MaterializedFile{}, err
 	}

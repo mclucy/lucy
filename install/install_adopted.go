@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync"
 
 	"github.com/mclucy/lucy/artifact"
 	"github.com/mclucy/lucy/artifactstore"
@@ -181,6 +182,9 @@ func prepareAdoptedArtifacts(
 // digest it pins, and the observed SHA-256, match its bytes; a name or role
 // never stands in for that proof, so a launcher cannot satisfy its installer.
 type localRuntimeSource struct {
+	// mu guards the digests and store paths cached per file: acquisitions of
+	// one server product run in parallel and share this source.
+	mu    sync.Mutex
 	root  string
 	files []*localRuntimeFile
 }
@@ -292,6 +296,8 @@ func (s *localRuntimeSource) materialize(
 	ctx context.Context,
 	a *catalog.Artifact,
 ) (artifact.MaterializedFile, bool, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	if len(s.files) == 0 || a.Embedded != "" {
 		return artifact.MaterializedFile{}, false, nil
 	}
