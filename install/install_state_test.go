@@ -65,6 +65,42 @@ func TestBootstrapCurrentRequiresReceiptOwnershipOfManagedOutput(t *testing.T) {
 	}
 }
 
+// The snapshot recipe key names a shareable output tree, but an installation
+// answers one directory. Changing the locked server directory must therefore
+// change the fingerprint and force a restage.
+func TestBootstrapFingerprintIncludesServerDirectory(t *testing.T) {
+	lock := &document.Lock{
+		Server: document.LockedServer{
+			Directory:   "server",
+			Product:     server.ProductMinecraft,
+			Minecraft:   "1.21.4",
+			CoreVersion: "1.21.4",
+			Bootstrap:   server.BootstrapMethodVanilla,
+			Artifact: catalog.Artifact{
+				Provider:  catalog.ProviderMojang,
+				ProjectID: "server",
+				Version:   "1.21.4",
+				Filename:  "server.jar",
+				Hashes:    map[string]string{"sha256": transactionTestDigest([]byte("core"))},
+			},
+		},
+	}
+	moved := *lock
+	moved.Server.Directory = "server2"
+
+	before, err := receipt.BootstrapFingerprint(lock)
+	if err != nil {
+		t.Fatalf("fingerprint before move: %v", err)
+	}
+	after, err := receipt.BootstrapFingerprint(&moved)
+	if err != nil {
+		t.Fatalf("fingerprint after move: %v", err)
+	}
+	if before == after {
+		t.Fatal("server directory change did not change the bootstrap fingerprint")
+	}
+}
+
 // A recorded seed proves only that the bootstrap produced the file. Deleting it
 // must invalidate currentness so the next install writes it again, while an
 // edit to its content stays user-owned.
