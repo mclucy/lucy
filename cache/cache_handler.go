@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"maps"
+	"os"
 	"path/filepath"
 	"slices"
 	"sync"
@@ -17,6 +18,10 @@ import (
 )
 
 var ErrDisabled = errors.New("cache is disabled")
+
+// missingObjectRetries bounds how often get reloads the index after the
+// object of an entry vanished.
+const missingObjectRetries = 2
 
 type handler struct {
 	mu     sync.Mutex
@@ -262,20 +267,29 @@ func (h *handler) get(k string) (
 			hit, reader, filename, digest = false, nil, "", cas.Digest{}
 		}
 	}()
-	entry, ok := h.index.get(canonicalizeKey(k))
-	if !ok || !entry.Expiration.After(time.Now()) {
-		return false, nil, "", cas.Digest{}, nil
-	}
 	var err error
-	digest, err = cas.ParseDigest(entry.ContentHash)
-	if err != nil {
-		return false, nil, "", cas.Digest{}, err
+	for attempt := 0; ; attempt++ {
+		entry, ok := h.index.get(canonicalizeKey(k))
+		if !ok || !entry.Expiration.After(time.Now()) {
+			return false, nil, "", cas.Digest{}, nil
+		}
+		digest, err = cas.ParseDigest(entry.ContentHash)
+		if err != nil {
+			return false, nil, "", cas.Digest{}, err
+		}
+		reader, err = h.store.Open(digest)
+		if err == nil {
+			return true, reader, entry.Filename, digest, nil
+		}
+		// Another process publishes a replacement entry before it reclaims
+		// the old object, so a refresh after a missing object finds it.
+		if !errors.Is(err, os.ErrNotExist) || attempt == missingObjectRetries {
+			return false, nil, "", cas.Digest{}, err
+		}
+		if err := h.refresh(); err != nil {
+			return false, nil, "", cas.Digest{}, err
+		}
 	}
-	reader, err = h.store.Open(digest)
-	if err != nil {
-		return false, nil, "", cas.Digest{}, err
-	}
-	return true, reader, entry.Filename, digest, nil
 }
 
 func (h *handler) getBytes(k string) (bool, []byte, error) {
