@@ -150,6 +150,9 @@ type PackagesRequest struct {
 	Context  context.Context
 	Manifest *document.Manifest
 	Previous []document.Package
+	// PreviousTarget is the runtime Previous was resolved for. A zero value
+	// reuses no recorded analysis.
+	PreviousTarget Target
 	// PreserveLocked keeps the file recorded by Previous selectable when the
 	// catalogue no longer publishes it for the current labels. It applies only
 	// while the runtime target is unchanged.

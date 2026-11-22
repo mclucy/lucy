@@ -423,8 +423,13 @@ func (c *AnalysisCache) RecordVerified(candidate upstream.Candidate, target Targ
 // names its artifact and hashes, so a pinned candidate whose lock recorded its
 // modules needs no materialization or reopen. Packages without recorded
 // modules are skipped: an absent module list does not prove the artifact has
-// none.
-func (c *AnalysisCache) SeedPrevious(previous []document.Package, target Target) {
+// none. A descriptor reader selects its files by loader and Minecraft
+// version, so a package resolved for previousTarget is seeded only when both
+// match target.
+func (c *AnalysisCache) SeedPrevious(previous []document.Package, previousTarget, target Target) {
+	if previousTarget.Minecraft == "" || previousTarget.Minecraft != target.Minecraft {
+		return
+	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	for i := range previous {
@@ -432,12 +437,12 @@ func (c *AnalysisCache) SeedPrevious(previous []document.Package, target Target)
 		if p.Artifact.Filename == "" || len(p.Artifact.Modules) == 0 {
 			continue
 		}
+		loader := target.DescriptorLoader(p.Ecosystem)
+		if previousTarget.DescriptorLoader(p.Ecosystem) != loader {
+			continue
+		}
 		candidate := upstream.Candidate{Artifact: p.Artifact}
-		key := analysisKeyFor(
-			candidate,
-			target.DescriptorLoader(p.Ecosystem),
-			target.Minecraft,
-		)
+		key := analysisKeyFor(candidate, loader, target.Minecraft)
 		// A shared cache may seed the same lock again for another search.
 		if _, hit := c.lookupLocked(key, p.Artifact.Hashes); hit {
 			continue

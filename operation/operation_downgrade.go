@@ -151,11 +151,13 @@ func (s *Service) Downgrade(
 	if err != nil {
 		return nil, err
 	}
+	lockTarget := upgradeTarget(old, coreModules)
 	packages, warnings, err := resolve.Packages(resolve.PackagesRequest{
 		Context:                ctx,
 		Manifest:               nextManifest,
 		Previous:               old.Packages,
-		Target:                 upgradeTarget(old, coreModules),
+		PreviousTarget:         lockTarget,
+		Target:                 lockTarget,
 		Candidates:             candidates,
 		Materialize:            materialize,
 		WithOptional:           opts.Install.WithOptional,

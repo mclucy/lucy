@@ -44,7 +44,7 @@ The resolver receives candidate lookup and artifact materialization as injected 
 
 Resolution overlaps upstream work with its sequential search. It starts candidate listings for the manifest roots it already knows and for dependencies a chosen candidate reveals, and it analyzes the top-ranked candidate of each listing in the background. The search consumes listings and analyses in its established order, so the selected graph and every reported error stay the same as a serial search. Work the search never needs is cancelled when resolution ends, and its errors are dropped with it.
 
-A command can share candidate listings between related resolutions, such as the bounded upgrade frontier, because a listing answers the same builds whatever selectors a resolution applies. The artifact analysis cache also accepts the previous lock as a seed: a pinned package whose recorded key and hashes match is reused without materializing or reopening its artifact.
+A command can share candidate listings between related resolutions, such as the bounded upgrade frontier, because a listing answers the same builds whatever selectors a resolution applies. The artifact analysis cache also accepts the previous lock as a seed when the lock was resolved for the same Minecraft version and descriptor loader: a pinned package whose recorded key and hashes match is reused without materializing or reopening its artifact. After a runtime change, every candidate is analyzed again, because a descriptor reader can select other descriptor files for another Minecraft version.
 
 Candidates carry compatibility and dependency evidence; resolution has no generic package-fetch path.
 

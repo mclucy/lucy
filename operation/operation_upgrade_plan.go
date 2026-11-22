@@ -68,11 +68,13 @@ func (s *Service) resolveUpgradeOption(
 	if moduleErr != nil {
 		s.logger.Warn(fmt.Errorf("read server core modules: %w", moduleErr))
 	}
+	lockTarget := upgradeTarget(old, coreModules)
 	packages, resolutionWarnings, err := resolve.Packages(resolve.PackagesRequest{
 		Context:            ctx,
 		Manifest:           resolutionManifest,
 		Previous:           old.Packages,
-		Target:             upgradeTarget(old, coreModules),
+		PreviousTarget:     lockTarget,
+		Target:             lockTarget,
 		Candidates:         s.source.Candidates,
 		Materialize:        materialize,
 		ExpandDependencies: true,

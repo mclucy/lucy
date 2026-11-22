@@ -366,7 +366,7 @@ func Packages(request PackagesRequest) ([]document.Package, []error, error) {
 	if cache == nil {
 		cache = NewAnalysisCache()
 	}
-	cache.SeedPrevious(request.Previous, target)
+	cache.SeedPrevious(request.Previous, request.PreviousTarget, target)
 	prefetch := newPrefetcher(ctx, request, cache, request.Listings)
 	defer prefetch.close()
 	attempts := 0

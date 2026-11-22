@@ -182,6 +182,13 @@ func (s *Service) resolveInstall(
 		Logger:             s.logger,
 		Trace:              opts.Trace.resolveTrace(),
 	}
+	if old != nil {
+		packageRequest.PreviousTarget = resolve.Target{
+			Product:     old.Server.Product,
+			Minecraft:   old.Server.Minecraft,
+			CoreVersion: old.Server.CoreVersion,
+		}
+	}
 	if len(opts.Adopted) > 0 {
 		cache, err := prepareAdoptedArtifacts(ctx, root, opts.Adopted, &packageRequest.Target)
 		if err != nil {
