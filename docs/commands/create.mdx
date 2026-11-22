@@ -35,7 +35,7 @@ Quilt servers load both Quilt and Fabric mods, while Fabric servers load Fabric 
 
 ## Existing files
 
-Lucy warns when the directory is not empty and continues, leaving existing files in place. The installation can still stop on an unmanaged file at a package destination, so prefer an empty directory.
+Lucy warns when the directory is not empty and continues. A file at a server runtime path with other contents is replaced, and its previous contents are kept under `.lucy/displaced/`. An unmanaged file at a package destination stops the installation, so prefer an empty directory.
 
 An existing `lucy.yaml` is never replaced silently: the interactive form asks first, and non-interactive runs need `--force`. Replacing a manifest discards its package declarations, and the installation can remove files that only those declarations required.
 
