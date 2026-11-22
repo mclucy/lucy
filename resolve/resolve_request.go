@@ -79,21 +79,24 @@ type ModuleIdentity struct {
 }
 
 // PackageRuntime returns the ecosystem whose loader loads server packages on
-// target. A product outside Lucy's product table comes from a GitHub
-// repository, and Lucy resolves such a repository only as a Paperclip fork,
-// so it runs Paper. The second result is false for a target that loads no
+// target. Lucy resolves every Paper-family, Bukkit-family, or unlisted product
+// as a Paperclip server, from a release API or a GitHub repository, so each of
+// them runs Paper. The second result is false for a target that loads no
 // server packages through Lucy.
 func (t Target) PackageRuntime() (catalog.Ecosystem, bool) {
-	switch t.Product {
-	case serverpkg.ProductFabric,
-		serverpkg.ProductQuilt,
-		serverpkg.ProductForge,
-		serverpkg.ProductNeoForge,
-		serverpkg.ProductPaper,
-		serverpkg.ProductPurpur:
-		return t.Product.Ecosystem(), true
+	if t.Product == serverpkg.ProductUnknown {
+		return catalog.EcosystemUnspecified, false
 	}
-	if _, known := serverpkg.ParseProduct(t.Product.String()); !known && t.Product != serverpkg.ProductUnknown {
+	if _, known := serverpkg.ParseProduct(t.Product.String()); !known {
+		return catalog.EcosystemPaper, true
+	}
+	switch ecosystem := t.Product.Ecosystem(); ecosystem {
+	case catalog.EcosystemFabric,
+		catalog.EcosystemQuilt,
+		catalog.EcosystemForge,
+		catalog.EcosystemNeoForge:
+		return ecosystem, true
+	case catalog.EcosystemPaper, catalog.EcosystemBukkit:
 		return catalog.EcosystemPaper, true
 	}
 	return catalog.EcosystemUnspecified, false
