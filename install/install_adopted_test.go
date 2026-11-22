@@ -161,9 +161,9 @@ func TestPrepareAdoptedArtifactsVerifiesObservedAndRequestedDigests(t *testing.T
 
 	// Both packages must be reachable from the store by the observed SHA-256,
 	// with no transfer cache and no injected materializer.
-	store := &downloadStore{ctx: context.Background(), offline: true}
+	store := &downloadStore{offline: true}
 	for id, want := range map[string][]byte{"alpha": alphaBytes, "beta": betaBytes} {
-		materialized, err := store.materializeFor(&catalog.Artifact{
+		materialized, err := store.materializeFor(t.Context(), &catalog.Artifact{
 			Filename: id + ".jar",
 			Hashes:   map[string]string{"sha256": adoptedTestDigests(want)["sha256"]},
 		}, id+".jar")
@@ -244,8 +244,8 @@ func TestResolveReuseAddsProvenSHA256AndReplaysOffline(t *testing.T) {
 
 	// An offline replay has no injected materializer and an empty transfer
 	// cache; only the proven store object can answer it.
-	store := &downloadStore{ctx: context.Background(), offline: true}
-	materialized, err := store.materializeFor(&resolved.Server.Artifact, "server core")
+	store := &downloadStore{offline: true}
+	materialized, err := store.materializeFor(t.Context(), &resolved.Server.Artifact, "server core")
 	if err != nil {
 		t.Fatalf("materialize enriched core offline: %v", err)
 	}

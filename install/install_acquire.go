@@ -35,7 +35,6 @@ var (
 )
 
 type downloadStore struct {
-	ctx         context.Context
 	offline     bool
 	storeOnly   bool
 	trace       *Trace
@@ -43,7 +42,7 @@ type downloadStore struct {
 	network     *cache.Client
 	logger      *log.Logger
 	githubProxy string
-	injected    func(*catalog.Artifact) (artifact.MaterializedFile, error)
+	injected    artifact.Materializer
 	verified    sync.Map   // cas.Digest -> *objectVerification
 	progressMu  sync.Mutex // concurrent staging and fetch reports
 	// injectedMu keeps a caller-supplied materializer one call at a time: it
@@ -192,12 +191,19 @@ func digestValues(hashers map[string]hash.Hash, algorithms map[string]string, fi
 // hashes when the artifact becomes part of a lock. A store hit performs no
 // network or cache access; a miss copies verified bytes from the network cache
 // or the network into the store.
-func (s *downloadStore) materialize(a *catalog.Artifact) (artifact.MaterializedFile, error) {
-	return s.materializeFor(a, a.Filename)
+func (s *downloadStore) materialize(
+	ctx context.Context,
+	a *catalog.Artifact,
+) (artifact.MaterializedFile, error) {
+	return s.materializeFor(ctx, a, a.Filename)
 }
 
-func (s *downloadStore) materializeFor(a *catalog.Artifact, transferName string) (artifact.MaterializedFile, error) {
-	if err := s.ctx.Err(); err != nil {
+func (s *downloadStore) materializeFor(
+	ctx context.Context,
+	a *catalog.Artifact,
+	transferName string,
+) (artifact.MaterializedFile, error) {
+	if err := ctx.Err(); err != nil {
 		return artifact.MaterializedFile{}, err
 	}
 	if a.Embedded != "" {
@@ -207,7 +213,7 @@ func (s *downloadStore) materializeFor(a *catalog.Artifact, transferName string)
 		return artifact.MaterializedFile{}, fmt.Errorf("invalid artifact filename %q", a.Filename)
 	}
 	if s.injected != nil {
-		file, err := s.injectedMaterialize(a)
+		file, err := s.injectedMaterialize(ctx, a)
 		if s.storeOnly && errors.Is(err, os.ErrNotExist) {
 			err = fmt.Errorf("%w: %s: %w", errOfflineArtifactUnavailable, a.Filename, err)
 		}
@@ -230,7 +236,7 @@ func (s *downloadStore) materializeFor(a *catalog.Artifact, transferName string)
 		entry = s.verification(digest)
 		entry.mu.Lock()
 		defer entry.mu.Unlock()
-		if err := s.ctx.Err(); err != nil {
+		if err := ctx.Err(); err != nil {
 			return artifact.MaterializedFile{}, err
 		}
 		destination := store.Path(digest)
@@ -278,7 +284,7 @@ func (s *downloadStore) materializeFor(a *catalog.Artifact, transferName string)
 	if s.storeOnly {
 		return artifact.MaterializedFile{}, fmt.Errorf("%w: %s", errOfflineArtifactUnavailable, a.Filename)
 	}
-	source, cleanup, err := s.downloadArtifact(a, transferName)
+	source, cleanup, err := s.downloadArtifact(ctx, a, transferName)
 	if cleanup != nil {
 		defer cleanup()
 	}
@@ -308,7 +314,10 @@ func (s *downloadStore) materializeFor(a *catalog.Artifact, transferName string)
 // the hash guarantee. Verified bytes enter the artifact store because a lock
 // that mentions them must remain replayable. It does not touch the fetch
 // summary, which describes the configured cache's transfers.
-func (s *downloadStore) injectedMaterialize(a *catalog.Artifact) (artifact.MaterializedFile, error) {
+func (s *downloadStore) injectedMaterialize(
+	ctx context.Context,
+	a *catalog.Artifact,
+) (artifact.MaterializedFile, error) {
 	expected := maps.Clone(a.Hashes)
 	input := *a
 	input.Hashes = maps.Clone(a.Hashes)
@@ -318,7 +327,7 @@ func (s *downloadStore) injectedMaterialize(a *catalog.Artifact) (artifact.Mater
 		input.Modules[i].Dependencies = slices.Clone(a.Modules[i].Dependencies)
 	}
 	s.injectedMu.Lock()
-	materialized, err := s.injected(&input)
+	materialized, err := s.injected(ctx, &input)
 	s.injectedMu.Unlock()
 	if err != nil {
 		return artifact.MaterializedFile{}, err
@@ -426,7 +435,11 @@ func artifactCacheIdentity(a *catalog.Artifact) (string, error) {
 // and the persisted artifact URL stay the artifact's own URL. The returned
 // path is temporary; callers import it into the store before removing the
 // directory.
-func (s *downloadStore) downloadArtifact(a *catalog.Artifact, transferName string) (string, func(), error) {
+func (s *downloadStore) downloadArtifact(
+	ctx context.Context,
+	a *catalog.Artifact,
+	transferName string,
+) (string, func(), error) {
 	if s.network == nil {
 		return "", nil, errors.New("artifact download client is unavailable")
 	}
@@ -494,7 +507,7 @@ func (s *downloadStore) downloadArtifact(a *catalog.Artifact, transferName strin
 		"host", downloadHost(options.RequestURL),
 	)
 	started := time.Now()
-	result, err := s.network.CachedDownload(s.ctx, identity, directory, options)
+	result, err := s.network.CachedDownload(ctx, identity, directory, options)
 	if err != nil {
 		return "", cleanup, err
 	}

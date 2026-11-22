@@ -48,7 +48,7 @@ func (s *Service) resolveInstall(
 		FilePattern:    d.Server.Core.FilePattern,
 	}
 	localRuntime := newLocalRuntimeSource(root, opts.LocalRuntime)
-	acquire := localRuntime.acquire(ctx, store.materialize)
+	acquire := localRuntime.acquire(store.materialize)
 	var core upstream.ServerProductResolution
 	canReuse := false
 	if old != nil {

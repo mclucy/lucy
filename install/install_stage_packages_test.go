@@ -38,9 +38,9 @@ func TestStagePackagesReportsProgressDuringConcurrentFetches(t *testing.T) {
 			counts = append(counts, count)
 		},
 	}
-	store := &downloadStore{ctx: t.Context(), network: acquireTestCache(t), trace: trace}
+	store := &downloadStore{network: acquireTestCache(t), trace: trace}
 	service := &Service{}
-	if _, _, err := service.stagePackages(t.TempDir(), t.TempDir(), locked, store, nil, Options{Trace: trace}); err != nil {
+	if _, _, err := service.stagePackages(t.Context(), t.TempDir(), t.TempDir(), locked, store, nil, Options{Trace: trace}); err != nil {
 		t.Fatal(err)
 	}
 	if !slices.Equal(counts, []int{1, 2, 3, 4}) || len(active) != 0 {

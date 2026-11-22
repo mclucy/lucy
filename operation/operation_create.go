@@ -39,7 +39,7 @@ type CreateOptions struct {
 	Trace          *install.Trace
 	// Materialize supplies artifact bytes for planning and the optional
 	// installation. Nil uses the configured cache and network.
-	Materialize func(*catalog.Artifact) (artifact.MaterializedFile, error)
+	Materialize artifact.Materializer
 }
 
 // CreateTarget is the result of observing a directory before creation. It

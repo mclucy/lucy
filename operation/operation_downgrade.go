@@ -116,7 +116,7 @@ func (s *Service) Downgrade(
 	if err != nil {
 		return nil, err
 	}
-	materialize, fetch := s.install.Materializer(ctx, opts.Install)
+	materialize, fetch := s.install.Materializer(opts.Install)
 	// The lock's core modules describe the frozen runtime. A lock that
 	// predates recording them needs the artifact, and failing to read it
 	// would make the resolution answer a different runtime.

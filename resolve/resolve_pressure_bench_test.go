@@ -132,7 +132,7 @@ func BenchmarkPackageSearch(b *testing.B) {
 					lookups.Add(1)
 					return builds[name], nil
 				},
-				Materialize: func(a *catalog.Artifact) (artifact.MaterializedFile, error) {
+				Materialize: func(_ context.Context, a *catalog.Artifact) (artifact.MaterializedFile, error) {
 					reads.Add(1)
 					return artifact.MaterializedFile{Path: filepath.Join(dir, a.Filename)}, nil
 				},

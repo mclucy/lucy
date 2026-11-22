@@ -109,7 +109,7 @@ type prefetcher struct {
 	ctx         context.Context
 	cancel      context.CancelFunc
 	source      CandidateSource
-	materialize func(*catalog.Artifact) (artifact.MaterializedFile, error)
+	materialize artifact.Materializer
 	cache       *AnalysisCache
 	shared      *CandidateCache
 	target      Target
@@ -372,7 +372,7 @@ func (p *prefetcher) analyzeSerial(
 	if err := ctx.Err(); err != nil {
 		return analysisResult{fatal: err}
 	}
-	materialized, err := p.materialize(&a)
+	materialized, err := p.materialize(ctx, &a)
 	if err != nil {
 		return analysisResult{fatal: err}
 	}

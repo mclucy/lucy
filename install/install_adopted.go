@@ -223,16 +223,14 @@ func newLocalRuntimeSource(root string, files []AdoptedRuntimeFile) *localRuntim
 }
 
 // acquire wraps next so an artifact the observed runtime proves is imported
-// instead of transferred. Every other artifact keeps the normal path.
-func (s *localRuntimeSource) acquire(
-	ctx context.Context,
-	next func(*catalog.Artifact) (artifact.MaterializedFile, error),
-) func(*catalog.Artifact) (artifact.MaterializedFile, error) {
-	return func(a *catalog.Artifact) (artifact.MaterializedFile, error) {
+// instead of transferred. Every other artifact keeps the normal path. It
+// forwards each caller's context, so cancelling a caller abandons its work.
+func (s *localRuntimeSource) acquire(next artifact.Materializer) artifact.Materializer {
+	return func(ctx context.Context, a *catalog.Artifact) (artifact.MaterializedFile, error) {
 		if materialized, matched, err := s.materialize(ctx, a); err != nil || matched {
 			return materialized, err
 		}
-		return next(a)
+		return next(ctx, a)
 	}
 }
 

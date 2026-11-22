@@ -71,10 +71,10 @@ func operationTestDigest(data []byte) string {
 	return hex.EncodeToString(sum[:])
 }
 
-func operationTestMaterializer(t *testing.T, files map[string][]byte) func(*catalog.Artifact) (artifact.MaterializedFile, error) {
+func operationTestMaterializer(t *testing.T, files map[string][]byte) artifact.Materializer {
 	t.Helper()
 	directory := t.TempDir()
-	return func(a *catalog.Artifact) (artifact.MaterializedFile, error) {
+	return func(_ context.Context, a *catalog.Artifact) (artifact.MaterializedFile, error) {
 		data, ok := files[a.Filename]
 		if !ok {
 			return artifact.MaterializedFile{}, fmt.Errorf("unexpected artifact %s", a.Filename)
@@ -157,7 +157,7 @@ func (s *replaySource) Metadata(_ context.Context, endpoint string, _ any) error
 func (s *replaySource) ResolveServerProduct(
 	_ context.Context,
 	request upstream.ServerProductRequest,
-	_ func(*catalog.Artifact) (artifact.MaterializedFile, error),
+	_ artifact.Materializer,
 ) (upstream.ServerProductResolution, error) {
 	coreVersion := request.ProductVersion
 	if coreVersion == "" || coreVersion.CanInfer() || coreVersion.IsInvalid() {

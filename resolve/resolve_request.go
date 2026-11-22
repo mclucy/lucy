@@ -165,7 +165,7 @@ type PackagesRequest struct {
 	// select. It is required for every non-empty resolution.
 	Candidates CandidateSource
 	// Materialize must leave its input unchanged and return verified local bytes.
-	Materialize  func(*catalog.Artifact) (artifact.MaterializedFile, error)
+	Materialize  artifact.Materializer
 	WithOptional bool
 	AcceptBroken bool
 	// AcceptPackageConflicts accepts a graph whose package metadata conflicts

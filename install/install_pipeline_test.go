@@ -81,10 +81,10 @@ func installTestDigest(data []byte) string {
 // installTestMaterializer writes injected bytes to a private directory and
 // returns their path. Installation recomputes the digests, so the mapping must
 // name every artifact the pipeline asks for.
-func installTestMaterializer(t *testing.T, files map[string][]byte) func(*catalog.Artifact) (artifact.MaterializedFile, error) {
+func installTestMaterializer(t *testing.T, files map[string][]byte) artifact.Materializer {
 	t.Helper()
 	directory := t.TempDir()
-	return func(a *catalog.Artifact) (artifact.MaterializedFile, error) {
+	return func(_ context.Context, a *catalog.Artifact) (artifact.MaterializedFile, error) {
 		data, ok := files[a.Filename]
 		if !ok {
 			return artifact.MaterializedFile{}, fmt.Errorf("unexpected artifact %s", a.Filename)
@@ -178,7 +178,7 @@ func (s *pipelineSource) Metadata(context.Context, string, any) error {
 func (s *pipelineSource) ResolveServerProduct(
 	_ context.Context,
 	request upstream.ServerProductRequest,
-	_ func(*catalog.Artifact) (artifact.MaterializedFile, error),
+	_ artifact.Materializer,
 ) (upstream.ServerProductResolution, error) {
 	core := s.core
 	core.Version = request.ProductVersion

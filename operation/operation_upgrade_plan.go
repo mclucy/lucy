@@ -10,7 +10,6 @@ import (
 	"strings"
 
 	"github.com/mclucy/lucy/artifact"
-	"github.com/mclucy/lucy/catalog"
 	"github.com/mclucy/lucy/document"
 	"github.com/mclucy/lucy/install"
 	"github.com/mclucy/lucy/resolve"
@@ -30,7 +29,7 @@ func (s *Service) resolveUpgradeOption(
 	roots []upgradeRoot,
 	active []int,
 	combo []int,
-	materialize func(*catalog.Artifact) (artifact.MaterializedFile, error),
+	materialize artifact.Materializer,
 	cache *resolve.AnalysisCache,
 	listings *resolve.CandidateCache,
 	trace *install.Trace,

@@ -192,7 +192,10 @@ func (f *catalogueFixture) addArchive(t *testing.T, fileID string, data []byte) 
 	}
 }
 
-func (f *catalogueFixture) materialize(a *catalog.Artifact) (artifact.MaterializedFile, error) {
+func (f *catalogueFixture) materialize(
+	_ context.Context,
+	a *catalog.Artifact,
+) (artifact.MaterializedFile, error) {
 	archive, ok := f.artifacts[a.FileID]
 	if !ok {
 		return artifact.MaterializedFile{}, fmt.Errorf("no fixture archive for artifact file %q", a.FileID)

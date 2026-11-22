@@ -21,7 +21,7 @@ func CoreModules(
 	ctx context.Context,
 	product server.Product,
 	core catalog.Artifact,
-	acquire func(*catalog.Artifact) (artifact.MaterializedFile, error),
+	acquire artifact.Materializer,
 ) ([]catalog.DescriptorModule, error) {
 	definition, ok := loaderRuntimeFor(product)
 	if !ok {
@@ -30,7 +30,7 @@ func CoreModules(
 	if len(core.Modules) > 0 {
 		return core.Modules, nil
 	}
-	materialized, err := acquire(&core)
+	materialized, err := acquire(ctx, &core)
 	if err != nil {
 		return nil, err
 	}
@@ -99,7 +99,7 @@ func (r *Router) trustMavenChecksum(
 func (r *Router) ResolveServerProduct(
 	ctx context.Context,
 	req upstream.ServerProductRequest,
-	acquire func(*catalog.Artifact) (artifact.MaterializedFile, error),
+	acquire artifact.Materializer,
 ) (upstream.ServerProductResolution, error) {
 	out := upstream.ServerProductResolution{
 		Minecraft:      req.Minecraft,
@@ -139,7 +139,7 @@ func (r *Router) ResolveServerProduct(
 		out.Artifact = minecraft
 		out.Bootstrap = server.BootstrapMethodVanilla
 		out.ProductVersion = req.Minecraft
-		materialized, err := acquire(&out.Artifact)
+		materialized, err := acquire(ctx, &out.Artifact)
 		if err != nil {
 			return out, err
 		}
@@ -198,7 +198,7 @@ func (r *Router) ResolveServerProduct(
 				URL:       remote.FileURL,
 				Hashes:    map[string]string{},
 			}
-			materialized, e := acquire(&out.Artifact)
+			materialized, e := acquire(ctx, &out.Artifact)
 			if e != nil {
 				return out, e
 			}
@@ -270,7 +270,7 @@ func (r *Router) ResolveServerProduct(
 	if err != nil {
 		return out, err
 	}
-	materialized, err := acquire(&out.Artifact)
+	materialized, err := acquire(ctx, &out.Artifact)
 	if err != nil {
 		return out, err
 	}
