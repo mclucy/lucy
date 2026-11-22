@@ -355,6 +355,7 @@ func applyCommit(root, stage string, d *document.Manifest, l *document.Lock, pub
 			}
 			target := filepath.Join(root, relative)
 			isSeed := classified && out.Policy == bootstrap.PolicySeed
+			runtimeOutput := classified && !isPackage && isManagedRuntimeOutput(out)
 			if tracked[strings.ToLower(relative)] {
 				if !isSeed {
 					return fmt.Errorf("tracked file %s collides with managed runtime output", relative)
@@ -383,6 +384,7 @@ func applyCommit(root, stage string, d *document.Manifest, l *document.Lock, pub
 				fileMode = info.Mode().Perm()
 			}
 			var base *workspacewrite.InstallImage
+			displace := false
 			targetInfo, err := os.Lstat(target)
 			switch {
 			case err == nil:
@@ -404,20 +406,22 @@ func applyCommit(root, stage string, d *document.Manifest, l *document.Lock, pub
 				prior, isOwned := owned[relative]
 				if !isOwned {
 					switch {
-					case overwritePaths[relative]:
+					case !runtimeOutput && overwritePaths[relative]:
 						logger.Debug(
 							"overwriting unowned output",
 							"path", relative,
 							"reason", "overwrite requested",
 						)
-					case classified && !isPackage && strings.EqualFold(actual["sha256"], sha256):
+					case classified && !isPackage && strings.EqualFold(current.SHA256, sha256):
 						// Retain the existing mode; adoption is not a replacement.
 						fileMode = targetInfo.Mode().Perm()
 						logger.Debug(
 							"adopting byte-identical unowned output",
 							"path", relative,
-							"sha256", actual["sha256"],
+							"sha256", current.SHA256,
 						)
+					case runtimeOutput:
+						displace = true
 					default:
 						if isPackage {
 							return fmt.Errorf("unowned output conflict: %s (rerun with --overwrite to replace it)", relative)
@@ -428,13 +432,16 @@ func applyCommit(root, stage string, d *document.Manifest, l *document.Lock, pub
 						)
 					}
 				} else if !matchesReceipt(prior, &current) {
-					if overwritePaths[relative] {
+					switch {
+					case runtimeOutput:
+						displace = true
+					case overwritePaths[relative]:
 						logger.Debug(
 							"overwriting modified output",
 							"path", relative,
 							"reason", "overwrite requested",
 						)
-					} else {
+					default:
 						return fmt.Errorf("modified owned output conflict: %s", relative)
 					}
 				}
@@ -490,10 +497,11 @@ func applyCommit(root, stage string, d *document.Manifest, l *document.Lock, pub
 				Mode:   workspacewrite.EffectiveInstallMode(fileMode),
 			}
 			staged[relative] = commitWrite{
-				path:   relative,
-				source: p,
-				base:   base,
-				after:  &after,
+				path:     relative,
+				source:   p,
+				base:     base,
+				after:    &after,
+				displace: displace,
 			}
 			return nil
 		})
@@ -574,7 +582,7 @@ func applyCommit(root, stage string, d *document.Manifest, l *document.Lock, pub
 	if err != nil {
 		return FileChanges{}, err
 	}
-	var counts FileChanges
+	counts := FileChanges{Displaced: []string{}}
 	for _, entry := range applied {
 		if entry.After == nil {
 			if _, pruned := pruneExpected[entry.Path]; pruned {
@@ -587,8 +595,11 @@ func applyCommit(root, stage string, d *document.Manifest, l *document.Lock, pub
 		}
 		if entry.Before == nil {
 			counts.Created++
-		} else if entry.Before.SHA256 != entry.After.SHA256 {
+		} else if entry.Displace || entry.Before.SHA256 != entry.After.SHA256 {
 			counts.Replaced++
+		}
+		if entry.Displace {
+			counts.Displaced = append(counts.Displaced, entry.Path)
 		}
 	}
 	logger.Info(

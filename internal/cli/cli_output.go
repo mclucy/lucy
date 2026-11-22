@@ -256,6 +256,9 @@ func (o *installOutput) Render(result *install.Result) error {
 			o.renderer.Println(append([]string{""}, changes...)...)
 		}
 	}
+	if line := displacedFilesLine(len(result.Files.Displaced)); line != "" {
+		o.renderer.Println(o.inv.Theme.Muted(line))
+	}
 	if trailer := publicationLine(result, o.inv.Theme); trailer != "" {
 		o.renderer.Println("", trailer)
 	}

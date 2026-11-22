@@ -2,6 +2,7 @@ package install
 
 import (
 	"bytes"
+	"crypto/rand"
 	"errors"
 	"fmt"
 	"os"
@@ -22,11 +23,12 @@ import (
 // and after is the image the write produces. Satisfying base is the write's
 // precondition, not a description of what the path currently holds.
 type commitWrite struct {
-	path   string
-	data   []byte
-	source string
-	base   *workspacewrite.InstallImage
-	after  *workspacewrite.InstallImage
+	path     string
+	data     []byte
+	source   string
+	base     *workspacewrite.InstallImage
+	after    *workspacewrite.InstallImage
+	displace bool
 }
 
 // commitPrune records one path a transaction removes. A nil expected means the
@@ -51,31 +53,32 @@ type commitRequest struct {
 	verify    func(files *os.Root, entries []workspacewrite.InstallJournalEntry) error
 }
 
-// executeCommit applies a request as one journaled transaction and returns the
-// journal entries it mutated. A request whose paths all match their planned
-// images publishes no journal. The caller must hold the workspace writer lock
-// and must have replayed interrupted journals first.
+// executeCommit applies a request and returns the entries it mutated, sorted by
+// path. The caller must hold the workspace writer lock and must replay any
+// interrupted journal first.
 func executeCommit(
 	root string,
 	request commitRequest,
 	logger *log.Logger,
 ) (applied []workspacewrite.InstallJournalEntry, resultErr error) {
 	type change struct {
-		path   string
-		data   []byte
-		source string
-		before *workspacewrite.InstallImage
-		after  *workspacewrite.InstallImage
-		prune  bool
+		path     string
+		data     []byte
+		source   string
+		before   *workspacewrite.InstallImage
+		after    *workspacewrite.InstallImage
+		prune    bool
+		displace bool
 	}
 	changes := make([]change, 0, len(request.writes)+len(request.prunes))
 	for _, write := range request.writes {
 		changes = append(changes, change{
-			path:   write.path,
-			data:   write.data,
-			source: write.source,
-			before: write.base,
-			after:  write.after,
+			path:     write.path,
+			data:     write.data,
+			source:   write.source,
+			before:   write.base,
+			after:    write.after,
+			displace: write.displace,
 		})
 	}
 	for _, prune := range request.prunes {
@@ -121,8 +124,9 @@ func executeCommit(
 			)
 		}
 	}
-	backup, err := os.MkdirTemp(filepath.Join(root, ".lucy"), "rollback-*")
-	if err != nil {
+	backupRelative := ".lucy/rollback-" + rand.Text()
+	backup := filepath.Join(root, filepath.FromSlash(backupRelative))
+	if err := files.Mkdir(filepath.FromSlash(backupRelative), 0o700); err != nil {
 		return nil, err
 	}
 	journalPublished := false
@@ -138,9 +142,6 @@ func executeCommit(
 			))
 		}
 	}()
-	backupRelative := filepath.ToSlash(
-		filepath.Join(".lucy", filepath.Base(backup)),
-	)
 	journal := workspacewrite.InstallJournal{
 		Backup:  backupRelative,
 		Entries: make([]workspacewrite.InstallJournalEntry, 0, len(changes)),
@@ -178,7 +179,7 @@ func executeCommit(
 					change.path,
 				)
 			}
-			if before != nil &&
+			if !change.displace && before != nil &&
 				workspacewrite.InstallImagesEqual(before, change.after) {
 				continue
 			}
@@ -197,9 +198,10 @@ func executeCommit(
 		journal.Entries = append(
 			journal.Entries,
 			workspacewrite.InstallJournalEntry{
-				Path:   change.path,
-				Before: before,
-				After:  change.after,
+				Path:     change.path,
+				Before:   before,
+				After:    change.after,
+				Displace: change.displace,
 			},
 		)
 	}
@@ -331,21 +333,8 @@ func executeCommit(
 		return nil, err
 	}
 	failed = false
-	if err := os.RemoveAll(backup); err != nil {
-		return nil, &CommittedError{Err: fmt.Errorf(
-			"%s committed; remove rollback backup: %w",
-			request.label,
-			err,
-		)}
-	}
-	if err := workspacewrite.RemoveRoot(
-		files, workspacewrite.InstallJournalName,
-	); err != nil {
-		return nil, &CommittedError{Err: fmt.Errorf(
-			"%s committed; remove transaction journal: %w",
-			request.label,
-			err,
-		)}
+	if err := workspacewrite.CleanupCommittedInstall(files, &journal); err != nil {
+		return nil, &CommittedError{Err: err}
 	}
 	return applied, nil
 }

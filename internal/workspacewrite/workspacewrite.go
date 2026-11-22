@@ -24,6 +24,15 @@ const (
 
 	// LockFileName names the writer lock inside the workspace state directory.
 	LockFileName = "writer.lock"
+
+	// DisplacedRoot holds one directory per committed installation that
+	// replaced files it did not own or that were edited after it owned them.
+	// Lucy never deletes this content; the user does.
+	DisplacedRoot = ".lucy/displaced"
+
+	// DisplacedIndexName names the index inside each installation directory
+	// under DisplacedRoot.
+	DisplacedIndexName = "index.yaml"
 )
 
 // InstallImage describes one content state of a path. A nil image means the
@@ -37,26 +46,41 @@ type InstallImage struct {
 // state of one path that a commit may touch. A nil Before marks a path the
 // commit creates; a nil After marks a path the commit prunes. Content hashes
 // and modes identify whether recovery may reverse the transition; Mode also
-// supplies the permissions to restore.
+// supplies the permissions to restore. Displace keeps the Before content under
+// DisplacedRoot once the commit point passes; it requires a Before image.
 type InstallJournalEntry struct {
-	Path   string        `yaml:"path"`
-	Before *InstallImage `yaml:"before,omitempty"`
-	After  *InstallImage `yaml:"after,omitempty"`
+	Path     string        `yaml:"path"`
+	Before   *InstallImage `yaml:"before,omitempty"`
+	After    *InstallImage `yaml:"after,omitempty"`
+	Displace bool          `yaml:"displace,omitempty"`
+}
+
+// DisplacedFile records one file kept under DisplacedRoot. Path is the
+// workspace path the file occupied and also its path below the installation
+// directory.
+type DisplacedFile struct {
+	Path   string `yaml:"path"`
+	SHA256 string `yaml:"sha256"`
+	Mode   uint32 `yaml:"mode"`
+}
+
+// DisplacedIndex lists the files one installation displaced.
+type DisplacedIndex struct {
+	Files []DisplacedFile `yaml:"files"`
 }
 
 // InstallJournal is the installation rollback record. Backup is relative to
 // the workspace root, so moving the workspace keeps it valid. Committed marks
-// the commit point: once set, recovery only removes rollback data and never
-// rewrites workspace files. Decoding is strict, so a legacy changed/created
-// journal or any unknown field is refused instead of reinterpreted.
+// the commit point. Recovery preserves displaced files and removes the rollback
+// data without changing installed files.
 type InstallJournal struct {
 	Backup    string                `yaml:"backup"`
 	Committed bool                  `yaml:"committed,omitempty"`
 	Entries   []InstallJournalEntry `yaml:"entries"`
 }
 
-// RecoveryCleanupError reports that recovery of a committed installation could
-// not remove its rollback data. Installed files and documents stay in place.
+// RecoveryCleanupError reports a cleanup failure after the commit point.
+// Installed files and documents stay in place.
 type RecoveryCleanupError struct{ Err error }
 
 func (e *RecoveryCleanupError) Error() string { return e.Err.Error() }
@@ -173,10 +197,11 @@ func ReplayInstallJournal(
 	if err := guard(root, "recovering an interrupted installation"); err != nil {
 		return err
 	}
-	backup, err := installJournalBackup(root, journal.Backup)
+	files, err := os.OpenRoot(root)
 	if err != nil {
 		return err
 	}
+	defer func() { resultErr = errors.Join(resultErr, files.Close()) }()
 	journalPath := filepath.Join(root, InstallJournalName)
 	if journal.Committed {
 		logger.Warn(
@@ -185,10 +210,19 @@ func ReplayInstallJournal(
 				journalPath,
 			),
 		)
-		if err := cleanupCommittedInstall(root, backup, journalPath, logger); err != nil {
+		if err := CleanupCommittedInstall(files, journal); err != nil {
 			return err
 		}
+		logger.Info(
+			"installation transaction cleanup completed",
+			"root", root,
+			"journal", journalPath,
+		)
 		return nil
+	}
+	backup, err := installJournalBackup(root, journal.Backup)
+	if err != nil {
+		return err
 	}
 	if err := validateInstallJournal(root, journal); err != nil {
 		return err
@@ -199,11 +233,6 @@ func ReplayInstallJournal(
 			journalPath, len(journal.Entries),
 		),
 	)
-	files, err := os.OpenRoot(root)
-	if err != nil {
-		return err
-	}
-	defer func() { resultErr = errors.Join(resultErr, files.Close()) }()
 	plan := make([]InstallJournalEntry, 0, len(journal.Entries))
 	refused := make([]string, 0)
 	for _, entry := range journal.Entries {
@@ -308,9 +337,12 @@ func installJournalBackup(root, backup string) (string, error) {
 }
 
 func validateInstallJournal(root string, journal *InstallJournal) error {
-	folded := make(map[string][]string, len(journal.Entries))
+	folded := map[string][]string{}
 	for _, entry := range journal.Entries {
-		if entry.Path == "" || !filepath.IsLocal(filepath.FromSlash(entry.Path)) {
+		if journal.Committed && !entry.Displace {
+			continue
+		}
+		if entry.Path == "" || entry.Path == "." || !filepath.IsLocal(filepath.FromSlash(entry.Path)) {
 			return fmt.Errorf("invalid installation journal path %q", entry.Path)
 		}
 		if filepath.ToSlash(filepath.Clean(filepath.FromSlash(entry.Path))) != entry.Path {
@@ -331,6 +363,9 @@ func validateInstallJournal(root string, journal *InstallJournal) error {
 			}
 		}
 		folded[key] = append(folded[key], entry.Path)
+		if entry.Displace && entry.Before == nil {
+			return fmt.Errorf("installation journal path %q has no before image to displace", entry.Path)
+		}
 		if entry.Before == nil && entry.After == nil {
 			return fmt.Errorf(
 				"installation journal path %q has neither before nor after image",
@@ -348,8 +383,10 @@ func validateInstallJournal(root string, journal *InstallJournal) error {
 				)
 			}
 		}
-		if err := SafePath(root, filepath.FromSlash(entry.Path)); err != nil {
-			return err
+		if !journal.Committed {
+			if err := SafePath(root, filepath.FromSlash(entry.Path)); err != nil {
+				return err
+			}
 		}
 	}
 	return nil
@@ -368,28 +405,129 @@ func validateInstallImage(image *InstallImage) error {
 	return nil
 }
 
-func cleanupCommittedInstall(root, backup, journalPath string, logger *log.Logger) (resultErr error) {
-	files, err := os.OpenRoot(root)
+// CleanupCommittedInstall preserves displaced files before removing the
+// rollback backup and its journal. The caller must hold the workspace writer
+// lock and must have published the committed journal.
+func CleanupCommittedInstall(files *os.Root, journal *InstallJournal) error {
+	if !journal.Committed {
+		return errors.New("installation cleanup requires a committed journal")
+	}
+	if err := cleanupCommittedInstall(files, journal); err != nil {
+		return &RecoveryCleanupError{Err: fmt.Errorf("installation committed; %w", err)}
+	}
+	return nil
+}
+
+func cleanupCommittedInstall(files *os.Root, journal *InstallJournal) error {
+	backup, err := installJournalBackup(files.Name(), journal.Backup)
 	if err != nil {
 		return err
 	}
-	defer func() { resultErr = errors.Join(resultErr, files.Close()) }()
+	if err := validateInstallJournal(files.Name(), journal); err != nil {
+		return err
+	}
+	if err := preserveDisplacedInstallFiles(files, backup, journal.Entries); err != nil {
+		return fmt.Errorf("preserve displaced files: %w", err)
+	}
 	if err := files.RemoveAll(backup); err != nil {
-		return &RecoveryCleanupError{Err: fmt.Errorf(
-			"installation committed; remove rollback backup %s: %w", backup, err,
-		)}
+		return fmt.Errorf("remove rollback backup %s: %w", backup, err)
 	}
 	if err := RemoveRoot(files, InstallJournalName); err != nil {
-		return &RecoveryCleanupError{Err: fmt.Errorf(
-			"installation committed; remove transaction journal: %w", err,
-		)}
+		return fmt.Errorf("remove transaction journal: %w", err)
 	}
-	logger.Info(
-		"installation transaction cleanup completed",
-		"root", root,
-		"journal", journalPath,
-	)
 	return nil
+}
+
+func preserveDisplacedInstallFiles(files *os.Root, backup string, entries []InstallJournalEntry) error {
+	index := DisplacedIndex{}
+	var directory string
+	for _, entry := range entries {
+		if !entry.Displace {
+			continue
+		}
+		if directory == "" {
+			id := strings.TrimPrefix(filepath.Base(backup), "rollback-")
+			if id == "." || !filepath.IsLocal(id) {
+				return fmt.Errorf("invalid displacement directory name %q", id)
+			}
+			directory = filepath.Join(DisplacedRoot, id)
+		}
+		first, _, _ := strings.Cut(entry.Path, "/")
+		if strings.EqualFold(first, DisplacedIndexName) {
+			return fmt.Errorf("displaced path %q conflicts with the displacement index", entry.Path)
+		}
+		target := filepath.Join(directory, filepath.FromSlash(entry.Path))
+		if err := preserveDisplacedInstallFile(files, backup, target, entry); err != nil {
+			return fmt.Errorf("displace %s: %w", entry.Path, err)
+		}
+		index.Files = append(index.Files, DisplacedFile{
+			Path:   entry.Path,
+			SHA256: entry.Before.SHA256,
+			Mode:   entry.Before.Mode,
+		})
+	}
+	if len(index.Files) == 0 {
+		return nil
+	}
+	raw, err := yaml.Marshal(index)
+	if err != nil {
+		return fmt.Errorf("encode displacement index: %w", err)
+	}
+	target := filepath.Join(directory, DisplacedIndexName)
+	if err := fsutil.WriteRoot(
+		files,
+		target,
+		bytes.NewReader(raw),
+		fsutil.WriteOptions{Mode: 0o600, Replace: true},
+	); err != nil {
+		return fmt.Errorf("write displacement index: %w", err)
+	}
+	return nil
+}
+
+func preserveDisplacedInstallFile(
+	files *os.Root,
+	backup, target string,
+	entry InstallJournalEntry,
+) error {
+	if err := SafePath(files.Name(), target); err != nil {
+		return err
+	}
+	current, err := ObserveInstallImage(files, target)
+	if err != nil {
+		return err
+	}
+	if current != nil {
+		if current.SHA256 != entry.Before.SHA256 {
+			return fmt.Errorf("displaced file %s does not match its before image", target)
+		}
+		return nil
+	}
+	if err := checkInstallPreImage(files, backup, entry); err != nil {
+		return err
+	}
+	source, err := files.Open(filepath.Join(backup, entry.Before.SHA256))
+	if err != nil {
+		return err
+	}
+	hasher := sha256.New()
+	check := func() error {
+		if hex.EncodeToString(hasher.Sum(nil)) != entry.Before.SHA256 {
+			return fmt.Errorf("installation pre-image %s is incomplete", entry.Before.SHA256)
+		}
+		return nil
+	}
+	// Keep shared pre-images until every displaced file and the index exist.
+	copyErr := fsutil.WriteRoot(
+		files,
+		target,
+		io.TeeReader(source, hasher),
+		fsutil.WriteOptions{
+			Mode:  os.FileMode(entry.Before.Mode),
+			Check: check,
+		},
+	)
+	return errors.Join(copyErr, source.Close())
 }
 
 // installEntryState describes how far a commit got with one journal path.
