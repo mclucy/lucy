@@ -39,7 +39,7 @@ jobs:
         with:
           persist-credentials: false
 
-      # The filters mirror the paths each suite is built from. The init and mutation
+      # The filters mirror the paths each suite is built from. The init and heuristic
       # suites run the real CLI binary, so they share its full dependency closure:
       # every package the CLI command tree links, not only the packages their own
       # test directories name. A change that matches no filter runs no e2e domain.
@@ -49,7 +49,7 @@ jobs:
         uses: dorny/paths-filter@v4
         with:
           filters: |
-            mutation:
+            heuristic:
               - '.github/workflows/ci.yml'
               - '.github/workflows/e2e-run.yml'
               - '.github/workflows/e2e.yml'
@@ -63,7 +63,7 @@ jobs:
               - 'config/**'
               - 'document/**'
               - 'e2e/internal/**'
-              - 'e2e/mutation/**'
+              - 'e2e/heuristic/**'
               - 'filetrack/**'
               - 'go.mod'
               - 'go.sum'
@@ -173,7 +173,7 @@ jobs:
       - name: Plan suite matrix
         id: plan
         env:
-          DOMAINS: ${{ inputs.force && '["mutation","init","compile"]' || steps.filter.outputs.changes }}
+          DOMAINS: ${{ inputs.force && '["heuristic","init","compile"]' || steps.filter.outputs.changes }}
           COMPILE_FULL: ${{ inputs.compile-full || (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'ci:compile-full')) }}
         run: go run ./scripts/e2e-plan.go
 

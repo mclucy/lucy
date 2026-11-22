@@ -1,6 +1,6 @@
 //go:build e2e
 
-package mutation
+package heuristic
 
 import (
 	"bytes"
@@ -45,7 +45,7 @@ func reportRoot(t *testing.T) string {
 	if artifactsEnabled() {
 		return t.ArtifactDir()
 	}
-	return filepath.Join(testkit.RepoRoot(t), "test_e2e-reports", "mutation")
+	return filepath.Join(testkit.RepoRoot(t), "test_e2e-reports", "heuristic")
 }
 
 func artifactsEnabled() bool {

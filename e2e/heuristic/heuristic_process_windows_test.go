@@ -1,6 +1,6 @@
 //go:build e2e && windows
 
-package mutation
+package heuristic
 
 import (
 	"errors"

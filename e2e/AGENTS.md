@@ -8,13 +8,13 @@ The e2e domain suites are Go tests behind the `e2e` build tag. They run the buil
 
 - `e2e/init` initializes modpack manifests from generated server sandboxes.
 - `e2e/compile` compiles repository fixtures from `e2e/testdata/repo`.
-- `e2e/mutation` runs heuristic add, remove, and upgrade-all cases from YAML fixtures. Its observation cases are recorded, not gated. Four contract anchors in the same package gate fixed rejection behaviors.
+- `e2e/heuristic` runs heuristic add, remove, and upgrade-all cases from YAML fixtures. Its observation cases are recorded, not gated. Four contract anchors in the same package gate fixed rejection behaviors.
 
 The `cmd` filetrack guard suite runs in the default test suite (`go test ./...`); it invokes the CLI in process and uses a helper process for the world session lock. The default suite stays hermetic through temporary directories, local HTTP servers, and self-executed helper processes.
 
 ## Running Domain Suites
 
-Build Lucy first. Generate sandboxes only for `e2e/init`, which clones them; `e2e/compile` and `e2e/mutation` do not read `.sandboxes`:
+Build Lucy first. Generate sandboxes only for `e2e/init`, which clones them; `e2e/compile` and `e2e/heuristic` do not read `.sandboxes`:
 
 ```bash
 task build                                # Build dist/lucy binary
@@ -22,12 +22,12 @@ task sandboxes:gen                        # Materialize sandboxes into .sandboxe
 
 go test -tags e2e -count=1 ./e2e/init     # Initialize modpack manifests
 go test -tags e2e -count=1 ./e2e/compile  # Compile e2e/testdata/repo fixtures
-go test -tags e2e -count=1 -timeout 0 ./e2e/mutation # Heuristic add, remove, upgrade-all cases
+go test -tags e2e -count=1 -timeout 0 ./e2e/heuristic # Heuristic add, remove, upgrade-all cases
 ```
 
-`task e2e:init`, `task e2e:compile`, `task e2e:compile:smoke`, `task e2e:mutation`, and `task e2e:mutation:smoke` wrap these commands.
+`task e2e:init`, `task e2e:compile`, `task e2e:compile:smoke`, `task e2e:heuristic`, and `task e2e:heuristic:smoke` wrap these commands.
 
-Direct `go test` runs of `e2e/mutation` need `-timeout 0`, because Go's default test timeout would kill a long run.
+Direct `go test` runs of `e2e/heuristic` need `-timeout 0`, because Go's default test timeout would kill a long run.
 
 ### Filtering and Test Flags
 
@@ -47,15 +47,15 @@ Direct `go test` runs of `e2e/mutation` need `-timeout 0`, because Go's default 
 
 - **Init (`e2e/init`)**: Runs `lucy init` in a clone of each modpack sandbox and verifies the generated manifest and lock.
 - **Compile (`e2e/compile`)**: Compiles repository fixtures from `e2e/testdata/repo`. Fixtures marked `smoke: true` form the default CI layer (`LUCY_COMPILE_LAYER=smoke` or `task e2e:compile:smoke`). The full table runs when labeled with `ci:compile-full`.
-- **Mutation (`e2e/mutation`)**: Heuristic corpus described below.
+- **Heuristic (`e2e/heuristic`)**: Heuristic corpus described below.
 
-## Heuristic Mutation Suite
+## Heuristic Suite
 
-`e2e/mutation` records how the real CLI behaves on hand-authored add, remove, and upgrade-all cases. Observation cases are not a regression gate; the four contract anchors in the same package are (see [Contract Anchors](#contract-anchors)). You author concrete examples in YAML; the runner does not generate cases, randomize inputs, or assert expected outcomes for them.
+`e2e/heuristic` records how the real CLI behaves on hand-authored add, remove, and upgrade-all cases. Observation cases are not a regression gate; the four contract anchors in the same package are (see [Contract Anchors](#contract-anchors)). You author concrete examples in YAML; the runner does not generate cases, randomize inputs, or assert expected outcomes for them.
 
 ### Fixture Files and Schema
 
-Each file in `e2e/mutation/testdata/` holds a YAML sequence of cases for one command:
+Each file in `e2e/heuristic/testdata/` holds a YAML sequence of cases for one command:
 
 - `add.yaml` → `TestAddHeuristic`
 - `remove.yaml` → `TestRemoveHeuristic`
@@ -86,14 +86,14 @@ Authoring rules:
 
 ```bash
 task build                                                    # Build dist/lucy binary
-task e2e:mutation                                             # All cases in all three files
-task e2e:mutation -- -run 'TestAddHeuristic/<case id>'        # One case
-task e2e:mutation:smoke                                       # Smoke cases only
-LUCY_HEURISTIC_REPORT_DIR=<absolute dir> task e2e:mutation    # Write reports to an absolute path
-LUCY_HEURISTIC_COMMAND_TIMEOUT=10m task e2e:mutation          # Per-command timeout (default 3m)
+task e2e:heuristic                                             # All cases in all three files
+task e2e:heuristic -- -run 'TestAddHeuristic/<case id>'        # One case
+task e2e:heuristic:smoke                                       # Smoke cases only
+LUCY_HEURISTIC_REPORT_DIR=<absolute dir> task e2e:heuristic    # Write reports to an absolute path
+LUCY_HEURISTIC_COMMAND_TIMEOUT=10m task e2e:heuristic          # Per-command timeout (default 3m)
 ```
 
-`task e2e:mutation` runs the full layer, and `task e2e:mutation:smoke` runs the smoke layer; each task sets `LUCY_HEURISTIC_LAYER` itself. For a direct `go test` run, `LUCY_HEURISTIC_LAYER` unset or `full` runs every case; `smoke` runs only `smoke: true` cases; any other value fails the test. Each case runs with `--no-style` in an isolated temporary root and home directory, so cases do not share state or touch the developer's configuration.
+`task e2e:heuristic` runs the full layer, and `task e2e:heuristic:smoke` runs the smoke layer; each task sets `LUCY_HEURISTIC_LAYER` itself. For a direct `go test` run, `LUCY_HEURISTIC_LAYER` unset or `full` runs every case; `smoke` runs only `smoke: true` cases; any other value fails the test. Each case runs with `--no-style` in an isolated temporary root and home directory, so cases do not share state or touch the developer's configuration.
 
 ### Random Sampling
 
@@ -107,18 +107,18 @@ LUCY_HEURISTIC_COMMAND_TIMEOUT=10m task e2e:mutation          # Per-command time
 
 ```bash
 task build
-LUCY_HEURISTIC_SAMPLE=5 LUCY_HEURISTIC_SEED=20261106 task e2e:mutation -- -run '^TestAddHeuristic$'
+LUCY_HEURISTIC_SAMPLE=5 LUCY_HEURISTIC_SEED=20261106 task e2e:heuristic -- -run '^TestAddHeuristic$'
 ```
 
 To replay one operation, rerun with its printed or indexed seed, the same sample count, and a top-level `-run` for that operation, such as `-run '^TestAddHeuristic$'`.
 
 ### Outcomes and Reports
 
-Reports go to `LUCY_HEURISTIC_REPORT_DIR`. When unset, they go to `test_e2e-reports/mutation` at the repository root (`test_*` is git-ignored). Each run writes to `<root>/<command>/<run-id>/`, where `<command>` is `add`, `remove`, or `upgrade`, and `<run-id>` is a UTC timestamp plus 8 random hex characters (for example `20261106T083012.123456789Z-1a2b3c4d`). A run directory holds `fixture/<command>.yaml` (the exact fixture bytes), `cases/<case-id>/`, and `index.json`. Each case directory holds `report.json`, `input/` (a copy of the workspace taken before setup), and stage output files `<stage>-stdout.txt` and `<stage>-stderr.txt`: `setup-*` when the case has `setup`, and `command-*` for the case command. `report.json` holds `command`, `id`, `smoke`, `fixture`, `definition` (manifest, args, setup, files), `invocation` (`binary`, `directory`, `timeout`), `before`, an optional `setup` stage, and `main`, the case command stage (stage name `command`). Each stage holds `name`, `argv`, `outcome` (`status` is `exited`, `signaled`, `timeout`, or `skipped`, plus `exit_code`, `detail`, and `duration_ms`), `stdout`, `stderr`, `after`, and `changes`; a skipped stage has no output, snapshot, or changes. Index entries hold `id`, `smoke`, `status`, `exit_code`, `setup_status` and `setup_exit_code` (when the case has `setup`), and `report` (the path to the case `report.json`). The resolved path is logged. Read the reports to judge the CLI's behavior.
+Reports go to `LUCY_HEURISTIC_REPORT_DIR`. When unset, they go to `test_e2e-reports/heuristic` at the repository root (`test_*` is git-ignored). Each run writes to `<root>/<command>/<run-id>/`, where `<command>` is `add`, `remove`, or `upgrade`, and `<run-id>` is a UTC timestamp plus 8 random hex characters (for example `20261106T083012.123456789Z-1a2b3c4d`). A run directory holds `fixture/<command>.yaml` (the exact fixture bytes), `cases/<case-id>/`, and `index.json`. Each case directory holds `report.json`, `input/` (a copy of the workspace taken before setup), and stage output files `<stage>-stdout.txt` and `<stage>-stderr.txt`: `setup-*` when the case has `setup`, and `command-*` for the case command. `report.json` holds `command`, `id`, `smoke`, `fixture`, `definition` (manifest, args, setup, files), `invocation` (`binary`, `directory`, `timeout`), `before`, an optional `setup` stage, and `main`, the case command stage (stage name `command`). Each stage holds `name`, `argv`, `outcome` (`status` is `exited`, `signaled`, `timeout`, or `skipped`, plus `exit_code`, `detail`, and `duration_ms`), `stdout`, `stderr`, `after`, and `changes`; a skipped stage has no output, snapshot, or changes. Index entries hold `id`, `smoke`, `status`, `exit_code`, `setup_status` and `setup_exit_code` (when the case has `setup`), and `report` (the path to the case `report.json`). The resolved path is logged. Read the reports to judge the CLI's behavior.
 
 Report root: when `LUCY_HEURISTIC_REPORT_DIR` is unset but Go's `-artifacts` flag is set, reports go under the `t.ArtifactDir` root, which takes precedence over the repository fallback.
 
-Relative `LUCY_HEURISTIC_REPORT_DIR` values resolve against `e2e/mutation`, the directory `go test` runs in, not the repository root. Pass an absolute path. The same applies to `-lucy`.
+Relative `LUCY_HEURISTIC_REPORT_DIR` values resolve against `e2e/heuristic`, the directory `go test` runs in, not the repository root. Pass an absolute path. The same applies to `-lucy`.
 
 Paths: `fixture.path` in `index.json` and `report.json` is relative to the run root. Stage output paths are relative to the case directory.
 
@@ -130,12 +130,12 @@ Cases execute the real CLI and may resolve packages over the network, so runs ta
 
 ### Contract Anchors
 
-Four tests in `e2e/mutation` check fixed rejection contracts and gate the run. They ignore the layer and sample settings, but honor `LUCY_HEURISTIC_COMMAND_TIMEOUT`. Their results are not written to heuristic reports. Run them alone with `-run '^TestMutation'`:
+Four tests in `e2e/heuristic` check fixed rejection contracts and gate the run. They ignore the layer and sample settings, but honor `LUCY_HEURISTIC_COMMAND_TIMEOUT`. Their results are not written to heuristic reports. Run them alone with `-run '^(TestAddRejectsMissingManifest|TestRemoveRejectsMissingManifest|TestRemoveKeepsUnparseableManifest|TestUpgradeKeepsManifestWithoutLock)$'`:
 
-- `TestMutationAddRejectsMissingManifest`
-- `TestMutationRemoveRejectsMissingManifest`
-- `TestMutationRemoveKeepsUnparseableManifest`
-- `TestMutationUpgradeKeepsManifestWithoutLock`
+- `TestAddRejectsMissingManifest`
+- `TestRemoveRejectsMissingManifest`
+- `TestRemoveKeepsUnparseableManifest`
+- `TestUpgradeKeepsManifestWithoutLock`
 
 An anchor fails on a timeout, a clean exit, or a nonzero exit whose output lacks the expected reason. It also fails when the manifest, lock, or workspace entries differ from what the contract requires.
 
@@ -155,8 +155,8 @@ task build
 
 ```bash
 export LUCY_HEURISTIC_SAMPLE=10 LUCY_HEURISTIC_SEED=20261106
-LUCY_HEURISTIC_REPORT_DIR="$PWD/test_reports/baseline" go test -tags e2e -count=1 -timeout 0 -parallel 3 -v ./e2e/mutation -args -lucy "$PWD/test_baseline/dist/lucy"
-LUCY_HEURISTIC_REPORT_DIR="$PWD/test_reports/changed" go test -tags e2e -count=1 -timeout 0 -parallel 3 -v ./e2e/mutation -args -lucy "$PWD/dist/lucy"
+LUCY_HEURISTIC_REPORT_DIR="$PWD/test_reports/baseline" go test -tags e2e -count=1 -timeout 0 -parallel 3 -v ./e2e/heuristic -args -lucy "$PWD/test_baseline/dist/lucy"
+LUCY_HEURISTIC_REPORT_DIR="$PWD/test_reports/changed" go test -tags e2e -count=1 -timeout 0 -parallel 3 -v ./e2e/heuristic -args -lucy "$PWD/dist/lucy"
 ```
 
 4. Match entries by `id` across the two `index.json` files for each command. Read the `report.json` of every case whose `status`, `exit_code`, or setup fields differ, and of every case that is not clean.

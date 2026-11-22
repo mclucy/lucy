@@ -1,6 +1,6 @@
 //go:build e2e && linux
 
-package mutation
+package heuristic
 
 import (
 	"errors"

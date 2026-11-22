@@ -126,12 +126,12 @@ func compileFixtures() ([]string, error) {
 
 var allSuites = []suite{
 	{
-		Domain:         "mutation",
-		Group:          "mutation",
+		Domain:         "heuristic",
+		Group:          "heuristic",
 		Suite:          "smoke",
-		Command:        "LUCY_HEURISTIC_LAYER=smoke go test -tags e2e -count=1 -timeout 40m -parallel 3 -v ./e2e/mutation",
+		Command:        "LUCY_HEURISTIC_LAYER=smoke go test -tags e2e -count=1 -timeout 40m -parallel 3 -v ./e2e/heuristic",
 		Timeout:        45,
-		ReportArtifact: "lucy-heuristic-mutation-smoke",
+		ReportArtifact: "lucy-heuristic-smoke",
 	},
 	{
 		Domain:    "init",

@@ -1,7 +1,7 @@
 //go:build e2e
 
-// Package mutation records heuristic CLI outcomes and checks established contracts.
-package mutation
+// Package heuristic records heuristic CLI outcomes and checks established contracts.
+package heuristic
 
 import (
 	"bytes"
@@ -798,7 +798,7 @@ server:
     product_version: "1.20.1"
 `
 
-func TestMutationAddRejectsMissingManifest(t *testing.T) {
+func TestAddRejectsMissingManifest(t *testing.T) {
 	t.Parallel()
 	binary := testkit.Lucy(t)
 	workspace, environment := newIsolatedWorkspace(t)
@@ -809,7 +809,7 @@ func TestMutationAddRejectsMissingManifest(t *testing.T) {
 	requireWorkspaceEntries(t, workspace)
 }
 
-func TestMutationRemoveRejectsMissingManifest(t *testing.T) {
+func TestRemoveRejectsMissingManifest(t *testing.T) {
 	t.Parallel()
 	binary := testkit.Lucy(t)
 	workspace, environment := newIsolatedWorkspace(t)
@@ -820,7 +820,7 @@ func TestMutationRemoveRejectsMissingManifest(t *testing.T) {
 	requireWorkspaceEntries(t, workspace)
 }
 
-func TestMutationRemoveKeepsUnparseableManifest(t *testing.T) {
+func TestRemoveKeepsUnparseableManifest(t *testing.T) {
 	t.Parallel()
 	binary := testkit.Lucy(t)
 	workspace, environment := newIsolatedWorkspace(t)
@@ -833,7 +833,7 @@ func TestMutationRemoveKeepsUnparseableManifest(t *testing.T) {
 	requireWorkspaceEntries(t, workspace, manifestName)
 }
 
-func TestMutationUpgradeKeepsManifestWithoutLock(t *testing.T) {
+func TestUpgradeKeepsManifestWithoutLock(t *testing.T) {
 	t.Parallel()
 	binary := testkit.Lucy(t)
 	workspace, environment := newIsolatedWorkspace(t)
