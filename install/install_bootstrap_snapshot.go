@@ -53,6 +53,11 @@ func restoreBootstrapSnapshot(
 // publishBootstrapSnapshot stores the checked staging output for reuse by any
 // workspace with the same recipe. Material a runtime does not consume (discard
 // policy and bootstrap-only tools) is never stored.
+//
+// The link mode is a machine setting outside the recipe key, so a snapshot
+// records the mode of a writable deployment. A method writes every output with
+// the owner write bit; only a hardlink placement removes it. Restoring the bit
+// here lets each restore apply its own link mode.
 func publishBootstrapSnapshot(
 	ctx context.Context,
 	store snapshot.Store,
@@ -74,7 +79,7 @@ func publishBootstrapSnapshot(
 		entries = append(entries, snapshot.Entry{
 			Path:     output.ServerPath,
 			SHA256:   output.SHA256,
-			Mode:     output.Mode,
+			Mode:     writableMode(output.Mode),
 			Policy:   string(output.Policy),
 			Role:     string(output.Role),
 			Evidence: string(output.Evidence),
@@ -85,6 +90,15 @@ func publishBootstrapSnapshot(
 		Entries: entries,
 	}
 	return store.SaveSnapshot(ctx, snap, root)
+}
+
+// writableMode adds the owner write bit to a recorded mode. Zero stays zero,
+// because it marks an unrecorded mode.
+func writableMode(mode uint32) uint32 {
+	if mode == 0 {
+		return 0
+	}
+	return mode | 0o200
 }
 
 // openSnapshotStore opens the artifact store that owns the snapshot index.
