@@ -71,7 +71,7 @@ func (h *handler) initialize(cfg Config) (resultErr error) {
 	if _, err = h.index.load(); err != nil {
 		return err
 	}
-	removed, err := h.maintainLocked(nil)
+	removed, _, err := h.maintainLocked(nil)
 	if err != nil {
 		return err
 	}
@@ -109,6 +109,32 @@ func (h *handler) lockIndex() (*fsutil.FileLock, error) {
 		return nil, errors.Join(err, lock.Close())
 	}
 	return lock, nil
+}
+
+// refresh reloads the index only when another process published a change.
+// A read that finds the published identity unchanged costs one stat and no
+// file lock, because this process holds the same entries it last loaded.
+func (h *handler) refresh() (resultErr error) {
+	if !h.on {
+		return ErrDisabled
+	}
+	changed, err := h.index.changed()
+	if err != nil || !changed {
+		return err
+	}
+	lock, err := h.acquireIndexLock()
+	if err != nil {
+		return err
+	}
+	defer func() { resultErr = errors.Join(resultErr, lock.Close()) }()
+	reset, err := h.index.load()
+	if err != nil {
+		return err
+	}
+	if reset {
+		return h.collectAllLocked(nil)
+	}
+	return nil
 }
 
 func (h *handler) newWriter() (*cas.Writer, error) {
@@ -163,11 +189,24 @@ func (h *handler) commitEntryContext(ctx context.Context, writer *cas.Writer, fi
 		Key:         string(ckey),
 		CreatedAt:   created,
 	})
-	removed, err = h.maintainLocked(removed)
+	removed, dropped, err := h.maintainLocked(removed)
 	if err != nil {
 		return err
 	}
-	if err := h.index.flush(); err != nil {
+	// Publish the entry and the maintenance deletions with one append. The
+	// new entry may itself be the one maintenance dropped.
+	records := make([]journalRecord, 0, len(dropped)+1)
+	if entry, ok := h.index.get(ckey); ok {
+		records = append(records, journalRecord{
+			Op:    journalOpPut,
+			Key:   ckey,
+			Entry: entry,
+		})
+	}
+	for _, k := range dropped {
+		records = append(records, journalRecord{Op: journalOpDelete, Key: k})
+	}
+	if err := h.index.publishRecords(records); err != nil {
 		return err
 	}
 	return h.collectCandidatesLocked(removed)
@@ -214,12 +253,10 @@ func (h *handler) get(k string) (
 	if !h.on {
 		return false, nil, "", cas.Digest{}, nil
 	}
-	lock, err := h.lockIndex()
-	if err != nil {
+	if err := h.refresh(); err != nil {
 		return false, nil, "", cas.Digest{}, err
 	}
 	defer func() {
-		resultErr = errors.Join(resultErr, lock.Close())
 		if resultErr != nil && reader != nil {
 			resultErr = errors.Join(resultErr, reader.Close())
 			hit, reader, filename, digest = false, nil, "", cas.Digest{}
@@ -229,6 +266,7 @@ func (h *handler) get(k string) (
 	if !ok || !entry.Expiration.After(time.Now()) {
 		return false, nil, "", cas.Digest{}, nil
 	}
+	var err error
 	digest, err = cas.ParseDigest(entry.ContentHash)
 	if err != nil {
 		return false, nil, "", cas.Digest{}, err
@@ -283,7 +321,10 @@ func (h *handler) remove(k string) (resultErr error) {
 		return err
 	}
 	h.index.delete(canonicalizeKey(k))
-	if err := h.index.flush(); err != nil {
+	if err := h.index.publishRecords([]journalRecord{{
+		Op:  journalOpDelete,
+		Key: canonicalizeKey(k),
+	}}); err != nil {
 		return err
 	}
 	return h.collectCandidatesLocked([]cas.Digest{digest})
@@ -295,16 +336,10 @@ func (h *handler) all() []*Entry {
 	if !h.on {
 		return nil
 	}
-	lock, err := h.lockIndex()
-	if err != nil {
+	if err := h.refresh(); err != nil {
 		h.logger.Warn(err)
 		return nil
 	}
-	defer func() {
-		if err := lock.Close(); err != nil {
-			h.logger.Warn(err)
-		}
-	}()
 	keys := slices.Sorted(maps.Keys(h.index.entries))
 	entries := make([]*Entry, 0, len(keys))
 	for _, k := range keys {

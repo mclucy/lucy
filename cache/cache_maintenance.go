@@ -18,24 +18,27 @@ type ResetReport struct {
 	Removed        []string
 }
 
-func (h *handler) maintainLocked(removed []cas.Digest) ([]cas.Digest, error) {
+func (h *handler) maintainLocked(removed []cas.Digest) ([]cas.Digest, []key, error) {
+	var dropped []key
 	for _, k := range expiredEntries(h.index.entries, time.Now()) {
 		digest, err := cas.ParseDigest(h.index.entries[k].ContentHash)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		removed = append(removed, digest)
+		dropped = append(dropped, k)
 		h.index.delete(k)
 	}
 	for _, target := range evictionCandidates(h.index.entries, h.policy) {
 		digest, err := cas.ParseDigest(h.index.entries[target.key].ContentHash)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		removed = append(removed, digest)
+		dropped = append(dropped, target.key)
 		h.index.delete(target.key)
 	}
-	return removed, nil
+	return removed, dropped, nil
 }
 
 func (h *handler) referencedLocked(digest cas.Digest) bool {
