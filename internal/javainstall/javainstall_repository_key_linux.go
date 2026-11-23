@@ -133,7 +133,7 @@ func serializeRepositoryKey(
 	key *crypto.Key,
 	armored bool,
 ) ([]byte, error) {
-	data, err := key.Serialize()
+	data, err := key.GetPublicKey()
 	if err != nil {
 		return nil, fmt.Errorf("serialize repository key: %w", err)
 	}
