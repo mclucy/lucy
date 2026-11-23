@@ -6,7 +6,7 @@ import (
 	"sync"
 
 	"charm.land/lipgloss/v2"
-	"golang.org/x/term"
+	"github.com/charmbracelet/x/term"
 )
 
 // Conventional geometry when the stream cannot report its own size.
@@ -50,11 +50,11 @@ func detectTerminal(input io.Reader, w io.Writer) Terminal {
 		Dark:   true,
 	}
 	file, ok := w.(*os.File)
-	if !ok || !term.IsTerminal(int(file.Fd())) {
+	if !ok || !term.IsTerminal(file.Fd()) {
 		return detected
 	}
 	detected.IsTTY = true
-	if width, height, err := term.GetSize(int(file.Fd())); err == nil {
+	if width, height, err := term.GetSize(file.Fd()); err == nil {
 		if width > 0 {
 			detected.Width = width
 		}
@@ -62,7 +62,7 @@ func detectTerminal(input io.Reader, w io.Writer) Terminal {
 			detected.Height = height
 		}
 	}
-	if terminalInput, ok := input.(*os.File); ok && term.IsTerminal(int(terminalInput.Fd())) {
+	if terminalInput, ok := input.(*os.File); ok && term.IsTerminal(terminalInput.Fd()) {
 		detected.background = sync.OnceValue(func() bool {
 			return lipgloss.HasDarkBackground(terminalInput, file)
 		})
