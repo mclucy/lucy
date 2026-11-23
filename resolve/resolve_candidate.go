@@ -6,6 +6,7 @@ import (
 	"slices"
 	"sort"
 	"strings"
+	"sync"
 
 	"github.com/mclucy/lucy/catalog"
 	"github.com/mclucy/lucy/document"
@@ -387,8 +388,11 @@ type analysisEntry struct {
 	hashes  map[string]string
 }
 
-// AnalysisCache reuses artifact analysis within one resolution session.
+// AnalysisCache reuses artifact analysis within one resolution session. The
+// cache is safe for concurrent use, because speculative analysis runs beside
+// the search that may consume it.
 type AnalysisCache struct {
+	mu      sync.Mutex
 	entries map[analysisKey]analysisEntry
 	content map[analysisContentKey]analysisEntry
 }
@@ -400,6 +404,14 @@ func NewAnalysisCache() *AnalysisCache {
 	}
 }
 
+// has reports whether the cache holds analysis for key. It copies nothing.
+func (c *AnalysisCache) has(key analysisKey, expected map[string]string) bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	_, hit := c.lookupLocked(key, expected)
+	return hit
+}
+
 // RecordVerified records descriptor modules of an artifact whose bytes the
 // caller already verified and made available for replay.
 func (c *AnalysisCache) RecordVerified(candidate upstream.Candidate, target Target, ecosystem catalog.Ecosystem, modules []catalog.DescriptorModule, hashes map[string]string) {
@@ -407,10 +419,59 @@ func (c *AnalysisCache) RecordVerified(candidate upstream.Candidate, target Targ
 	c.put(key, analysisEntry{modules: modules, hashes: hashes})
 }
 
+// SeedPrevious records the analysis a lock already carries. A locked package
+// names its artifact and hashes, so a pinned candidate whose lock recorded its
+// modules needs no materialization or reopen. Packages without recorded
+// modules are skipped: an absent module list does not prove the artifact has
+// none. Packages whose modules finalization trimmed are skipped too, because
+// the trimmed list omits descriptors that a different selection may need. A
+// descriptor reader selects its files by loader and Minecraft version, so a
+// package resolved for previousTarget is seeded only when both match target.
+func (c *AnalysisCache) SeedPrevious(previous []document.Package, previousTarget, target Target) {
+	if previousTarget.Minecraft == "" || previousTarget.Minecraft != target.Minecraft {
+		return
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	for i := range previous {
+		p := &previous[i]
+		if p.Artifact.Filename == "" || len(p.Artifact.Modules) == 0 || p.ModulesSuperseded {
+			continue
+		}
+		loader := target.DescriptorLoader(p.Ecosystem)
+		if previousTarget.DescriptorLoader(p.Ecosystem) != loader {
+			continue
+		}
+		candidate := upstream.Candidate{Artifact: p.Artifact}
+		key := analysisKeyFor(candidate, loader, target.Minecraft)
+		// A shared cache may seed the same lock again for another search.
+		if _, hit := c.lookupLocked(key, p.Artifact.Hashes); hit {
+			continue
+		}
+		c.putLocked(key, analysisEntry{
+			modules: p.Artifact.Modules,
+			hashes:  p.Artifact.Hashes,
+		})
+	}
+}
+
 func (c *AnalysisCache) get(key analysisKey, expected map[string]string) (analysisEntry, bool) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	entry, hit := c.lookupLocked(key, expected)
+	if !hit {
+		return analysisEntry{}, false
+	}
+	entry.modules = cloneModules(entry.modules)
+	return entry, true
+}
+
+// lookupLocked resolves an entry without copying its modules. The caller
+// holds the cache mutex.
+func (c *AnalysisCache) lookupLocked(key analysisKey, expected map[string]string) (analysisEntry, bool) {
 	entry, hit := c.entries[key]
 	if hit && matchesAnalysisHashes(entry.hashes, expected) {
-		return analysisEntry{modules: cloneModules(entry.modules), hashes: entry.hashes}, true
+		return analysisEntry{modules: entry.modules, hashes: entry.hashes}, true
 	}
 	if expected["sha256"] == "" {
 		return analysisEntry{}, false
@@ -423,7 +484,7 @@ func (c *AnalysisCache) get(key analysisKey, expected map[string]string) (analys
 	for algorithm := range expected {
 		hashes[algorithm] = entry.hashes[algorithm]
 	}
-	return analysisEntry{modules: cloneModules(entry.modules), hashes: hashes}, true
+	return analysisEntry{modules: entry.modules, hashes: hashes}, true
 }
 
 func matchesAnalysisHashes(actual, expected map[string]string) bool {
@@ -436,6 +497,13 @@ func matchesAnalysisHashes(actual, expected map[string]string) bool {
 }
 
 func (c *AnalysisCache) put(key analysisKey, entry analysisEntry) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.putLocked(key, entry)
+}
+
+// putLocked stores an entry. The caller holds the cache mutex.
+func (c *AnalysisCache) putLocked(key analysisKey, entry analysisEntry) {
 	entry.modules = cloneModules(entry.modules)
 	c.entries[key] = entry
 	if digest := entry.hashes["sha256"]; digest != "" {

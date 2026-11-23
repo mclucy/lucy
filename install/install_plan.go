@@ -298,13 +298,8 @@ func (s *Service) resolveLock(
 	return resolved, nil
 }
 
-func (s *Service) newDownloadStore(
-	ctx context.Context,
-	opts Options,
-	result *Result,
-) *downloadStore {
+func (s *Service) newDownloadStore(opts Options, result *Result) *downloadStore {
 	return &downloadStore{
-		ctx:         ctx,
 		offline:     opts.Offline,
 		trace:       opts.Trace,
 		fetch:       &result.Fetch,

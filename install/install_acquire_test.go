@@ -1,7 +1,6 @@
 package install
 
 import (
-	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"net/http"
@@ -86,7 +85,7 @@ func acquireTestSpigetArtifact(remote *acquireTestRemote, releaseID, version str
 
 func acquireTestMaterialize(t *testing.T, store *downloadStore, a *catalog.Artifact) (map[string]string, []byte) {
 	t.Helper()
-	materialized, err := store.materialize(a)
+	materialized, err := store.materialize(t.Context(), a)
 	if err != nil {
 		t.Fatalf("materialize %s release %s: %v", a.Filename, a.ReleaseID, err)
 	}
@@ -134,7 +133,7 @@ func TestMaterializeSpigetMutableURLDoesNotReuseAnotherReleasesBytes(t *testing.
 
 		remote := newAcquireTestRemote(t, releaseOneBytes)
 		network := acquireTestCache(t)
-		store := &downloadStore{ctx: context.Background(), network: network}
+		store := &downloadStore{network: network}
 
 		releaseOne := acquireTestSpigetArtifact(remote, "101", "1.0.0")
 		hashes, firstBytes := acquireTestMaterialize(t, store, releaseOne)
@@ -147,12 +146,11 @@ func TestMaterializeSpigetMutableURLDoesNotReuseAnotherReleasesBytes(t *testing.
 		// Before release 102 is ever downloaded, an offline lookup must miss
 		// rather than borrow release 101 bytes cached under the shared URL.
 		offline := &downloadStore{
-			ctx:     context.Background(),
 			offline: true,
 			network: network,
 		}
 		releaseTwo := acquireTestSpigetArtifact(remote, "102", "2.0.0")
-		if materialized, err := offline.materialize(releaseTwo); err == nil {
+		if materialized, err := offline.materialize(t.Context(), releaseTwo); err == nil {
 			t.Fatalf(
 				"offline release 102 resolved without being cached (path %q)",
 				materialized.Path,
@@ -226,7 +224,7 @@ func TestMaterializeSpigetMutableURLDoesNotReuseAnotherReleasesBytes(t *testing.
 		firstRemote := newAcquireTestRemote(t, firstURLBytes)
 		secondRemote := newAcquireTestRemote(t, secondURLBytes)
 		network := acquireTestCache(t)
-		store := &downloadStore{ctx: context.Background(), network: network}
+		store := &downloadStore{network: network}
 
 		// Both artifacts name the same release coordinates. Only their
 		// download URLs differ, so a cache key that omits the URL would return
@@ -262,7 +260,6 @@ func TestMaterializeSpigetMutableURLDoesNotReuseAnotherReleasesBytes(t *testing.
 		}
 
 		offline := &downloadStore{
-			ctx:     context.Background(),
 			offline: true,
 			network: network,
 		}
@@ -284,7 +281,7 @@ func TestMaterializeSpigetMutableURLDoesNotReuseAnotherReleasesBytes(t *testing.
 	t.Run("missing coordinates fail closed", func(t *testing.T) {
 		remote := newAcquireTestRemote(t, []byte("bytes that must not be fetched\n"))
 		network := acquireTestCache(t)
-		store := &downloadStore{ctx: context.Background(), network: network}
+		store := &downloadStore{network: network}
 
 		cases := []struct {
 			name   string
@@ -298,7 +295,7 @@ func TestMaterializeSpigetMutableURLDoesNotReuseAnotherReleasesBytes(t *testing.
 			t.Run(tc.name, func(t *testing.T) {
 				artifact := acquireTestSpigetArtifact(remote, "101", "1.0.0")
 				tc.mutate(artifact)
-				if materialized, err := store.materialize(artifact); err == nil {
+				if materialized, err := store.materialize(t.Context(), artifact); err == nil {
 					t.Fatalf(
 						"materialize succeeded without complete coordinates (path %q)",
 						materialized.Path,

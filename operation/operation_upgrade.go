@@ -11,7 +11,6 @@ import (
 
 	"github.com/mclucy/lucy/artifact"
 	"github.com/mclucy/lucy/artifactstore"
-	"github.com/mclucy/lucy/catalog"
 	"github.com/mclucy/lucy/document"
 	"github.com/mclucy/lucy/filetrack"
 	"github.com/mclucy/lucy/install"
@@ -35,7 +34,7 @@ type UpgradeOptions struct {
 	Trace   *install.Trace
 	// Materialize supplies artifact bytes for frontier planning. Nil uses the
 	// configured cache and network.
-	Materialize func(*catalog.Artifact) (artifact.MaterializedFile, error)
+	Materialize artifact.Materializer
 	// MaxCombinations and MaxVersions bound the frontier search. Zero uses
 	// the package defaults.
 	MaxCombinations int
@@ -137,12 +136,13 @@ func (s *Service) PlanUpgrade(
 		return nil, err
 	}
 	warnings := []error{}
-	materialize, fetch := s.install.Materializer(ctx, install.Options{
+	materialize, fetch := s.install.Materializer(install.Options{
 		Offline:     opts.Offline,
 		Trace:       opts.Trace,
 		Materialize: opts.Materialize,
 	})
 	cache := resolve.NewAnalysisCache()
+	listings := resolve.NewCandidateCache()
 	maxVersions := opts.MaxVersions
 	if maxVersions <= 0 {
 		maxVersions = defaultUpgradeVersions
@@ -226,6 +226,7 @@ func (s *Service) PlanUpgrade(
 			combo,
 			materialize,
 			cache,
+			listings,
 			opts.Trace,
 		)
 		if err != nil {

@@ -291,8 +291,8 @@ func TestCachedDownloadMissThenHitKeepsIndexedFilename(t *testing.T) {
 	}
 }
 
-// Every stored download rewrites the cache index. A mode an operator set on it
-// must survive the rewrite.
+// Compaction rewrites the cache index. A mode an operator set on it must
+// survive that rewrite.
 func TestCacheIndexRetainsFileMode(t *testing.T) {
 	fixture := newCacheFixture(t)
 	h := installNetworkCache(t, DefaultCacheConfig())

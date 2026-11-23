@@ -14,7 +14,6 @@ import (
 	"github.com/mclucy/lucy/document"
 	"github.com/mclucy/lucy/upstream"
 
-	"github.com/mclucy/lucy/artifact"
 	serverpkg "github.com/mclucy/lucy/server"
 
 	versionpkg "github.com/mclucy/lucy/version"
@@ -273,7 +272,6 @@ func appendLockedCandidate(
 func Packages(request PackagesRequest) ([]document.Package, []error, error) {
 	ctx := request.Context
 	logger := request.Logger
-	candidatesFor := request.Candidates
 	if ctx == nil {
 		ctx = context.Background()
 	}
@@ -281,7 +279,6 @@ func Packages(request PackagesRequest) ([]document.Package, []error, error) {
 	previous := indexLock(request.Previous)
 	preserveLocked := request.PreserveLocked
 	target := request.Target
-	materialize := request.Materialize
 	withOptional := request.WithOptional
 	acceptBroken := request.AcceptBroken
 	acceptPackageConflicts := request.AcceptPackageConflicts
@@ -369,6 +366,9 @@ func Packages(request PackagesRequest) ([]document.Package, []error, error) {
 	if cache == nil {
 		cache = NewAnalysisCache()
 	}
+	cache.SeedPrevious(request.Previous, request.PreviousTarget, target)
+	prefetch := newPrefetcher(ctx, request, cache, request.Listings)
+	defer prefetch.close()
 	attempts := 0
 	backtracks := 0
 	preferPins := preserveLocked && request.PreferLocked && !withOptional
@@ -376,6 +376,9 @@ func Packages(request PackagesRequest) ([]document.Package, []error, error) {
 	if preferPins && expandDependencies {
 		pinnedEdges = previous.lockedEdges(requests, request.Previous)
 	}
+	// Start the listings every learned request needs before the search asks
+	// for the first one. The search still consumes them in its own order.
+	prefetch.prefetchRequests(requests, previous, preferPins)
 	usedPin := false
 	native := make(map[moduleKey]nativeOwner)
 	nonPrimary := make(map[projectKey]bool)
@@ -573,25 +576,23 @@ func Packages(request PackagesRequest) ([]document.Package, []error, error) {
 		prior := previous.byProject[r.key]
 		replayEdges := false
 		if preferPins {
-			if pin, found := lockedCandidate(prior); found {
-				decision, err := decideCandidate(pin, r)
-				if err != nil {
-					return hardFail(err)
-				}
-				if decision.eligible && (len(r.releaseHints) == 0 || r.releaseHints[0].releaseID == pin.ReleaseID) {
-					list, ok = []upstream.Candidate{pin}, true
-					usedPin = true
-					replayEdges = pinnedEdges != nil
-					ledger.setCandidates(r.key, r.display, 1)
-				}
+			pin, found, err := pinAccepts(prior, r)
+			if err != nil {
+				return hardFail(err)
+			}
+			if found {
+				list, ok = []upstream.Candidate{pin}, true
+				usedPin = true
+				replayEdges = pinnedEdges != nil
+				ledger.setCandidates(r.key, r.display, 1)
 			}
 		}
 		if !ok {
-			if candidatesFor == nil {
+			if request.Candidates == nil {
 				return stop(errors.New("resolution requires a candidate source"))
 			}
 			var err error
-			list, err = candidatesFor(ctx, catalogueRegistry(r.key.provider), r.key.project, string(target.Minecraft), r.key.ecosystem)
+			list, err = prefetch.list(ctx, r.key)
 			if err != nil {
 				var locked upstream.Candidate
 				lockedOK := false
@@ -736,39 +737,27 @@ func Packages(request PackagesRequest) ([]document.Package, []error, error) {
 			}
 			var modules []catalog.DescriptorModule
 			descriptorLoader := target.DescriptorLoader(r.key.ecosystem)
-			key := analysisKeyFor(candidate, descriptorLoader, target.Minecraft)
-			entry, cached := cache.get(key, a.Hashes)
-			if cached {
-				a.Hashes = entry.hashes
-				modules = entry.modules
-			} else {
-				materialized, err := materialize(&a)
-				if err != nil {
-					return hardFail(err)
-				}
-				a.Hashes = materialized.Hashes
-				if prior, ok := cache.get(key, a.Hashes); ok {
-					modules = prior.modules
-				} else {
-					modules, err = artifact.ReadModulesFor(ctx, materialized.Path, descriptorLoader, string(target.Minecraft))
-				}
-				if err != nil {
-					explained = false
-					// A descriptor the reader cannot interpret rejects this
-					// candidate. It is content evidence, not an operational
-					// failure of the whole search.
-					message := fmt.Sprintf(
-						"artifact %s has an unreadable %s descriptor: %v",
-						a.Filename,
-						descriptorLoader,
-						err,
-					)
-					lastErr = err
-					ledger.record(r.key, r.display, string(candidate.Version), message, RejectionModules)
-					trace.rejected(r.display, string(candidate.Version), message)
-					continue
-				}
-				cache.put(key, analysisEntry{modules: modules, hashes: a.Hashes})
+			analysis := prefetch.analyze(ctx, candidate, r.key.ecosystem)
+			if analysis.fatal != nil {
+				return hardFail(analysis.fatal)
+			}
+			a.Hashes = analysis.hashes
+			modules = analysis.modules
+			if analysis.descriptor != nil {
+				explained = false
+				// A descriptor the reader cannot interpret rejects this
+				// candidate. It is content evidence, not an operational
+				// failure of the whole search.
+				message := fmt.Sprintf(
+					"artifact %s has an unreadable %s descriptor: %v",
+					a.Filename,
+					descriptorLoader,
+					analysis.descriptor,
+				)
+				lastErr = analysis.descriptor
+				ledger.record(r.key, r.display, string(candidate.Version), message, RejectionModules)
+				trace.rejected(r.display, string(candidate.Version), message)
+				continue
 			}
 			if len(modules) == 0 {
 				message := fmt.Sprintf("artifact %s has no server-visible %s modules", a.Filename, descriptorLoader)
@@ -871,12 +860,14 @@ func Packages(request PackagesRequest) ([]document.Package, []error, error) {
 			)
 			trace.selected(r.display, string(candidate.Version))
 			next := rest
+			var learned []projectRequest
 			wasNonPrimary := nonPrimary[r.key]
 			if !candidate.PrimaryFile || wasNonPrimary {
 				nonPrimary[r.key] = !candidate.PrimaryFile
 			}
 			if replayEdges {
 				next = append(next, pinnedEdges[r.key]...)
+				learned = pinnedEdges[r.key]
 			} else if expandDependencies {
 				for _, dep := range candidate.Dependencies {
 					if dep.Kind == catalog.DependencyKindRequired || (withOptional && dep.Kind == catalog.DependencyKindOptional) {
@@ -910,9 +901,11 @@ func Packages(request PackagesRequest) ([]document.Package, []error, error) {
 							}
 						}
 						next = append(next, dependency)
+						learned = append(learned, dependency)
 					}
 				}
 			}
+			prefetch.prefetchRequests(learned, previous, preferPins)
 			if outcome := descend(next); outcome != branchFailed {
 				return outcome
 			}
@@ -1003,6 +996,8 @@ func Packages(request PackagesRequest) ([]document.Package, []error, error) {
 	if outcome == branchFailed && usedPin {
 		logger.Debug("resolve: prior pins did not settle; considering catalogue alternatives", "reason", lastErr)
 		preferPins = false
+		// The retry needs every listing the lock pins made unnecessary.
+		prefetch.prefetchRequests(requests, previous, false)
 		outcome = search(false)
 	}
 	if outcome == branchFailed && acceptBroken {

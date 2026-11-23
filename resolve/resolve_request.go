@@ -150,6 +150,9 @@ type PackagesRequest struct {
 	Context  context.Context
 	Manifest *document.Manifest
 	Previous []document.Package
+	// PreviousTarget is the runtime Previous was resolved for. A zero value
+	// reuses no recorded analysis.
+	PreviousTarget Target
 	// PreserveLocked keeps the file recorded by Previous selectable when the
 	// catalogue no longer publishes it for the current labels. It applies only
 	// while the runtime target is unchanged.
@@ -162,7 +165,7 @@ type PackagesRequest struct {
 	// select. It is required for every non-empty resolution.
 	Candidates CandidateSource
 	// Materialize must leave its input unchanged and return verified local bytes.
-	Materialize  func(*catalog.Artifact) (artifact.MaterializedFile, error)
+	Materialize  artifact.Materializer
 	WithOptional bool
 	AcceptBroken bool
 	// AcceptPackageConflicts accepts a graph whose package metadata conflicts
@@ -175,6 +178,11 @@ type PackagesRequest struct {
 	// Cache shares artifact analysis across related searches. A nil cache
 	// limits reuse to this invocation.
 	Cache *AnalysisCache
+	// Listings shares candidate listings across related searches. A listing
+	// answers the same builds whatever selectors a search applies, so one
+	// command may reuse it for every resolution of the same project, runtime,
+	// and ecosystem. A nil Listings limits reuse to this invocation.
+	Listings *CandidateCache
 	// Logger records resolution diagnostics. A nil Logger records nothing.
 	Logger *log.Logger
 	Trace  Trace

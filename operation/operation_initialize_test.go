@@ -92,7 +92,7 @@ func (initializeInstallSource) Metadata(context.Context, string, any) error {
 func (initializeInstallSource) ResolveServerProduct(
 	_ context.Context,
 	request upstream.ServerProductRequest,
-	_ func(*catalog.Artifact) (artifact.MaterializedFile, error),
+	_ artifact.Materializer,
 ) (upstream.ServerProductResolution, error) {
 	resolution := upstream.ServerProductResolution{
 		Minecraft:      request.Minecraft,

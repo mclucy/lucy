@@ -48,7 +48,7 @@ func (s *Service) resolveInstall(
 		FilePattern:    d.Server.Core.FilePattern,
 	}
 	localRuntime := newLocalRuntimeSource(root, opts.LocalRuntime)
-	acquire := localRuntime.acquire(ctx, store.materialize)
+	acquire := localRuntime.acquire(store.materialize)
 	var core upstream.ServerProductResolution
 	canReuse := false
 	if old != nil {
@@ -181,6 +181,13 @@ func (s *Service) resolveInstall(
 		ExpandDependencies: !opts.declaredOnly,
 		Logger:             s.logger,
 		Trace:              opts.Trace.resolveTrace(),
+	}
+	if old != nil {
+		packageRequest.PreviousTarget = resolve.Target{
+			Product:     old.Server.Product,
+			Minecraft:   old.Server.Minecraft,
+			CoreVersion: old.Server.CoreVersion,
+		}
 	}
 	if len(opts.Adopted) > 0 {
 		cache, err := prepareAdoptedArtifacts(ctx, root, opts.Adopted, &packageRequest.Target)

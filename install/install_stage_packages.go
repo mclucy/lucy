@@ -16,7 +16,7 @@ const installFileWorkers = 4
 
 // stagePackages validates ownership and destinations before acquiring or
 // copying independent package artifacts.
-func (s *Service) stagePackages(root, stage string, resolved *document.Lock, store *downloadStore, stagedOutputs map[string]bootstrap.Output, opts Options) (map[string]bool, map[string]string, error) {
+func (s *Service) stagePackages(ctx context.Context, root, stage string, resolved *document.Lock, store *downloadStore, stagedOutputs map[string]bootstrap.Output, opts Options) (map[string]bool, map[string]string, error) {
 	if err := rejectSharedDestinations(root, resolved, stagedOutputs); err != nil {
 		return nil, nil, err
 	}
@@ -48,9 +48,9 @@ func (s *Service) stagePackages(root, stage string, resolved *document.Lock, sto
 	opts.Trace.phaseStarted(phase)
 	completed := 0
 	hashes := make([]string, len(jobs))
-	err := runStagingJobs(store.ctx, len(jobs), store.injected != nil, func(i int) error {
+	err := runStagingJobs(ctx, len(jobs), store.injected != nil, func(i int) error {
 		j := jobs[i]
-		source, err := store.materializeFor(&j.pkg.Artifact, filepath.ToSlash(j.destination))
+		source, err := store.materializeFor(ctx, &j.pkg.Artifact, filepath.ToSlash(j.destination))
 		if err != nil {
 			return err
 		}

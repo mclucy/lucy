@@ -240,7 +240,7 @@ func (r *Router) resolveGithubProduct(
 	ctx context.Context,
 	req upstream.ServerProductRequest,
 	out *upstream.ServerProductResolution,
-	acquire func(*catalog.Artifact) (artifact.MaterializedFile, error),
+	acquire artifact.Materializer,
 ) error {
 	var repo struct {
 		ID int64 `json:"id"`
@@ -322,7 +322,7 @@ func (r *Router) resolveGithubProduct(
 			trial := *out
 			trial.ProductVersion = version.Version(rl.Tag)
 			trial.Bootstrap = server.BootstrapMethodPaperclip
-			materialized, e := acquire(&candidate)
+			materialized, e := acquire(ctx, &candidate)
 			if e != nil {
 				return e
 			}

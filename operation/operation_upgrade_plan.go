@@ -10,7 +10,6 @@ import (
 	"strings"
 
 	"github.com/mclucy/lucy/artifact"
-	"github.com/mclucy/lucy/catalog"
 	"github.com/mclucy/lucy/document"
 	"github.com/mclucy/lucy/install"
 	"github.com/mclucy/lucy/resolve"
@@ -30,8 +29,9 @@ func (s *Service) resolveUpgradeOption(
 	roots []upgradeRoot,
 	active []int,
 	combo []int,
-	materialize func(*catalog.Artifact) (artifact.MaterializedFile, error),
+	materialize artifact.Materializer,
 	cache *resolve.AnalysisCache,
+	listings *resolve.CandidateCache,
 	trace *install.Trace,
 ) (UpgradeOption, error) {
 	resolutionManifest, err := cloneManifest(d)
@@ -67,15 +67,18 @@ func (s *Service) resolveUpgradeOption(
 	if moduleErr != nil {
 		s.logger.Warn(fmt.Errorf("read server core modules: %w", moduleErr))
 	}
+	lockTarget := upgradeTarget(old, coreModules)
 	packages, resolutionWarnings, err := resolve.Packages(resolve.PackagesRequest{
 		Context:            ctx,
 		Manifest:           resolutionManifest,
 		Previous:           old.Packages,
-		Target:             upgradeTarget(old, coreModules),
+		PreviousTarget:     lockTarget,
+		Target:             lockTarget,
 		Candidates:         s.source.Candidates,
 		Materialize:        materialize,
 		ExpandDependencies: true,
 		Cache:              cache,
+		Listings:           listings,
 		Logger:             s.logger,
 		Trace:              upgradeResolveTrace(trace),
 	})

@@ -40,7 +40,7 @@ type InitOptions struct {
 	Trace *install.Trace
 	// Materialize supplies artifact bytes for adoption planning. Nil uses the
 	// configured cache and network.
-	Materialize func(*catalog.Artifact) (artifact.MaterializedFile, error)
+	Materialize artifact.Materializer
 }
 
 // InitResult is the structured outcome of one initialization. The document

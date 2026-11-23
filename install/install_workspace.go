@@ -86,7 +86,7 @@ type (
 		// them against the artifact's expected hashes before use. Injected
 		// bytes stay outside the operation's FetchSummary, which describes
 		// transfers the configured cache performed.
-		Materialize func(*catalog.Artifact) (artifact.MaterializedFile, error)
+		Materialize artifact.Materializer
 	}
 )
 
@@ -127,7 +127,7 @@ func (s *Service) syncInstall(ctx context.Context, root string, d *document.Mani
 	if opts.PublishManifest {
 		manifest = d
 	}
-	store := s.newDownloadStore(ctx, opts, result)
+	store := s.newDownloadStore(opts, result)
 	resolved, err := s.resolveLock(ctx, root, manifest, baseLock, &opts, store, result)
 	if err != nil {
 		return nil, err
@@ -294,7 +294,7 @@ func (s *Service) stageInstall(
 		stagedOutputs[path] = output
 	}
 	overwritePaths, stagedPackageHashes, err := s.stagePackages(
-		root, stage, resolved, store, stagedOutputs, opts,
+		ctx, root, stage, resolved, store, stagedOutputs, opts,
 	)
 	if err != nil {
 		return nil, err
@@ -396,7 +396,7 @@ func (s *Service) stageServerTree(
 			}
 			a, label = input, input.Filename
 		}
-		file, err := store.materializeFor(a, label)
+		file, err := store.materializeFor(ctx, a, label)
 		materialized[i] = file
 		return err
 	})

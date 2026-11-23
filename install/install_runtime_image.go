@@ -103,7 +103,6 @@ func (s *Service) RuntimeImage(
 	}()
 
 	store := &downloadStore{
-		ctx:       ctx,
 		offline:   true,
 		storeOnly: true,
 		logger:    s.logger,

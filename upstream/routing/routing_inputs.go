@@ -25,7 +25,7 @@ const (
 func acquireInputs(
 	ctx context.Context,
 	inputs []catalog.Artifact,
-	acquire func(*catalog.Artifact) (artifact.MaterializedFile, error),
+	acquire artifact.Materializer,
 ) error {
 	downloadable := make([]int, 0, len(inputs))
 	for i := range inputs {
@@ -41,7 +41,7 @@ func acquireInputs(
 		},
 		func(position int) error {
 			index := downloadable[position]
-			materialized, err := acquire(&inputs[index])
+			materialized, err := acquire(ctx, &inputs[index])
 			if err != nil {
 				return err
 			}

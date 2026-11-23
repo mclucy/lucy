@@ -32,7 +32,7 @@ type Source interface {
 	ResolveServerProduct(
 		ctx context.Context,
 		request upstream.ServerProductRequest,
-		acquire func(*catalog.Artifact) (artifact.MaterializedFile, error),
+		acquire artifact.Materializer,
 	) (upstream.ServerProductResolution, error)
 }
 
@@ -156,7 +156,7 @@ func (s *Service) Resolve(
 		// dropping an existing pin; an unchanged lock keeps its exact bytes.
 		return withProvenServer(old, proven, changed), result, nil
 	}
-	store := s.newDownloadStore(ctx, opts, result)
+	store := s.newDownloadStore(opts, result)
 	resolved, err := s.resolveInstall(ctx, absolute, d, old, fingerprint, &opts, store, result)
 	if err != nil {
 		return nil, result, err
@@ -233,7 +233,7 @@ func (s *Service) ApplyPlan(
 		result = newResult()
 		result.applyChanges(plan.Previous, plan.Resolved, plan.Manifest)
 	}
-	store := s.newDownloadStore(ctx, opts, result)
+	store := s.newDownloadStore(opts, result)
 	opts.publishLock = plan.PublishLock
 	diagnostics, err := s.stageInstall(ctx, root, plan.Manifest, plan.Resolved, documents, store, opts, result)
 	result.Diagnostics = diagnostics
@@ -257,13 +257,9 @@ func (s *Service) Sync(
 
 // Materializer returns a verified artifact materializer and the fetch summary
 // it updates. Callers must hold the workspace writer lock while resolving.
-func (s *Service) Materializer(
-	ctx context.Context,
-	opts Options,
-) (func(*catalog.Artifact) (artifact.MaterializedFile, error), *FetchSummary) {
+func (s *Service) Materializer(opts Options) (artifact.Materializer, *FetchSummary) {
 	summary := &FetchSummary{}
 	store := &downloadStore{
-		ctx:         ctx,
 		offline:     opts.Offline,
 		trace:       opts.Trace,
 		fetch:       summary,

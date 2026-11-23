@@ -14,7 +14,7 @@ func TestMaintainLockedRejectsMalformedContentHash(t *testing.T) {
 		ContentHash: "sha256:not-a-digest",
 		Expiration:  time.Now().Add(-time.Hour),
 	})
-	if _, err := handler.maintainLocked(nil); err == nil {
+	if _, _, err := handler.maintainLocked(nil); err == nil {
 		t.Fatal("maintenance accepted a malformed content hash")
 	}
 	if _, ok := handler.index.get("broken"); !ok {

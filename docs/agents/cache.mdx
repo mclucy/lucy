@@ -11,6 +11,10 @@ A read-only POST lookup opts into caching; its key digests method, URL, body, an
 
 The client owns its HTTP client, policy, and logger; command composition supplies the disk root. Indexes initialize lazily. Invocations share cached objects but not transport or provider configuration. Caller context covers cache-hit reads and copies. The configured TTL applies without an override; closing drains active operations and leaves unused stores unopened.
 
+## Index persistence
+
+A process keeps the index in memory. A read stats the published snapshot and its append log and reloads only when their identity changed, so a cache hit takes no file lock. A committed response or removal appends one record under the cache file lock; the log is replayed on load and compacted into an atomically replaced snapshot at a bounded size. Multi-process visibility is preserved: a writer publishes its record before releasing the lock, and a reader notices the changed file identity and reloads it. A torn record tail is discarded, so a crash costs at most the entries that were not published.
+
 ## Publication and verification
 
 A download is staged while its content digest and any supplied upstream integrity expectation are checked. On a cache hit, bytes are copied from the indexed object; installation then verifies the materialized artifact against the hashes recorded in the lock. A corrupt or unreadable cached object can be treated as a miss during an online download.

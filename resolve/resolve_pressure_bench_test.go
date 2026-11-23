@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
 
 	"github.com/mclucy/lucy/artifact"
@@ -17,6 +18,8 @@ import (
 )
 
 // All four graphs use local Fabric jars so registry latency does not mask search work.
+// Resolution overlaps upstream work with its search, so the counters that
+// report its calls are atomic.
 func BenchmarkPackageSearch(b *testing.B) {
 	for _, shape := range []string{"dependencies", "locked-add", "duplicate", "duplicate-recovered"} {
 		b.Run(shape, func(b *testing.B) {
@@ -117,7 +120,7 @@ func BenchmarkPackageSearch(b *testing.B) {
 				// collision with the last root.
 				writeJar("pkg0000-alt", "pkg0000")
 			}
-			lookups, reads := 0, 0
+			var lookups, reads atomic.Int64
 			r := resolve.PackagesRequest{
 				Context: b.Context(),
 				Manifest: &document.Manifest{Server: document.ManifestServer{
@@ -126,11 +129,11 @@ func BenchmarkPackageSearch(b *testing.B) {
 				Target:             fuzzTarget,
 				ExpandDependencies: true,
 				Candidates: func(_ context.Context, _ catalog.Registry, name, _ string, _ catalog.Ecosystem) ([]upstream.Candidate, error) {
-					lookups++
+					lookups.Add(1)
 					return builds[name], nil
 				},
-				Materialize: func(a *catalog.Artifact) (artifact.MaterializedFile, error) {
-					reads++
+				Materialize: func(_ context.Context, a *catalog.Artifact) (artifact.MaterializedFile, error) {
+					reads.Add(1)
 					return artifact.MaterializedFile{Path: filepath.Join(dir, a.Filename)}, nil
 				},
 			}
@@ -166,7 +169,8 @@ func BenchmarkPackageSearch(b *testing.B) {
 				r.PreferLocked = true
 				roots["modrinth:pkg0464"] = document.Requirement{Selector: "any"}
 			}
-			lookups, reads = 0, 0
+			lookups.Store(0)
+			reads.Store(0)
 			for b.Loop() {
 				pkgs, _, err := resolve.Packages(r)
 				switch shape {
@@ -214,8 +218,8 @@ func BenchmarkPackageSearch(b *testing.B) {
 					}
 				}
 			}
-			b.ReportMetric(float64(lookups)/float64(b.N), "lookups/op")
-			b.ReportMetric(float64(reads)/float64(b.N), "jar-reads/op")
+			b.ReportMetric(float64(lookups.Load())/float64(b.N), "lookups/op")
+			b.ReportMetric(float64(reads.Load())/float64(b.N), "jar-reads/op")
 		})
 	}
 }
