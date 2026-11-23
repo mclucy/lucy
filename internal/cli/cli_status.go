@@ -132,6 +132,7 @@ func actionStatusLive(
 			}
 		}
 	}
+	document.Name = statusNameFromManifest(root)
 	recordWorkspaceTelemetry(inv, observed, document)
 	document.Warnings = append(document.Warnings, output.Warnings()...)
 	return writeStatusDocument(ctx, output, inv, document, long, logoMode)
@@ -168,11 +169,13 @@ func actionStatusFromLock(
 			Cause: err,
 		}
 	}
+	document := newLockStatusDocument(root, lock)
+	document.Name = statusNameFromManifest(root)
 	return writeStatusDocument(
 		ctx,
 		output,
 		inv,
-		newLockStatusDocument(root, lock),
+		document,
 		long,
 		logoMode,
 	)
@@ -223,7 +226,7 @@ func writeStatusDocument(
 	}
 	_, err := fmt.Fprintln(
 		output.Human(),
-		renderStatus(document, long, logoMode, inv.Stdout, inv.Theme),
+		renderStatus(document, long, logoMode, inv.ASCII, inv.Stdout, inv.Theme),
 	)
 	if err != nil {
 		return fmt.Errorf("write status: %w", err)

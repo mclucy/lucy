@@ -54,6 +54,7 @@ func renderStatusForTest(
 		document,
 		long,
 		mode,
+		false,
 		terminalstyle.Terminal{Width: width, Height: 24, IsTTY: isTerminal},
 		terminalstyle.New(false),
 	)

@@ -30,6 +30,7 @@ func renderStatus(
 	document statusDocument,
 	long bool,
 	logoMode terminal.StatusLogoMode,
+	ascii bool,
 	term style.Terminal,
 	theme style.Theme,
 ) string {
@@ -76,6 +77,9 @@ func renderStatus(
 			)
 		}
 	}
+	if document.Name != "" {
+		info = statusViewName(document.Name, infoWidth, ascii) + "\n\n" + info
+	}
 	info = "  " + strings.ReplaceAll(info, "\n", "\n  ")
 	return statusViewCompose(info, logo, layout, logoMode)
 }
@@ -110,6 +114,15 @@ func statusViewBlockWidth(lines []string) int {
 		return 0
 	}
 	return lipgloss.Width(lines[0])
+}
+
+func statusViewName(name string, width int, ascii bool) string {
+	rule := "─"
+	if ascii {
+		rule = "-"
+	}
+	name = statusViewClip(name, width)
+	return name + "\n" + strings.Repeat(rule, max(1, min(ansi.StringWidth(name), width)))
 }
 
 func resolveStatusViewLogo(

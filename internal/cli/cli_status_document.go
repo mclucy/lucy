@@ -37,6 +37,7 @@ type statusDocument struct {
 	Kind     string          `json:"kind"`
 	Source   string          `json:"source"`
 	Root     string          `json:"root"`
+	Name     string          `json:"name"`
 	Server   *statusServer   `json:"server"`
 	Packages []statusPackage `json:"packages"`
 	MCDR     *statusMCDR     `json:"mcdr,omitempty"`
@@ -93,6 +94,16 @@ func newStatusDocument(source, root string) statusDocument {
 		Packages: []statusPackage{},
 		Warnings: []string{},
 	}
+}
+
+// A missing or unreadable manifest leaves the name absent; status still
+// reports the rest of the workspace.
+func statusNameFromManifest(root string) string {
+	manifest, err := documentpkg.ManifestFile(root).Read()
+	if err != nil {
+		return ""
+	}
+	return manifest.Name
 }
 
 func newLiveStatusDocument(

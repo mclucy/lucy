@@ -28,6 +28,8 @@ type Invocation struct {
 	Stderr style.Terminal
 	// Interactive reports whether prompts and animated output are allowed.
 	Interactive bool
+	// ASCII selects plain-glyph output when styling is disabled.
+	ASCII bool
 	// Pager selects when long human documents go through the pager.
 	Pager pager.Mode
 	// TelemetryEnabled permits projections of facts already observed by a command.

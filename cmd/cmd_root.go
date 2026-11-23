@@ -276,6 +276,7 @@ func (r *Runner) configurePresentation(cmd *cobra.Command) {
 	noColor, _ := cmd.Flags().GetBool(cli.FlagNoColor)
 	noInteractive, _ := cmd.Flags().GetBool(cli.FlagNoInteractive)
 	r.invocation.Theme = style.New(!noStyle && !noColor)
+	r.invocation.ASCII = noStyle
 	r.invocation.Interactive = r.effectiveRendering(cmd) == cli.JSONNone && !noStyle && !noInteractive
 	if r.effectiveRendering(cmd) == cli.JSONNone {
 		var input io.Reader
