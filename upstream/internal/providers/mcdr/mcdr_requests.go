@@ -68,7 +68,7 @@ func fuzzySearch(query string, ids []string) []string {
 		result, _ := algo.FuzzyMatchV2(
 			false, true, true, &chars, pattern, false, slab,
 		)
-		if result.Score > 0 {
+		if result.Start >= 0 {
 			matches = append(matches, ranked{i, result.Score})
 		}
 	}
