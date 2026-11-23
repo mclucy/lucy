@@ -137,30 +137,30 @@ func verifyQuiltLock(t *testing.T, root string) {
 	if got := locked.Server.CoreVersion.String(); got != quiltLoader {
 		t.Errorf("lock core version = %q, want %q", got, quiltLoader)
 	}
-	if got := locked.Server.Bootstrapper; got != serverpkg.BootstrapMethodQuilt {
-		t.Errorf("lock bootstrapper = %q, want %q", got, serverpkg.BootstrapMethodQuilt)
+	if got := locked.Server.Bootstrap; got != serverpkg.BootstrapMethodQuilt {
+		t.Errorf("lock bootstrap = %q, want %q", got, serverpkg.BootstrapMethodQuilt)
 	}
 	// A profile-based install pins the vanilla server and the hashed and
 	// intermediary mappings the loader needs; a bare loader JAR cannot boot.
-	wantedPrefixes := map[string]bool{
-		"libraries/org/quiltmc/hashed/":        false,
-		"libraries/net/fabricmc/intermediary/": false,
+	wantedLibraries := map[string]bool{
+		"org.quiltmc:hashed:":        false,
+		"net.fabricmc:intermediary:": false,
 	}
 	hasServerJar := false
 	for _, input := range locked.Server.Inputs {
-		if input.Path == "server.jar" {
+		if input.Provider == catalog.ProviderMojang && input.ProjectID == "minecraft" {
 			hasServerJar = true
 		}
-		for prefix := range wantedPrefixes {
-			if strings.HasPrefix(input.Path, prefix) {
-				wantedPrefixes[prefix] = true
+		for prefix := range wantedLibraries {
+			if input.Provider == catalog.ProviderMaven && strings.HasPrefix(input.ProjectID, prefix) {
+				wantedLibraries[prefix] = true
 			}
 		}
 	}
 	if !hasServerJar {
 		t.Error("lock inputs do not pin the vanilla server.jar")
 	}
-	for prefix, present := range wantedPrefixes {
+	for prefix, present := range wantedLibraries {
 		if !present {
 			t.Errorf("lock inputs do not include a %s library", prefix)
 		}

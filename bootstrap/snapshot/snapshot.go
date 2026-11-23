@@ -11,17 +11,13 @@ import (
 	"fmt"
 	"hash"
 	"path/filepath"
-	"slices"
 	"strings"
 
 	"github.com/mclucy/lucy/cas"
+	"github.com/mclucy/lucy/catalog"
 	"github.com/mclucy/lucy/document"
-	"github.com/mclucy/lucy/server"
+	"github.com/mclucy/lucy/internal/buildid"
 )
-
-// FormatVersion is the manifest encoding and key derivation version. Increment
-// it when either changes, so a stale manifest never answers a new lookup.
-const FormatVersion = 1
 
 // Entry describes one runtime-zone or seed-zone file of a bootstrap output.
 // Policy and Role keep their bootstrap package words as opaque labels; this
@@ -36,8 +32,8 @@ type Entry struct {
 }
 
 // Snapshot is one stored bootstrap output set addressed by its recipe key.
+// The key covers the Lucy build, so the manifest encoding needs no version.
 type Snapshot struct {
-	Version int        `json:"version"`
 	Key     cas.Digest `json:"key"`
 	Entries []Entry    `json:"entries"`
 }
@@ -50,28 +46,17 @@ type Store interface {
 	RestoreSnapshot(ctx context.Context, snap Snapshot, destination string) error
 }
 
-// MethodRevision reports the generator revision of one bootstrap adapter.
-// Increment a revision when a method produces different bytes for unchanged
-// inputs, so old snapshots and receipts stop matching.
-func MethodRevision(method server.BootstrapMethod) (int, error) {
-	switch method {
-	case server.BootstrapMethodPlain,
-		server.BootstrapMethodPaperclip,
-		server.BootstrapMethodFabric,
-		server.BootstrapMethodQuilt,
-		server.BootstrapMethodForgeInstaller:
-		return 1, nil
-	default:
-		return 0, fmt.Errorf("unsupported bootstrap method %q", method)
-	}
-}
-
-// Key computes the recipe identity of a locked server:
-// H(method, method revision, Minecraft version, core digest, each input path
-// and digest). The workspace directory, URLs, filenames, Java runtime, and
-// package set are deliberately absent: they do not change the output bytes.
+// Key computes the recipe identity of a locked server: H(Lucy build, method,
+// product, Minecraft version, core version, core digest, each input identity
+// and digest in lock order). Input order is part of the recipe because a
+// method can derive a classpath from it. The workspace directory, URLs,
+// filenames, Java runtime, and package set are absent: they do not change the
+// output bytes.
 func Key(locked document.LockedServer) (cas.Digest, error) {
-	revision, err := MethodRevision(locked.Bootstrapper)
+	if err := locked.Bootstrap.Validate(); err != nil {
+		return cas.Digest{}, err
+	}
+	build, err := buildid.Identity()
 	if err != nil {
 		return cas.Digest{}, err
 	}
@@ -79,33 +64,24 @@ func Key(locked document.LockedServer) (cas.Digest, error) {
 	if err != nil {
 		return cas.Digest{}, err
 	}
-	inputs := make([]server.BootstrapInput, len(locked.Inputs))
-	copy(inputs, locked.Inputs)
-	slices.SortFunc(inputs, func(a, b server.BootstrapInput) int {
-		return strings.Compare(a.Path, b.Path)
-	})
 
 	hasher := sha256.New()
 	writeField(hasher, "lucy-bootstrap-snapshot")
-	writeField(hasher, fmt.Sprint(FormatVersion))
-	writeField(hasher, string(locked.Bootstrapper))
-	writeField(hasher, fmt.Sprint(revision))
+	writeField(hasher, build)
+	writeField(hasher, string(locked.Bootstrap))
 	writeField(hasher, string(locked.Product))
 	writeField(hasher, locked.Minecraft.String())
-	// The adapter derives launch paths from the core version, so two locks
+	// The method derives launch paths from the core version, so two locks
 	// with the same core bytes but a different declared version generate
 	// different launchers.
 	writeField(hasher, locked.CoreVersion.String())
 	writeField(hasher, core)
-	for i, input := range inputs {
-		if err := document.SafeRelativePath(input.Path); err != nil {
-			return cas.Digest{}, fmt.Errorf("bootstrap input %d path: %w", i, err)
-		}
+	for _, input := range locked.Inputs {
 		reference, err := inputReference(input)
 		if err != nil {
 			return cas.Digest{}, err
 		}
-		writeField(hasher, filepath.ToSlash(filepath.Clean(input.Path)))
+		writeField(hasher, string(input.Provider)+":"+input.ProjectID+"@"+input.Version.String())
 		writeField(hasher, reference)
 	}
 	var key cas.Digest
@@ -116,14 +92,14 @@ func Key(locked document.LockedServer) (cas.Digest, error) {
 // inputReference identifies one locked input. An embedded input is addressed by
 // its parent installer's digest plus the entry name, so a lock that omits an
 // embedded digest still has a stable recipe.
-func inputReference(input server.BootstrapInput) (string, error) {
-	if input.Embedded != "" && !hasDigest(input.Artifact.Hashes) {
+func inputReference(input catalog.Artifact) (string, error) {
+	if input.Embedded != "" && !hasDigest(input.Hashes) {
 		if err := document.SafeRelativePath(input.Embedded); err != nil {
-			return "", fmt.Errorf("embedded bootstrap input %s: %w", input.Path, err)
+			return "", fmt.Errorf("embedded bootstrap input %s: %w", input.ProjectID, err)
 		}
 		return "embedded:" + filepath.ToSlash(filepath.Clean(input.Embedded)), nil
 	}
-	return artifactReference("bootstrap input "+input.Path, input.Artifact.Hashes)
+	return artifactReference("bootstrap input "+input.ProjectID, input.Hashes)
 }
 
 func hasDigest(hashes map[string]string) bool {
@@ -157,9 +133,6 @@ func writeField(hasher hash.Hash, value string) {
 // Validate rejects a manifest whose entries could escape the destination,
 // collide, or name content that is not addressed by SHA-256.
 func (s Snapshot) Validate() error {
-	if s.Version != FormatVersion {
-		return fmt.Errorf("unsupported snapshot version %d", s.Version)
-	}
 	if _, err := cas.ParseDigest(s.Key.String()); err != nil {
 		return fmt.Errorf("invalid snapshot key: %w", err)
 	}

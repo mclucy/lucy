@@ -17,10 +17,14 @@ func prepareFabric(root string, server document.LockedServer, corePath string) e
 	if err != nil {
 		return err
 	}
+	placed, err := inputPaths(server)
+	if err != nil {
+		return err
+	}
 	if err := fsutil.AtomicCopyFile(corePath, filepath.Join(root, filepath.FromSlash(loaderPath)), 0o644); err != nil {
 		return err
 	}
-	classpath := loaderClasspath(loaderPath, server.Inputs)
+	classpath := loaderClasspath(loaderPath, placed)
 	unix := strings.Join(classpath, ":")
 	windows := strings.Join(classpath, ";")
 	if err := os.WriteFile(filepath.Join(root, "run.sh"), []byte("#!/bin/sh\ncd -- \"$(dirname -- \"$0\")\"\nexec java -cp '"+unix+"' "+fabricLauncherMainClass+" nogui \"$@\"\n"), 0o755); err != nil {
@@ -56,7 +60,7 @@ func writeFabricShimJar(path string, classpath []string) error {
 }
 
 // writeLauncherShimJar writes the manifest-only launcher JAR shared by the
-// loader adapters. The embedded properties entry selects the server main class.
+// loader methods. The embedded properties entry selects the server main class.
 func writeLauncherShimJar(path, propertiesEntry, mainClass, launchMainClass string, classpath []string) error {
 	file, err := os.Create(path)
 	if err != nil {

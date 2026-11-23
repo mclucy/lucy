@@ -16,11 +16,13 @@ import (
 	serverpkg "github.com/mclucy/lucy/server"
 )
 
-// PrepareLocked builds the server tree of a locked server in stage. java is the
-// Java executable for the bootstrap steps that run Java; it may be empty when
-// no runtime is installed, and only those steps fail then. progress reports
-// bounded stages such as the Forge processor count.
-func PrepareLocked(ctx context.Context, stage string, server document.LockedServer, corePath string, inputs map[string]string, java string, output io.Writer, progress Progress) error {
+// PrepareLocked builds the server tree of a locked server in stage. inputs
+// holds the local file of each locked input at the same index; an embedded
+// input has an empty entry because it is extracted from the installer. java
+// is the Java executable for the bootstrap steps that run Java; it may be
+// empty when no runtime is installed, and only those steps fail then.
+// progress reports bounded stages such as the Forge processor count.
+func PrepareLocked(ctx context.Context, stage string, server document.LockedServer, corePath string, inputs []string, java string, output io.Writer, progress Progress) error {
 	for _, part := range []string{server.Minecraft.String(), server.CoreVersion.String()} {
 		if part == "" || part == "." || part == ".." || strings.ContainsAny(part, "/\\") {
 			return fmt.Errorf("invalid locked server version %q", part)
@@ -33,20 +35,23 @@ func PrepareLocked(ctx context.Context, stage string, server document.LockedServ
 	if err := os.MkdirAll(root, 0o755); err != nil {
 		return err
 	}
+	if len(inputs) != len(server.Inputs) {
+		return fmt.Errorf("got %d input files for %d locked inputs", len(inputs), len(server.Inputs))
+	}
+	placed, err := inputPaths(server)
+	if err != nil {
+		return err
+	}
 	var installer *zip.ReadCloser
-	if server.Bootstrapper == serverpkg.BootstrapMethodForgeInstaller {
-		var err error
+	if server.Bootstrap == serverpkg.BootstrapMethodForge {
 		installer, err = zip.OpenReader(corePath)
 		if err != nil {
 			return err
 		}
 		defer installer.Close()
 	}
-	for _, input := range server.Inputs {
-		if err := document.SafeRelativePath(input.Path); err != nil {
-			return err
-		}
-		dst := filepath.Join(root, filepath.FromSlash(input.Path))
+	for i, input := range server.Inputs {
+		dst := filepath.Join(root, filepath.FromSlash(placed[i]))
 		if input.Embedded != "" {
 			if installer == nil {
 				return fmt.Errorf("embedded input requires an installer")
@@ -56,16 +61,15 @@ func PrepareLocked(ctx context.Context, stage string, server document.LockedServ
 			}
 			continue
 		}
-		src, ok := inputs[input.Path]
-		if !ok {
-			return fmt.Errorf("missing locked bootstrap input %s", input.Path)
+		if inputs[i] == "" {
+			return fmt.Errorf("missing locked bootstrap input %s", input.ProjectID)
 		}
-		if err := fsutil.AtomicCopyFile(src, dst, 0o644); err != nil {
+		if err := fsutil.AtomicCopyFile(inputs[i], dst, 0o644); err != nil {
 			return err
 		}
 	}
-	switch server.Bootstrapper {
-	case serverpkg.BootstrapMethodPlain:
+	switch server.Bootstrap {
+	case serverpkg.BootstrapMethodVanilla:
 		return preparePlain(root, corePath)
 	case serverpkg.BootstrapMethodPaperclip:
 		return preparePaperclip(ctx, root, corePath, java, output)
@@ -73,10 +77,10 @@ func PrepareLocked(ctx context.Context, stage string, server document.LockedServ
 		return prepareFabric(root, server, corePath)
 	case serverpkg.BootstrapMethodQuilt:
 		return prepareQuilt(root, server, corePath)
-	case serverpkg.BootstrapMethodForgeInstaller:
+	case serverpkg.BootstrapMethodForge:
 		return prepareForgeInstaller(ctx, root, server, corePath, &installer.Reader, java, output, progress)
 	default:
-		return fmt.Errorf("unsupported bootstrap adapter %q", server.Bootstrapper)
+		return fmt.Errorf("unsupported bootstrap method %q", server.Bootstrap)
 	}
 }
 

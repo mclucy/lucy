@@ -45,6 +45,7 @@ func testWorkspace(t *testing.T) (string, *document.Manifest, *document.Lock) {
 			Minecraft:   versionpkg.Version("1.21.4"),
 			Product:     serverpkg.ProductFabric,
 			CoreVersion: versionpkg.Version("0.16.9"),
+			Bootstrap:   serverpkg.BootstrapMethodFabric,
 			Artifact: catalog.Artifact{
 				Version:  versionpkg.Version("0.16.9"),
 				Filename: "fabric-loader-0.16.9.jar",

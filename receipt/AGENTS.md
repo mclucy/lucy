@@ -11,7 +11,7 @@ Package `receipt` owns the workspace installation receipt (`.lucy/install.yaml`)
 
 ## Fingerprint Relationship
 
-- **Bootstrap Fingerprint**: `BootstrapFingerprint(lock)` digests the server resolution fields (product, method, core artifact, inputs, directory), strictly excluding Java requirements, tracked files, MCDR, and packages.
+- **Bootstrap Fingerprint**: `BootstrapFingerprint(lock)` returns the bootstrap snapshot recipe key. It digests the Lucy build identity, the bootstrap method, the product, the Minecraft and core versions, the core digest, and each input identity and digest in lock order. It excludes the server directory, URLs, filenames, Java requirements, tracked files, MCDR, and packages. The Lucy build identity is the SHA-256 of the running executable, so a new Lucy build makes the bootstrap fingerprint of an existing receipt stale.
 - **Package Fingerprint**: `PackageFingerprint(lock)` digests the package pins and MCDR wrapper directory.
 - **Invariance**: Explicitly excludes tracked files, the manifest fingerprint, and Java requirements. Ordinary package changes do not invalidate an unchanged, satisfied bootstrap.
 

@@ -5,7 +5,6 @@ import (
 	"testing"
 
 	"github.com/mclucy/lucy/catalog"
-	"github.com/mclucy/lucy/server"
 	"github.com/mclucy/lucy/upstream/internal/providers/loadermeta"
 	"github.com/mclucy/lucy/version"
 )
@@ -48,12 +47,12 @@ func quiltProfileFixture() loadermeta.Profile {
 	}
 }
 
-func inputPaths(inputs []server.BootstrapInput) []string {
-	paths := make([]string, 0, len(inputs))
+func inputCoordinates(inputs []catalog.Artifact) []string {
+	coordinates := make([]string, 0, len(inputs))
 	for _, input := range inputs {
-		paths = append(paths, input.Path)
+		coordinates = append(coordinates, input.ProjectID)
 	}
-	return paths
+	return coordinates
 }
 
 func TestLoaderProfileInputsPinsEveryNonLoaderLibrary(t *testing.T) {
@@ -68,33 +67,33 @@ func TestLoaderProfileInputsPinsEveryNonLoaderLibrary(t *testing.T) {
 
 	// The loader is the core artifact; Fabric and Quilt profiles both list it
 	// among the libraries, but it must not be pinned as a bootstrap input.
-	wantPaths := []string{
-		"libraries/net/fabricmc/sponge-mixin/0.15.4+mixin.0.8.7/sponge-mixin-0.15.4+mixin.0.8.7.jar",
-		"libraries/org/quiltmc/quilt-json5/1.0.4+final/quilt-json5-1.0.4+final.jar",
-		"libraries/net/fabricmc/intermediary/1.21.1/intermediary-1.21.1.jar",
+	wantCoordinates := []string{
+		"net.fabricmc:sponge-mixin:0.15.4+mixin.0.8.7",
+		"org.quiltmc:quilt-json5:1.0.4+final",
+		"net.fabricmc:intermediary:1.21.1",
 	}
-	if got := inputPaths(inputs); !slices.Equal(got, wantPaths) {
-		t.Fatalf("profile input order = %v, want %v", got, wantPaths)
+	if got := inputCoordinates(inputs); !slices.Equal(got, wantCoordinates) {
+		t.Fatalf("profile input order = %v, want %v", got, wantCoordinates)
 	}
 
 	wantURLs := map[string]string{
-		wantPaths[0]: "https://maven.fabricmc.net/net/fabricmc/sponge-mixin/0.15.4+mixin.0.8.7/sponge-mixin-0.15.4+mixin.0.8.7.jar",
-		wantPaths[1]: "https://maven.quiltmc.org/repository/release/org/quiltmc/quilt-json5/1.0.4+final/quilt-json5-1.0.4+final.jar",
-		wantPaths[2]: "https://maven.fabricmc.net/net/fabricmc/intermediary/1.21.1/intermediary-1.21.1.jar",
+		wantCoordinates[0]: "https://maven.fabricmc.net/net/fabricmc/sponge-mixin/0.15.4+mixin.0.8.7/sponge-mixin-0.15.4+mixin.0.8.7.jar",
+		wantCoordinates[1]: "https://maven.quiltmc.org/repository/release/org/quiltmc/quilt-json5/1.0.4+final/quilt-json5-1.0.4+final.jar",
+		wantCoordinates[2]: "https://maven.fabricmc.net/net/fabricmc/intermediary/1.21.1/intermediary-1.21.1.jar",
 	}
 	for _, input := range inputs {
-		if input.URL != wantURLs[input.Path] {
+		if input.URL != wantURLs[input.ProjectID] {
 			t.Errorf(
 				"%s URL = %q, want %q",
-				input.Path,
+				input.ProjectID,
 				input.URL,
-				wantURLs[input.Path],
+				wantURLs[input.ProjectID],
 			)
 		}
 		if input.Provider != catalog.ProviderMaven {
 			t.Errorf(
 				"%s provider = %q, want %q",
-				input.Path,
+				input.ProjectID,
 				input.Provider,
 				catalog.ProviderMaven,
 			)
@@ -102,7 +101,7 @@ func TestLoaderProfileInputsPinsEveryNonLoaderLibrary(t *testing.T) {
 		if input.Version != version.Version("0.27.1") {
 			t.Errorf(
 				"%s version = %q, want the selected loader version",
-				input.Path,
+				input.ProjectID,
 				input.Version,
 			)
 		}
@@ -130,7 +129,7 @@ func TestLoaderProfileInputsExcludesLoaderFromInputs(t *testing.T) {
 	if len(inputs) != 0 {
 		t.Fatalf(
 			"loader-only profile inputs = %v, want none",
-			inputPaths(inputs),
+			inputCoordinates(inputs),
 		)
 	}
 }
@@ -167,6 +166,6 @@ func TestLoaderProfileInputsEmptyProfile(t *testing.T) {
 		t.Fatalf("translate empty profile: %v", err)
 	}
 	if len(inputs) != 0 {
-		t.Fatalf("empty profile inputs = %v, want none", inputPaths(inputs))
+		t.Fatalf("empty profile inputs = %v, want none", inputCoordinates(inputs))
 	}
 }

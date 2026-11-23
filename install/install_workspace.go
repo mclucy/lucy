@@ -337,7 +337,7 @@ func (s *Service) stageServerTree(
 			if input.Embedded != "" {
 				continue
 			}
-			if err := requirePinnedArtifact(input.Artifact.Hashes, input.Path); err != nil {
+			if err := requirePinnedArtifact(input.Hashes, input.ProjectID); err != nil {
 				return nil, err
 			}
 		}
@@ -351,7 +351,7 @@ func (s *Service) stageServerTree(
 			if input.Embedded != "" {
 				return nil
 			}
-			a, label = &input.Artifact, input.Path
+			a, label = input, input.Filename
 		}
 		file, err := store.materializeFor(a, label)
 		materialized[i] = file
@@ -362,13 +362,12 @@ func (s *Service) stageServerTree(
 	}
 	core := materialized[0]
 	resolved.Server.Artifact.Hashes = core.Hashes
-	inputs := make(map[string]string, len(resolved.Server.Inputs))
+	inputs := make([]string, len(resolved.Server.Inputs))
 	for i := range resolved.Server.Inputs {
 		file := materialized[i+1]
 		if file.Path != "" {
-			input := &resolved.Server.Inputs[i]
-			input.Artifact.Hashes = file.Hashes
-			inputs[input.Path] = file.Path
+			resolved.Server.Inputs[i].Hashes = file.Hashes
+			inputs[i] = file.Path
 		}
 	}
 

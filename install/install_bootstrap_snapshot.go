@@ -79,7 +79,6 @@ func publishBootstrapSnapshot(
 		})
 	}
 	snap := snapshot.Snapshot{
-		Version: snapshot.FormatVersion,
 		Key:     key,
 		Entries: entries,
 	}
@@ -132,7 +131,7 @@ func requireEmptyDirectory(path string) error {
 // coreArtifactPath returns the offline installer used to verify Forge outputs.
 // Only an object whose contents match the lock may supply that evidence.
 func coreArtifactPath(server document.LockedServer) string {
-	if server.Bootstrapper != serverpkg.BootstrapMethodForgeInstaller {
+	if server.Bootstrap != serverpkg.BootstrapMethodForge {
 		return ""
 	}
 	value := server.Artifact.Hashes["sha256"]

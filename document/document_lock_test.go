@@ -36,6 +36,7 @@ func lockDocument(directory, tracked, pinVersion, selector string, enabled bool)
 			Directory:   directory,
 			Minecraft:   "1.21.4",
 			Product:     serverpkg.ProductPaper,
+			Bootstrap:   serverpkg.BootstrapMethodPaperclip,
 			CoreVersion: "1.21.4",
 			Artifact: catalog.Artifact{
 				Provider:  catalog.ProviderPaperMC,

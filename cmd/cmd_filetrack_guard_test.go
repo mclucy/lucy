@@ -29,6 +29,7 @@ func TestActivityGuardBlocksSharedReplays(t *testing.T) {
 			Minecraft:   "1.21.4",
 			Directory:   "server",
 			Product:     server.ProductMinecraft,
+			Bootstrap:   server.BootstrapMethodVanilla,
 			CoreVersion: "1.21.4",
 			Artifact: catalog.Artifact{
 				Provider: catalog.ProviderMojang,
@@ -164,6 +165,7 @@ func TestStaleLockRuntimeBlocksFileWritesWhileActive(t *testing.T) {
 			Minecraft:   "1.21.4",
 			Directory:   "server-lock",
 			Product:     server.ProductMinecraft,
+			Bootstrap:   server.BootstrapMethodVanilla,
 			CoreVersion: "1.21.4",
 			Artifact: catalog.Artifact{
 				Provider: catalog.ProviderMojang,

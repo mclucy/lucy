@@ -51,6 +51,7 @@ func compositeWorkspace(t *testing.T) (string, *document.Manifest, *document.Loc
 			Directory:   "server",
 			Product:     serverpkg.ProductMinecraft,
 			CoreVersion: "1.21.4",
+			Bootstrap:   serverpkg.BootstrapMethodVanilla,
 			Artifact: catalog.Artifact{
 				Provider: catalog.ProviderMojang,
 				Version:  "1.21.4",

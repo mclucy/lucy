@@ -239,11 +239,11 @@ func TestForgeInstallerEvidenceDoesNotPinSeedContents(t *testing.T) {
 
 func forgeShimTestLock() document.LockedServer {
 	return document.LockedServer{
-		Directory:    ".",
-		Product:      server.ProductForge,
-		Minecraft:    version.Version("1.21.11"),
-		CoreVersion:  version.Version("61.2.0"),
-		Bootstrapper: server.BootstrapMethodForgeInstaller,
+		Directory:   ".",
+		Product:     server.ProductForge,
+		Minecraft:   version.Version("1.21.11"),
+		CoreVersion: version.Version("61.2.0"),
+		Bootstrap:   server.BootstrapMethodForge,
 	}
 }
 

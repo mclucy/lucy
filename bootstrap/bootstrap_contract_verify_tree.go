@@ -82,8 +82,8 @@ func (v *treeVerifier) verify() (CheckResult, error) {
 	}
 
 	var result CheckResult
-	switch v.locked.Bootstrapper {
-	case serverpkg.BootstrapMethodPlain:
+	switch v.locked.Bootstrap {
+	case serverpkg.BootstrapMethodVanilla:
 		result = v.verifyPlain()
 	case serverpkg.BootstrapMethodPaperclip:
 		result = v.verifyPaperclip()
@@ -91,13 +91,13 @@ func (v *treeVerifier) verify() (CheckResult, error) {
 		result = v.verifyFabric()
 	case serverpkg.BootstrapMethodQuilt:
 		result = v.verifyQuilt()
-	case serverpkg.BootstrapMethodForgeInstaller:
+	case serverpkg.BootstrapMethodForge:
 		result = v.verifyForgeInstaller()
 	default:
 		result = CheckResult{
 			Current: false,
 			Status:  CurrentnessInconclusive,
-			Reason:  fmt.Sprintf("unsupported bootstrap adapter %q", v.locked.Bootstrapper),
+			Reason:  fmt.Sprintf("unsupported bootstrap method %q", v.locked.Bootstrap),
 		}
 	}
 	return result, nil
@@ -170,7 +170,7 @@ func (v *treeVerifier) verifyQuilt() CheckResult {
 }
 
 func (v *treeVerifier) verifyForgeInstaller() CheckResult {
-	v.verifyInputs()
+	placed := v.verifyInputs()
 
 	if v.launcher.err != nil {
 		v.fail("%v", v.launcher.err)
@@ -218,12 +218,12 @@ func (v *treeVerifier) verifyForgeInstaller() CheckResult {
 	if v.failed {
 		return v.mismatch()
 	}
-	proven := make(map[string]bool, len(declared)+len(v.locked.Inputs))
+	proven := make(map[string]bool, len(declared)+len(placed))
 	for rel := range declared {
 		proven[rel] = true
 	}
-	for _, input := range v.locked.Inputs {
-		proven[filepath.ToSlash(filepath.Clean(input.Path))] = true
+	for _, rel := range placed {
+		proven[rel] = true
 	}
 	unproven, err := v.unprovenForgeOutput(proven)
 	if err != nil {
@@ -244,18 +244,18 @@ func (v *treeVerifier) verifyForgeInstaller() CheckResult {
 // verifyInputs verifies every locked input against its pinned digests. Forge
 // inputs carry their declared contract policy; stage-only inputs are consumed
 // by installer execution and verified only while staging.
-func (v *treeVerifier) verifyInputs() {
-	for _, input := range v.locked.Inputs {
-		if err := document.SafeRelativePath(input.Path); err != nil {
-			v.fail("unsafe locked input path %q: %v", input.Path, err)
-			continue
-		}
-		cleanRel := filepath.ToSlash(filepath.Clean(input.Path))
+func (v *treeVerifier) verifyInputs() []string {
+	placed, err := inputPaths(v.locked)
+	if err != nil {
+		v.fail("resolving locked input paths: %v", err)
+		return nil
+	}
+	for i, rel := range placed {
 		policy, role := PolicyManaged, RoleRuntime
-		if v.locked.Bootstrapper == serverpkg.BootstrapMethodForgeInstaller {
-			spec, declared := v.contract[cleanRel]
+		if v.locked.Bootstrap == serverpkg.BootstrapMethodForge {
+			spec, declared := v.contract[rel]
 			if !declared {
-				v.fail("locked input %s has no declared bootstrap contract", cleanRel)
+				v.fail("locked input %s has no declared bootstrap contract", rel)
 				continue
 			}
 			if !v.staging && spec.stageOnly() {
@@ -263,13 +263,14 @@ func (v *treeVerifier) verifyInputs() {
 			}
 			policy, role = spec.Policy, spec.Role
 		}
-		out, ok := v.verifyPinned(cleanRel, input.Artifact.Hashes)
+		out, ok := v.verifyPinned(rel, v.locked.Inputs[i].Hashes)
 		if !ok {
 			continue
 		}
 		out.Policy, out.Role = policy, role
 		v.add(out)
 	}
+	return placed
 }
 
 // verifyPinned verifies one required regular file against pinned digests.

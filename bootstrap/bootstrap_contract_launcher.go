@@ -33,12 +33,12 @@ type launcherCheck struct {
 
 // verifyLauncher checks the generated launch files of a bootstrap method.
 func verifyLauncher(serverDir string, locked document.LockedServer) launcherCheck {
-	switch locked.Bootstrapper {
+	switch locked.Bootstrap {
 	case serverpkg.BootstrapMethodFabric:
 		return launcherCheck{err: verifyFabricLauncher(serverDir, locked)}
 	case serverpkg.BootstrapMethodQuilt:
 		return launcherCheck{err: verifyQuiltLauncher(serverDir, locked)}
-	case serverpkg.BootstrapMethodForgeInstaller:
+	case serverpkg.BootstrapMethodForge:
 		rootShim, err := verifyForgeLauncher(serverDir, locked)
 		return launcherCheck{rootShim: rootShim, err: err}
 	default:
@@ -89,7 +89,11 @@ func verifyFabricLauncher(serverDir string, locked document.LockedServer) error 
 	if err != nil {
 		return fmt.Errorf("resolving fabric loader path: %w", err)
 	}
-	classpath := loaderClasspath(loaderPath, locked.Inputs)
+	placed, err := inputPaths(locked)
+	if err != nil {
+		return err
+	}
+	classpath := loaderClasspath(loaderPath, placed)
 	unixClasspath := strings.Join(classpath, ":")
 	windowsClasspath := strings.Join(classpath, ";")
 
@@ -162,7 +166,11 @@ func verifyQuiltLauncher(serverDir string, locked document.LockedServer) error {
 	if err != nil {
 		return fmt.Errorf("resolving Quilt loader path: %w", err)
 	}
-	classpath := loaderClasspath(loaderPath, locked.Inputs)
+	placed, err := inputPaths(locked)
+	if err != nil {
+		return err
+	}
+	classpath := loaderClasspath(loaderPath, placed)
 
 	shimPath := filepath.Join(serverDir, "quilt-server-launch.jar")
 	zr, err := zip.OpenReader(shimPath)
@@ -386,13 +394,13 @@ func regularFileSHA256(serverDir, rel string) (string, error) {
 	return fileSHA256(filepath.Join(serverDir, filepath.FromSlash(rel)))
 }
 
-// fabricLoaderPath returns the library path the Fabric adapter installs the
+// fabricLoaderPath returns the library path the Fabric method installs the
 // locked loader to.
 func fabricLoaderPath(version string) (string, error) {
 	return loaderLibraryPath("net.fabricmc:fabric-loader", "Fabric", version)
 }
 
-// quiltLoaderPath returns the library path the Quilt adapter installs the
+// quiltLoaderPath returns the library path the Quilt method installs the
 // locked loader to.
 func quiltLoaderPath(version string) (string, error) {
 	return loaderLibraryPath("org.quiltmc:quilt-loader", "Quilt", version)
@@ -412,11 +420,12 @@ func loaderLibraryPath(coordinate, loader, version string) (string, error) {
 
 // loaderClasspath returns the launcher classpath: the loader library followed
 // by every pinned library input in lock order.
-func loaderClasspath(loaderPath string, inputs []serverpkg.BootstrapInput) []string {
-	classpath := []string{loaderPath}
-	for _, input := range inputs {
-		if strings.HasPrefix(input.Path, "libraries/") {
-			classpath = append(classpath, input.Path)
+func loaderClasspath(loaderPath string, placed []string) []string {
+	classpath := make([]string, 1, 1+len(placed))
+	classpath[0] = loaderPath
+	for _, rel := range placed {
+		if strings.HasPrefix(rel, "libraries/") {
+			classpath = append(classpath, rel)
 		}
 	}
 	return classpath

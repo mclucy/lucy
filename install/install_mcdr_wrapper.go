@@ -49,7 +49,7 @@ func writeMCDRWrapper(
 	configPath := filepath.Join(wrapper, "config.yml")
 	_, configErr := os.Stat(configPath)
 	if replaceConfig || os.IsNotExist(configErr) {
-		launch := bootstrap.LaunchFor(d.Server.Bootstrapper)
+		launch := bootstrap.LaunchFor(d.Server.Bootstrap)
 		relativeServer, err := filepath.Rel(m.Directory, d.Server.Directory)
 		if err != nil {
 			return err

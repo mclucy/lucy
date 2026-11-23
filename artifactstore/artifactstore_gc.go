@@ -254,7 +254,7 @@ func addLockReferences(
 		return err
 	}
 	for _, input := range locked.Server.Inputs {
-		if err := addArtifactReference(referenced, owner, "bootstrap input "+input.Path, input.Artifact); err != nil {
+		if err := addArtifactReference(referenced, owner, "bootstrap input "+input.ProjectID, input); err != nil {
 			return err
 		}
 	}

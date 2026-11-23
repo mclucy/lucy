@@ -169,6 +169,7 @@ func (s *replaySource) ResolveServerProduct(
 		Product:        request.Product,
 		ProductVersion: coreVersion,
 		Artifact:       artifact,
+		Bootstrap:      serverpkg.BootstrapMethodVanilla,
 		JavaAdvisory:   21,
 	}, nil
 }
@@ -230,13 +231,13 @@ func testInitializedLockReplaysOffline(t *testing.T, reuseLock bool) {
 			SchemaVersion:       document.LockSchemaVersion,
 			ManifestFingerprint: fingerprint,
 			Server: document.LockedServer{
-				Minecraft:    "1.21.4",
-				Directory:    ".",
-				Product:      serverpkg.ProductMinecraft,
-				CoreVersion:  "1.21.4",
-				Artifact:     coreArtifact,
-				Bootstrapper: serverpkg.BootstrapMethodPlain,
-				Java:         document.LockedJava{Advisory: 21},
+				Minecraft:   "1.21.4",
+				Directory:   ".",
+				Product:     serverpkg.ProductMinecraft,
+				CoreVersion: "1.21.4",
+				Artifact:    coreArtifact,
+				Bootstrap:   serverpkg.BootstrapMethodVanilla,
+				Java:        document.LockedJava{Advisory: 21},
 			},
 		}
 		if err := document.LockFile(sourceRoot).Write(lock); err != nil {

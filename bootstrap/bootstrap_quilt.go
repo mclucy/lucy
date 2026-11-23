@@ -23,10 +23,14 @@ func prepareQuilt(root string, server document.LockedServer, corePath string) er
 	if err != nil {
 		return err
 	}
+	placed, err := inputPaths(server)
+	if err != nil {
+		return err
+	}
 	if err := fsutil.AtomicCopyFile(corePath, filepath.Join(root, filepath.FromSlash(loaderPath)), 0o644); err != nil {
 		return err
 	}
-	classpath := loaderClasspath(loaderPath, server.Inputs)
+	classpath := loaderClasspath(loaderPath, placed)
 	if err := writeLauncherShimJar(
 		filepath.Join(root, "quilt-server-launch.jar"),
 		"quilt-server-launch.properties",

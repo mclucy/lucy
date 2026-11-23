@@ -32,7 +32,7 @@ func adoptRuntime(
 	tracked map[string]bool,
 	ledger *adoptionLedger,
 ) error {
-	if opts.Lock.Server.Bootstrapper == "" && opts.Lock.Server.Product == "" {
+	if opts.Lock.Server.Bootstrap == "" && opts.Lock.Server.Product == "" {
 		return nil
 	}
 	serverDir := filepath.Join(root, filepath.FromSlash(opts.Lock.Server.Directory))
@@ -62,7 +62,7 @@ func adoptRuntime(
 		if opts.Logger != nil {
 			opts.Logger.Debug(
 				"existing server tree satisfies locked bootstrap contract",
-				"method", opts.Lock.Server.Bootstrapper,
+				"method", opts.Lock.Server.Bootstrap,
 				"fingerprint", fingerprint,
 				"outputs", len(check.Outputs),
 			)

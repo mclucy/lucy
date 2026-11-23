@@ -7,7 +7,6 @@ import (
 	"encoding/json/v2"
 	"fmt"
 	"net/http"
-	"path"
 	"path/filepath"
 	"slices"
 	"strconv"
@@ -212,7 +211,7 @@ func (r *Router) adoptPaperBuild(
 		return false
 	}
 	v := strconv.Itoa(build.ID)
-	out.ProductVersion, out.Bootstrapper = version.Version(v), server.BootstrapMethodPaperclip
+	out.ProductVersion, out.Bootstrap = version.Version(v), server.BootstrapMethodPaperclip
 	out.Artifact = catalog.Artifact{
 		Provider:  catalog.ProviderPaperMC,
 		ProjectID: "paper",
@@ -322,7 +321,7 @@ func (r *Router) resolveGithubProduct(
 			}
 			trial := *out
 			trial.ProductVersion = version.Version(rl.Tag)
-			trial.Bootstrapper = server.BootstrapMethodPaperclip
+			trial.Bootstrap = server.BootstrapMethodPaperclip
 			materialized, e := acquire(&candidate)
 			if e != nil {
 				return e
@@ -352,6 +351,9 @@ func (r *Router) resolveGithubProduct(
 	return fmt.Errorf("no GitHub Paper fork artifact for Minecraft %s in %s", req.Minecraft, req.Repository)
 }
 
+// paperclipInput records the Mojang server jar the Paperclip core downloads.
+// Its download context names that jar, while bootstrap places it in the cache
+// under the version this input carries, so this verifies the declared name.
 func paperclipInput(out *upstream.ServerProductResolution, corePath string) error {
 	z, err := zip.OpenReader(corePath)
 	if err != nil {
@@ -373,9 +375,8 @@ func paperclipInput(out *upstream.ServerProductResolution, corePath string) erro
 	if fields[2] != expected {
 		return fmt.Errorf("core targets %s, requested Minecraft %s", fields[2], out.Minecraft)
 	}
-	out.Inputs = []server.BootstrapInput{
+	out.Inputs = []catalog.Artifact{
 		{
-			Path:      path.Join("cache", fields[2]),
 			Provider:  catalog.ProviderMojang,
 			ProjectID: "minecraft",
 			Version:   out.Minecraft,

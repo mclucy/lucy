@@ -200,12 +200,11 @@ func upgradeTarget(old *document.Lock, coreModules []catalog.DescriptorModule) r
 		mcdrVersion = string(old.MCDR.Version)
 	}
 	return resolve.Target{
-		Product:      old.Server.Product,
-		Bootstrapper: old.Server.Bootstrapper,
-		Minecraft:    old.Server.Minecraft,
-		CoreVersion:  old.Server.CoreVersion,
-		MCDRVersion:  mcdrVersion,
-		CoreModules:  coreModules,
+		Product:     old.Server.Product,
+		Minecraft:   old.Server.Minecraft,
+		CoreVersion: old.Server.CoreVersion,
+		MCDRVersion: mcdrVersion,
+		CoreModules: coreModules,
 	}
 }
 

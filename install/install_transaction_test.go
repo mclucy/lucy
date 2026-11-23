@@ -109,6 +109,7 @@ func TestApplyCommitRetainedBootstrapDriftAborts(t *testing.T) {
 			Minecraft:   "1.21.4",
 			Product:     serverpkg.ProductMinecraft,
 			CoreVersion: "1.21.4",
+			Bootstrap:   serverpkg.BootstrapMethodVanilla,
 			Artifact: catalog.Artifact{
 				Provider:  catalog.ProviderMojang,
 				ProjectID: "server",

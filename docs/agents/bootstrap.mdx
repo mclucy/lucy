@@ -3,31 +3,35 @@ title: "Server bootstrap architecture"
 description: "How locked server products become launchable files"
 ---
 
-A server product is not always a single runnable JAR. Resolution records a product, Minecraft and core versions, a core artifact, a bootstrapper, and supporting inputs in the locked server. An input has a destination path and either its own artifact metadata or a reference to content embedded in the installer. These are server bootstrap inputs, not mod or plugin requirements.
+A server product is not always a single runnable JAR. Resolution records a product, Minecraft and core versions, a core artifact, a bootstrap method, and supporting inputs in the locked server. The manifest has no bootstrap field; resolution selects the method from the product. An input is a Maven library or a Mojang artifact. The lock does not record input placement; the bootstrap method decides the placement. These are server bootstrap inputs, not mod or plugin requirements.
 
-Product resolution inspects upstream metadata to construct this locked definition, analyzing installer archives or Paperclip bundles prior to installation. For example, Paperclip download context identifies the expected vanilla Mojang JAR and its SHA-256 hash, allowing verification that the bundle targets the requested Minecraft version. Forge-family installer metadata describes required libraries and execution processors. Locking these inputs allows staging to operate deterministically from selected artifacts instead of discovering a new product version while staging.
+Product resolution inspects upstream metadata to construct this locked definition, analyzing installer archives or Paperclip bundles prior to installation. For example, Paperclip download context identifies the expected Mojang server JAR and its SHA-256 hash, allowing verification that the bundle targets the requested Minecraft version. Forge-family installer metadata describes required libraries and execution processors. Resolution fails when a profile library declares a download path that differs from the Maven path of its coordinate. Locking these inputs allows staging to operate deterministically from selected artifacts instead of discovering a new product version while staging.
 
-## Preparation adapters
+## Bootstrap methods
 
-Server preparation operates in an installation staging tree. It copies or extracts locked inputs under the server directory, then dispatches on the declared bootstrap method:
+Server preparation operates in an installation staging tree. It copies or extracts locked inputs under the server directory, then dispatches on the bootstrap method in the lock:
 
-| Bootstrapper | Preparation |
+| Method | Preparation |
 | --- | --- |
-| Empty | Copy the core artifact as `server.jar`. |
+| `vanilla` | Copy the core artifact as `server.jar`. |
 | `paperclip` | Copy the core as `server.jar` and run Paperclip in patch-only mode. |
 | `fabric` | Place the loader in the library layout and generate launch scripts, a launcher shim, and launcher properties from the locked classpath. |
 | `quilt` | Place the loader in the library layout and generate the Quilt launcher JAR and launcher properties from the locked classpath. |
-| `forge-installer` | Read the installer's server profile and execute its processors using the locked inputs. |
+| `forge` | Read the Forge or NeoForge installer's server profile and run its processors with the locked inputs. Both products share the installer profile format. |
 
-Paperclip and installer processors execute Java when there is no reusable snapshot. Processor outputs with expected hashes are checked. Fabric and Quilt generate launchers from their locked classpaths.
+An empty or unknown method is invalid, and Lucy tells the user to resolve the server again.
 
-A bootstrap snapshot records checked runtime files and seeds, keyed by adapter revision, locked versions, and input content and destinations. Restoring verifies objects and the runtime contract; an unusable snapshot falls back to a cold install. Adopted user trees never populate the snapshot cache.
+`InputPath` returns the placement of each input from the method: Maven libraries go to `libraries/<maven path>`; the Mojang server jar goes to `server.jar`, except Paperclip reads it from `cache/mojang_<minecraft>.jar`; server mappings go to `server-mappings.txt`. A Forge installer can carry libraries in itself; such an input names the embedded entry, and the installer digest addresses it.
+
+Paperclip and Forge installer processors execute Java when there is no reusable snapshot. Processor outputs with expected hashes are checked. Fabric and Quilt generate launchers from their locked classpaths.
+
+A bootstrap snapshot records checked runtime files and seeds. Its recipe key is the hash of the Lucy build identity, the bootstrap method, the product, the Minecraft and core versions, the core digest, and each input identity and digest in lock order. Input order is part of the key because Fabric and Quilt derive the launcher classpath from it. The Lucy build identity is the SHA-256 of the running executable, so a new Lucy build rebuilds snapshots and makes the bootstrap fingerprint of existing receipts stale; the next install restages the runtime. Restoring verifies objects and the runtime contract; an unusable snapshot falls back to a cold install. Adopted user trees never populate the snapshot cache.
 
 Subprocess output streams to terminal progress and a per-command log under `installer` in the platform log directory. Each command's header is recorded even when it prints nothing, and both stdout and stderr reach the file. The log is bounded to 64 MiB and discarded on success; a failure keeps it and names its path and size. Truncation or a write failure is reported.
 
 Shim-era Forge installers write a version-named shim at the server root, and the generated `run.sh` runs it for its Java check. Installation admits that file only when `run.sh`, after blank and comment lines are removed, consists of exactly the shim's Java check followed by the Forge launch command, and when the root copy byte-matches the canonical version-qualified shim under `libraries/`, which must open as a JAR whose manifest names the Forge shim main class. The canonical copy is unpinned, so this is adoption evidence like generated outputs rather than cryptographic proof. A named root shim that fails these checks is an error, never silently left unclaimed.
 
-Bootstrap adapters also define the launch command, MCDReforged log handlers, output paths, and superseded core metadata that other subsystems require. Installation and workspace observation consume these unified descriptions.
+Bootstrap methods also define the launch command, MCDReforged log handlers, output paths, and superseded core metadata that other subsystems require. Installation and workspace observation consume these unified descriptions.
 
 An upstream installer that an archive carries is identified from its contents, never its name: a Forge or NeoForge `install_profile.json` supplies the product, loader and Minecraft versions, whether it keeps that declaration at the top level or, as installers predating the install profile spec do, nests it under `install`; a Fabric or Quilt manifest main class supplies the product. Forge and NeoForge installers run natively with `--installServer` in the target root; this produces the same layout their installer produces outside Lucy. Import uses this before initialization, so the prepared tree is adopted rather than locked first. The run creates no lock or receipt; ownership begins only when initialization commits.
 

@@ -25,10 +25,7 @@ func validateUnmanagedArtifacts(ctx context.Context, root string, d *document.Lo
 	} else if !errors.Is(err, os.ErrNotExist) {
 		return err
 	}
-	runtime, hasRuntime := (resolve.Target{
-		Product:      d.Server.Product,
-		Bootstrapper: d.Server.Bootstrapper,
-	}).PackageRuntime()
+	runtime, hasRuntime := (resolve.Target{Product: d.Server.Product}).PackageRuntime()
 	seenDirectories := map[string]bool{}
 	for index := range d.Packages {
 		planned := &d.Packages[index]

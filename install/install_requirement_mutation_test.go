@@ -35,8 +35,8 @@ func TestMutateLockBindsEachDeclarationToLocation(t *testing.T) {
 				Filename:  "paper.jar",
 				Hashes:    map[string]string{"sha256": fmt.Sprintf("%064x", 9)},
 			},
-			Bootstrapper: "paperclip",
-			Java:         document.LockedJava{Advisory: 21},
+			Bootstrap: "paperclip",
+			Java:      document.LockedJava{Advisory: 21},
 		},
 		Packages: []document.Package{
 			lockedMutationPackage(catalog.EcosystemFabric, versionpkg.Any, true),
@@ -181,8 +181,8 @@ func TestMutateLockBindsRecordedRequirement(t *testing.T) {
 				Filename:  "quilt-loader-0.29.1.jar",
 				Hashes:    map[string]string{"sha256": fmt.Sprintf("%064x", 8)},
 			},
-			Bootstrapper: serverpkg.BootstrapMethodQuilt,
-			Java:         document.LockedJava{Advisory: 21},
+			Bootstrap: serverpkg.BootstrapMethodQuilt,
+			Java:      document.LockedJava{Advisory: 21},
 		},
 		Packages: []document.Package{pkg},
 	}
@@ -384,8 +384,8 @@ func TestMutateLockRetainsProviderThroughCrossEcosystemDependent(t *testing.T) {
 						Filename:  "quilt-loader-0.29.1.jar",
 						Hashes:    map[string]string{"sha256": fmt.Sprintf("%064x", 7)},
 					},
-					Bootstrapper: serverpkg.BootstrapMethodQuilt,
-					Java:         document.LockedJava{Advisory: 21},
+					Bootstrap: serverpkg.BootstrapMethodQuilt,
+					Java:      document.LockedJava{Advisory: 21},
 				},
 				Packages: packages,
 			}
