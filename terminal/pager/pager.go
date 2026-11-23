@@ -9,8 +9,8 @@ import (
 
 	"charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
+	"github.com/charmbracelet/x/term"
 	"github.com/mclucy/lucy/terminal/style"
-	"golang.org/x/term"
 )
 
 // Mode selects when a document goes through the pager.
@@ -110,7 +110,7 @@ func needsPager(mode Mode, text string, width, terminalHeight int) bool {
 
 func isTerminal(stream any) bool {
 	file, ok := stream.(*os.File)
-	return ok && term.IsTerminal(int(file.Fd()))
+	return ok && term.IsTerminal(file.Fd())
 }
 
 func textRows(text string, width int) int {

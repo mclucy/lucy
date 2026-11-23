@@ -7,7 +7,7 @@ import (
 	"github.com/mclucy/lucy/catalog"
 	"github.com/mclucy/lucy/internal/fileschema"
 	"github.com/mclucy/lucy/workspace/discovery"
-	"gopkg.in/ini.v1"
+	"unknwon.dev/ini/v2"
 )
 
 // PackageDirs lists the directories that hold content packages for this

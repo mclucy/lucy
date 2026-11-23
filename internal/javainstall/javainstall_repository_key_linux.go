@@ -3,9 +3,7 @@
 package javainstall
 
 import (
-	"bytes"
 	"context"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -13,8 +11,8 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/ProtonMail/go-crypto/openpgp"
-	"github.com/ProtonMail/go-crypto/openpgp/armor"
+	"github.com/ProtonMail/gopenpgp/v3/armor"
+	"github.com/ProtonMail/gopenpgp/v3/crypto"
 )
 
 // repositoryKeyMaxBytes is the largest key file Lucy accepts. A vendor key is
@@ -46,7 +44,7 @@ func fetchRepositoryKey(
 	ctx context.Context,
 	key *RepositoryKey,
 	host *Host,
-) (*openpgp.Entity, error) {
+) (*crypto.Key, error) {
 	address, err := url.Parse(key.URL)
 	if err != nil {
 		return nil, fmt.Errorf("parse repository key URL: %w", err)
@@ -89,28 +87,18 @@ func fetchRepositoryKey(
 
 // verifyRepositoryKey returns the key whose primary fingerprint matches pin.
 // The comparison ignores case and whitespace.
-func verifyRepositoryKey(data []byte, pin string) (*openpgp.Entity, error) {
-	entities, armoredErr := openpgp.ReadArmoredKeyRing(bytes.NewReader(data))
-	if armoredErr != nil {
-		binaryEntities, binaryErr := openpgp.ReadKeyRing(bytes.NewReader(data))
-		if binaryErr != nil {
-			return nil, fmt.Errorf(
-				"parse OpenPGP key: %w",
-				errors.Join(armoredErr, binaryErr),
-			)
-		}
-		entities = binaryEntities
+func verifyRepositoryKey(data []byte, pin string) (*crypto.Key, error) {
+	keys, err := repositoryKeys(data)
+	if err != nil {
+		return nil, err
 	}
 	want := normalizeFingerprint(pin)
 	if want == "" {
 		return nil, errors.New("repository key has no pinned fingerprint")
 	}
-	for _, entity := range entities {
-		got := strings.ToUpper(
-			hex.EncodeToString(entity.PrimaryKey.Fingerprint[:]),
-		)
-		if got == want {
-			return entity, nil
+	for _, key := range keys {
+		if strings.ToUpper(key.GetFingerprint()) == want {
+			return key, nil
 		}
 	}
 	return nil, fmt.Errorf(
@@ -119,30 +107,42 @@ func verifyRepositoryKey(data []byte, pin string) (*openpgp.Entity, error) {
 	)
 }
 
+func repositoryKeys(data []byte) ([]*crypto.Key, error) {
+	binary, armorErr := armor.UnarmorBytes(data)
+	if armorErr == nil {
+		ring, err := crypto.NewKeyRingFromBinary(binary)
+		if err == nil {
+			return ring.GetKeys(), nil
+		}
+	}
+	ring, binaryErr := crypto.NewKeyRingFromBinary(data)
+	if binaryErr != nil {
+		return nil, fmt.Errorf(
+			"parse OpenPGP key: %w",
+			errors.Join(armorErr, binaryErr),
+		)
+	}
+	return ring.GetKeys(), nil
+}
+
 func normalizeFingerprint(fingerprint string) string {
 	return strings.ToUpper(strings.Join(strings.Fields(fingerprint), ""))
 }
 
 func serializeRepositoryKey(
-	entity *openpgp.Entity,
+	key *crypto.Key,
 	armored bool,
 ) ([]byte, error) {
-	var buffer bytes.Buffer
-	if !armored {
-		if err := entity.Serialize(&buffer); err != nil {
-			return nil, fmt.Errorf("serialize repository key: %w", err)
-		}
-		return buffer.Bytes(), nil
+	data, err := key.GetPublicKey()
+	if err != nil {
+		return nil, fmt.Errorf("serialize repository key: %w", err)
 	}
-	writer, err := armor.Encode(&buffer, openpgp.PublicKeyType, nil)
+	if !armored {
+		return data, nil
+	}
+	text, err := armor.ArmorWithTypeBytes(data, "PGP PUBLIC KEY BLOCK")
 	if err != nil {
 		return nil, fmt.Errorf("armor repository key: %w", err)
 	}
-	if err := entity.Serialize(writer); err != nil {
-		return nil, fmt.Errorf("serialize repository key: %w", err)
-	}
-	if err := writer.Close(); err != nil {
-		return nil, fmt.Errorf("close repository key armor: %w", err)
-	}
-	return buffer.Bytes(), nil
+	return text, nil
 }
