@@ -11,6 +11,7 @@ require (
 	charm.land/lipgloss/v2 v2.1.1
 	charm.land/log/v2 v2.0.1
 	github.com/Masterminds/semver/v3 v3.5.0
+	github.com/NimbleMarkets/oksvg v0.1.7
 	github.com/ProtonMail/go-crypto v1.5.2
 	github.com/bmatcuk/doublestar/v4 v4.10.7
 	github.com/charmbracelet/colorprofile v0.4.3
@@ -22,7 +23,6 @@ require (
 	github.com/sahilm/fuzzy v0.1.3
 	github.com/spf13/cobra v1.10.2
 	github.com/spf13/pflag v1.1.0
-	github.com/srwiley/oksvg v0.0.0-20221011165216-be6e8873101c
 	github.com/srwiley/rasterx v0.0.0-20220730225603-2ab79fcdd4ef
 	go.yaml.in/yaml/v4 v4.0.0
 	golang.org/x/crypto v0.59.0
@@ -540,3 +540,5 @@ tool (
 	gotest.tools/gotestsum
 	mvdan.cc/gofumpt
 )
+
+replace github.com/srwiley/rasterx => github.com/neomantra/rasterx v0.1.1

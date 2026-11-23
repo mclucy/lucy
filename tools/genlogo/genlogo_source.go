@@ -21,7 +21,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/srwiley/oksvg"
+	"github.com/NimbleMarkets/oksvg"
 	"github.com/srwiley/rasterx"
 	_ "golang.org/x/image/webp"
 )
