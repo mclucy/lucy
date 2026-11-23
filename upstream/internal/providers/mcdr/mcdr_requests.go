@@ -6,9 +6,13 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"sort"
+	"strings"
+	"sync"
 
+	"github.com/junegunn/fzf/src/algo"
+	"github.com/junegunn/fzf/src/util"
 	"github.com/mclucy/lucy/cache"
-	"github.com/sahilm/fuzzy"
 )
 
 const (
@@ -40,12 +44,42 @@ func (p *Provider) search(
 		pluginIds = append(pluginIds, file.Name)
 	}
 
-	matches := fuzzy.Find(query, pluginIds)
+	return fuzzySearch(query, pluginIds), nil
+}
+
+var initFuzzyScoring sync.Once
+
+// fuzzySearch ranks ids by how well they match query.
+func fuzzySearch(query string, ids []string) []string {
+	if query == "" {
+		return nil
+	}
+	initFuzzyScoring.Do(func() { algo.Init("default") })
+	pattern := []rune(strings.ToLower(query))
+	slab := util.MakeSlab(16, 32)
+
+	type ranked struct {
+		index int
+		score int
+	}
+	matches := make([]ranked, 0, len(ids))
+	for i, id := range ids {
+		chars := util.ToChars([]byte(id))
+		result, _ := algo.FuzzyMatchV2(
+			false, true, true, &chars, pattern, false, slab,
+		)
+		if result.Score > 0 {
+			matches = append(matches, ranked{i, result.Score})
+		}
+	}
+	sort.SliceStable(matches, func(i, j int) bool {
+		return matches[i].score > matches[j].score
+	})
 	result := make([]string, 0, len(matches))
 	for _, match := range matches {
-		result = append(result, pluginIds[match.Index])
+		result = append(result, ids[match.index])
 	}
-	return result, nil
+	return result
 }
 
 // getPlugin fetches one plugin's aggregate catalogue document. Its meta,
