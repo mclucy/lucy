@@ -21,4 +21,12 @@ Working-file tracking stores captured bytes in the workspace-local `.lucy/object
 
 Tracked-file mutations share the workspace writer lock. Their journal, `.lucy/file-commit.json`, records before and after images and the intended history event. Recovery uses history to choose an image and refuses to overwrite an unrelated edit. [Installation](/agents/resolution) has a separate journal and recovery path. Read-only file history refuses an unfinished transaction.
 
-Tracked files and runtime-owned outputs are different ownership domains. Installation checks for destination conflicts, preserves existing tracked working files, and can provision missing accepted content from a verified local object or recovery URL. A hash in a declaration is an identity for bytes, not a transfer of those bytes.
+Tracked files and runtime-owned outputs are different ownership domains. Tracked files take precedence: installation preserves existing tracked working files and can provision missing accepted content from a verified local object or recovery URL. A hash in a declaration is an identity for bytes, not a transfer of those bytes.
+
+## Runtime ownership and displacement
+
+Runtime outputs are the files a bootstrap method produces: server jars, `libraries/`, `versions/`, `cache/`, launchers, and run scripts. They are owned as the runtime image of the lock's recipe; `--overwrite` governs package destinations, and runtime outputs never need it. At commit, an unowned runtime output with identical bytes is claimed without a rewrite. A runtime output with other bytes is replaced, and its before-image is kept under `.lucy/displaced/<transaction-id>/files/<path>` with an `index.yaml` that records path, SHA-256, and mode. The journal entry carries the displacement flag. Displacement materializes only after the commit point: recovery before it restores the before-images, and recovery after it completes the cleanup. Lucy never deletes displaced content; the workspace owner does.
+
+## Store link mode
+
+`store.link` selects how stored content reaches an installed file. `clone` (the default) uses a copy-on-write clone where the filesystem supports it and a plain copy otherwise. `hardlink` links the stored inode and deploys the file without write bits, so an in-place rewrite fails instead of changing the shared copy. A file whose mode cannot match the stored copy, such as an executable launch script, is cloned. A hardlink applies only when the store and the destination share one filesystem; otherwise Lucy clones or copies. On Windows, Lucy cannot share a stored inode, so `hardlink` installs plain copies and keeps their write bits.

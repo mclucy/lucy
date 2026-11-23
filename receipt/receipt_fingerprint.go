@@ -9,20 +9,29 @@ import (
 	"go.yaml.in/yaml/v4"
 )
 
-// BootstrapFingerprint returns the bootstrap recipe key of a lock: the same
-// key the bootstrap snapshot cache uses, so a receipt answers exactly the
-// snapshot a fresh staging would look up. A new Lucy build changes the key,
-// so the next install restages the runtime. Packages, tracked files, MCDR,
-// and Java requirements cannot invalidate an unchanged bootstrap.
+// BootstrapFingerprint returns the bootstrap installation key of a lock: the
+// snapshot recipe key plus the server directory. The recipe key names a
+// shareable output tree; the directory is where this workspace installs it, so
+// moving the server restages the runtime. A new Lucy build changes the recipe
+// key, so the next install restages. Packages, tracked files, MCDR, Java
+// requirements, URLs, and filenames cannot invalidate an unchanged bootstrap.
 func BootstrapFingerprint(l *document.Lock) (string, error) {
 	if l == nil {
 		return "", nil
 	}
-	key, err := snapshot.Key(l.Server)
+	recipe, err := snapshot.Key(l.Server)
 	if err != nil {
 		return "", err
 	}
-	return key.Hex(), nil
+	data, err := yaml.Marshal(struct {
+		Recipe    string `yaml:"recipe"`
+		Directory string `yaml:"directory"`
+	}{recipe.String(), l.Server.Directory})
+	if err != nil {
+		return "", err
+	}
+	sum := sha256.Sum256(data)
+	return hex.EncodeToString(sum[:]), nil
 }
 
 // PackageFingerprint digests the package pins and wrapper runtime in the lock:

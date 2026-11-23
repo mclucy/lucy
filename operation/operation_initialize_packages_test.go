@@ -17,6 +17,7 @@ import (
 	"github.com/mclucy/lucy/catalog"
 	documentpkg "github.com/mclucy/lucy/document"
 	"github.com/mclucy/lucy/install"
+	"github.com/mclucy/lucy/internal/fsutil"
 	"github.com/mclucy/lucy/upstream"
 	versionpkg "github.com/mclucy/lucy/version"
 )
@@ -235,6 +236,7 @@ func initializePackageMapperResult(
 		svc.registry,
 		svc.logger,
 		"",
+		fsutil.LinkClone,
 	)
 	result, err := svc.Initialize(
 		t.Context(),

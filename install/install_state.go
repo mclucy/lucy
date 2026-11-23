@@ -8,7 +8,6 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/mclucy/lucy/bootstrap"
 	"github.com/mclucy/lucy/document"
 	"github.com/mclucy/lucy/internal/workspacewrite"
 	"github.com/mclucy/lucy/log"
@@ -42,9 +41,9 @@ func installationCurrent(ctx context.Context, root string, l *document.Lock, log
 	return true, true, nil
 }
 
-// bootstrapCurrent reports whether the receipt satisfies the resolved bootstrap
-// plan: every required managed bootstrap output is owned with bootstrap origin
-// and still matches its accepted baseline.
+// bootstrapCurrent reports whether the receipt answers the resolved bootstrap
+// plan: its bootstrap fingerprint matches the lock and every recorded bootstrap
+// output still matches its accepted baseline.
 func bootstrapCurrent(root string, l *document.Lock, current *receipt.Receipt, logger *log.Logger) (bool, error) {
 	if current == nil {
 		return false, nil
@@ -67,24 +66,25 @@ func bootstrapCurrent(root string, l *document.Lock, current *receipt.Receipt, l
 		return false, nil
 	}
 
-	specs := bootstrap.OutputSpecs(l.Server)
-	if len(specs) == 0 && (l.Server.Product != "" || l.Server.Bootstrap != "") {
-		logger.Debug("bootstrap not current", "reason", "unsupported bootstrap method", "method", l.Server.Bootstrap)
-		return false, nil
-	}
-
-	serverDir := filepath.Join(root, filepath.FromSlash(l.Server.Directory))
-	checkResult, err := bootstrap.Check(serverDir, l.Server, coreArtifactPath(l.Server))
-	if err != nil {
-		return false, err
-	}
-	if !checkResult.RequiredOutputsVerified {
-		logger.Debug("bootstrap not current", "reason", checkResult.Reason)
-		return false, nil
+	for _, seed := range current.SeedPaths {
+		if err := workspacewrite.SafePath(root, seed); err != nil {
+			return false, err
+		}
+		info, err := os.Lstat(filepath.Join(root, filepath.FromSlash(seed)))
+		switch {
+		case os.IsNotExist(err):
+			logger.Debug("bootstrap not current", "reason", "recorded seed missing", "path", seed)
+			return false, nil
+		case err != nil:
+			return false, err
+		}
+		if !info.Mode().IsRegular() {
+			logger.Debug("bootstrap not current", "reason", "recorded seed is symlink or non-regular", "path", seed)
+			return false, nil
+		}
 	}
 
 	tracked := trackedPaths(l)
-	owned := make(map[string]bool)
 	hasBootstrapEntry := false
 	for _, entry := range current.Entries {
 		if entry.Origin != receipt.OriginBootstrap {
@@ -94,7 +94,6 @@ func bootstrapCurrent(root string, l *document.Lock, current *receipt.Receipt, l
 		if tracked[strings.ToLower(entry.Path)] {
 			continue
 		}
-		owned[entry.Path] = true
 		entryCurrent, err := receiptEntryCurrent(root, entry, "bootstrap", logger)
 		if err != nil || !entryCurrent {
 			return false, err
@@ -103,19 +102,6 @@ func bootstrapCurrent(root string, l *document.Lock, current *receipt.Receipt, l
 	if l.Server.Product != "" && !hasBootstrapEntry {
 		logger.Debug("bootstrap not current", "reason", "no bootstrap entries recorded in receipt")
 		return false, nil
-	}
-	for _, output := range checkResult.Outputs {
-		if !isManagedRuntimeOutput(output) {
-			continue
-		}
-		required := output.Path
-		if tracked[strings.ToLower(required)] {
-			continue
-		}
-		if !owned[required] {
-			logger.Debug("bootstrap not current", "reason", "required managed output not owned by receipt", "path", required)
-			return false, nil
-		}
 	}
 	return true, nil
 }

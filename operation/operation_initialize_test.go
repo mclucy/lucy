@@ -15,6 +15,7 @@ import (
 	"github.com/mclucy/lucy/catalog"
 	documentpkg "github.com/mclucy/lucy/document"
 	"github.com/mclucy/lucy/install"
+	"github.com/mclucy/lucy/internal/fsutil"
 	logpkg "github.com/mclucy/lucy/log"
 	serverpkg "github.com/mclucy/lucy/server"
 	"github.com/mclucy/lucy/upstream"
@@ -156,6 +157,7 @@ func newInitializeTestServiceWithSource(t *testing.T, source Source) *Service {
 		registry,
 		logger,
 		"",
+		fsutil.LinkClone,
 	)
 	return NewService(
 		installer,

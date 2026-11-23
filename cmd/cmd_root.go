@@ -26,6 +26,7 @@ import (
 	"github.com/mclucy/lucy/internal/cli/info"
 	"github.com/mclucy/lucy/internal/cli/search"
 	telemetrycli "github.com/mclucy/lucy/internal/cli/telemetry"
+	"github.com/mclucy/lucy/internal/fsutil"
 	"github.com/mclucy/lucy/internal/javainstall"
 	"github.com/mclucy/lucy/log"
 	"github.com/mclucy/lucy/operation"
@@ -302,7 +303,8 @@ func (r *Runner) configureServices(cmd *cobra.Command) error {
 	}
 	proxy, proxyErr := settings.GitHubProxy()
 	key, keyErr := settings.CurseForgeAPIKey()
-	if err := errors.Join(proxyErr, keyErr); err != nil {
+	link, linkErr := configuredLinkMode(settings)
+	if err := errors.Join(proxyErr, keyErr, linkErr); err != nil {
 		if !toleratesUnreadableSettings(cmd) {
 			return fmt.Errorf("%w\nrun `lucy config` to inspect or repair machine settings", err)
 		}
@@ -327,7 +329,14 @@ func (r *Runner) configureServices(cmd *cobra.Command) error {
 	router := routing.New(network, r.invocation.Logger, key)
 	files := filetrack.NewService(r.httpClient, r.invocation.Logger)
 	installer := install.NewService(
-		router, network, files, install.NewPythonHost(r.invocation.Directory, r.invocation.Logger), registry, r.invocation.Logger, proxy,
+		router,
+		network,
+		files,
+		install.NewPythonHost(r.invocation.Directory, r.invocation.Logger),
+		registry,
+		r.invocation.Logger,
+		proxy,
+		link,
 	)
 	r.dependencies.Network = network
 	r.dependencies.Router = router
@@ -335,6 +344,21 @@ func (r *Runner) configureServices(cmd *cobra.Command) error {
 	r.dependencies.Operations = operation.NewService(installer, router, registry, r.invocation.Logger)
 	r.dependencies.JavaHost = javainstall.NewHost(network, r.invocation.Logger)
 	return nil
+}
+
+// configuredLinkMode reads store.link and names the key in a value the
+// installer cannot use, so the command fails before it stages anything.
+// Machine settings that cannot be read leave the default in place.
+func configuredLinkMode(settings *config.Service) (fsutil.LinkMode, error) {
+	value, err := settings.Setting("store.link")
+	if err != nil {
+		return fsutil.LinkClone, err
+	}
+	link, err := fsutil.ParseLinkMode(strings.TrimSpace(value))
+	if err != nil {
+		return fsutil.LinkClone, fmt.Errorf("config store.link: %w", err)
+	}
+	return link, nil
 }
 
 // toleratesUnreadableSettings reports whether cmd stays runnable while machine

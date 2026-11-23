@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/mclucy/lucy/bootstrap"
@@ -54,6 +55,7 @@ func adoptRuntime(
 		); err != nil {
 			return err
 		}
+		ledger.seedPaths = observedSeedPaths(root, check.Outputs, tracked)
 		fingerprint, err := receipt.BootstrapFingerprint(opts.Lock)
 		if err != nil {
 			return err
@@ -309,4 +311,22 @@ func workspacePathSafe(root, rel string) bool {
 
 func isManagedRuntimeOutput(out bootstrap.Output) bool {
 	return out.Policy == bootstrap.PolicyManaged && out.Role == bootstrap.RoleRuntime
+}
+
+// observedSeedPaths lists the seed outputs a verified bootstrap produced.
+// Tracked files stay user-owned and unrecorded.
+func observedSeedPaths(root string, outputs []bootstrap.Output, tracked map[string]bool) []string {
+	paths := make([]string, 0, len(outputs))
+	for _, out := range outputs {
+		if out.Policy != bootstrap.PolicySeed {
+			continue
+		}
+		clean := cleanWorkspacePath(out.Path)
+		if tracked[strings.ToLower(clean)] || !workspacePathSafe(root, clean) {
+			continue
+		}
+		paths = append(paths, clean)
+	}
+	slices.Sort(paths)
+	return paths
 }

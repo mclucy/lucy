@@ -1,23 +1,19 @@
 package install
 
 import (
-	"archive/zip"
-	"bytes"
-	"crypto/sha1"
-	"fmt"
+	"os"
 	"path/filepath"
 	"testing"
 
-	"github.com/mclucy/lucy/artifactstore"
 	"github.com/mclucy/lucy/catalog"
 	"github.com/mclucy/lucy/document"
 	"github.com/mclucy/lucy/receipt"
 	"github.com/mclucy/lucy/server"
 )
 
-// A receipt that does not own a required managed bootstrap output must not
-// claim currency, even when the receipt's fingerprint and the file itself are
-// intact. Otherwise the output is never restaged and never reported unowned.
+// A receipt with a matching bootstrap fingerprint but no bootstrap entry must
+// not claim currency, even when the file itself is intact. Otherwise the output
+// is never restaged and never reported unowned.
 func TestBootstrapCurrentRequiresReceiptOwnershipOfManagedOutput(t *testing.T) {
 	root := t.TempDir()
 	core := []byte("plain server core\n")
@@ -69,80 +65,103 @@ func TestBootstrapCurrentRequiresReceiptOwnershipOfManagedOutput(t *testing.T) {
 	}
 }
 
-func TestBootstrapCurrentRequiresForgeInstallerEvidence(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
-	t.Setenv("USERPROFILE", home)
-	t.Setenv("XDG_DATA_HOME", filepath.Join(home, "data"))
-	t.Setenv("LOCALAPPDATA", filepath.Join(home, "appdata"))
-
-	const (
-		args = "libraries/net/minecraftforge/forge/1.21.11-61.2.0/unix_args.txt"
-		lib  = "libraries/required.jar"
-	)
-	library := []byte("processor output")
-	var installer bytes.Buffer
-	zw := zip.NewWriter(&installer)
-	profile, err := zw.Create("install_profile.json")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := fmt.Fprintf(profile, `{"processors":[{"outputs":{"{ROOT}/%s":"%x"}}]}`, lib, sha1.Sum(library)); err != nil {
-		t.Fatal(err)
-	}
-	if err := zw.Close(); err != nil {
-		t.Fatal(err)
-	}
+// The snapshot recipe key names a shareable output tree, but an installation
+// answers one directory. Changing the locked server directory must therefore
+// change the fingerprint and force a restage.
+func TestBootstrapFingerprintIncludesServerDirectory(t *testing.T) {
 	lock := &document.Lock{
 		Server: document.LockedServer{
-			Product:     server.ProductForge,
-			Minecraft:   "1.21.11",
-			CoreVersion: "61.2.0",
-			Bootstrap:   server.BootstrapMethodForge,
 			Directory:   "server",
+			Product:     server.ProductMinecraft,
+			Minecraft:   "1.21.4",
+			CoreVersion: "1.21.4",
+			Bootstrap:   server.BootstrapMethodVanilla,
 			Artifact: catalog.Artifact{
-				Hashes: map[string]string{"sha256": transactionTestDigest(installer.Bytes())},
+				Provider:  catalog.ProviderMojang,
+				ProjectID: "server",
+				Version:   "1.21.4",
+				Filename:  "server.jar",
+				Hashes:    map[string]string{"sha256": transactionTestDigest([]byte("core"))},
 			},
 		},
 	}
-	root := t.TempDir()
-	installed := receipt.New()
-	installed.BootstrapFingerprint, err = receipt.BootstrapFingerprint(lock)
-	if err != nil {
-		t.Fatal(err)
-	}
-	own := func(rel string, data []byte) {
-		t.Helper()
-		path := "server/" + rel
-		transactionTestWrite(t, root, path, data)
-		installed.Entries = append(installed.Entries, receipt.Entry{
-			Path:   path,
-			Origin: receipt.OriginBootstrap,
-			SHA256: transactionTestDigest(data),
-		})
-	}
-	own("run.sh", []byte("#!/bin/sh\njava @user_jvm_args.txt @"+args+" \"$@\"\n"))
-	own("run.bat", []byte("@echo off\r\njava @user_jvm_args.txt @"+args+" %*\r\n"))
-	own(args, []byte("-Djava.net.preferIPv6Addresses=system\n"))
-	transactionTestWrite(t, root, "server/user_jvm_args.txt", []byte("-Xmx2G\n"))
+	moved := *lock
+	moved.Server.Directory = "server2"
 
-	check := func(want bool, scenario string) {
-		t.Helper()
-		got, err := bootstrapCurrent(root, lock, &installed, nil)
-		if err != nil || got != want {
-			t.Errorf("%s: current = %v, error = %v, want %v", scenario, got, err, want)
-		}
-	}
-	check(false, "missing installer and no receipt entry for its required library")
-	store, err := artifactstore.Open()
+	before, err := receipt.BootstrapFingerprint(lock)
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("fingerprint before move: %v", err)
 	}
-	t.Cleanup(func() { _ = store.Close() })
-	if _, err := store.Put(bytes.NewReader(installer.Bytes()), nil); err != nil {
-		t.Fatal(err)
+	after, err := receipt.BootstrapFingerprint(&moved)
+	if err != nil {
+		t.Fatalf("fingerprint after move: %v", err)
 	}
-	check(false, "pinned installer declares a missing library")
-	own(lib, library)
-	check(true, "declared library and unhashed launch arguments match the receipt")
+	if before == after {
+		t.Fatal("server directory change did not change the bootstrap fingerprint")
+	}
+}
+
+// A recorded seed proves only that the bootstrap produced the file. Deleting it
+// must invalidate currentness so the next install writes it again, while an
+// edit to its content stays user-owned.
+func TestBootstrapCurrentRequiresRecordedSeeds(t *testing.T) {
+	root := t.TempDir()
+	core := []byte("plain server core\n")
+	transactionTestWrite(t, root, "server/server.jar", core)
+	transactionTestWrite(t, root, "server/user_jvm_args.txt", []byte("-Xmx1G\n"))
+	lock := &document.Lock{
+		SchemaVersion: document.LockSchemaVersion,
+		Server: document.LockedServer{
+			Product:   server.ProductMinecraft,
+			Minecraft: "1.21.4",
+			Directory: "server",
+			Bootstrap: server.BootstrapMethodVanilla,
+			Artifact: catalog.Artifact{
+				Provider:  catalog.ProviderMojang,
+				ProjectID: "server",
+				Version:   "1.21.4",
+				Filename:  "server.jar",
+				Hashes:    map[string]string{"sha256": transactionTestDigest(core)},
+			},
+		},
+	}
+	fingerprint, err := receipt.BootstrapFingerprint(lock)
+	if err != nil {
+		t.Fatalf("bootstrap fingerprint: %v", err)
+	}
+	owned := receipt.New()
+	owned.BootstrapFingerprint = fingerprint
+	owned.SeedPaths = []string{"server/user_jvm_args.txt"}
+	owned.Entries = []receipt.Entry{{
+		Path:   "server/server.jar",
+		SHA256: transactionTestDigest(core),
+		Origin: receipt.OriginBootstrap,
+	}}
+	current, err := bootstrapCurrent(root, lock, &owned, nil)
+	if err != nil {
+		t.Fatalf("current seed: %v", err)
+	}
+	if !current {
+		t.Fatal("receipt with a present recorded seed reported not current")
+	}
+
+	transactionTestWrite(t, root, "server/user_jvm_args.txt", []byte("-Xmx4G\n"))
+	current, err = bootstrapCurrent(root, lock, &owned, nil)
+	if err != nil {
+		t.Fatalf("edited seed: %v", err)
+	}
+	if !current {
+		t.Fatal("edited seed content invalidated bootstrap currentness")
+	}
+
+	if err := os.Remove(filepath.Join(root, "server", "user_jvm_args.txt")); err != nil {
+		t.Fatalf("remove seed: %v", err)
+	}
+	current, err = bootstrapCurrent(root, lock, &owned, nil)
+	if err != nil {
+		t.Fatalf("missing seed: %v", err)
+	}
+	if current {
+		t.Fatal("receipt with a missing recorded seed reported current")
+	}
 }

@@ -13,44 +13,51 @@ import (
 	"github.com/mclucy/lucy/bootstrap/snapshot"
 	"github.com/mclucy/lucy/cas"
 	"github.com/mclucy/lucy/document"
+	"github.com/mclucy/lucy/internal/fsutil"
 	serverpkg "github.com/mclucy/lucy/server"
 )
 
-// restoreBootstrapSnapshot restores a stored output set into a fresh stage.
-// It reports false without an error when no snapshot exists, so the caller
-// stages the method from scratch.
+// restoreBootstrapSnapshot restores a stored output set into a fresh stage
+// and returns the snapshot it restored. It reports false without an error
+// when no snapshot exists, so the caller stages the method from scratch.
 func restoreBootstrapSnapshot(
 	ctx context.Context,
 	store snapshot.Store,
 	key cas.Digest,
 	stage string,
 	server document.LockedServer,
+	link fsutil.LinkMode,
 	trace *Trace,
-) (bool, error) {
+) (snapshot.Snapshot, bool, error) {
 	snap, ok, err := store.LookupSnapshot(ctx, key)
 	if err != nil {
-		return false, err
+		return snapshot.Snapshot{}, false, err
 	}
 	if !ok {
-		return false, nil
+		return snapshot.Snapshot{}, false, nil
 	}
 	root, err := serverRootPath(stage, server)
 	if err != nil {
-		return false, err
+		return snapshot.Snapshot{}, false, err
 	}
 	if err := requireEmptyDirectory(root); err != nil {
-		return false, err
+		return snapshot.Snapshot{}, false, err
 	}
 	trace.phaseStarted("bootstrap snapshot")
-	if err := store.RestoreSnapshot(ctx, snap, root); err != nil {
-		return false, err
+	if err := store.RestoreSnapshot(ctx, snap, root, link); err != nil {
+		return snapshot.Snapshot{}, false, err
 	}
-	return true, nil
+	return snap, true, nil
 }
 
 // publishBootstrapSnapshot stores the checked staging output for reuse by any
 // workspace with the same recipe. Material a runtime does not consume (discard
 // policy and bootstrap-only tools) is never stored.
+//
+// The link mode is a machine setting outside the recipe key, so a snapshot
+// records the mode of a writable deployment. A method writes every output with
+// the owner write bit; only a hardlink placement removes it. Restoring the bit
+// here lets each restore apply its own link mode.
 func publishBootstrapSnapshot(
 	ctx context.Context,
 	store snapshot.Store,
@@ -72,7 +79,7 @@ func publishBootstrapSnapshot(
 		entries = append(entries, snapshot.Entry{
 			Path:     output.ServerPath,
 			SHA256:   output.SHA256,
-			Mode:     output.Mode,
+			Mode:     writableMode(output.Mode),
 			Policy:   string(output.Policy),
 			Role:     string(output.Role),
 			Evidence: string(output.Evidence),
@@ -83,6 +90,15 @@ func publishBootstrapSnapshot(
 		Entries: entries,
 	}
 	return store.SaveSnapshot(ctx, snap, root)
+}
+
+// writableMode adds the owner write bit to a recorded mode. Zero stays zero,
+// because it marks an unrecorded mode.
+func writableMode(mode uint32) uint32 {
+	if mode == 0 {
+		return 0
+	}
+	return mode | 0o200
 }
 
 // openSnapshotStore opens the artifact store that owns the snapshot index.

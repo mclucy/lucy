@@ -14,6 +14,7 @@ import (
 	"github.com/mclucy/lucy/document"
 	"github.com/mclucy/lucy/filetrack"
 	"github.com/mclucy/lucy/install"
+	"github.com/mclucy/lucy/internal/fsutil"
 	"github.com/mclucy/lucy/receipt"
 	serverpkg "github.com/mclucy/lucy/server"
 )
@@ -104,7 +105,7 @@ func compositeWriteReceipt(t *testing.T, root string) {
 func compositeServices(t *testing.T) (*filetrack.Service, *install.Service, *Service) {
 	t.Helper()
 	tracker := filetrack.NewService(&http.Client{}, nil)
-	installer := install.NewService(nil, nil, tracker, nil, operationTestRegistry(t), nil, "")
+	installer := install.NewService(nil, nil, tracker, nil, operationTestRegistry(t), nil, "", fsutil.LinkClone)
 	return tracker, installer, NewService(installer, nil, nil, nil)
 }
 

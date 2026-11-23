@@ -10,6 +10,7 @@ import (
 	"github.com/mclucy/lucy/bootstrap"
 	"github.com/mclucy/lucy/install"
 	"github.com/mclucy/lucy/internal/shell"
+	"github.com/mclucy/lucy/internal/workspacewrite"
 	"github.com/mclucy/lucy/operation"
 	serverpkg "github.com/mclucy/lucy/server"
 	"github.com/mclucy/lucy/terminal/report"
@@ -225,6 +226,9 @@ func createSummaryLines(
 		if result.Files.Removed > 0 {
 			lines = append(lines, theme.Muted("  Removed "+fileCountLabel(result.Files.Removed)))
 		}
+		if line := displacedFilesLine(len(result.Files.Displaced)); line != "" {
+			lines = append(lines, theme.Muted(line))
+		}
 	} else {
 		lines = append(
 			lines,
@@ -250,6 +254,17 @@ func fileCountLabel(count int) string {
 		return "1 file"
 	}
 	return fmt.Sprintf("%d files", count)
+}
+
+func displacedFilesLine(count int) string {
+	if count == 0 {
+		return ""
+	}
+	noun := "files"
+	if count == 1 {
+		noun = "file"
+	}
+	return fmt.Sprintf("  Kept %d replaced %s in %s/", count, noun, workspacewrite.DisplacedRoot)
 }
 
 func versionLabel(value version.Version) string {

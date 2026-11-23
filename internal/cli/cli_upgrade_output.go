@@ -112,6 +112,9 @@ func (o *installOutput) RenderUpgradeApplied(
 	if changed := result.Files.Created + result.Files.Replaced + result.Files.Removed; changed > 0 {
 		fmt.Fprintln(o.Human(), o.inv.Theme.Muted("  "+fileCountLabel(changed)+" changed"))
 	}
+	if line := displacedFilesLine(len(result.Files.Displaced)); line != "" {
+		fmt.Fprintln(o.Human(), o.inv.Theme.Muted(line))
+	}
 	fmt.Fprintln(o.Human(), o.inv.Theme.Muted("  Policy: "+policy))
 	fmt.Fprintln(o.Human(), o.inv.Theme.Muted("  Plan: "+hash))
 	if trailer := publicationLine(result, o.inv.Theme); trailer != "" {

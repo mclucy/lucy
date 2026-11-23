@@ -254,10 +254,10 @@ func (s *Service) stageInstall(
 	var bootstrapOutputs map[string]bootstrap.Output
 	stagedBootstrap := !bootstrapOK
 	if stagedBootstrap {
-		// Bootstrap validation and package staging must not share a view of
-		// the stage. ValidateStagedOutputs walks the server tree and accepts only the
+		// Bootstrap classification and package staging must not share a view
+		// of the stage. StagedImage walks the server tree and accepts only the
 		// method's declared outputs, so packages and wrapper files staged
-		// alongside it would be rejected as unpermitted runtime content.
+		// alongside it would be rejected as undeclared runtime content.
 		bootstrapOutputs, err = s.stageServerTree(
 			ctx, stage, resolved, check.Executable(), store, opts,
 		)
@@ -390,7 +390,9 @@ func (s *Service) stageServerTree(
 	}
 	if snapStore != nil && !opts.RefreshBootstrap {
 		lookupStarted := time.Now()
-		restored, err := restoreBootstrapSnapshot(ctx, snapStore, key, stage, resolved.Server, opts.Trace)
+		snap, restored, err := restoreBootstrapSnapshot(
+			ctx, snapStore, key, stage, resolved.Server, s.link, opts.Trace,
+		)
 		switch {
 		case err != nil:
 			s.logger.Warn(fmt.Errorf(
@@ -401,7 +403,7 @@ func (s *Service) stageServerTree(
 				return nil, clearErr
 			}
 		case restored:
-			outputs, verifyErr := restoredServerOutputs(stage, resolved.Server, core.Path)
+			outputs, verifyErr := restoredServerOutputs(stage, resolved.Server, snap)
 			if verifyErr == nil {
 				s.logger.Info(
 					"bootstrap snapshot restored",
@@ -435,14 +437,15 @@ func (s *Service) stageServerTree(
 		resolved.Server,
 		core.Path,
 		inputs,
+		s.link,
 		java,
 		opts.Trace.processOutput(),
 		opts.Trace.bootstrapProgress(),
 	); err != nil {
 		return nil, err
 	}
-	// Verify the dynamic result now, while the server tree is the only
-	// content in stage. This emits the output classification the commit
+	// Classify the dynamic result now, while the server tree is the only
+	// content in stage. This emits the output policy and role the commit
 	// uses, including discard and seed policy, without re-walking the tree
 	// after packages and wrapper files join it.
 	outputs, err := stagedServerOutputs(stage, resolved.Server)
@@ -469,21 +472,49 @@ func (s *Service) stageServerTree(
 	return outputs, nil
 }
 
-// restoredServerOutputs validates a tree restored from a snapshot. Stage-only
-// inputs are absent from a snapshot by design, so this check proves the
-// runtime zone and seed zone rather than re-running the staging check.
-func restoredServerOutputs(stage string, server document.LockedServer, coreFile string) (map[string]bootstrap.Output, error) {
-	stagedOutputs, err := bootstrap.ValidateSnapshotOutputs(stage, server, coreFile)
+// restoredServerOutputs verifies a tree restored from a snapshot and indexes
+// its entries by workspace path. A snapshot holds only the runtime zone and
+// the seed zone, so the comparison proves those files rather than re-running
+// the staging contract.
+func restoredServerOutputs(
+	stage string,
+	server document.LockedServer,
+	snap snapshot.Snapshot,
+) (map[string]bootstrap.Output, error) {
+	root, err := serverRootPath(stage, server)
 	if err != nil {
 		return nil, err
 	}
-	return indexServerOutputs(stagedOutputs), nil
+	comparison, err := snapshot.Compare(root, snap.Entries)
+	if err != nil {
+		return nil, err
+	}
+	if !comparison.Complete() {
+		return nil, fmt.Errorf(
+			"restored bootstrap tree has %d differing and %d missing files",
+			len(comparison.Differing), len(comparison.Missing),
+		)
+	}
+	outputs := make(map[string]bootstrap.Output, len(snap.Entries))
+	for _, entry := range snap.Entries {
+		path := filepath.ToSlash(filepath.Join(server.Directory, filepath.FromSlash(entry.Path)))
+		outputs[path] = bootstrap.Output{
+			Path:       path,
+			ServerPath: entry.Path,
+			SHA256:     entry.SHA256,
+			Mode:       entry.Mode,
+			Policy:     bootstrap.OutputPolicy(entry.Policy),
+			Role:       bootstrap.MaterialRole(entry.Role),
+			Evidence:   bootstrap.Evidence(entry.Evidence),
+		}
+	}
+	return outputs, nil
 }
 
-// stagedServerOutputs validates the current staging tree against the locked
+// stagedServerOutputs classifies the current staging tree against the locked
 // bootstrap contract and indexes the outputs by workspace path.
 func stagedServerOutputs(stage string, server document.LockedServer) (map[string]bootstrap.Output, error) {
-	stagedOutputs, err := bootstrap.ValidateStagedOutputs(stage, server)
+	stagedOutputs, err := bootstrap.StagedImage(stage, server)
 	if err != nil {
 		return nil, err
 	}

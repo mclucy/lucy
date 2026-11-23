@@ -47,11 +47,14 @@ func (e *ErrLegacyReceipt) Error() string {
 // It is not a second lock: paths and digests describe local state, and the
 // fingerprints name the resolution that produced it.
 type Receipt struct {
-	Version              int     `yaml:"version"`
-	BootstrapFingerprint string  `yaml:"bootstrap_fingerprint,omitempty"`
-	PackageFingerprint   string  `yaml:"package_fingerprint,omitempty"`
-	LockFingerprint      string  `yaml:"lock_fingerprint,omitempty"`
-	Entries              []Entry `yaml:"entries"`
+	Version              int    `yaml:"version"`
+	BootstrapFingerprint string `yaml:"bootstrap_fingerprint,omitempty"`
+	// SeedPaths names the seed outputs the recorded bootstrap produced. Seeds
+	// stay user-owned, so the receipt records only their presence.
+	SeedPaths          []string `yaml:"seed_paths,omitempty"`
+	PackageFingerprint string   `yaml:"package_fingerprint,omitempty"`
+	LockFingerprint    string   `yaml:"lock_fingerprint,omitempty"`
+	Entries            []Entry  `yaml:"entries"`
 }
 
 // Entry records one committed managed output.
@@ -79,6 +82,7 @@ func (r *Receipt) Validate() error {
 	}
 	isLegacy := r.LockFingerprint != ""
 	seen := make(map[string]string, len(r.Entries))
+	seeds := make(map[string]string, len(r.SeedPaths))
 	for i := range r.Entries {
 		entry := &r.Entries[i]
 		if entry.Path == "" {
@@ -98,17 +102,11 @@ func (r *Receipt) Validate() error {
 		default:
 			return fmt.Errorf("receipt entry %s has unsupported origin %q; expected %q, %q or %q", entry.Path, entry.Origin, OriginBootstrap, OriginPackage, OriginMCDR)
 		}
-		clean := filepath.ToSlash(filepath.Clean(filepath.FromSlash(entry.Path)))
-		if clean != entry.Path || filepath.IsAbs(entry.Path) || strings.HasPrefix(clean, "../") {
-			return fmt.Errorf("unsafe or unnormalized receipt path: %s", entry.Path)
-		}
-		if err := document.SafeRelativePath(clean); err != nil {
-			return fmt.Errorf("unsafe receipt path %s: %w", entry.Path, err)
+		clean, err := validateReceiptPath("path", entry.Path)
+		if err != nil {
+			return err
 		}
 		lower := strings.ToLower(clean)
-		if lower == ".lucy" || strings.HasPrefix(lower, ".lucy/") || lower == strings.ToLower(document.LockFilename) || lower == strings.ToLower(document.ManifestFilename) {
-			return fmt.Errorf("receipt path %s is reserved", entry.Path)
-		}
 		if len(entry.SHA256) != 64 {
 			return fmt.Errorf("receipt entry %s has invalid sha256 digest %q", entry.Path, entry.SHA256)
 		}
@@ -123,10 +121,44 @@ func (r *Receipt) Validate() error {
 		}
 		seen[lower] = clean
 	}
+	for _, seed := range r.SeedPaths {
+		clean, err := validateReceiptPath("seed path", seed)
+		if err != nil {
+			return err
+		}
+		lower := strings.ToLower(clean)
+		if prior, exists := seen[lower]; exists {
+			return fmt.Errorf("receipt seed path %s collides with managed output %s", seed, prior)
+		}
+		if prior, exists := seeds[lower]; exists {
+			return fmt.Errorf("receipt seed path collision: %s and %s", prior, seed)
+		}
+		seeds[lower] = clean
+	}
 	if isLegacy {
 		return &ErrLegacyReceipt{Receipt: r}
 	}
 	return nil
+}
+
+// validateReceiptPath rejects a path that could escape the workspace, is not
+// canonical, or names a file the workspace reserves. label names the path
+// class in errors.
+func validateReceiptPath(label, path string) (string, error) {
+	clean := filepath.ToSlash(filepath.Clean(filepath.FromSlash(path)))
+	if clean != path || filepath.IsAbs(path) || strings.HasPrefix(clean, "../") {
+		return "", fmt.Errorf("unsafe or unnormalized receipt %s: %s", label, path)
+	}
+	if err := document.SafeRelativePath(clean); err != nil {
+		return "", fmt.Errorf("unsafe receipt %s %s: %w", label, path, err)
+	}
+	lower := strings.ToLower(clean)
+	if lower == ".lucy" || strings.HasPrefix(lower, ".lucy/") ||
+		lower == strings.ToLower(document.LockFilename) ||
+		lower == strings.ToLower(document.ManifestFilename) {
+		return "", fmt.Errorf("receipt %s %s is reserved", label, path)
+	}
+	return clean, nil
 }
 
 // Decode parses receipt bytes strictly and verifies schema version and entry validity.
@@ -195,6 +227,8 @@ func (r *Receipt) Snapshot() ([]byte, error) {
 	}
 	result := *r
 	result.LockFingerprint = ""
+	result.SeedPaths = slices.Clone(r.SeedPaths)
+	slices.Sort(result.SeedPaths)
 	if result.Entries == nil {
 		result.Entries = []Entry{}
 	} else {

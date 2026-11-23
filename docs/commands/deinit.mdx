@@ -20,6 +20,7 @@ Run it from the server directory. The command fails when there is nothing to rem
 ## What remains
 
 - Files lucy installed stay on disk and become unmanaged.
+- Files that installations replaced move from `.lucy/displaced/` to `lucy-displaced/` in the server directory. Delete them when you no longer need them.
 - An isolated MCDReforged environment stays in the server directory, so its launcher keeps working.
 - Your global configuration, Java, all worlds, the network cache, and the global artifact store are untouched.
 

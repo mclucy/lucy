@@ -86,10 +86,13 @@ type ServerChange struct {
 }
 
 // FileChanges counts the managed runtime outputs the commit touched.
+// Displaced lists the workspace paths whose previous content the commit kept
+// under the workspace's displaced directory.
 type FileChanges struct {
-	Created  int `json:"created"`
-	Replaced int `json:"replaced"`
-	Removed  int `json:"removed"`
+	Created   int      `json:"created"`
+	Replaced  int      `json:"replaced"`
+	Removed   int      `json:"removed"`
+	Displaced []string `json:"displaced"`
 }
 
 // FetchSummary counts artifact transfers: local reuse and network downloads.
@@ -140,7 +143,11 @@ type Result struct {
 }
 
 func newResult() *Result {
-	return &Result{Schema: ResultSchema, Kind: ResultKind}
+	return &Result{
+		Schema: ResultSchema,
+		Kind:   ResultKind,
+		Files:  FileChanges{Displaced: []string{}},
+	}
 }
 
 // CommittedError marks a failure after the installation was committed. The

@@ -17,6 +17,7 @@ import (
 	"github.com/mclucy/lucy/catalog"
 	"github.com/mclucy/lucy/document"
 	"github.com/mclucy/lucy/internal/buildid"
+	"github.com/mclucy/lucy/internal/fsutil"
 )
 
 // Entry describes one runtime-zone or seed-zone file of a bootstrap output.
@@ -40,10 +41,11 @@ type Snapshot struct {
 
 // Store persists snapshot manifests and their file contents. The artifact
 // store implements it; installation wires it. A lookup miss is not an error.
+// RestoreSnapshot places each entry with link and verifies its digest.
 type Store interface {
 	LookupSnapshot(ctx context.Context, key cas.Digest) (Snapshot, bool, error)
 	SaveSnapshot(ctx context.Context, snap Snapshot, sourceDir string) error
-	RestoreSnapshot(ctx context.Context, snap Snapshot, destination string) error
+	RestoreSnapshot(ctx context.Context, snap Snapshot, destination string, link fsutil.LinkMode) error
 }
 
 // Key computes the recipe identity of a locked server: H(Lucy build, method,

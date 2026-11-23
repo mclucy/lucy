@@ -296,8 +296,5 @@ func (s *Store) removePrivateFile(name string) error {
 	if !info.Mode().IsRegular() {
 		return fmt.Errorf("refuse non-regular cas cleanup path")
 	}
-	if err := s.root.Chmod(name, 0o600); err != nil {
-		return err
-	}
 	return s.root.Remove(name)
 }

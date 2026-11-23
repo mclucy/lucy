@@ -9,8 +9,9 @@ import (
 
 // deinitDocument is the machine-readable outcome of one deinitialization.
 type deinitDocument struct {
-	Removed  []string `json:"removed"`
-	Warnings []string `json:"warnings,omitempty"`
+	Removed   []string `json:"removed"`
+	Displaced string   `json:"displaced,omitempty"`
+	Warnings  []string `json:"warnings,omitempty"`
 }
 
 var deinitJSON JSONResult[deinitDocument]
@@ -38,13 +39,22 @@ func actionDeinit(cmd *cobra.Command, inv *Invocation, deps *Dependencies) error
 	for _, warning := range result.Warnings {
 		output.Warn(warning)
 	}
-	document := deinitDocument{Removed: result.Removed, Warnings: output.Warnings()}
+	document := deinitDocument{
+		Removed:   result.Removed,
+		Displaced: result.Displaced,
+		Warnings:  output.Warnings(),
+	}
 	if output.JSON() {
 		return deinitJSON.Write(output, document)
 	}
 	out := output.Human()
 	for _, name := range result.Removed {
 		if _, err := fmt.Fprintf(out, "removed %s\n", name); err != nil {
+			return err
+		}
+	}
+	if result.Displaced != "" {
+		if _, err := fmt.Fprintf(out, "kept displaced files in %s/\n", result.Displaced); err != nil {
 			return err
 		}
 	}

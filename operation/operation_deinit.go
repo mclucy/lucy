@@ -15,17 +15,22 @@ import (
 )
 
 // DeinitResult reports the Lucy state that deinitialization removed. Paths are
-// relative to the server root and listed in removal order.
+// relative to the server root and listed in removal order. Displaced names the
+// directory that keeps the files earlier installations displaced, or is empty
+// when there were none.
 type DeinitResult struct {
-	Removed  []string
-	Warnings []error
+	Removed   []string
+	Displaced string
+	Warnings  []error
 }
 
 // Deinitialize removes every path that marks root as a Lucy workspace and
 // leaves the server it describes in place. Installed server content, worlds,
-// and configuration stay untouched. An interrupted installation or file
-// transaction is recovered before state is removed, and the writer lock keeps
-// another Lucy process from writing while the state disappears.
+// and configuration stay untouched. Files that installations displaced move
+// out of the state directory first, because Lucy never deletes them. An
+// interrupted installation or file transaction is recovered before state is
+// removed, and the writer lock keeps another Lucy process from writing while
+// the state disappears.
 func (s *Service) Deinitialize(root string) (result *DeinitResult, resultErr error) {
 	root, err := filepath.Abs(root)
 	if err != nil {
@@ -55,6 +60,11 @@ func (s *Service) Deinitialize(root string) (result *DeinitResult, resultErr err
 		return nil, err
 	}
 	result = &DeinitResult{}
+	displaced, err := keepDisplacedFiles(root)
+	if err != nil {
+		return result, err
+	}
+	result.Displaced = displaced
 	for _, name := range []string{
 		document.ManifestFilename,
 		document.LockFilename,
@@ -156,4 +166,39 @@ func removeDetachedState(root, detached string) (resultErr error) {
 	}
 	defer func() { resultErr = errors.Join(resultErr, files.Close()) }()
 	return files.RemoveAll(detached)
+}
+
+// keepDisplacedFiles moves the displaced-file directory to the server root and
+// returns its new name, or an empty name when no installation displaced a
+// file. A free name is chosen, so an earlier kept directory stays intact.
+func keepDisplacedFiles(root string) (string, error) {
+	source := filepath.Join(root, filepath.FromSlash(workspacewrite.DisplacedRoot))
+	if err := workspacewrite.SafePath(root, workspacewrite.DisplacedRoot); err != nil {
+		return "", err
+	}
+	info, err := os.Lstat(source)
+	if errors.Is(err, os.ErrNotExist) {
+		return "", nil
+	}
+	if err != nil {
+		return "", err
+	}
+	if !info.IsDir() {
+		return "", fmt.Errorf("%s must be a directory", workspacewrite.DisplacedRoot)
+	}
+	name := "lucy-displaced"
+	if _, err := os.Lstat(filepath.Join(root, name)); err == nil {
+		name += "-" + rand.Text()
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return "", err
+	}
+	files, err := os.OpenRoot(root)
+	if err != nil {
+		return "", err
+	}
+	renameErr := fsutil.RenameDirRoot(files, filepath.FromSlash(workspacewrite.DisplacedRoot), name)
+	if err := errors.Join(renameErr, files.Close()); err != nil {
+		return "", fmt.Errorf("keep displaced files: %w", err)
+	}
+	return name, nil
 }
