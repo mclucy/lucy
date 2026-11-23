@@ -214,7 +214,7 @@ func (r *Result) yieldSelectedFindings(yield func(Finding) bool) bool {
 	if !selected.IsValid() {
 		return true
 	}
-	if selected.Source == SourcePreferred {
+	if selected.Source == SourcePreferred || selected.Source == SourceCoverage {
 		if !yield(Finding{
 			Kind:       FindingAutomaticSelection,
 			Identity:   selected.Installation.Identity,

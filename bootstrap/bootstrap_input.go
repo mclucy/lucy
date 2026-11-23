@@ -11,6 +11,23 @@ import (
 	serverpkg "github.com/mclucy/lucy/server"
 )
 
+// CorePath returns the server-relative path where the method keeps the core
+// artifact unchanged, or an empty path when it keeps no copy.
+func CorePath(locked document.LockedServer) (string, error) {
+	switch locked.Bootstrap {
+	case serverpkg.BootstrapMethodVanilla, serverpkg.BootstrapMethodPaperclip:
+		return "server.jar", nil
+	case serverpkg.BootstrapMethodFabric:
+		return fabricLoaderPath(locked.CoreVersion.String())
+	case serverpkg.BootstrapMethodQuilt:
+		return quiltLoaderPath(locked.CoreVersion.String())
+	case serverpkg.BootstrapMethodForge:
+		return "", nil
+	default:
+		return "", locked.Bootstrap.Validate()
+	}
+}
+
 // InputPath places one locked input in the server tree of method. The lock
 // records what an input is; this function owns where it lands. Libraries
 // follow the Maven layout under libraries/. The Mojang server jar lands where

@@ -14,7 +14,6 @@ import (
 	"github.com/mclucy/lucy/cas"
 	"github.com/mclucy/lucy/document"
 	"github.com/mclucy/lucy/internal/fsutil"
-	serverpkg "github.com/mclucy/lucy/server"
 )
 
 // restoreBootstrapSnapshot restores a stored output set into a fresh stage
@@ -77,12 +76,11 @@ func publishBootstrapSnapshot(
 			continue
 		}
 		entries = append(entries, snapshot.Entry{
-			Path:     output.ServerPath,
-			SHA256:   output.SHA256,
-			Mode:     writableMode(output.Mode),
-			Policy:   string(output.Policy),
-			Role:     string(output.Role),
-			Evidence: string(output.Evidence),
+			Path:   output.ServerPath,
+			SHA256: output.SHA256,
+			Mode:   writableMode(output.Mode),
+			Policy: string(output.Policy),
+			Role:   string(output.Role),
 		})
 	}
 	snap := snapshot.Snapshot{
@@ -142,31 +140,4 @@ func requireEmptyDirectory(path string) error {
 		return fmt.Errorf("staging path %s is not empty; refusing to restore a snapshot over it", path)
 	}
 	return nil
-}
-
-// coreArtifactPath returns the offline installer used to verify Forge outputs.
-// Only an object whose contents match the lock may supply that evidence.
-func coreArtifactPath(server document.LockedServer) string {
-	if server.Bootstrap != serverpkg.BootstrapMethodForge {
-		return ""
-	}
-	value := server.Artifact.Hashes["sha256"]
-	digest, err := cas.ParseDigest("sha256:" + value)
-	if err != nil {
-		return ""
-	}
-	store, err := artifactstore.Open()
-	if err != nil {
-		return ""
-	}
-	defer store.Close()
-	path := store.Path(digest)
-	info, err := os.Lstat(path)
-	if err != nil || !info.Mode().IsRegular() {
-		return ""
-	}
-	if _, err := DigestFile(path, server.Artifact.Hashes); err != nil {
-		return ""
-	}
-	return path
 }

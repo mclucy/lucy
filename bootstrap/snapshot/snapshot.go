@@ -24,12 +24,11 @@ import (
 // Policy and Role keep their bootstrap package words as opaque labels; this
 // package does not interpret them.
 type Entry struct {
-	Path     string `json:"path"`
-	SHA256   string `json:"sha256"`
-	Mode     uint32 `json:"mode"`
-	Policy   string `json:"policy"`
-	Role     string `json:"role"`
-	Evidence string `json:"evidence,omitempty"`
+	Path   string `json:"path"`
+	SHA256 string `json:"sha256"`
+	Mode   uint32 `json:"mode"`
+	Policy string `json:"policy"`
+	Role   string `json:"role"`
 }
 
 // Snapshot is one stored bootstrap output set addressed by its recipe key.

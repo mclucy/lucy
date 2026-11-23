@@ -14,6 +14,7 @@ import (
 	"github.com/mclucy/lucy/artifactstore"
 	"github.com/mclucy/lucy/bootstrap"
 	"github.com/mclucy/lucy/bootstrap/snapshot"
+	"github.com/mclucy/lucy/cas"
 	"github.com/mclucy/lucy/catalog"
 	"github.com/mclucy/lucy/document"
 	"github.com/mclucy/lucy/filetrack"
@@ -342,6 +343,42 @@ func (s *Service) stageServerTree(
 			}
 		}
 	}
+	// A lock that pins every digest names its recipe before acquisition, so a
+	// stored snapshot restores without the build inputs. Otherwise the key
+	// exists once acquisition attaches every store digest.
+	key, keyErr := snapshot.Key(resolved.Server)
+	pinnedKey := keyErr == nil
+	var snapStore *artifactstore.Store
+	defer func() {
+		if snapStore != nil {
+			snapStore.Close()
+		}
+	}()
+	lookup := func() (map[string]bootstrap.Output, bool, error) {
+		if keyErr != nil {
+			s.logger.Debug("bootstrap snapshot unavailable", "reason", keyErr.Error())
+			return nil, false, nil
+		}
+		if snapStore == nil {
+			opened, err := openSnapshotStore()
+			if err != nil {
+				s.logger.Debug("bootstrap snapshot store unavailable", "reason", err.Error())
+				return nil, false, nil
+			}
+			snapStore = opened
+		}
+		if opts.RefreshBootstrap {
+			return nil, false, nil
+		}
+		return s.restoreServerSnapshot(ctx, snapStore, key, stage, resolved.Server, opts.Trace)
+	}
+	if pinnedKey {
+		outputs, restored, err := lookup()
+		if err != nil || restored {
+			return outputs, err
+		}
+	}
+
 	materialized := make([]artifact.MaterializedFile, 1+len(resolved.Server.Inputs))
 	err := runStagingJobs(ctx, len(materialized), store.injected != nil, func(i int) error {
 		a := &resolved.Server.Artifact
@@ -370,65 +407,15 @@ func (s *Service) stageServerTree(
 			inputs[i] = file.Path
 		}
 	}
-
-	// The recipe key exists once every input has its store digest. A hit
-	// restores the checked output of the identical recipe and runs no
-	// processor; any failure falls back to a clean cold stage.
-	key, keyErr := snapshot.Key(resolved.Server)
-	if keyErr != nil {
-		s.logger.Debug("bootstrap snapshot unavailable", "reason", keyErr.Error())
-	}
-	var snapStore *artifactstore.Store
-	if keyErr == nil {
-		opened, err := openSnapshotStore()
-		if err != nil {
-			s.logger.Debug("bootstrap snapshot store unavailable", "reason", err.Error())
-		} else {
-			snapStore = opened
-			defer snapStore.Close()
-		}
-	}
-	if snapStore != nil && !opts.RefreshBootstrap {
-		lookupStarted := time.Now()
-		snap, restored, err := restoreBootstrapSnapshot(
-			ctx, snapStore, key, stage, resolved.Server, s.link, opts.Trace,
-		)
-		switch {
-		case err != nil:
-			s.logger.Warn(fmt.Errorf(
-				"bootstrap snapshot restore failed for %s; staging from scratch: %w",
-				key.Hex(), err,
-			))
-			if clearErr := clearServerRoot(stage, resolved.Server); clearErr != nil {
-				return nil, clearErr
-			}
-		case restored:
-			outputs, verifyErr := restoredServerOutputs(stage, resolved.Server, snap)
-			if verifyErr == nil {
-				s.logger.Info(
-					"bootstrap snapshot restored",
-					"key", key.Hex(),
-					"files", len(outputs),
-				)
-				opts.Trace.phaseDone(PhaseInfo{
-					Name:    "bootstrap snapshot",
-					Count:   len(outputs),
-					Elapsed: time.Since(lookupStarted),
-				})
-				return outputs, nil
-			}
-			s.logger.Warn(fmt.Errorf(
-				"restored bootstrap snapshot for %s failed verification; staging from scratch: %w",
-				key.Hex(), verifyErr,
-			))
-			if clearErr := clearServerRoot(stage, resolved.Server); clearErr != nil {
-				return nil, clearErr
-			}
-			// The manifest cannot be trusted for this key; drop it so the next
-			// operation does not repeat the same failed restore.
-			if removeErr := snapStore.RemoveSnapshot(key); removeErr != nil {
-				s.logger.Warn(fmt.Errorf("cannot drop failed bootstrap snapshot %s: %w", key.Hex(), removeErr))
-			}
+	// Acquisition can add a stronger digest than the lock pinned, and the key
+	// names the strongest one. Publication and a second lookup use the key
+	// that later runs with the enriched lock compute.
+	if enriched, enrichedErr := snapshot.Key(resolved.Server); !pinnedKey ||
+		(enrichedErr == nil && enriched != key) {
+		key, keyErr = enriched, enrichedErr
+		outputs, restored, err := lookup()
+		if err != nil || restored {
+			return outputs, err
 		}
 	}
 	if err := bootstrap.PrepareLocked(
@@ -452,8 +439,7 @@ func (s *Service) stageServerTree(
 	if err != nil {
 		return nil, err
 	}
-	// Only a tree Lucy executed and checked here becomes a snapshot. Adoption
-	// never reaches this function, so an existing user tree is never stored.
+	// Only the checked output of an executed recipe enters the snapshot store.
 	if snapStore != nil {
 		if err := publishBootstrapSnapshot(ctx, snapStore, key, stage, resolved.Server, outputs); err != nil {
 			s.logger.Warn(fmt.Errorf(
@@ -470,6 +456,54 @@ func (s *Service) stageServerTree(
 		"outputs", len(outputs),
 	)
 	return outputs, nil
+}
+
+// restoreServerSnapshot restores the snapshot of key into stage and verifies
+// it. A hit returns the restored outputs and runs no processor. A restore
+// failure or a verification failure clears the server root for a cold stage,
+// and a verification failure also drops the snapshot, so the next operation
+// does not repeat it. Only a failure to clear the stage is returned.
+func (s *Service) restoreServerSnapshot(
+	ctx context.Context,
+	snapStore *artifactstore.Store,
+	key cas.Digest,
+	stage string,
+	server document.LockedServer,
+	trace *Trace,
+) (map[string]bootstrap.Output, bool, error) {
+	started := time.Now()
+	snap, restored, err := restoreBootstrapSnapshot(ctx, snapStore, key, stage, server, s.link, trace)
+	if err != nil {
+		s.logger.Warn(fmt.Errorf(
+			"bootstrap snapshot restore failed for %s; staging from scratch: %w",
+			key.Hex(), err,
+		))
+		return nil, false, clearServerRoot(stage, server)
+	}
+	if !restored {
+		return nil, false, nil
+	}
+	outputs, err := restoredServerOutputs(stage, server, snap)
+	if err == nil {
+		s.logger.Info("bootstrap snapshot restored", "key", key.Hex(), "files", len(outputs))
+		trace.phaseDone(PhaseInfo{
+			Name:    "bootstrap snapshot",
+			Count:   len(outputs),
+			Elapsed: time.Since(started),
+		})
+		return outputs, true, nil
+	}
+	s.logger.Warn(fmt.Errorf(
+		"restored bootstrap snapshot for %s failed verification; staging from scratch: %w",
+		key.Hex(), err,
+	))
+	if err := clearServerRoot(stage, server); err != nil {
+		return nil, false, err
+	}
+	if err := snapStore.RemoveSnapshot(key); err != nil {
+		s.logger.Warn(fmt.Errorf("cannot drop failed bootstrap snapshot %s: %w", key.Hex(), err))
+	}
+	return nil, false, nil
 }
 
 // restoredServerOutputs verifies a tree restored from a snapshot and indexes
@@ -491,8 +525,8 @@ func restoredServerOutputs(
 	}
 	if !comparison.Complete() {
 		return nil, fmt.Errorf(
-			"restored bootstrap tree has %d differing and %d missing files",
-			len(comparison.Differing), len(comparison.Missing),
+			"restored bootstrap tree has %d differing, %d permission-differing, and %d missing files",
+			len(comparison.Differing), len(comparison.OtherPermissions), len(comparison.Missing),
 		)
 	}
 	outputs := make(map[string]bootstrap.Output, len(snap.Entries))
@@ -505,7 +539,6 @@ func restoredServerOutputs(
 			Mode:       entry.Mode,
 			Policy:     bootstrap.OutputPolicy(entry.Policy),
 			Role:       bootstrap.MaterialRole(entry.Role),
-			Evidence:   bootstrap.Evidence(entry.Evidence),
 		}
 	}
 	return outputs, nil

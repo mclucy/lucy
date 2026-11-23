@@ -7,7 +7,7 @@ description: "How lucy discovers installations, identifies packages, and tracks 
 
 Installation discovery scans a server directory and reconciles recognizer results into installations. An installation has an identity and a collection of members with roles such as entry point or payload. A server JAR used as another installation's payload is not necessarily an independent server. Equivalent identities and overlapping claims are reconciled before selection; diagnostics retain conflicts and unreadable or unknown artifacts.
 
-Discovery and selection are separate. Selection owns runtime choice and workspace declarations: it uses a directly chosen installation when supplied, otherwise an identity expectation, otherwise a persisted declaration, otherwise an inference policy. Entry-point members prove launchability but never become the selection result. A missing declared installation and an ambiguous selection are distinct outcomes; neither proves that the directory has no server files.
+Discovery and selection are separate. Selection owns runtime choice and workspace declarations: it uses a directly chosen installation when supplied, otherwise an identity expectation, otherwise a persisted declaration, otherwise the installation whose recognized entry points, payloads, and libraries account for strictly more files than any other candidate's, otherwise an inference policy. Configuration files do not take part in that comparison. Lucy uses the strict majority and warns `multiple server runtimes found; using X automatically`, naming the other runtimes and the `lucy init --core <product>` command that selects one; a tie stays ambiguous. Entry-point members prove launchability but never become the selection result. A missing declared installation and an ambiguous selection are distinct outcomes; neither proves that the directory has no server files.
 
 Workspace observation assembles local observations of installations, environment wrappers, declarations, and package files. Reselection refreshes package observations; upstream identification must be repeated afterward.
 
@@ -26,6 +26,8 @@ Tracked files and runtime-owned outputs are different ownership domains. Tracked
 ## Runtime ownership and displacement
 
 Runtime outputs are the files a bootstrap method produces: server jars, `libraries/`, `versions/`, `cache/`, launchers, and run scripts. They are owned as the runtime image of the lock's recipe; `--overwrite` governs package destinations, and runtime outputs never need it. At commit, an unowned runtime output with identical bytes is claimed without a rewrite. A runtime output with other bytes is replaced, and its before-image is kept under `.lucy/displaced/<transaction-id>/files/<path>` with an `index.yaml` that records path, SHA-256, and mode. The journal entry carries the displacement flag. Displacement materializes only after the commit point: recovery before it restores the before-images, and recovery after it completes the cleanup. Lucy never deletes displaced content; the workspace owner does.
+
+Initialization owns matching managed files from the locked recipe's runtime image, or only digest-pinned files when the image is unavailable, without writing runtime files.
 
 ## Store link mode
 

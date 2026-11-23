@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"testing"
 
 	"github.com/mclucy/lucy/artifact"
@@ -21,6 +22,7 @@ import (
 	"github.com/mclucy/lucy/filetrack"
 	"github.com/mclucy/lucy/install"
 	"github.com/mclucy/lucy/internal/fsutil"
+	"github.com/mclucy/lucy/internal/workspacewrite"
 	serverpkg "github.com/mclucy/lucy/server"
 	"github.com/mclucy/lucy/serverregistry"
 	"github.com/mclucy/lucy/upstream"
@@ -451,9 +453,24 @@ func TestExplicitAdoptionThenInstallReplacesOwnedRuntimeAndPreservesAmbientFiles
 	if err != nil {
 		t.Fatalf("stat adopted package: %v", err)
 	}
-	if err := install.AdoptExistingWorkspace(root, install.AdoptOptions{
+	service := installTestService(t)
+	writer, err := workspacewrite.Lock(root, nil)
+	if err != nil {
+		t.Fatalf("lock workspace: %v", err)
+	}
+	image, imageErr := service.RuntimeImage(t.Context(), root, adopted, install.Options{
+		Materialize: installTestMaterializer(t, map[string][]byte{
+			"fabric-loader-0.16.9.jar": core,
+			"server.jar":               adoptedServerJar,
+		}),
+	})
+	if imageErr != nil {
+		t.Fatalf("build runtime image: %v", errors.Join(imageErr, writer.Close()))
+	}
+	_, adoptErr := install.AdoptExistingWorkspace(root, install.AdoptOptions{
 		Manifest:    manifest,
 		Lock:        adopted,
+		Image:       image,
 		PublishLock: true,
 		Packages: []install.AdoptedPackage{{
 			Path:           ambientPath,
@@ -461,10 +478,10 @@ func TestExplicitAdoptionThenInstallReplacesOwnedRuntimeAndPreservesAmbientFiles
 			ExpectedSHA256: installTestDigest(ambient),
 			ExpectedMode:   uint32(ambientInfo.Mode().Perm()),
 		}},
-	}); err != nil {
+	})
+	if err := errors.Join(adoptErr, writer.Close()); err != nil {
 		t.Fatalf("explicit adoption: %v", err)
 	}
-	service := installTestService(t)
 	unchanged, err := service.Sync(t.Context(), root, manifest, adopted, install.Options{Locked: true, Offline: true})
 	if err != nil {
 		t.Fatalf("install after adoption: %v", err)
@@ -472,6 +489,11 @@ func TestExplicitAdoptionThenInstallReplacesOwnedRuntimeAndPreservesAmbientFiles
 	if unchanged.Mode != install.ModeReplay ||
 		unchanged.Files.Created != 0 || unchanged.Files.Replaced != 0 {
 		t.Fatalf("explicit adoption did not establish a current installation: %+v", unchanged)
+	}
+	if slices.ContainsFunc(unchanged.Phases, func(phase install.Phase) bool {
+		return phase.Name == "install"
+	}) {
+		t.Fatalf("install restaged the adopted runtime: %+v", unchanged.Phases)
 	}
 
 	// A later lock pins a new server input, so installation must replace the

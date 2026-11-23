@@ -29,9 +29,15 @@ import (
 	"github.com/mclucy/lucy/log"
 )
 
+var (
+	errOfflineArtifactUnavailable = errors.New("offline artifact unavailable")
+	errArtifactDigestMismatch     = errors.New("checksum mismatch")
+)
+
 type downloadStore struct {
 	ctx         context.Context
 	offline     bool
+	storeOnly   bool
 	trace       *Trace
 	fetch       *FetchSummary
 	network     *cache.Client
@@ -128,6 +134,10 @@ func DigestFile(filename string, algorithms map[string]string) (map[string]strin
 		return nil, err
 	}
 	defer file.Close()
+	return digestReader(file, filename, algorithms)
+}
+
+func digestReader(file io.Reader, filename string, algorithms map[string]string) (map[string]string, error) {
 	hashers, writers, err := digestHashers(algorithms, true)
 	if err != nil {
 		return nil, err
@@ -168,7 +178,7 @@ func digestValues(hashers map[string]hash.Hash, algorithms map[string]string, fi
 	for algorithm, hasher := range hashers {
 		values[algorithm] = hex.EncodeToString(hasher.Sum(nil))
 		if expected := algorithms[algorithm]; expected != "" && values[algorithm] != strings.ToLower(expected) {
-			return nil, fmt.Errorf("%s checksum mismatch for %s", algorithm, filename)
+			return nil, fmt.Errorf("%s %w for %s", algorithm, errArtifactDigestMismatch, filename)
 		}
 	}
 	return values, nil
@@ -194,7 +204,11 @@ func (s *downloadStore) materializeFor(a *catalog.Artifact, transferName string)
 		return artifact.MaterializedFile{}, fmt.Errorf("invalid artifact filename %q", a.Filename)
 	}
 	if s.injected != nil {
-		return s.injectedMaterialize(a)
+		file, err := s.injectedMaterialize(a)
+		if s.storeOnly && errors.Is(err, os.ErrNotExist) {
+			err = fmt.Errorf("%w: %s: %w", errOfflineArtifactUnavailable, a.Filename, err)
+		}
+		return file, err
 	}
 	store, err := artifactstore.Open()
 	if err != nil {
@@ -248,12 +262,18 @@ func (s *downloadStore) materializeFor(a *catalog.Artifact, transferName string)
 			return artifact.MaterializedFile{Path: destination, Hashes: hashes}, nil
 		}
 		if !errors.Is(err, os.ErrNotExist) {
+			if s.storeOnly {
+				return artifact.MaterializedFile{}, err
+			}
 			s.logger.Debug(
 				"store object is unusable; acquiring again",
 				"file", a.Filename,
 				"error", err,
 			)
 		}
+	}
+	if s.storeOnly {
+		return artifact.MaterializedFile{}, fmt.Errorf("%w: %s", errOfflineArtifactUnavailable, a.Filename)
 	}
 	source, cleanup, err := s.downloadArtifact(a, transferName)
 	if cleanup != nil {

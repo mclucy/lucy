@@ -9,6 +9,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/mclucy/lucy/bootstrap"
 	"github.com/mclucy/lucy/document"
 	"github.com/mclucy/lucy/internal/workspacewrite"
 	"github.com/mclucy/lucy/log"
@@ -36,10 +37,12 @@ type AdoptedRuntimeFile struct {
 type AdoptOptions struct {
 	Manifest     *document.Manifest
 	Lock         *document.Lock
-	Runtime      *discovery.Installation
 	RuntimeFiles []AdoptedRuntimeFile
-	Packages     []AdoptedPackage
-	Logger       *log.Logger
+	// Image is the runtime image of Lock from Service.RuntimeImage. A nil
+	// image limits runtime ownership to the files the lock pins by digest.
+	Image    []bootstrap.Output
+	Packages []AdoptedPackage
+	Logger   *log.Logger
 	// PublishLock publishes the resolved lock with the adoption. Callers that
 	// reused an existing lock byte-for-byte leave it false.
 	PublishLock bool
@@ -55,36 +58,32 @@ type AdoptOptions struct {
 	Preconditions WorkspaceDocuments
 }
 
-// AdoptExistingWorkspace explicitly adopts an existing workspace installation
-// without invoking the installer. It verifies attributable runtime files and
-// identified packages, checks bootstrap contract satisfaction against the
-// locked server, enforces path and symlink safety, and atomically publishes
-// the document and receipt changes under the standard installation journal
-// (.lucy/commit.yaml and rollback backup).
+// AdoptExistingWorkspace claims runtime files that match the image, or files
+// pinned by the lock if the image is unavailable. It also claims identified
+// packages. It publishes the documents and receipt in one transaction and
+// leaves the runtime files unchanged. The warnings name claims that the next
+// install must still complete.
 //
-// If the locked bootstrap contract is fully satisfied by existing regular
-// files, the receipt records the bootstrap fingerprint so a subsequent install
-// skips bootstrap. If satisfaction is inconclusive, explicit ownership of
-// recognized files is still recorded (preventing future collision conflicts)
-// but the bootstrap fingerprint stays empty. Existing baselines are never
-// reset: a managed file whose digest or mode changed fails adoption.
-func AdoptExistingWorkspace(root string, opts AdoptOptions) (resultErr error) {
+// The receipt gets a bootstrap fingerprint only when all managed image
+// entries are claimed with the image's permissions and all seeds are present.
+// A previously accepted receipt baseline cannot change during adoption.
+func AdoptExistingWorkspace(root string, opts AdoptOptions) (warnings []error, resultErr error) {
 	if opts.Lock == nil {
-		return errors.New("cannot adopt workspace without lock")
+		return nil, errors.New("cannot adopt workspace without lock")
 	}
 	root, err := filepath.Abs(root)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if opts.Preconditions.documents == nil {
 		opts.Preconditions, err = CaptureWorkspaceDocuments(root)
 		if err != nil {
-			return err
+			return nil, err
 		}
 	}
 	files, err := os.OpenRoot(root)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	defer func() { resultErr = errors.Join(resultErr, files.Close()) }()
 	tracked := trackedPaths(opts.Lock)
@@ -96,23 +95,23 @@ func AdoptExistingWorkspace(root string, opts AdoptOptions) (resultErr error) {
 		tracked,
 	)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if err := adoptRuntime(files, root, opts, tracked, ledger); err != nil {
-		return err
+		return nil, err
 	}
 	if err := adoptPackages(files, root, opts, tracked, ledger); err != nil {
-		return err
+		return nil, err
 	}
 	if err := adoptMCDRWrapper(root, opts, tracked, ledger); err != nil {
-		return err
+		return nil, err
 	}
 	if err := ledger.rejectUnclaimedLegacy(); err != nil {
-		return err
+		return nil, err
 	}
 	next, err := ledger.build(root, opts.Lock)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	publishReceipt := adoptionReceiptChanged(
@@ -121,7 +120,7 @@ func AdoptExistingWorkspace(root string, opts AdoptOptions) (resultErr error) {
 		next,
 		opts.Preconditions.documents[receipt.Filename].image != nil,
 	)
-	return publishAdoption(root, opts, next, publishReceipt, ledger.images)
+	return ledger.warnings, publishAdoption(root, opts, next, publishReceipt, ledger.images, ledger.seedPaths)
 }
 
 // adoptionLedger accumulates ownership claims over the receipt read at
@@ -133,7 +132,9 @@ type adoptionLedger struct {
 	images               map[string]*workspacewrite.InstallImage
 	legacyUnclaimed      map[string]struct{}
 	bootstrapFingerprint string
-	seedPaths            []string
+	// seedPaths names the seed files the fingerprint requires to exist.
+	seedPaths []string
+	warnings  []error
 }
 
 func newAdoptionLedger() *adoptionLedger {

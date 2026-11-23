@@ -9,23 +9,12 @@ import (
 	"strings"
 
 	"github.com/mclucy/lucy/bootstrap"
+	"github.com/mclucy/lucy/bootstrap/snapshot"
 	"github.com/mclucy/lucy/document"
 	"github.com/mclucy/lucy/internal/workspacewrite"
 	"github.com/mclucy/lucy/receipt"
-	"github.com/mclucy/lucy/server"
-	versionpkg "github.com/mclucy/lucy/version"
-	"github.com/mclucy/lucy/workspace/discovery"
 )
 
-// errAdoptionOutputConflict reports that a verified runtime output no longer
-// matches the bytes and mode the bootstrap contract observed.
-var errAdoptionOutputConflict = errors.New(
-	"verified server outputs changed or conflict with tracked files during adoption",
-)
-
-// adoptRuntime claims the runtime files the locked bootstrap contract proves.
-// A current tree also records its bootstrap fingerprint; an inconclusive tree
-// claims only outputs that attribution and discovery agree on.
 func adoptRuntime(
 	files *os.Root,
 	root string,
@@ -36,244 +25,231 @@ func adoptRuntime(
 	if opts.Lock.Server.Bootstrap == "" && opts.Lock.Server.Product == "" {
 		return nil
 	}
-	serverDir := filepath.Join(root, filepath.FromSlash(opts.Lock.Server.Directory))
-	check, checkErr := bootstrap.Check(serverDir, opts.Lock.Server, coreArtifactPath(opts.Lock.Server))
-	if checkErr != nil && opts.Runtime != nil {
-		return fmt.Errorf("verify existing server runtime: %w", checkErr)
+	baselines := runtimeBaselines(root, opts.RuntimeFiles)
+	if opts.Image == nil {
+		return adoptPinnedRuntime(files, root, opts, tracked, baselines, ledger)
 	}
 
-	baselines := runtimeBaselines(opts)
-	if check.Current && opts.Runtime != nil &&
-		!observedRuntimeMatchesLocked(opts.Runtime, opts.Lock.Server) {
-		check.Current = false
-		check.Reason = "observed runtime does not match the locked server"
-	}
-
-	if check.Current {
-		if err := claimBootstrapOutputs(
-			files, root, check.Outputs, baselines, tracked, ledger,
-		); err != nil {
-			return err
+	entries := make([]snapshot.Entry, 0, len(opts.Image))
+	var skipped int
+	for _, out := range opts.Image {
+		if out.Role != bootstrap.RoleRuntime || out.Policy == bootstrap.PolicyDiscard {
+			continue
 		}
-		ledger.seedPaths = observedSeedPaths(root, check.Outputs, tracked)
-		fingerprint, err := receipt.BootstrapFingerprint(opts.Lock)
+		if out.Policy == bootstrap.PolicyManaged && runtimePathReserved(root, out.Path, tracked) {
+			skipped++
+			continue
+		}
+		entries = append(entries, snapshot.Entry{
+			Path:   out.Path,
+			SHA256: out.SHA256,
+			Mode:   out.Mode,
+			Policy: string(out.Policy),
+		})
+	}
+	compared, err := snapshot.Compare(root, entries)
+	if err != nil {
+		return fmt.Errorf("compare existing runtime with the locked image: %w", err)
+	}
+
+	claim := func(entry snapshot.Entry) (bool, error) {
+		expected := &workspacewrite.InstallImage{
+			SHA256: entry.SHA256,
+			Mode:   workspacewrite.EffectiveInstallMode(os.FileMode(entry.Mode)),
+		}
+		if !runtimeBaselineMatches(entry.Path, expected, baselines) {
+			return false, nil
+		}
+		return true, ledger.claim(entry.Path, receipt.OriginBootstrap, "", expected)
+	}
+	for _, entry := range compared.Matching {
+		if entry.Policy != string(bootstrap.PolicyManaged) {
+			continue
+		}
+		claimed, err := claim(entry)
 		if err != nil {
 			return err
 		}
-		ledger.bootstrapFingerprint = fingerprint
-		if opts.Logger != nil {
-			opts.Logger.Debug(
-				"existing server tree satisfies locked bootstrap contract",
-				"method", opts.Lock.Server.Bootstrap,
-				"fingerprint", fingerprint,
-				"outputs", len(check.Outputs),
-			)
+		if !claimed {
+			skipped++
 		}
-		return nil
+	}
+	// A file with the image's bytes but other permissions stays owned with
+	// its observed mode. The fingerprint is withheld, so the next install
+	// restores the image's permissions.
+	var otherPermissions []string
+	for _, entry := range compared.OtherPermissions {
+		claimed, err := claim(entry)
+		if err != nil {
+			return err
+		}
+		if !claimed {
+			skipped++
+			continue
+		}
+		otherPermissions = append(otherPermissions, entry.Path)
+	}
+	if len(otherPermissions) > 0 {
+		ledger.warnings = append(ledger.warnings, fmt.Errorf(
+			"runtime files have other permissions than the runtime image: %s; the next lucy install restores them",
+			strings.Join(otherPermissions, ", "),
+		))
 	}
 
+	runtimeDiffers := len(otherPermissions) > 0
+	for _, entry := range compared.Differing {
+		if entry.Policy == string(bootstrap.PolicyManaged) {
+			runtimeDiffers = true
+			continue
+		}
+		// An edited seed still counts as present; another kind of file at
+		// a seed path does not.
+		if !regularFileWithin(files, entry.Path) {
+			runtimeDiffers = true
+		}
+	}
 	if opts.Logger != nil {
 		opts.Logger.Debug(
-			"recording attributable runtime ownership without bootstrap currentness",
-			"reason", check.Reason,
+			"compared existing server with the locked runtime image",
+			"matching", len(compared.Matching),
+			"differing", len(compared.Differing),
+			"other-permissions", len(compared.OtherPermissions),
+			"missing", len(compared.Missing),
+			"skipped", skipped,
 		)
 	}
-	return adoptInconclusiveRuntime(files, root, opts, check.Outputs, tracked, ledger)
+	// Missing seeds require a stage, but existing seeds stay user-owned.
+	if runtimeDiffers || len(compared.Missing) > 0 || skipped > 0 {
+		return nil
+	}
+	fingerprint, err := receipt.BootstrapFingerprint(opts.Lock)
+	if err != nil {
+		return err
+	}
+	ledger.bootstrapFingerprint = fingerprint
+	ledger.seedPaths = observedSeedPaths(root, opts.Image, tracked)
+	return nil
 }
 
-// runtimeBaselines indexes the digest and mode captured for each observed
-// runtime file.
-func runtimeBaselines(opts AdoptOptions) map[string]AdoptedRuntimeFile {
-	baselines := make(map[string]AdoptedRuntimeFile, len(opts.RuntimeFiles))
-	for _, file := range opts.RuntimeFiles {
-		baselines[filepath.Clean(file.Path)] = file
+func regularFileWithin(files *os.Root, rel string) bool {
+	info, err := files.Lstat(filepath.FromSlash(rel))
+	return err == nil && info.Mode().IsRegular()
+}
+
+func runtimeBaselines(root string, observed []AdoptedRuntimeFile) map[string]AdoptedRuntimeFile {
+	baselines := make(map[string]AdoptedRuntimeFile, len(observed))
+	for _, file := range observed {
+		if rel, ok := workspaceRelative(root, file.Path); ok {
+			baselines[rel] = file
+		}
 	}
 	return baselines
 }
 
-// observedRuntimeMatchesLocked reports whether the observed installation
-// identity agrees with the resolved lock. Unknown observed versions do not
-// contradict the lock.
-func observedRuntimeMatchesLocked(
-	installation *discovery.Installation,
-	locked document.LockedServer,
-) bool {
-	if installation == nil {
-		return false
-	}
-	identity := installation.Identity
-	product := identity.Product()
-	if product == server.ProductUnknown {
-		product = server.Product(identity.Primary.Name.String())
-	}
-	if product != locked.Product {
-		return false
-	}
-	return !observedVersionConflicts(identity.MinecraftVersion(), locked.Minecraft) &&
-		!observedVersionConflicts(identity.Primary.Version, locked.CoreVersion)
-}
-
-// observedVersionConflicts reports a concrete observed version that differs
-// from the locked version. Unknown observed metadata proves nothing.
-func observedVersionConflicts(observed, locked versionpkg.Version) bool {
-	if observed == "" || observed.IsInvalid() || observed.CanInfer() {
-		return false
-	}
-	return observed != locked
-}
-
-// bootstrapImage returns the exact state a managed bootstrap output records.
-func bootstrapImage(out bootstrap.Output) *workspacewrite.InstallImage {
-	return &workspacewrite.InstallImage{
-		SHA256: out.SHA256,
-		Mode:   workspacewrite.EffectiveInstallMode(os.FileMode(out.Mode)),
-	}
-}
-
-// adoptedImage returns the exact state captured for one discovered runtime
-// file. Every capture uses the observed permission mode, including zero.
-func adoptedImage(file AdoptedRuntimeFile) *workspacewrite.InstallImage {
-	return &workspacewrite.InstallImage{
-		SHA256: strings.ToLower(file.ExpectedSHA256),
-		Mode:   file.ExpectedMode,
-	}
-}
-
-// claimBootstrapOutputs rechecks every managed bootstrap output against the
-// contract and its observed baseline, then records its ownership. The
-// baseline map is nil when no runtime selection was observed.
-func claimBootstrapOutputs(
-	files *os.Root,
-	root string,
-	outputs []bootstrap.Output,
+func runtimeBaselineMatches(
+	rel string,
+	current *workspacewrite.InstallImage,
 	baselines map[string]AdoptedRuntimeFile,
-	tracked map[string]bool,
-	ledger *adoptionLedger,
-) error {
-	for _, out := range outputs {
-		if !isManagedRuntimeOutput(out) {
-			continue
-		}
-		cleanRel := cleanWorkspacePath(out.Path)
-		if !workspacePathSafe(root, cleanRel) ||
-			tracked[strings.ToLower(cleanRel)] ||
-			installPathReserved(root, cleanRel) {
-			return fmt.Errorf(
-				"verified bootstrap output %s conflicts with workspace state",
-				out.Path,
-			)
-		}
-		expected := bootstrapImage(out)
-		if err := verifyOutputBaseline(files, cleanRel, expected); err != nil {
-			return fmt.Errorf("%w: %v", errAdoptionOutputConflict, err)
-		}
-		if observed, ok := baselines[filepath.Clean(
-			filepath.Join(root, filepath.FromSlash(cleanRel)),
-		)]; ok && !workspacewrite.InstallImagesEqual(
-			expected, adoptedImage(observed),
-		) {
-			return errAdoptionOutputConflict
-		}
-		if err := ledger.claim(
-			cleanRel,
-			receipt.OriginBootstrap,
-			"",
-			expected,
-		); err != nil {
-			return err
-		}
-	}
-	return nil
+) bool {
+	observed, ok := baselines[rel]
+	return !ok || (current.Mode == observed.ExpectedMode &&
+		strings.EqualFold(current.SHA256, observed.ExpectedSHA256))
 }
 
-// adoptInconclusiveRuntime records ownership of files the bootstrap contract
-// cannot prove current. It refuses outputs that conflict with workspace state
-// and claims discovery runtime files only inside declared managed scopes.
-func adoptInconclusiveRuntime(
+func adoptPinnedRuntime(
 	files *os.Root,
 	root string,
 	opts AdoptOptions,
-	outputs []bootstrap.Output,
 	tracked map[string]bool,
+	baselines map[string]AdoptedRuntimeFile,
 	ledger *adoptionLedger,
 ) error {
-	if err := claimBootstrapOutputs(
-		files, root, outputs, nil, tracked, ledger,
-	); err != nil {
+	server := opts.Lock.Server
+	if err := document.SafeRelativePath(server.Directory); err != nil {
 		return err
 	}
-
-	if opts.Runtime == nil {
-		return nil
-	}
-	baselines := runtimeBaselines(opts)
-	specs := bootstrap.OutputSpecs(opts.Lock.Server)
-	serverDir := cleanWorkspacePath(opts.Lock.Server.Directory)
-	if serverDir == "." {
-		serverDir = ""
-	}
-	for _, file := range opts.Runtime.Files {
-		cleanRel, ok := workspaceRelative(root, file.Path)
-		if !ok {
-			return fmt.Errorf("runtime file %s escapes the workspace", file.Path)
-		}
-		if !workspacePathSafe(root, cleanRel) ||
-			tracked[strings.ToLower(cleanRel)] ||
-			installPathReserved(root, cleanRel) {
-			continue
-		}
-		serverRel, within := serverRelative(serverDir, cleanRel)
-		if !within || !managedRuntimeScope(specs, serverRel) {
-			continue
-		}
-		baseline, observed := baselines[filepath.Clean(file.Path)]
-		if !observed {
-			if info, err := os.Lstat(file.Path); err == nil &&
-				info.Mode()&os.ModeSymlink != 0 {
-				continue
-			}
-		}
-		if !observed || baseline.ExpectedSHA256 == "" {
-			return fmt.Errorf("runtime file %s has no observed baseline", cleanRel)
-		}
-		expected := adoptedImage(baseline)
-		if err := verifyOutputBaseline(files, cleanRel, expected); err != nil {
-			return fmt.Errorf(
-				"runtime file %s changed between discovery and adoption publication: %w",
-				cleanRel,
-				err,
-			)
-		}
-		if err := ledger.claim(
-			cleanRel,
-			receipt.OriginBootstrap,
-			"",
-			expected,
-		); err != nil {
+	// Only managed runtime outputs enter the receipt. A pinned input that the
+	// method discards after staging, such as the Forge mappings, stays with
+	// the user, as it does after a fresh install.
+	claim := func(serverRel string, pins map[string]string) error {
+		spec, declared, err := bootstrap.ClassifyOutput(server, serverRel)
+		if err != nil {
 			return err
 		}
+		if !declared || spec.Policy != bootstrap.PolicyManaged || spec.Role != bootstrap.RoleRuntime {
+			return nil
+		}
+		rel := filepath.ToSlash(filepath.Join(server.Directory, filepath.FromSlash(serverRel)))
+		if runtimePathReserved(root, rel, tracked) || !workspacePathSafe(root, rel) {
+			return nil
+		}
+		if err := requirePinnedArtifact(pins, rel); err != nil {
+			return nil
+		}
+		current, err := pinnedRuntimeImage(files, rel, pins)
+		if err != nil || current == nil {
+			return err
+		}
+		if !runtimeBaselineMatches(rel, current, baselines) {
+			return nil
+		}
+		return ledger.claim(rel, receipt.OriginBootstrap, "", current)
+	}
+	for _, input := range server.Inputs {
+		rel, err := bootstrap.InputPath(server.Bootstrap, input)
+		if err != nil {
+			return err
+		}
+		if err := claim(rel, input.Hashes); err != nil {
+			return err
+		}
+	}
+	corePath, err := bootstrap.CorePath(server)
+	if err != nil {
+		return err
+	}
+	if corePath != "" {
+		return claim(corePath, server.Artifact.Hashes)
 	}
 	return nil
 }
 
-// verifyOutputBaseline checks that an output still has the observed exact
-// content and permission bits.
-func verifyOutputBaseline(
+func pinnedRuntimeImage(
 	files *os.Root,
 	rel string,
-	expected *workspacewrite.InstallImage,
-) error {
-	current, err := workspacewrite.ObserveInstallImage(files, rel)
+	pins map[string]string,
+) (*workspacewrite.InstallImage, error) {
+	info, err := files.Lstat(rel)
 	switch {
+	case errors.Is(err, os.ErrNotExist):
+		return nil, nil
 	case err != nil:
-		return fmt.Errorf("%s is not a regular file: %w", rel, err)
-	case current == nil:
-		return fmt.Errorf("inspect %s: file is absent", rel)
+		return nil, fmt.Errorf("inspect pinned runtime file %s: %w", rel, err)
+	case !info.Mode().IsRegular():
+		return nil, nil
 	}
-	if !workspacewrite.InstallImagesEqual(current, expected) {
-		return fmt.Errorf("%s changed", rel)
+	file, err := files.Open(rel)
+	if err != nil {
+		return nil, fmt.Errorf("open pinned runtime file %s: %w", rel, err)
 	}
-	return nil
+	hashes, err := digestReader(file, rel, pins)
+	if closeErr := file.Close(); closeErr != nil {
+		return nil, errors.Join(err, closeErr)
+	}
+	if errors.Is(err, errArtifactDigestMismatch) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("digest pinned runtime file %s: %w", rel, err)
+	}
+	return &workspacewrite.InstallImage{
+		SHA256: hashes["sha256"],
+		Mode:   workspacewrite.EffectiveInstallMode(info.Mode().Perm()),
+	}, nil
+}
+
+func runtimePathReserved(root, rel string, tracked map[string]bool) bool {
+	return tracked[strings.ToLower(rel)] || installPathReserved(root, rel)
 }
 
 // workspaceRelative converts an absolute path inside root to a clean
@@ -284,20 +260,6 @@ func workspaceRelative(root, path string) (string, bool) {
 		return "", false
 	}
 	return cleanWorkspacePath(rel), true
-}
-
-// serverRelative rebases a workspace-relative path onto the server directory.
-func serverRelative(serverDir, rel string) (string, bool) {
-	if serverDir == "" {
-		return rel, true
-	}
-	if rel == serverDir {
-		return "", true
-	}
-	if !strings.HasPrefix(rel, serverDir+"/") {
-		return "", false
-	}
-	return strings.TrimPrefix(rel, serverDir+"/"), true
 }
 
 func cleanWorkspacePath(path string) string {

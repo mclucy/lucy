@@ -54,11 +54,7 @@ func captureRuntimeObservation(
 	}, nil
 }
 
-// verify rejects a runtime that changed after observation. The caller passes a
-// freshly discovered installation, and verify rechecks its identity,
-// membership roles, and every observed file's digest and mode, so
-// inconclusive adoption cannot record ownership of a replacement using stale
-// membership.
+// verify rejects a change to the selected runtime's identity or membership.
 func (o *runtimeObservation) verify(installation *discovery.Installation) error {
 	if o == nil {
 		if installation != nil {
@@ -77,11 +73,6 @@ func (o *runtimeObservation) verify(installation *discovery.Installation) error 
 	if !o.sameMembership(installation.Files) {
 		return errors.New("the observed runtime membership changed during initialization")
 	}
-	for _, observed := range o.files {
-		if err := verifyRuntimeFileBaseline(observed); err != nil {
-			return err
-		}
-	}
 	return nil
 }
 
@@ -98,44 +89,6 @@ func (o *runtimeObservation) sameMembership(files []discovery.File) bool {
 	return true
 }
 
-func verifyRuntimeFileBaseline(observed install.AdoptedRuntimeFile) error {
-	current, err := observeRuntimeFile(observed.Path)
-	if err != nil {
-		return fmt.Errorf(
-			"digest runtime file %s: %w",
-			observed.Path,
-			err,
-		)
-	}
-	want := &workspacewrite.InstallImage{
-		SHA256: observed.ExpectedSHA256,
-		Mode:   observed.ExpectedMode,
-	}
-	if current == nil ||
-		!workspacewrite.InstallImagesEqual(current, want) {
-		return fmt.Errorf(
-			"runtime file %s changed during initialization",
-			observed.Path,
-		)
-	}
-	return nil
-}
-
-// observeRuntimeFile reports the exact content and mode of one regular file.
-// A nil image means the path is absent; a non-regular path is an error.
-func observeRuntimeFile(path string) (*workspacewrite.InstallImage, error) {
-	files, err := os.OpenRoot(filepath.Dir(path))
-	if err != nil {
-		return nil, err
-	}
-	defer files.Close()
-	return workspacewrite.ObserveInstallImage(files, filepath.Base(path))
-}
-
-// adoptedRuntimeFiles captures the digest and mode of every file the selected
-// runtime owns. Adoption records only files with a captured baseline, so an
-// unreadable or replaced file fails initialization instead of being adopted
-// without evidence.
 func adoptedRuntimeFiles(
 	installation *discovery.Installation,
 ) ([]install.AdoptedRuntimeFile, error) {

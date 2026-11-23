@@ -61,32 +61,7 @@ type OutputSpec struct {
 	Origin OutputOrigin
 }
 
-// stageOnly reports whether the declared material exists only to drive staged
-// bootstrap execution. Such material is pinned and verified before execution
-// but is discarded from the committed runtime tree.
-func (s OutputSpec) stageOnly() bool {
-	return s.Policy == PolicyDiscard || s.Role == RoleBootstrapOnly
-}
-
-// Evidence names the proof that admits one runtime file. A file without
-// evidence is never claimed as owned.
-type Evidence string
-
-const (
-	// EvidenceLocked proves the file against a digest the lock pins.
-	EvidenceLocked Evidence = "locked"
-	// EvidenceInstallerDeclared proves the file against a digest inside a
-	// pinned installer, its profile, or a pinned core artifact.
-	EvidenceInstallerDeclared Evidence = "installer-declared"
-	// EvidenceSemantic proves a generated file by its meaning, such as a
-	// launcher's exact commands, because its bytes may vary.
-	EvidenceSemantic Evidence = "semantic"
-	// EvidenceExecuted identifies an allowed output of a checked bootstrap run
-	// that cannot be independently attributed in an existing workspace.
-	EvidenceExecuted Evidence = "executed"
-)
-
-// Output describes a concrete staged or verified output file.
+// Output describes a file in the staged image.
 type Output struct {
 	// Path is the workspace-relative path (e.g. "server.jar" or "server/server.jar").
 	Path string
@@ -100,34 +75,6 @@ type Output struct {
 	Policy OutputPolicy
 	// Role is the material role (runtime, bootstrap-only).
 	Role MaterialRole
-	// Evidence is the proof that admits this file.
-	Evidence Evidence
-}
-
-// CurrentnessStatus indicates whether an existing server tree satisfies the locked bootstrap contract.
-type CurrentnessStatus string
-
-const (
-	// CurrentnessCurrent indicates all required outputs exist, launcher semantics match,
-	// and all locked artifact hashes match.
-	CurrentnessCurrent CurrentnessStatus = "current"
-	// CurrentnessInconclusive indicates the existing tree cannot be proven to satisfy
-	// the locked contract without executing bootstrap.
-	CurrentnessInconclusive CurrentnessStatus = "inconclusive"
-	// CurrentnessMismatch indicates a missing required output or artifact hash mismatch.
-	CurrentnessMismatch CurrentnessStatus = "mismatch"
-)
-
-// CheckResult reports the outcome of verifying an existing tree against a locked server.
-type CheckResult struct {
-	Current bool
-	Status  CurrentnessStatus
-	Reason  string
-	Outputs []Output
-	// RequiredOutputsVerified means the check identified and verified all
-	// required outputs. Generated files outside that set can still need a
-	// receipt baseline when Status is inconclusive.
-	RequiredOutputsVerified bool
 }
 
 // validateContract checks the locked server's bootstrap method, locked inputs, and declared outputs.
