@@ -18,6 +18,7 @@ import (
 	"github.com/mclucy/lucy/catalog"
 	"github.com/mclucy/lucy/document"
 	"github.com/mclucy/lucy/filetrack"
+	"github.com/mclucy/lucy/internal/fileidentity"
 	"github.com/mclucy/lucy/internal/workspacewrite"
 	"github.com/mclucy/lucy/javaruntime"
 	"github.com/mclucy/lucy/upstream"
@@ -155,10 +156,12 @@ func (s *Service) stageInstall(
 		return nil, err
 	}
 	result.Java = check
-	bootstrapOK, current, err := installationCurrent(ctx, root, resolved, s.logger)
+	memo := fileidentity.NewMemo()
+	bootstrapOK, current, evidence, err := installationCurrent(ctx, root, resolved, memo, s.logger)
 	if err != nil {
 		return nil, err
 	}
+	commitCheck := currentCheck{memo: memo, evidence: evidence}
 	// A refresh request executes the bootstrap method again to publish a
 	// fresh snapshot.
 	if opts.RefreshBootstrap {
@@ -188,7 +191,8 @@ func (s *Service) stageInstall(
 			// a partial manifest/lock publication rolls back.
 			if _, err := applyCommit(
 				root, "", manifest, resolved, opts.PublishManifest,
-				nil, nil, nil, false, installCommitMetadataOnly, documents, s.logger,
+				nil, nil, nil, nil, false, installCommitMetadataOnly, documents,
+				commitCheck, s.logger,
 			); err != nil {
 				return nil, err
 			}
@@ -220,8 +224,9 @@ func (s *Service) stageInstall(
 		}
 		mcdrOutputs := mcdrWrapperOutputs(resolved)
 		counts, err := applyCommit(
-			root, stage, manifest, resolved, opts.PublishManifest, nil,
-			mcdrOutputs, mcdrOutputs, false, installCommitOverlay, documents, s.logger,
+			root, stage, manifest, resolved, opts.PublishManifest, nil, nil,
+			mcdrOutputs, mcdrOutputs, false, installCommitOverlay, documents,
+			commitCheck, s.logger,
 		)
 		if err != nil {
 			return nil, err
@@ -288,7 +293,7 @@ func (s *Service) stageInstall(
 		}
 		stagedOutputs[path] = output
 	}
-	overwritePaths, err := s.stagePackages(
+	overwritePaths, stagedPackageHashes, err := s.stagePackages(
 		root, stage, resolved, store, stagedOutputs, opts,
 	)
 	if err != nil {
@@ -304,7 +309,8 @@ func (s *Service) stageInstall(
 	}
 	counts, err := applyCommit(
 		root, stage, d, resolved, opts.PublishManifest,
-		overwritePaths, stagedOutputs, mcdrOutputs, stagedBootstrap, installCommitReconcile, documents, s.logger,
+		overwritePaths, stagedPackageHashes, stagedOutputs, mcdrOutputs,
+		stagedBootstrap, installCommitReconcile, documents, commitCheck, s.logger,
 	)
 	if err != nil {
 		return nil, err
@@ -506,8 +512,10 @@ func (s *Service) restoreServerSnapshot(
 	return nil, false, nil
 }
 
-// restoredServerOutputs verifies a tree restored from a snapshot and indexes
-// its entries by workspace path. A snapshot holds only the runtime zone and
+// restoredServerOutputs verifies a tree a snapshot restore materialized and
+// indexes its entries by workspace path. The restore hashed every stored
+// object before placing it, so this walk checks presence and mode instead of
+// reading the same bytes again. A snapshot holds only the runtime zone and
 // the seed zone, so the comparison proves those files rather than re-running
 // the staging contract.
 func restoredServerOutputs(
@@ -519,7 +527,7 @@ func restoredServerOutputs(
 	if err != nil {
 		return nil, err
 	}
-	comparison, err := snapshot.Compare(root, snap.Entries)
+	comparison, err := snapshot.VerifyRestored(root, snap.Entries)
 	if err != nil {
 		return nil, err
 	}

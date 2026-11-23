@@ -144,7 +144,7 @@ func Select(ctx context.Context, root string, req Requirement, logger *log.Logge
 
 // Installed includes explicitly supplied homes in ordinary machine discovery.
 func Installed(ctx context.Context, logger *log.Logger, additionalHomes ...string) ([]Runtime, error) {
-	inventory, err := toolchain.Discover(ctx, additionalHomes...)
+	inventory, err := toolchain.DiscoverJava(ctx, additionalHomes...)
 	if err != nil {
 		return nil, err
 	}

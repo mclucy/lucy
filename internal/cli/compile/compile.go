@@ -158,7 +158,7 @@ func run(
 		return err
 	}
 	build.JavaHome = javaHome
-	inventory, err := toolchain.Discover(ctx, javaHome)
+	inventory, err := toolchain.DiscoverBuildTools(ctx, javaHome)
 	if err != nil {
 		return fmt.Errorf("discover local toolchains: %w", err)
 	}

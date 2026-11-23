@@ -94,7 +94,7 @@ func syncDir(root *os.Root, dir string) error {
 		return fmt.Errorf("open directory for sync: %w", err)
 	}
 	var resultErr error
-	if err := file.Sync(); err != nil {
+	if err := Barrier(file); err != nil {
 		resultErr = fmt.Errorf("sync directory: %w", err)
 	}
 	if err := file.Close(); err != nil {
@@ -112,7 +112,7 @@ func makePrivateDirectories(path string, missing []string) error {
 		if err != nil {
 			return err
 		}
-		syncErr := parent.Sync()
+		syncErr := Barrier(parent)
 		closeErr := parent.Close()
 		if syncErr != nil || closeErr != nil {
 			return errors.Join(syncErr, closeErr)

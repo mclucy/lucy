@@ -1,17 +1,17 @@
 package snapshot
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
 	"errors"
 	"fmt"
-	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
+	"sync/atomic"
 
 	"github.com/mclucy/lucy/document"
+	"github.com/mclucy/lucy/internal/fileidentity"
 )
 
 // managedPolicy is the entry policy whose permission bits belong to its
@@ -47,12 +47,123 @@ func (c Comparison) Complete() bool {
 // Compare digests each entry's path below dir. It refuses a path that leaves
 // dir or traverses a symlink, so a hostile tree cannot redirect the read.
 func Compare(dir string, entries []Entry) (Comparison, error) {
+	return CompareCached(dir, entries, nil)
+}
+
+// compareResult is one entry's outcome. Observations are kept so a caller can
+// record the evidence without a second walk.
+type compareResult struct {
+	entry            Entry
+	differing        bool
+	otherPermissions bool
+	missing          bool
+	err              error
+}
+
+// CompareCached digests each entry's path below dir, reusing a digest the memo
+// already proved for an unchanged file. Files hash on a bounded pool; entry
+// order decides the first error and the result lists.
+func CompareCached(
+	dir string,
+	entries []Entry,
+	memo *fileidentity.Memo,
+) (Comparison, error) {
 	root, err := os.OpenRoot(dir)
 	if err != nil {
 		return Comparison{}, err
 	}
 	defer root.Close()
 
+	results := make([]compareResult, len(entries))
+	workers := min(len(entries), 4)
+	if workers < 1 {
+		workers = 1
+	}
+	var next atomic.Int64
+	var group sync.WaitGroup
+	for range workers {
+		group.Go(func() {
+			for {
+				index := int(next.Add(1)) - 1
+				if index >= len(entries) {
+					return
+				}
+				results[index] = compareEntry(root, entries[index], memo)
+			}
+		})
+	}
+	group.Wait()
+
+	var comparison Comparison
+	for _, result := range results {
+		switch {
+		case result.err != nil:
+			return Comparison{}, result.err
+		case result.missing:
+			comparison.Missing = append(comparison.Missing, result.entry)
+		case result.differing:
+			comparison.Differing = append(comparison.Differing, result.entry)
+		case result.otherPermissions:
+			comparison.OtherPermissions = append(comparison.OtherPermissions, result.entry)
+		default:
+			comparison.Matching = append(comparison.Matching, result.entry)
+		}
+	}
+	return comparison, nil
+}
+
+func compareEntry(
+	root *os.Root,
+	entry Entry,
+	memo *fileidentity.Memo,
+) compareResult {
+	result := compareResult{entry: entry}
+	rel := filepath.FromSlash(entry.Path)
+	if err := document.SafeRelativePath(rel); err != nil {
+		result.err = fmt.Errorf("snapshot entry %s: %w", entry.Path, err)
+		return result
+	}
+	info, err := lstatWithin(root, rel)
+	switch {
+	case errors.Is(err, fs.ErrNotExist):
+		result.missing = true
+		return result
+	case err != nil:
+		result.err = err
+		return result
+	}
+	if !info.Mode().IsRegular() {
+		result.differing = true
+		return result
+	}
+	observation, err := memo.ObserveRootInfo(root, rel, info, nil)
+	if err != nil {
+		result.err = err
+		return result
+	}
+	digest := observation.Hashes["sha256"]
+	if !strings.EqualFold(digest, entry.SHA256) {
+		result.differing = true
+		return result
+	}
+	result.entry.Mode = uint32(info.Mode().Perm())
+	result.entry.SHA256 = digest
+	if entry.Policy == managedPolicy && entry.Mode != 0 &&
+		info.Mode().Perm()&0o555 != os.FileMode(entry.Mode)&0o555 {
+		result.otherPermissions = true
+	}
+	return result
+}
+
+// VerifyRestored classifies entries against a tree a verified restore
+// materialized. It checks presence, regular-file type, and the managed mode,
+// but never reads content the caller already verified.
+func VerifyRestored(dir string, entries []Entry) (Comparison, error) {
+	root, err := os.OpenRoot(dir)
+	if err != nil {
+		return Comparison{}, err
+	}
+	defer root.Close()
 	var comparison Comparison
 	for _, entry := range entries {
 		rel := filepath.FromSlash(entry.Path)
@@ -71,17 +182,8 @@ func Compare(dir string, entries []Entry) (Comparison, error) {
 			comparison.Differing = append(comparison.Differing, entry)
 			continue
 		}
-		digest, err := digestWithin(root, rel)
-		if err != nil {
-			return Comparison{}, err
-		}
-		if !strings.EqualFold(digest, entry.SHA256) {
-			comparison.Differing = append(comparison.Differing, entry)
-			continue
-		}
 		observed := entry
 		observed.Mode = uint32(info.Mode().Perm())
-		observed.SHA256 = digest
 		if entry.Policy == managedPolicy && entry.Mode != 0 &&
 			info.Mode().Perm()&0o555 != os.FileMode(entry.Mode)&0o555 {
 			comparison.OtherPermissions = append(comparison.OtherPermissions, observed)
@@ -118,20 +220,4 @@ func lstatWithin(root *os.Root, rel string) (fs.FileInfo, error) {
 		}
 	}
 	return nil, fs.ErrNotExist
-}
-
-// digestWithin returns the lowercase hexadecimal SHA-256 digest of the file at
-// rel below root.
-func digestWithin(root *os.Root, rel string) (string, error) {
-	file, err := root.Open(rel)
-	if err != nil {
-		return "", err
-	}
-	hasher := sha256.New()
-	_, copyErr := io.Copy(hasher, file)
-	closeErr := file.Close()
-	if copyErr != nil || closeErr != nil {
-		return "", errors.Join(copyErr, closeErr)
-	}
-	return hex.EncodeToString(hasher.Sum(nil)), nil
 }

@@ -169,7 +169,7 @@ func appendEvent(files *os.Root, event Event) (resultErr error) {
 	if _, err := file.Write(data); err != nil {
 		return err
 	}
-	return file.Sync()
+	return fsutil.Barrier(file)
 }
 
 func commit(root string, files *os.Root, store *cas.Store, txn transaction) (resultErr error) {
@@ -387,7 +387,7 @@ func recoverTransaction(root string, files *os.Root, store *cas.Store) error {
 		if err != nil {
 			return err
 		}
-		syncErr := file.Sync()
+		syncErr := fsutil.Barrier(file)
 		if closeErr := file.Close(); syncErr != nil || closeErr != nil {
 			return errors.Join(syncErr, closeErr)
 		}

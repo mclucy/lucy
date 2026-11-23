@@ -12,6 +12,8 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync"
+	"sync/atomic"
 
 	"github.com/mclucy/lucy/document"
 )
@@ -38,6 +40,13 @@ func StagedImage(stageRoot string, locked document.LockedServer) ([]Output, erro
 
 	outputs := make([]Output, 0, len(exact))
 	produced := make(map[string]bool, len(exact))
+	type stagedFile struct {
+		path string
+		rel  string
+		spec OutputSpec
+		mode uint32
+	}
+	var files []stagedFile
 	err = filepath.WalkDir(serverRoot, func(p string, entry fs.DirEntry, walkErr error) error {
 		if walkErr != nil {
 			return walkErr
@@ -63,27 +72,53 @@ func StagedImage(stageRoot string, locked document.LockedServer) ([]Output, erro
 		if !declared {
 			return fmt.Errorf("bootstrap method %s wrote undeclared file %s", locked.Bootstrap, rel)
 		}
-		digest, err := fileSHA256(p)
-		if err != nil {
-			return err
-		}
 		info, err := entry.Info()
 		if err != nil {
 			return err
 		}
 		produced[rel] = true
-		outputs = append(outputs, Output{
-			Path:       filepath.ToSlash(filepath.Join(locked.Directory, rel)),
-			ServerPath: rel,
-			SHA256:     digest,
-			Mode:       uint32(info.Mode().Perm()),
-			Policy:     spec.Policy,
-			Role:       spec.Role,
+		files = append(files, stagedFile{
+			path: p,
+			rel:  rel,
+			spec: spec,
+			mode: uint32(info.Mode().Perm()),
 		})
 		return nil
 	})
 	if err != nil {
 		return nil, err
+	}
+	digests := make([]string, len(files))
+	digestErrs := make([]error, len(files))
+	workers := min(len(files), 4)
+	var next atomic.Int64
+	var group sync.WaitGroup
+	for range workers {
+		group.Go(func() {
+			for {
+				index := int(next.Add(1)) - 1
+				if index >= len(files) {
+					return
+				}
+				digests[index], digestErrs[index] = fileSHA256(files[index].path)
+			}
+		})
+	}
+	group.Wait()
+	for _, err := range digestErrs {
+		if err != nil {
+			return nil, err
+		}
+	}
+	for i, file := range files {
+		outputs = append(outputs, Output{
+			Path:       filepath.ToSlash(filepath.Join(locked.Directory, file.rel)),
+			ServerPath: file.rel,
+			SHA256:     digests[i],
+			Mode:       file.mode,
+			Policy:     file.spec.Policy,
+			Role:       file.spec.Role,
+		})
 	}
 	for _, rel := range slices.Sorted(maps.Keys(exact)) {
 		spec := exact[rel]

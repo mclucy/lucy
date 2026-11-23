@@ -66,7 +66,7 @@ func TestPruneTargetsKeepsAbsentEntryAsPrecondition(t *testing.T) {
 	}
 
 	targets, err := pruneTargets(
-		root, previous, map[string]bool{}, nil, nil, false,
+		root, previous, map[string]bool{}, nil, nil, false, currentCheck{},
 	)
 	if err != nil {
 		t.Fatalf("plan prunes: %v", err)
@@ -83,7 +83,7 @@ func TestPruneTargetsKeepsAbsentEntryAsPrecondition(t *testing.T) {
 		}
 		check := installBeforeCheck(files, workspacewrite.InstallJournalEntry{
 			Path: path, Before: expected,
-		})
+		}, nil)
 		if err := check(); err != nil {
 			t.Fatalf("unchanged prune target %s: %v", path, err)
 		}
@@ -151,7 +151,7 @@ func TestApplyCommitRetainedBootstrapDriftAborts(t *testing.T) {
 	// undrifted tree must still commit through the retained path.
 	stage := t.TempDir()
 	if _, err := applyCommit(
-		root, stage, nil, lock, false, nil, nil, nil, false, installCommitOverlay, transactionTestDocuments(t, root), nil,
+		root, stage, nil, lock, false, nil, nil, nil, nil, false, installCommitOverlay, transactionTestDocuments(t, root), currentCheck{}, nil,
 	); err != nil {
 		t.Fatalf("overlay commit over current bootstrap: %v", err)
 	}
@@ -166,7 +166,7 @@ func TestApplyCommitRetainedBootstrapDriftAborts(t *testing.T) {
 		t.Fatalf("remove retained output: %v", err)
 	}
 	_, err = applyCommit(
-		root, stage, nil, lock, false, nil, nil, nil, false, installCommitOverlay, transactionTestDocuments(t, root), nil,
+		root, stage, nil, lock, false, nil, nil, nil, nil, false, installCommitOverlay, transactionTestDocuments(t, root), currentCheck{}, nil,
 	)
 	if err == nil || !strings.Contains(err.Error(), "bootstrap") {
 		t.Fatalf("commit over drifted retained bootstrap outputs: %v", err)
@@ -224,8 +224,8 @@ func TestApplyCommitRecordsStagedSeedPaths(t *testing.T) {
 		},
 	}
 	if _, err := applyCommit(
-		root, stage, nil, lock, false, nil, stagedOutputs, nil, true,
-		installCommitReconcile, transactionTestDocuments(t, root), nil,
+		root, stage, nil, lock, false, nil, nil, stagedOutputs, nil, true,
+		installCommitReconcile, transactionTestDocuments(t, root), currentCheck{}, nil,
 	); err != nil {
 		t.Fatalf("commit staged bootstrap: %v", err)
 	}
@@ -300,8 +300,8 @@ func TestApplyCommitRefusesNonRegularSeed(t *testing.T) {
 		},
 	}
 	_, err := applyCommit(
-		root, stage, nil, lock, false, nil, stagedOutputs, nil, true,
-		installCommitReconcile, transactionTestDocuments(t, root), nil,
+		root, stage, nil, lock, false, nil, nil, stagedOutputs, nil, true,
+		installCommitReconcile, transactionTestDocuments(t, root), currentCheck{}, nil,
 	)
 	if err == nil || !strings.Contains(err.Error(), "non-regular seed output") {
 		t.Fatalf("applyCommit() error = %v, want non-regular seed refusal", err)
@@ -403,7 +403,7 @@ func TestExecuteCommitRechecksDocumentsAfterVerifier(t *testing.T) {
 			}},
 			documents: documents,
 			verify:    editManifest(root),
-		}, nil)
+		}, currentCheck{}, nil)
 		if err == nil || !strings.Contains(err.Error(), document.ManifestFilename) {
 			t.Fatalf(
 				"executeCommit() error = %v, want a pinned document recheck",
@@ -436,7 +436,7 @@ func TestExecuteCommitRechecksDocumentsAfterVerifier(t *testing.T) {
 			label:     "test",
 			documents: documents,
 			verify:    editManifest(root),
-		}, nil)
+		}, currentCheck{}, nil)
 		if err == nil || !strings.Contains(err.Error(), document.ManifestFilename) {
 			t.Fatalf(
 				"executeCommit() error = %v, want a pinned document recheck for a no-op commit",
@@ -480,13 +480,13 @@ func TestVerifyInstallOutputsChecksJournaledPaths(t *testing.T) {
 			After:  publishedImage,
 		}}
 		if err := verifyInstallOutputs(
-			transactionTestRoot(t, root), entries, staged, nil, nil,
+			transactionTestRoot(t, root), entries, staged, nil, nil, currentCheck{},
 		); err != nil {
 			t.Fatalf("unchanged journaled write rejected: %v", err)
 		}
 		transactionTestWrite(t, root, "mods/edited.jar", []byte("external edit\n"))
 		if err := verifyInstallOutputs(
-			transactionTestRoot(t, root), entries, staged, nil, nil,
+			transactionTestRoot(t, root), entries, staged, nil, nil, currentCheck{},
 		); err == nil || !strings.Contains(err.Error(), "mods/edited.jar") {
 			t.Fatalf("edited journaled write accepted: %v", err)
 		}
@@ -502,13 +502,13 @@ func TestVerifyInstallOutputsChecksJournaledPaths(t *testing.T) {
 			Before: previousImage,
 		}}
 		if err := verifyInstallOutputs(
-			transactionTestRoot(t, root), entries, nil, prunes, nil,
+			transactionTestRoot(t, root), entries, nil, prunes, nil, currentCheck{},
 		); err != nil {
 			t.Fatalf("absent journaled prune rejected: %v", err)
 		}
 		transactionTestWrite(t, root, "mods/pruned.jar", previous)
 		if err := verifyInstallOutputs(
-			transactionTestRoot(t, root), entries, nil, prunes, nil,
+			transactionTestRoot(t, root), entries, nil, prunes, nil, currentCheck{},
 		); err == nil || !strings.Contains(err.Error(), "mods/pruned.jar") {
 			t.Fatalf("reappeared journaled prune accepted: %v", err)
 		}
@@ -525,7 +525,7 @@ func TestVerifyInstallOutputsChecksJournaledPaths(t *testing.T) {
 			},
 		}
 		if err := verifyInstallOutputs(
-			transactionTestRoot(t, root), nil, staged, nil, nil,
+			transactionTestRoot(t, root), nil, staged, nil, nil, currentCheck{},
 		); err != nil {
 			t.Fatalf("unchanged planned output rejected: %v", err)
 		}
@@ -533,7 +533,7 @@ func TestVerifyInstallOutputsChecksJournaledPaths(t *testing.T) {
 			t, root, "mods/unchanged.jar", []byte("external edit\n"),
 		)
 		if err := verifyInstallOutputs(
-			transactionTestRoot(t, root), nil, staged, nil, nil,
+			transactionTestRoot(t, root), nil, staged, nil, nil, currentCheck{},
 		); err == nil || !strings.Contains(err.Error(), "mods/unchanged.jar") {
 			t.Fatalf("edited planned output accepted: %v", err)
 		}
@@ -560,7 +560,7 @@ func TestVerifyInstallOutputsChecksRetainedEntries(t *testing.T) {
 			return verifyInstallOutputs(
 				transactionTestRoot(t, root),
 				nil, nil, nil,
-				[]receipt.Entry{entry},
+				[]receipt.Entry{entry}, currentCheck{},
 			)
 		}
 		if err := check(); err != nil {
@@ -576,7 +576,7 @@ func TestVerifyInstallOutputsChecksRetainedEntries(t *testing.T) {
 		root := t.TempDir()
 		if err := verifyInstallOutputs(
 			transactionTestRoot(t, root), nil, nil, nil,
-			[]receipt.Entry{entry},
+			[]receipt.Entry{entry}, currentCheck{},
 		); err == nil || !strings.Contains(err.Error(), entry.Path) {
 			t.Fatalf("missing retained output accepted: %v", err)
 		}
@@ -589,7 +589,7 @@ func TestVerifyInstallOutputsChecksRetainedEntries(t *testing.T) {
 		legacy.Mode = 0
 		if err := verifyInstallOutputs(
 			transactionTestRoot(t, root), nil, nil, nil,
-			[]receipt.Entry{legacy},
+			[]receipt.Entry{legacy}, currentCheck{},
 		); err != nil {
 			t.Fatalf("legacy retained output rejected: %v", err)
 		}
@@ -613,7 +613,7 @@ func TestVerifyInstallOutputsChecksRetainedEntries(t *testing.T) {
 		}
 		if err := verifyInstallOutputs(
 			transactionTestRoot(t, root), nil, staged, nil,
-			[]receipt.Entry{stale},
+			[]receipt.Entry{stale}, currentCheck{},
 		); err != nil {
 			t.Fatalf("restaged path compared with its old baseline: %v", err)
 		}
@@ -637,14 +637,14 @@ func TestVerifyInstallOutputsChecksRetainedEntries(t *testing.T) {
 		}}
 		if err := verifyInstallOutputs(
 			transactionTestRoot(t, root), entries, nil, prunes,
-			[]receipt.Entry{removed},
+			[]receipt.Entry{removed}, currentCheck{},
 		); err != nil {
 			t.Fatalf("absent pruned path rejected: %v", err)
 		}
 		transactionTestWrite(t, root, removed.Path, previous)
 		if err := verifyInstallOutputs(
 			transactionTestRoot(t, root), entries, nil, prunes,
-			[]receipt.Entry{removed},
+			[]receipt.Entry{removed}, currentCheck{},
 		); err == nil || !strings.Contains(err.Error(), removed.Path) {
 			t.Fatalf("reappeared pruned path accepted: %v", err)
 		}

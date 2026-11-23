@@ -14,6 +14,7 @@ import (
 	"runtime"
 	"strings"
 
+	"github.com/mclucy/lucy/internal/fileidentity"
 	"github.com/mclucy/lucy/internal/fsutil"
 	"github.com/mclucy/lucy/log"
 	"go.yaml.in/yaml/v4"
@@ -129,7 +130,7 @@ func Lock(root string, logger *log.Logger) (*fsutil.FileLock, error) {
 	if closeErr != nil {
 		return nil, errors.Join(closeErr, lock.Close())
 	}
-	return lock, nil
+	return lock.FlushOnClose(), nil
 }
 
 // SafePath rejects existing symlink components before root-confined IO.
@@ -735,33 +736,47 @@ func InstallImagesMatch(
 // absent. A present non-regular path is an error because installation images
 // describe files.
 func ObserveInstallImage(files *os.Root, relative string) (*InstallImage, error) {
-	info, err := files.Lstat(relative)
-	if errors.Is(err, os.ErrNotExist) {
-		return nil, nil
-	}
+	image, _, _, err := ObserveInstallImageEvidence(files, relative, nil)
+	return image, err
+}
+
+// ObserveInstallImageCached observes relative through memo, so a file whose
+// stat identity the memo already proved is not read again.
+func ObserveInstallImageCached(
+	files *os.Root,
+	relative string,
+	memo *fileidentity.Memo,
+) (*InstallImage, error) {
+	image, _, _, err := ObserveInstallImageEvidence(files, relative, memo)
+	return image, err
+}
+
+// ObserveInstallImageEvidence observes relative and also returns the identity
+// read from the same handle as the content, so a caller can record the
+// evidence for a later command. hasIdentity is false when the platform
+// exposes no stat identity.
+func ObserveInstallImageEvidence(
+	files *os.Root,
+	relative string,
+	memo *fileidentity.Memo,
+) (image *InstallImage, identity fileidentity.Identity, hasIdentity bool, err error) {
+	observation, err := memo.ObserveRoot(files, relative, nil)
 	if err != nil {
-		return nil, err
+		return nil, fileidentity.Identity{}, false, err
 	}
-	if !info.Mode().IsRegular() {
-		return nil, fmt.Errorf(
+	if !observation.Exists {
+		return nil, fileidentity.Identity{}, false, nil
+	}
+	if !observation.Regular {
+		return nil, fileidentity.Identity{}, false, fmt.Errorf(
 			"installation path %s is not a regular file",
 			relative,
 		)
 	}
-	file, err := files.Open(relative)
-	if err != nil {
-		return nil, err
-	}
-	hasher := sha256.New()
-	_, copyErr := io.Copy(hasher, file)
-	closeErr := file.Close()
-	if copyErr != nil || closeErr != nil {
-		return nil, errors.Join(copyErr, closeErr)
-	}
 	return &InstallImage{
-		SHA256: hex.EncodeToString(hasher.Sum(nil)),
-		Mode:   EffectiveInstallMode(info.Mode().Perm()),
-	}, nil
+		SHA256: observation.Hashes["sha256"],
+		Mode:   EffectiveInstallMode(observation.Mode.Perm()),
+	}, observation.Identity, observation.HasIdentity, nil
 }
 
 // InstallBytesImage describes the content and effective permission mode that

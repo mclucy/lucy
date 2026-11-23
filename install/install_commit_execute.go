@@ -10,6 +10,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/mclucy/lucy/internal/fileidentity"
 	"github.com/mclucy/lucy/internal/fsutil"
 	"github.com/mclucy/lucy/internal/workspaceguard"
 	"github.com/mclucy/lucy/internal/workspacewrite"
@@ -51,6 +52,11 @@ type commitRequest struct {
 	prunes    []commitPrune
 	documents WorkspaceDocuments
 	verify    func(files *os.Root, entries []workspacewrite.InstallJournalEntry) error
+	// beforeVerify releases resources the transaction no longer needs, after
+	// every write published and before the commit-point verification. A
+	// caller uses it to remove staged copies, so the metadata the
+	// verification observes is final.
+	beforeVerify func() error
 }
 
 // executeCommit applies a request and returns the entries it mutated, sorted by
@@ -59,6 +65,7 @@ type commitRequest struct {
 func executeCommit(
 	root string,
 	request commitRequest,
+	check currentCheck,
 	logger *log.Logger,
 ) (applied []workspacewrite.InstallJournalEntry, resultErr error) {
 	type change struct {
@@ -101,9 +108,9 @@ func executeCommit(
 	}
 	defer func() { resultErr = errors.Join(resultErr, files.Close()) }()
 	if len(changes) == 0 {
-		return nil, runCommitVerify(files, request, nil)
+		return nil, runCommitVerify(files, request, nil, check.memo)
 	}
-	if err := request.documents.verify(files, nil); err != nil {
+	if err := request.documents.verify(files, nil, check.memo); err != nil {
 		return nil, err
 	}
 	names := make([]string, len(changes))
@@ -206,7 +213,7 @@ func executeCommit(
 		)
 	}
 	if len(journal.Entries) == 0 {
-		return nil, runCommitVerify(files, request, nil)
+		return nil, runCommitVerify(files, request, nil, check.memo)
 	}
 	journalBytes, err := yaml.Marshal(journal)
 	if err != nil {
@@ -260,8 +267,8 @@ func executeCommit(
 			continue
 		}
 		if change.prune {
-			current, err := workspacewrite.ObserveInstallImage(
-				files, change.path,
+			current, err := workspacewrite.ObserveInstallImageCached(
+				files, change.path, check.memo,
 			)
 			if err != nil {
 				return nil, err
@@ -301,7 +308,7 @@ func executeCommit(
 				fsutil.WriteOptions{
 					Mode:    os.FileMode(entry.After.Mode),
 					Replace: true,
-					Check:   installBeforeCheck(files, entry),
+					Check:   installBeforeCheck(files, entry, check.memo),
 				},
 			); err != nil {
 				return nil, err
@@ -313,14 +320,19 @@ func executeCommit(
 			fsutil.WriteOptions{
 				Mode:    os.FileMode(entry.After.Mode),
 				Replace: true,
-				Check:   installBeforeCheck(files, entry),
+				Check:   installBeforeCheck(files, entry, check.memo),
 			},
 		); err != nil {
 			return nil, err
 		}
 		applied = append(applied, entry)
 	}
-	if err := runCommitVerify(files, request, journal.Entries); err != nil {
+	if request.beforeVerify != nil {
+		if err := request.beforeVerify(); err != nil {
+			return nil, err
+		}
+	}
+	if err := runCommitVerify(files, request, journal.Entries, check.memo); err != nil {
 		return nil, err
 	}
 	journal.Committed = true
@@ -348,21 +360,23 @@ func runCommitVerify(
 	files *os.Root,
 	request commitRequest,
 	entries []workspacewrite.InstallJournalEntry,
+	memo *fileidentity.Memo,
 ) error {
 	if request.verify != nil {
 		if err := request.verify(files, entries); err != nil {
 			return err
 		}
 	}
-	return request.documents.verify(files, request.writes)
+	return request.documents.verify(files, request.writes, memo)
 }
 
 func installBeforeCheck(
 	files *os.Root,
 	entry workspacewrite.InstallJournalEntry,
+	memo *fileidentity.Memo,
 ) func() error {
 	return func() error {
-		current, err := workspacewrite.ObserveInstallImage(files, entry.Path)
+		current, err := workspacewrite.ObserveInstallImageCached(files, entry.Path, memo)
 		if err != nil {
 			return err
 		}

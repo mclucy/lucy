@@ -202,23 +202,22 @@ func stageFile(root *os.Root, stage, src string, mode os.FileMode, link LinkMode
 	return writeStage(root, stage, source, mode)
 }
 
-// syncStaged makes linked or cloned content durable before publication. A
-// link or a clone writes no bytes through a descriptor, and the source can be
-// a stage file that was never synced, so the staged inode needs its own sync.
+// syncStaged orders linked or cloned content before publication. A link or a
+// clone writes no bytes through a descriptor, and the source can be a stage
+// file that never passed a Barrier, so the staged inode needs its own.
 func syncStaged(root *os.Root, stage string) error {
 	file, err := root.Open(stage)
 	if err != nil {
 		return err
 	}
-	if err := file.Sync(); err != nil {
+	if err := Barrier(file); err != nil {
 		return errors.Join(fmt.Errorf("sync staged file: %w", err), file.Close())
 	}
 	return file.Close()
 }
 
 // writeStage writes reader into the staged file inside root, applies mode, and
-// makes the content durable before publication. A failure removes the partial
-// file.
+// orders the content before publication. A failure removes the partial file.
 func writeStage(root *os.Root, stage string, reader io.Reader, mode os.FileMode) (resultErr error) {
 	file, err := root.OpenFile(stage, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
 	if err != nil {
@@ -237,8 +236,9 @@ func writeStage(root *os.Root, stage string, reader io.Reader, mode os.FileMode)
 	return nil
 }
 
-// fillStage writes reader into an open staged file, applies mode, makes the
-// content durable, and closes the file. It closes the file even on failure.
+// fillStage writes reader into an open staged file, applies mode, orders the
+// content before publication, and closes the file. It closes the file even on
+// failure.
 func fillStage(file *os.File, reader io.Reader, mode os.FileMode) (resultErr error) {
 	closed := false
 	defer func() {
@@ -252,7 +252,7 @@ func fillStage(file *os.File, reader io.Reader, mode os.FileMode) (resultErr err
 	if err := file.Chmod(mode.Perm()); err != nil {
 		return fmt.Errorf("set staged permissions: %w", err)
 	}
-	if err := file.Sync(); err != nil {
+	if err := Barrier(file); err != nil {
 		return fmt.Errorf("sync staged file: %w", err)
 	}
 	if err := file.Close(); err != nil {

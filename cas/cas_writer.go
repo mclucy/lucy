@@ -87,7 +87,7 @@ func (w *Writer) Seal(expected *Digest) (Object, error) {
 		var digest Digest
 		w.hash.Sum(digest[:0])
 		w.object = Object{Digest: digest, Size: w.size}
-		if err := w.file.Sync(); err != nil {
+		if err := fsutil.Barrier(w.file); err != nil {
 			return Object{}, fmt.Errorf("sync cas stage: %w", err)
 		}
 		w.state = writerSealed
@@ -139,7 +139,7 @@ func (w *Writer) Commit(expected *Digest) (object Object, resultErr error) {
 	if err := w.file.Chmod(0o444); err != nil {
 		return Object{}, err
 	}
-	if err := w.file.Sync(); err != nil {
+	if err := fsutil.Barrier(w.file); err != nil {
 		return Object{}, err
 	}
 	w.state = writerClosedStage

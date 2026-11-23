@@ -109,7 +109,7 @@ func adoptedRuntimeFiles(
 			}
 			return nil, fmt.Errorf("runtime file %s is not a regular file", f.Path)
 		}
-		hashes, err := install.DigestFile(f.Path, nil)
+		hashes, err := install.DigestFile(f.Path, map[string]string{"sha1": ""})
 		if err != nil {
 			return nil, fmt.Errorf("digest runtime file %s: %w", f.Path, err)
 		}
@@ -117,6 +117,7 @@ func adoptedRuntimeFiles(
 			Path:           f.Path,
 			Role:           f.Role,
 			ExpectedSHA256: hashes["sha256"],
+			ExpectedHashes: hashes,
 			ExpectedMode:   workspacewrite.EffectiveInstallMode(info.Mode().Perm()),
 		})
 	}

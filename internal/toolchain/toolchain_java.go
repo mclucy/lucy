@@ -39,6 +39,18 @@ func javaCandidates(environment envVars, hints []string) []javaCandidate {
 			add(filepath.Join(home, "bin", javaExecutableName), "Gradle configuration")
 		}
 	}
+	for _, root := range javaRoots(environment) {
+		for _, home := range javaHomesUnder(root) {
+			add(filepath.Join(home, "bin", javaExecutableName), root)
+		}
+	}
+	return candidates
+}
+
+// javaRoots lists the directories that hold Java homes of the system and of
+// version managers. Each child of a root holds one home, or a current link to
+// one.
+func javaRoots(environment envVars) []string {
 	roots := systemJavaRoots()
 	sdkman := os.Getenv("SDKMAN_DIR")
 	if sdkman == "" {
@@ -62,12 +74,7 @@ func javaCandidates(environment envVars, hints []string) []javaCandidate {
 	if managed, err := ManagedJavaRoot(); err == nil {
 		roots = append(roots, managed)
 	}
-	for _, root := range roots {
-		for _, home := range javaHomesUnder(root) {
-			add(filepath.Join(home, "bin", javaExecutableName), root)
-		}
-	}
-	return candidates
+	return roots
 }
 
 func javaHomesUnder(root string) []string {
@@ -111,13 +118,32 @@ func javaHomesUnder(root string) []string {
 	return homes
 }
 
-func probeJava(ctx context.Context, candidate javaCandidate) (JavaInstallation, error) {
+// probeJava probes one candidate. compilers adds the compiler probe that only
+// a build needs. cache may be nil, which probes without caching.
+func probeJava(ctx context.Context, candidate javaCandidate, compilers bool, cache *probeCache) (JavaInstallation, error) {
 	if !isExecutable(candidate.java) {
 		return JavaInstallation{}, fmt.Errorf("java candidate %q from %s is not executable", candidate.java, candidate.source)
 	}
-	output, err := runProbe(ctx, candidate.java, "-XshowSettings:properties", "-version")
+	installation, err := probeInstallation(ctx, candidate.java, cache)
 	if err != nil {
-		return JavaInstallation{}, fmt.Errorf("probe java %q: %w", candidate.java, err)
+		return JavaInstallation{}, err
+	}
+	if compilers {
+		installation.Javac = probeCompiler(ctx, installation.Home)
+	}
+	return installation, nil
+}
+
+// probeInstallation returns the installation that one Java executable
+// reports, from the cache while the executable and the release file of its
+// home keep their recorded identities.
+func probeInstallation(ctx context.Context, executable string, cache *probeCache) (JavaInstallation, error) {
+	if installation, ok := cache.lookup(executable); ok {
+		return installation, nil
+	}
+	output, err := runProbe(ctx, executable, "-XshowSettings:properties", "-version")
+	if err != nil {
+		return JavaInstallation{}, fmt.Errorf("probe java %q: %w", executable, err)
 	}
 	properties := make(map[string]string)
 	for line := range strings.SplitSeq(output, "\n") {
@@ -127,7 +153,7 @@ func probeJava(ctx context.Context, candidate javaCandidate) (JavaInstallation, 
 		}
 	}
 	if properties["java.home"] == "" {
-		return JavaInstallation{}, fmt.Errorf("java %q reported no installation home", candidate.java)
+		return JavaInstallation{}, fmt.Errorf("java %q reported no installation home", executable)
 	}
 	home := canonical(properties["java.home"])
 	if filepath.Base(home) == "jre" {
@@ -145,15 +171,23 @@ func probeJava(ctx context.Context, candidate javaCandidate) (JavaInstallation, 
 		Implementor:  release["IMPLEMENTOR"],
 	}
 	if installation.Major == 0 || !isExecutable(installation.Java) {
-		return JavaInstallation{}, fmt.Errorf("java %q reported an unusable installation", candidate.java)
+		return JavaInstallation{}, fmt.Errorf("java %q reported an unusable installation", executable)
 	}
-	javac := filepath.Join(home, "bin", javacExecutableName)
-	if isExecutable(javac) {
-		if _, err := runProbe(ctx, javac, "-version"); err == nil {
-			installation.Javac = javac
-		}
-	}
+	cache.store(executable, installation)
 	return installation, nil
+}
+
+// probeCompiler returns the javac of a Java home that runs, or "" when the
+// home has no usable compiler.
+func probeCompiler(ctx context.Context, home string) string {
+	javac := filepath.Join(home, "bin", javacExecutableName)
+	if !isExecutable(javac) {
+		return ""
+	}
+	if _, err := runProbe(ctx, javac, "-version"); err != nil {
+		return ""
+	}
+	return javac
 }
 
 // ProbeJava inspects the Java installation at path. path is a Java home or a
@@ -180,7 +214,9 @@ func ProbeJava(ctx context.Context, path string) (JavaInstallation, error) {
 	} else if !isExecutable(path) {
 		return JavaInstallation{}, fmt.Errorf("probe Java %q: not an executable file", path)
 	}
-	return probeJava(ctx, javaCandidate{java: executable, source: "requested path"})
+	cache := loadProbeCache()
+	defer cache.save()
+	return probeJava(ctx, javaCandidate{java: executable, source: "requested path"}, false, cache)
 }
 
 func majorVersion(version string) int {

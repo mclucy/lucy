@@ -12,6 +12,7 @@ import (
 	"github.com/mclucy/lucy/cas"
 	"github.com/mclucy/lucy/document"
 	"github.com/mclucy/lucy/input"
+	"github.com/mclucy/lucy/internal/fsutil"
 	"github.com/mclucy/lucy/internal/workspacewrite"
 )
 
@@ -98,7 +99,7 @@ func readHistory(root string, repair bool) (events []Event, offset int64, result
 				if err := file.Truncate(offset); err != nil {
 					return nil, offset, err
 				}
-				if err := file.Sync(); err != nil {
+				if err := fsutil.Barrier(file); err != nil {
 					return nil, offset, err
 				}
 			}

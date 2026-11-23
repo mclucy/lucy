@@ -8,9 +8,12 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync"
+	"sync/atomic"
 
 	"github.com/mclucy/lucy/bootstrap"
 	"github.com/mclucy/lucy/document"
+	"github.com/mclucy/lucy/internal/fileidentity"
 	"github.com/mclucy/lucy/internal/workspacewrite"
 	"github.com/mclucy/lucy/log"
 	"github.com/mclucy/lucy/receipt"
@@ -86,6 +89,7 @@ func pruneTargets(
 	staged map[string]commitWrite,
 	stagedOutputs map[string]bootstrap.Output,
 	stagedBootstrap bool,
+	check currentCheck,
 ) (map[string]*workspacewrite.InstallImage, error) {
 	files, err := os.OpenRoot(root)
 	if err != nil {
@@ -107,7 +111,7 @@ func pruneTargets(
 		if !shouldPrune {
 			continue
 		}
-		current, err := workspacewrite.ObserveInstallImage(files, old.Path)
+		current, err := workspacewrite.ObserveInstallImageCached(files, old.Path, check.memo)
 		if err != nil {
 			if info, statErr := files.Lstat(old.Path); statErr == nil &&
 				!info.Mode().IsRegular() {
@@ -149,6 +153,7 @@ func verifyInstallOutputs(
 	staged map[string]commitWrite,
 	pruneExpected map[string]*workspacewrite.InstallImage,
 	retained []receipt.Entry,
+	check currentCheck,
 ) error {
 	mutated := make(map[string]*workspacewrite.InstallImage, len(entries))
 	for _, entry := range entries {
@@ -186,29 +191,70 @@ func verifyInstallOutputs(
 		names = append(names, name)
 	}
 	slices.Sort(names)
-	for _, name := range names {
-		want := expected[name]
-		if after, journaled := mutated[name]; journaled {
-			want = installOutputExpectation{image: after, compareMode: true}
+	type verifiedOutput struct {
+		image       *workspacewrite.InstallImage
+		identity    fileidentity.Identity
+		hasIdentity bool
+		err         error
+	}
+	results := make([]verifiedOutput, len(names))
+	workers := min(len(names), installFileWorkers)
+	var next atomic.Int64
+	var group sync.WaitGroup
+	for range workers {
+		group.Go(func() {
+			for {
+				index := int(next.Add(1)) - 1
+				if index >= len(names) {
+					return
+				}
+				name := names[index]
+				want := expected[name]
+				if after, journaled := mutated[name]; journaled {
+					want = installOutputExpectation{image: after, compareMode: true}
+				}
+				current, identity, hasIdentity, err := workspacewrite.ObserveInstallImageEvidence(files, name, check.memo)
+				if err != nil {
+					results[index].err = fmt.Errorf(
+						"inspect installation output %s before commit: %w",
+						name,
+						err,
+					)
+					return
+				}
+				if !workspacewrite.InstallImagesMatch(
+					current,
+					want.image,
+					want.compareMode,
+				) {
+					results[index].err = fmt.Errorf(
+						"installation output %s changed before commit",
+						name,
+					)
+					return
+				}
+				results[index] = verifiedOutput{
+					image:       current,
+					identity:    identity,
+					hasIdentity: hasIdentity,
+				}
+			}
+		})
+	}
+	group.Wait()
+	for index, name := range names {
+		result := results[index]
+		if result.err != nil {
+			return result.err
 		}
-		current, err := workspacewrite.ObserveInstallImage(files, name)
-		if err != nil {
-			return fmt.Errorf(
-				"inspect installation output %s before commit: %w",
-				name,
-				err,
-			)
+		if result.image == nil {
+			continue
 		}
-		if !workspacewrite.InstallImagesMatch(
-			current,
-			want.image,
-			want.compareMode,
-		) {
-			return fmt.Errorf(
-				"installation output %s changed before commit",
-				name,
-			)
-		}
+		check.evidence.observe(
+			receipt.Entry{Path: name, SHA256: result.image.SHA256},
+			result.identity,
+			result.hasIdentity,
+		)
 	}
 	return nil
 }
@@ -226,7 +272,7 @@ func verifyInstallOutputs(
 // commit aborts before anything is written. The commit never inspects the stage
 // tree against the bootstrap contract, because that tree also contains package
 // and wrapper files that are not bootstrap outputs.
-func applyCommit(root, stage string, d *document.Manifest, l *document.Lock, publish bool, overwritePaths map[string]bool, stagedOutputs, mcdrOutputs map[string]bootstrap.Output, stagedBootstrap bool, mode installCommitMode, documents WorkspaceDocuments, logger *log.Logger) (FileChanges, error) {
+func applyCommit(root, stage string, d *document.Manifest, l *document.Lock, publish bool, overwritePaths map[string]bool, stagedPackageHashes map[string]string, stagedOutputs, mcdrOutputs map[string]bootstrap.Output, stagedBootstrap bool, mode installCommitMode, documents WorkspaceDocuments, check currentCheck, logger *log.Logger) (FileChanges, error) {
 	reconcile := mode == installCommitReconcile
 	metadataOnly := mode == installCommitMetadataOnly
 	previous := receipt.New()
@@ -247,7 +293,7 @@ func applyCommit(root, stage string, d *document.Manifest, l *document.Lock, pub
 		// retains are revalidated here: a fingerprint carried forward
 		// over drifted files would leave the receipt reporting a server
 		// tree that no longer satisfies the contract.
-		retained, err := bootstrapCurrent(root, l, &previous, logger)
+		retained, err := bootstrapCurrentWithCheck(root, l, &previous, check, logger)
 		if err != nil {
 			return FileChanges{}, err
 		}
@@ -386,6 +432,9 @@ func applyCommit(root, stage string, d *document.Manifest, l *document.Lock, pub
 			}
 			sha256 := out.SHA256
 			if sha256 == "" {
+				sha256 = stagedPackageHashes[relative]
+			}
+			if sha256 == "" {
 				hashes, err := DigestFile(p, nil)
 				if err != nil {
 					return err
@@ -402,22 +451,20 @@ func applyCommit(root, stage string, d *document.Manifest, l *document.Lock, pub
 			}
 			var base *workspacewrite.InstallImage
 			displace := false
-			targetInfo, err := os.Lstat(target)
+			observation, err := check.memo.ObservePath(target, nil)
 			switch {
-			case err == nil:
-				if targetInfo.Mode()&os.ModeSymlink != 0 {
+			case err != nil:
+				return err
+			case observation.Exists:
+				if observation.Mode&os.ModeSymlink != 0 {
 					return fmt.Errorf("refuse symlink output %s", relative)
 				}
-				if !targetInfo.Mode().IsRegular() {
+				if !observation.Regular {
 					return fmt.Errorf("refuse non-regular output %s", relative)
 				}
-				actual, err := DigestFile(target, nil)
-				if err != nil {
-					return err
-				}
 				current := workspacewrite.InstallImage{
-					SHA256: actual["sha256"],
-					Mode:   workspacewrite.EffectiveInstallMode(targetInfo.Mode().Perm()),
+					SHA256: observation.Hashes["sha256"],
+					Mode:   workspacewrite.EffectiveInstallMode(observation.Mode.Perm()),
 				}
 				base = &current
 				prior, isOwned := owned[relative]
@@ -431,7 +478,7 @@ func applyCommit(root, stage string, d *document.Manifest, l *document.Lock, pub
 						)
 					case classified && !isPackage && strings.EqualFold(current.SHA256, sha256):
 						// Retain the existing mode; adoption is not a replacement.
-						fileMode = targetInfo.Mode().Perm()
+						fileMode = observation.Mode.Perm()
 						logger.Debug(
 							"adopting byte-identical unowned output",
 							"path", relative,
@@ -462,11 +509,9 @@ func applyCommit(root, stage string, d *document.Manifest, l *document.Lock, pub
 						return fmt.Errorf("modified owned output conflict: %s", relative)
 					}
 				}
-			case errors.Is(err, os.ErrNotExist):
+			default:
 				// The write's base stays nil so the planner records an absent
 				// precondition instead of dropping the path.
-			default:
-				return err
 			}
 			if !isSeed {
 				origin := receipt.OriginBootstrap
@@ -539,6 +584,7 @@ func applyCommit(root, stage string, d *document.Manifest, l *document.Lock, pub
 			staged,
 			stagedOutputs,
 			stagedBootstrap,
+			check,
 		)
 		if err != nil {
 			return FileChanges{}, err
@@ -591,6 +637,7 @@ func applyCommit(root, stage string, d *document.Manifest, l *document.Lock, pub
 			staged,
 			pruneExpected,
 			next.Entries,
+			check,
 		)
 	}
 	applied, err := executeCommit(root, commitRequest{
@@ -599,10 +646,26 @@ func applyCommit(root, stage string, d *document.Manifest, l *document.Lock, pub
 		prunes:    prunes,
 		documents: documents,
 		verify:    verify,
-	}, logger)
+		// Every write hardlinks its staged source. Removing the stage before
+		// verification makes the link count final, so the identity the
+		// verification records stays valid for the next command.
+		beforeVerify: func() error {
+			if stage == "" {
+				return nil
+			}
+			if err := os.RemoveAll(stage); err != nil {
+				logger.Warn(fmt.Errorf(
+					"remove staged installation before verification: %w",
+					err,
+				))
+			}
+			return nil
+		},
+	}, check, logger)
 	if err != nil {
 		return FileChanges{}, err
 	}
+	check.evidence.write(root, next.Entries, logger)
 	counts := FileChanges{Displaced: []string{}}
 	for _, entry := range applied {
 		if entry.After == nil {

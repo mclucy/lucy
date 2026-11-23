@@ -130,10 +130,14 @@ func (r *Router) resolveLoaderProduct(
 	if err != nil {
 		return err
 	}
-	for i := range inputs {
-		if err := r.trustMavenChecksum(ctx, &inputs[i]); err != nil {
-			return err
-		}
+	errs := runBounded(
+		ctx,
+		len(inputs),
+		func(i int) string { return hostFromURL(inputs[i].URL) },
+		func(i int) error { return r.trustMavenChecksum(ctx, &inputs[i]) },
+	)
+	if err := firstError(errs); err != nil {
+		return err
 	}
 	out.Inputs = append(out.Inputs, inputs...)
 

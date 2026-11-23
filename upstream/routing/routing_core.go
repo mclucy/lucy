@@ -291,14 +291,8 @@ func (r *Router) ResolveServerProduct(
 			return out, err
 		}
 	}
-	for i := range out.Inputs {
-		if out.Inputs[i].Embedded == "" {
-			input, e := acquire(&out.Inputs[i])
-			if e != nil {
-				return out, e
-			}
-			out.Inputs[i].Hashes = input.Hashes
-		}
+	if err := acquireInputs(ctx, out.Inputs, acquire); err != nil {
+		return out, err
 	}
 	return out, nil
 }

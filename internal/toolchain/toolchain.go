@@ -44,9 +44,11 @@ type Inventory struct {
 	Problems       []error
 }
 
-// Discover probes installed executables without provisioning tools. Missing tools
-// and unusable candidates are inventory results; additional homes are local JDK hints.
-func Discover(ctx context.Context, homes ...string) (Inventory, error) {
+// DiscoverJava probes installed Java runtimes without provisioning tools and
+// without running their compilers. Missing tools and unusable candidates are
+// inventory results; additional homes are local JDK hints. A command may
+// discover several times, so results are memoized for this process.
+func DiscoverJava(ctx context.Context, homes ...string) (Inventory, error) {
 	if err := ctx.Err(); err != nil {
 		return Inventory{}, err
 	}
@@ -54,6 +56,66 @@ func Discover(ctx context.Context, homes ...string) (Inventory, error) {
 	if err != nil {
 		return Inventory{}, err
 	}
+	key := discoveryKey(environment, homes)
+	javaDiscovery.Lock()
+	defer javaDiscovery.Unlock()
+	if inventory, ok := javaDiscovery.inventories[key]; ok {
+		return cloneInventory(inventory), nil
+	}
+	inventory, err := discover(ctx, environment, homes, false)
+	if err != nil {
+		return Inventory{}, err
+	}
+	if javaDiscovery.inventories == nil {
+		javaDiscovery.inventories = make(map[string]Inventory)
+	}
+	javaDiscovery.inventories[key] = inventory
+	return cloneInventory(inventory), nil
+}
+
+// DiscoverBuildTools probes installed Java runtimes, their compilers, and
+// Gradle. Build commands use it; runtime selection uses DiscoverJava.
+func DiscoverBuildTools(ctx context.Context, homes ...string) (Inventory, error) {
+	if err := ctx.Err(); err != nil {
+		return Inventory{}, err
+	}
+	environment, err := readEnv()
+	if err != nil {
+		return Inventory{}, err
+	}
+	return discover(ctx, environment, homes, true)
+}
+
+// javaDiscovery memoizes the Java discovery of one process. Its key carries
+// every input that changes the candidate list.
+var javaDiscovery struct {
+	sync.Mutex
+	inventories map[string]Inventory
+}
+
+// discoveryKey joins the environment values, roots, and hints that decide
+// which Java candidates discovery considers, so a change reselects instead of
+// reusing.
+func discoveryKey(environment envVars, homes []string) string {
+	fields := []string{
+		environment.javaHome,
+		environment.pathJava,
+		environment.gradleUserHome,
+		environment.home,
+		environment.path,
+	}
+	fields = append(fields, javaRoots(environment)...)
+	fields = append(fields, homes...)
+	return strings.Join(fields, "\x00")
+}
+
+func cloneInventory(inventory Inventory) Inventory {
+	inventory.Java = slices.Clone(inventory.Java)
+	inventory.Problems = slices.Clone(inventory.Problems)
+	return inventory
+}
+
+func discover(ctx context.Context, environment envVars, homes []string, compilers bool) (Inventory, error) {
 	inventory := Inventory{
 		JavaHome: environment.javaHome, PathJava: environment.pathJava,
 		GradleUserHome: environment.gradleUserHome,
@@ -61,6 +123,8 @@ func Discover(ctx context.Context, homes ...string) (Inventory, error) {
 	candidates := javaCandidates(environment, homes)
 	results := make([]JavaInstallation, len(candidates))
 	problems := make([]error, len(candidates))
+	cache := loadProbeCache()
+	defer cache.save()
 	concurrency := make(chan struct{}, 4)
 	var workers sync.WaitGroup
 	for i, candidate := range candidates {
@@ -71,7 +135,7 @@ func Discover(ctx context.Context, homes ...string) (Inventory, error) {
 			case <-ctx.Done():
 				return
 			}
-			results[i], problems[i] = probeJava(ctx, candidate)
+			results[i], problems[i] = probeJava(ctx, candidate, compilers, cache)
 		})
 	}
 	workers.Wait()
@@ -93,9 +157,12 @@ func Discover(ctx context.Context, homes ...string) (Inventory, error) {
 		a, b := &inventory.Java[i], &inventory.Java[j]
 		return cmp.Or(cmp.Compare(b.Major, a.Major), cmp.Compare(a.Home, b.Home)) < 0
 	})
-	inventory.Gradle, err = probeGradle(ctx)
-	if err != nil {
-		inventory.Problems = append(inventory.Problems, err)
+	if compilers {
+		var err error
+		inventory.Gradle, err = probeGradle(ctx)
+		if err != nil {
+			inventory.Problems = append(inventory.Problems, err)
+		}
 	}
 	if err := ctx.Err(); err != nil {
 		return Inventory{}, err
