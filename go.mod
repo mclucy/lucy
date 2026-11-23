@@ -29,7 +29,7 @@ require (
 	golang.org/x/image v0.48.0
 	golang.org/x/sys v0.50.0
 	golang.org/x/term v0.48.0
-	gopkg.in/ini.v1 v1.68.0
+	unknwon.dev/ini/v2 v2.0.0-beta.7
 )
 
 require (
