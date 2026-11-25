@@ -7,7 +7,7 @@
 // arbitrary host data out of collected records.
 //
 // Telemetry is enabled by default for pre-release channels (alpha and beta).
-// LUCY_TELEMETRY can force it off for a process. Persisted opt-in and opt-out
+// DO_NOT_TRACK=1 forces it off for a process. Persisted opt-in and opt-out
 // choices override channel defaults. Disabling telemetry (SetEnabled with
 // false) purges queued records without rotating the installation identity.
 // Resetting the identity rotates the UUID and restarts the statistics window,
@@ -32,12 +32,9 @@ import (
 	"github.com/mclucy/lucy/internal/appdata"
 )
 
-// EnvironmentVariable forces telemetry off when set to a false-like value.
-// Recognized false values are 0, off, false, no, disabled, opt-out, and
-// opt_out. An unrecognized non-empty value also disables telemetry (privacy
-// favours failing closed). Recognized true values are 1, on, true, yes,
-// enabled, opt-in, and opt_in; they leave a persisted opt-out in place.
-const EnvironmentVariable = "LUCY_TELEMETRY"
+// EnvironmentVariable forces telemetry off for one process when set to 1.
+// Other values leave the stored policy in effect.
+const EnvironmentVariable = "DO_NOT_TRACK"
 
 // SchemaVersion is the wire and local-state schema version.
 const SchemaVersion = 1
@@ -272,17 +269,7 @@ func channelCollectsByDefault(channel string) bool {
 }
 
 func environmentDisabled() bool {
-	switch strings.ToLower(strings.TrimSpace(os.Getenv(EnvironmentVariable))) {
-	case "":
-		return false
-	case "0", "off", "false", "no", "disabled", "opt-out", "opt_out":
-		return true
-	case "1", "on", "true", "yes", "enabled", "opt-in", "opt_in":
-		return false
-	default:
-		// An unrecognized explicit value is treated as a request to stop.
-		return true
-	}
+	return os.Getenv(EnvironmentVariable) == "1"
 }
 
 func sanitizeVersion(raw string) string {

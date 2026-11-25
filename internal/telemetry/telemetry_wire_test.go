@@ -41,7 +41,7 @@ func testHTTPResponse(status int, statusText string, body io.ReadCloser) *http.R
 }
 
 func TestFlushThrottleForUnreadableResponse(t *testing.T) {
-	t.Setenv(EnvironmentVariable, "1")
+	t.Setenv(EnvironmentVariable, "")
 	const maxAttempts = 2
 	tests := []struct {
 		name          string

@@ -72,4 +72,4 @@ Pin a released version or digest rather than a moving tag.
 
 ## Telemetry
 
-The image sets `LUCY_TELEMETRY=off`, because each container would otherwise report as a separate installation. Enable it for a run with `-e LUCY_TELEMETRY=on` or with [`lucy telemetry`](/commands/telemetry).
+The image sets `DO_NOT_TRACK=1`, because each container would otherwise report as a separate installation. Enable it for a run with `-e DO_NOT_TRACK=0`.

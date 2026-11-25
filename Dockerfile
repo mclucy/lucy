@@ -26,7 +26,7 @@ ARG TARGETPLATFORM
 COPY --chmod=0755 ${TARGETPLATFORM:-linux/amd64}/lucy /usr/local/bin/lucy
 
 # Every container would otherwise report as a new installation.
-ENV LUCY_TELEMETRY=off \
+ENV DO_NOT_TRACK=1 \
   HOME=/home/lucy
 
 WORKDIR /workspace

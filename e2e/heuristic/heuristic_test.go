@@ -591,7 +591,7 @@ func isolatedEnvironment(home, temporary string) []string {
 		"TMPDIR="+temporary,
 		"TMP="+temporary,
 		"TEMP="+temporary,
-		"LUCY_TELEMETRY=off",
+		"DO_NOT_TRACK=1",
 		"GIT_CONFIG_GLOBAL="+os.DevNull,
 		"GIT_CONFIG_NOSYSTEM=1",
 		"GIT_TERMINAL_PROMPT=0",
@@ -604,7 +604,7 @@ func isolatedVariable(entry string) bool {
 	name = strings.ToUpper(name)
 	switch name {
 	case "HOME", "USERPROFILE", "APPDATA", "LOCALAPPDATA", "TMPDIR", "TMP", "TEMP", "TERM",
-		"OPENCODE", "QWEN_CODE_SESSION_ID", "PI_CODING_AGENT", "AI_AGENT", "OMPCODE",
+		"DO_NOT_TRACK", "OPENCODE", "QWEN_CODE_SESSION_ID", "PI_CODING_AGENT", "AI_AGENT", "OMPCODE",
 		"PI_SESSION_FILE", "PI_SESSION_ID", "DSH_SHELL", "CURSOR_AGENT", "CLAUDECODE",
 		"CODEX_THREAD_ID", "AMP_CURRENT_THREAD_ID", "GEMINI_CLI", "AUGMENT_AGENT", "CRUSH",
 		"COPILOT_AGENT", "OZ_RUN_ID":

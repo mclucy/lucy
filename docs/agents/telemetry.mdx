@@ -17,7 +17,7 @@ Every mutation runs under two locks: an in-process semaphore and a file lock, so
 
 ## Policy and identity
 
-The effective decision is: local development builds disable collection and uploads regardless of stored policy; otherwise `LUCY_TELEMETRY` with a false-like value disables collection; otherwise an explicit `opt_in` or `opt_out` wins; otherwise the channel default applies, which is on for alpha and beta. A disabled client reports a skip reason and writes no records.
+The effective decision is: local development builds disable collection and uploads regardless of stored policy; otherwise `DO_NOT_TRACK=1` disables collection; otherwise an explicit `opt_in` or `opt_out` wins; otherwise the channel default applies, which is on for alpha and beta. A disabled client reports a skip reason and writes no records.
 
 The installation UUID is created lazily by the first record or by the first `telemetry on`. Read-only commands still create one when they queue an event; this is not an opt-out. `reset-id` rotates the UUID and starts a new statistics window; queued records keep their original IDs and payloads, and remote data is untouched. Runtime uploads count in the new window. `off` marks the state `purge_pending`, deletes the queue directory, and clears the index; the marker makes an interrupted purge complete on the next read.
 

@@ -7,7 +7,7 @@ import (
 )
 
 func TestRecordEventDurationPayload(t *testing.T) {
-	t.Setenv(EnvironmentVariable, "1")
+	t.Setenv(EnvironmentVariable, "")
 	now := time.Date(2026, time.November, 18, 12, 0, 0, 0, time.UTC)
 	tests := []struct {
 		name        string

@@ -21,7 +21,7 @@ Turning telemetry off deletes pending local records but keeps the client ID and 
 
 The service retains command events and their structured snapshots, plus diagnostic reports, for 30 days from receipt. Retention starts when the service receives a record, not when the command ran, so a record queued for a week still receives the full window. Locally queued records expire after 7 days if they cannot be uploaded.
 
-Set `LUCY_TELEMETRY=off` to disable collection and uploads for a process, such as a CI job. This does not change the saved preference or clear the queue.
+Set `DO_NOT_TRACK=1` to disable collection and uploads for a process, such as a CI job. This does not change the saved preference or clear the queue.
 Local development builds skip telemetry collection and uploads, including queued records from release builds. `LUCY_TELEMETRY_ENDPOINT` overrides the upload destination for release builds. Use a trusted HTTPS endpoint; reserve HTTP for loopback testing. `lucy telemetry stats` shows the configured destination.
 
 ## What lucy collects
